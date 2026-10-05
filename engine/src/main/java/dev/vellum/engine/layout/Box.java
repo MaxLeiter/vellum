@@ -27,7 +27,14 @@ public class Box {
         /** A replaced element (img, item, slot, canvas, entity...). */
         REPLACED,
         /** A ::before or ::after pseudo-element box. */
-        PSEUDO
+        PSEUDO,
+        /**
+         * An inline element (span, a, b...). It is the element's {@code element.box} but is NOT in its parent's
+         * {@link #children}: its content is painted from the parent's line fragments ({@link Fragment.InlineBox} and
+         * text runs). Its parent is the box that owns those lines and its geometry is the bounding box of its
+         * fragments, so {@link #clientRect()} works for scripts, focus rings and hosts.
+         */
+        INLINE
     }
 
     public final Kind kind;
