@@ -2,8 +2,8 @@
 
 Vellum shows HTML, CSS and JavaScript pages as Minecraft screens, inventories and HUD overlays. This page covers the
 Java side: depending on Vellum, opening pages from the client or the server, exchanging data and messages, container
-screens and HUD overlays, and the Minecraft elements pages can use. The engine's HTML and CSS support is described in
-`DESIGN.md`.
+screens and HUD overlays, the Minecraft elements pages can use, and how your entities are drawn in them. The
+engine's HTML and CSS support is described in `DESIGN.md`.
 
 The API is loader-independent: the same calls work on NeoForge and Fabric.
 
@@ -213,13 +213,13 @@ Try it: `/vellum demo toast`, then press T and click a button.
 ## Minecraft elements
 
 These elements are drawn by Minecraft. They lay out like images: an intrinsic size, scaled by CSS `width`/`height`
-and `object-fit`.
+and `object-fit`, and placed in their box by `object-position`.
 
 | Element | Attributes | Notes |
 |---|---|---|
 | `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla tooltip. Items can't be faded: under 50% opacity they are hidden. |
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
-| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn. CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`, below); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer; `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
+| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer; `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
 | `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
 | `<player-head>` | `name`, `uuid` | A player's face with the hat layer. No attributes: your own face. 16×16 by default. |
 | `<sprite>` | `src` | A GUI-atlas sprite such as `minecraft:widget/button`, at its natural size. Nine-slice and tiled sprites keep their borders when resized. |
@@ -245,6 +245,7 @@ and the chat colours as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels:
 | `-mc-yaw` | angle, `0` | Turns it about the vertical axis; positive turns its front to the right. |
 | `-mc-pitch` | angle, `0` | Views it from above (positive) or below. |
 | `-mc-model-scale` | number, `1` | Multiplies the size that fits the box. |
+| `-mc-entity-focus` | `body` or `eyes`, `body` | `<entity>` only. What fills the box: the whole entity, or its head and shoulders. |
 
 ```css
 .stage entity { animation: spin 8s linear infinite; }
@@ -259,6 +260,66 @@ model:hover { -mc-yaw: 180deg; -mc-pitch: 20deg; }
 With `rotatable`, dragging adds to these: sideways turns it, up and down tilts the view (up to 60°), and a flick
 keeps it spinning for a moment. A `mousedown` listener that calls `preventDefault()` stops the drag.
 
+### Placing entities and models
+
+`object-position` places every Minecraft element in its box as it places an image: one to four values, keywords,
+lengths and percentages (`right 4px bottom`, `25% 75%`). Items, heads and models take a square as wide as the box's
+shorter side; models times `-mc-model-scale`.
+
+An `<entity>` is fitted one of two ways:
+
+- `-mc-entity-focus: body` (the default) fits the whole entity, with room to turn it, and `object-position` places
+  that room. Without `object-position` it stands on the bottom edge, centred (`50% 100%`), not in the middle.
+- `-mc-entity-focus: eyes` crops it to its head and shoulders: the box's shorter side spans 0.7 of the entity's eye
+  height (`Entity.getEyeHeight()`, so babies are framed closer), and `object-position` says where the eyes go. Unset,
+  they sit at `50% 40%`. `-mc-model-scale` zooms around the eyes, and turning, tilting and `follow-mouse` keep the
+  eyes where they are.
+
+```html
+<entity id="…" follow-mouse style="width:32px; height:32px; -mc-entity-focus: eyes; object-position: 50% 40%"></entity>
+```
+
+The eye point is on the entity's upright axis at its eye height. That suits mobs whose heads sit above their bodies
+(players, villagers, golems, creepers). A pig's or a fox's head sits in front of that axis, so it moves out of the
+frame when the mob is turned sideways. The Turntable showcase (`/vellum showcase models`) has a row of portraits that
+follow the pointer.
+
+## Entity render states
+
+Vellum draws an entity from the render state its renderer makes. If your renderer adds things for the world (speech
+bubbles, labels, effects), register a function that makes a state for screens instead:
+
+```java
+// Client setup:
+VellumEntities.registerPortraitState(MyEntities.AUTOMATON.get(), AutomatonRenderer::portraitState);
+```
+
+```java
+public static <T extends Entity> void registerPortraitState(EntityType<T> type,
+        BiFunction<? super T, Float, ? extends @Nullable EntityRenderState> state)
+```
+
+The function gets the entity and the partial tick and runs every frame for every `<entity>` of that type that is on
+screen. Return null to fall back to the renderer's state for that frame. Registering the type again replaces the
+function.
+
+Vellum then sets these fields on your state, as it does on its own:
+
+| Field | Set to |
+|---|---|
+| `shadowPieces` | cleared |
+| `outlineColor`, `nameTag`, `scoreText`, `leashStates`, `passengerOffset` | none |
+| `lightCoords` | full bright |
+| `ageInTicks` | the clock, for entities a page created (`type="…"`) |
+| `bodyRot` | from `-mc-yaw`, dragging and the `follow-mouse` lean |
+| `walkAnimationPos`, `walkAnimationSpeed` | from the `walk` attribute (standing still without it) |
+| `scale` | 1, with `boundingBoxWidth`, `boundingBoxHeight` and `eyeHeight` divided by the old scale |
+| `yRot`, `xRot` (the head) | toward the pointer with `follow-mouse`; otherwise left as your state has them |
+
+The fields from `bodyRot` down are set on living entities' states only. Without a registered function the head looks
+straight ahead unless `follow-mouse` turns it. The body fit measures the state you return, so whatever it leaves out
+takes no room in the box.
+
 ## Commands and development
 
 | Command | Side | |
@@ -267,7 +328,7 @@ keeps it spinning for a moment. A `mousedown` listener that calls `preventDefaul
 | `/vellum demo [name]` | client | The demo gallery, or one demo: `settings`, `layout`, `animation`, `templates`, `map`, `hud` (toggles the HUD overlay), `toast` (toggles an interactive HUD overlay: press T and click it). |
 | `/vellum demo chest` | server | The inventory demo on a real chest menu (needs cheats). |
 | `/vellum demo live` | server | The templates demo as a server session with live data. |
-| `/vellum showcase [page]` | client | The showcase gallery, or one page: `title`, `hud`, `shop`, `mobdex` (every mob in the game, with your kill statistics), `journal`, `console`, `models` (blocks, items and mobs in 3D). |
+| `/vellum showcase [page]` | client | The showcase gallery, or one page: `title`, `hud`, `shop`, `mobdex` (every mob in the game, with your kill statistics), `journal`, `console`, `models` (blocks, items and mobs in 3D, and head-and-shoulders portraits). |
 | `/vellum reload` | client | Reloads every open page. Resource reloads (F3+T) do too. |
 | `/vellum canvastest` | client | Draws every Minecraft canvas primitive without the engine, to check the renderer. |
 
@@ -313,5 +374,6 @@ fill in the templates demo.
 ## Stability
 
 The API is `dev.vellum.mod.server.VellumServer`, `VellumSession`, and `dev.vellum.mod.client.VellumScreens`,
-`VellumScreen`, `VellumContainerScreen`, `VellumHud`, `VellumAutomation` and `DocumentDriver`'s public methods. Other classes are
+`VellumScreen`, `VellumContainerScreen`, `VellumHud`, `VellumEntities`, `VellumAutomation` and `DocumentDriver`'s
+public methods. Other classes are
 internal. Vellum is at 0.x: expect changes, which will be listed in the changelog.

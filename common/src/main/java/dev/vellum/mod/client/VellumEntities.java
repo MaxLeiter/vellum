@@ -27,11 +27,11 @@ public final class VellumEntities {
      * <p>Vellum then poses the state as it does any other: it clears the shadow, outline, name tag, score, leashes
      * and passenger offset, lights it full bright, and sets the body's turn ({@code bodyRot}), the walk animation and
      * the size ({@code scale} becomes 1; the bounding box and eye height are divided by it). The head ({@code yRot},
-     * {@code xRot}) is only set with {@code follow-mouse}: otherwise it stays as your state has it. Fitting the entity
-     * to its box measures this state too, so whatever it leaves out takes no room.
+     * {@code xRot}) is only set with {@code follow-mouse}: otherwise it stays as your state has it. The body fit
+     * measures this state too, so whatever it leaves out takes no room in the box.
      *
      * <p>Registering a type again replaces its function. Call during client setup; the function runs on the render
-     * thread, once per frame for every {@code <entity>} showing that type.
+     * thread, once per frame for every {@code <entity>} on screen showing that type.
      */
     public static <T extends Entity> void registerPortraitState(EntityType<T> type,
                                                                 BiFunction<? super T, Float, ? extends @Nullable EntityRenderState> state) {
