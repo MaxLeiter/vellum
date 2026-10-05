@@ -1,6 +1,8 @@
 package dev.vellum.mod.client;
 
 import com.google.gson.JsonParser;
+import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -25,7 +27,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 /**
  * Dev-only visual check ({@code ./gradlew :neoforge:runClient -Pautopilot} or {@code :fabric:runClient -Pautopilot},
@@ -105,7 +106,8 @@ public final class DevAutopilot {
         guiScale(mc, 3);
         shoot(mc, "canvastest_gui3", () -> {});
         guiScale(mc, 2);
-        for (String page : Stream.concat(Stream.of("index"), VellumClientCommands.SHOWCASE.stream()).toList()) {
+        shoot(mc, "showcase_index", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("index")));
+        for (String page : VellumClientCommands.SHOWCASE) {
             shoot(mc, "showcase_" + page, () -> VellumScreens.open(VellumClientCommands.showcaseUrl(page)));
         }
         // The 3D pages again at GUI scale 3, where models and entities are drawn at a different resolution, and the
@@ -121,14 +123,15 @@ public final class DevAutopilot {
         // Dragging the Turntable's big model (rotatable): it turns and tilts, and keeps turning when let go.
         steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
         steps.add(() -> wait = SETTLE);
-        drag(mc, 700, 250, 760, 270);
+        drag(mc, "model[rotatable]", 60, 20);
         shoot(mc, "showcase_models_dragged", () -> mc.gui.screen().mouseMoved(10, 10));
         // What 3D content costs: the logged fps of 48 spinning entities, models and items (2D, for comparison).
         for (String bench : List.of("entity type='minecraft:zombie'", "model block='minecraft:chest'", "item id='minecraft:chest'")) {
-            String cell = "<" + bench + " style='width: 48px; height: 48px; animation: spin 4s linear infinite'></" + bench.split(" ")[0] + ">";
+            String tag = bench.split(" ")[0];
+            String cell = "<" + bench + " style='width: 48px; height: 48px; animation: spin 4s linear infinite'></" + tag + ">";
             String page = "<style>@keyframes spin { to { -mc-yaw: 360deg } } body { display: flex; flex-wrap: wrap }</style>"
                     + cell.repeat(48);
-            shoot(mc, "bench_" + bench.split(" ")[0], () -> VellumScreens.openInline(page, null));
+            shoot(mc, "bench_" + tag, () -> VellumScreens.openInline(page, null));
         }
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
@@ -157,19 +160,32 @@ public final class DevAutopilot {
         });
     }
 
-    /** Drags with the left button between two GUI points on the open screen, a step a tick, as a player would. */
-    private static void drag(Minecraft mc, double x0, double y0, double x1, double y1) {
+    /**
+     * Drags with the left button from the centre of the open page's first {@code selector} element by (dx, dy) GUI px,
+     * a step a tick, as a player would.
+     */
+    private static void drag(Minecraft mc, String selector, double dx, double dy) {
         MouseButtonInfo left = new MouseButtonInfo(1, 0); // SDL's left button
+        double[] from = new double[2];
         steps.add(() -> {
-            mc.gui.screen().mouseMoved(x0, y0);
-            mc.gui.screen().mouseClicked(new MouseButtonEvent(x0, y0, left), false);
+            Document doc = mc.gui.screen() instanceof VellumScreen screen ? screen.driver().document() : null;
+            Element target = doc == null ? null : doc.querySelector(selector);
+            if (target == null) {
+                Constants.LOG.warn("Vellum autopilot: no {} to drag", selector);
+                return;
+            }
+            float[] box = target.getBoundingClientRect();
+            from[0] = box[0] + box[2] / 2;
+            from[1] = box[1] + box[3] / 2;
+            mc.gui.screen().mouseMoved(from[0], from[1]);
+            mc.gui.screen().mouseClicked(new MouseButtonEvent(from[0], from[1], left), false);
         });
         int moves = 6;
         for (int i = 1; i <= moves; i++) {
-            double x = x0 + (x1 - x0) * i / moves, y = y0 + (y1 - y0) * i / moves;
-            steps.add(() -> mc.gui.screen().mouseMoved(x, y));
+            double t = (double) i / moves;
+            steps.add(() -> mc.gui.screen().mouseMoved(from[0] + dx * t, from[1] + dy * t));
         }
-        steps.add(() -> mc.gui.screen().mouseReleased(new MouseButtonEvent(x1, y1, left)));
+        steps.add(() -> mc.gui.screen().mouseReleased(new MouseButtonEvent(from[0] + dx, from[1] + dy, left)));
     }
 
     private static void guiScale(Minecraft mc, int scale) {
