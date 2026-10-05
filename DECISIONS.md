@@ -88,3 +88,12 @@ Each decision has its reasons and the alternatives we looked at. Newest last.
 - Standard `object-position` keeps pages portable and works the same on images. A UA rule (`entity { object-position: 50% 100% }`) would have given entities their bottom default in plain CSS, but then the eyes focus could not have a default of its own.
 - Vellum cannot know about a mod's overlays (speech bubbles, task labels). The mod already knows how to make a clean state; Vellum keeps posing it so `-mc-yaw`, `rotatable` and `follow-mouse` work, and leaves the head alone without `follow-mouse` so a mod can pose it (a slumped, powered-down robot).
 **Alternatives.** Several `-mc-` properties for crop height, anchor and zoom; an `auto` keyword for `object-position`; a list of render state fields to keep. One property plus the standard one covers the portraits we have.
+
+## D-013 An item's tooltip takes the title's lines by default
+**Choice.** Over an `<item tooltip>`, the item's vanilla tooltip shows at once with the lines of the `title` / `title-json` that applies (the nearest from the item up) after its own, in one box, unwrapped. An empty `title` on the item opts out. A plain title wraps at 170 px unless its element has `title-nowrap`.
+**Why.**
+- Before this, the item's tooltip won and the title was dropped silently. A title on a row that holds an item says something about that item, as a merchant's price does under the item in vanilla.
+- The workaround, rebuilding the item's lines in Java as one `title-json`, lost the tooltip image, the item's tooltip style, other mods' lines and NeoForge's tooltip events, and wrapped every line at 170 px.
+- Item tooltips never wrap in vanilla, so appended lines don't either; authors break lines with `\n`.
+- `title-nowrap` follows the `title` / `title-json` attribute family and HTML's old `<td nowrap>`. A CSS property would have been the first one about UA chrome, and would need the element's style where the host only reads attributes.
+**Alternatives.** An opt-in attribute (`tooltip="merge"`) keeps the old behaviour, which dropped the title. A title width attribute (`title-width="250"`) adds a setting no page has needed yet.

@@ -83,7 +83,7 @@ host: frame(nowMs)                   every frame:
         updateLayout       if layout dirty: box tree → element.box
         input.afterLayout  after any layout (also one a script flushed): caret in view, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
-host: input.tooltip()                every frame, after paint: the title tooltip to draw on top, or null
+host: input.tooltip()                every frame, after paint: the tooltip to draw on top, or null
 host: close()                        pagehide, unload (scripts still run), then dispose scripts, timers, replaced content
 ```
 
@@ -198,7 +198,7 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 
 | Element | Behaviour |
 |---|---|
-| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover. |
+| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover, with the lines of the `title` that applies after it. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
 | `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
 | `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box (or placed by `object-position`): at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
@@ -454,9 +454,14 @@ the scrollbar).
 - Tooltips (`input.Tooltips`): the element whose `title` / `title-json` applies is the nearest one with either
   attribute from the hover target up (an empty one means none, as in HTML). Its tooltip is due once the pointer has
   rested on it (or inside it) for 500 ms, and is hidden by a button or key press until the pointer reaches another
-  tooltip's element. The engine only decides; hosts ask `InputHandler.tooltip()` each frame after painting (a
-  `Tooltip` record: element, text, JSON, pointer position) and draw it, so scripts can change the attributes live.
-  `needsFrame` covers the moment the delay ends.
+  tooltip's element. Its lines wrap at the host's width unless the element has `title-nowrap`. When the hover target
+  is replaced content that shows its own tooltip (`ReplacedContent.showsTooltip`: an `<item tooltip>`), that
+  tooltip shows instead, at once and through presses, and the title that applies adds its lines after the content's,
+  never wrapped. A titled row that holds an item usually means "this item, and this about it", so the composition
+  is the default; an empty `title` on the item opts out (D-013). The engine only decides; hosts ask
+  `InputHandler.tooltip()` each frame after painting (a `Tooltip` record: the title's element, text and JSON, the
+  pointer position, the content element when there is one, and whether to wrap) and draw it, so scripts can change
+  the attributes live. `needsFrame` covers the moment the delay ends; a content tooltip has no delay to wait out.
 - Pointer leave: `InputHandler.mouseLeave()` when the host stops giving the document the pointer (an interactive
   HUD overlay whose screen closed): hover ends with `mouseout`/`mouseleave`, a drag ends, no tooltip.
 - Focus: `focus`/`blur`/`focusin`/`focusout`; `:focus-visible` after keyboard navigation; `autofocus`; elements
@@ -526,9 +531,17 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - Replaced elements: `item`, `slot`, `entity`, `model`, `player-head` (`McReplaced.ELEMENTS`); canvases are
   `McSurface`s (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
 - `DocumentDriver`: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
-  input, messages, reload. After painting it shows the page's title tooltip through `setTooltipForNextFrame` (lines
-  from `Font.split` at 170 px, as vanilla widget tooltips; `title-json` parsed like `<mc-text json>`), at the
-  engine's pointer; vanilla's first-set-wins rule keeps an `<item tooltip>` (set while painting) on top.
+  input, messages, reload. After painting it shows the engine's tooltip at the engine's pointer through
+  `setTooltipForNextFrame`. A title alone gets lines from `Font.split` at 170 px, as vanilla widget tooltips, or
+  split only at newlines with `title-nowrap`; `title-json` is parsed like `<mc-text json>` and cut into lines at its
+  newlines by `McText.lines`. Over an `<item tooltip>` the item content (`McReplaced.showTooltip`, `ItemTooltips`)
+  sets one tooltip: vanilla's item tooltip as is when no title applies, else the item's lines
+  (`Screen.getTooltipFromItem`), then the title's, with the item's tooltip image, style and the gap after its name.
+  NeoForge's client entry installs the overload that passes the stack on, so its tooltip events (gather components,
+  colour, pre) see the item as for vanilla item tooltips.
+  `onKey(Predicate<KeyEvent>)` handlers get key presses the page left alone (not cancelled, not used by a focused
+  control, no text field focused), in order until one consumes it, before the screen's own keys: a mod's key
+  mappings (close on the key that opened the screen, switch pages) work on a page that can't know them.
   `onClose(Runnable)` handlers run once when the owner closes the page for good (screen removed, overlay hidden),
   after the page's `unload`; not on navigation, reload or while suspended (link confirmation).
 - 3D content: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
@@ -569,7 +582,13 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - `VellumScreen` (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
-  world shows).
+  world shows). Minecraft tells a screen about the pointer only when it moves, and drops the first move after a
+  screen opens, so each frame the screen also passes the driver the pointer position it was rendered with
+  (`DocumentDriver.followPointer`, in `VellumContainerScreen` too). The page gets a move when it has had no pointer
+  since it loaded, or when the render's pointer changed since the last frame and is not where the page last had it.
+  A page opened under a resting cursor is hovered from its first frames, as vanilla widgets are, and a move sent from
+  code stays in effect until the real mouse moves. `VellumAutomation` moves the mouse handler along with
+  its events (so `leave()` stays off the page), and HUD overlays poll the pointer themselves.
 - `VellumContainerScreen` (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
@@ -579,8 +598,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   positions, relative to it as in vanilla, are placed against the same area. Slot data is sent to the page only when
   a stack changed.
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
-  tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
-  slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
+  tick and the page is updated when its result or a stack changed. The page's tooltip (an `<item tooltip>`'s or a
+  title) is shown after vanilla's slot tooltip (in `extractTooltip`), and only without one, so a hovered slot's item
+  wins. Keys go to the page, then the driver's `onKey` handlers, then vanilla (the inventory key closes).
 - HUD layers: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
   `register(id, url, Predicate<Screen> interactiveOver)` (or `Input.WHEN_CHAT_OPEN`, `Input.WHEN_CURSOR_FREE`: any
   screen) makes it interactive over the screens the predicate accepts, asked each frame and pointer event with the
@@ -615,8 +635,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (Minecraft's ASCII glyph widths, the Rhino runtime, in-memory resources and canvases, recorded logs, errors,
   sounds and cursors); `TestHost.load(html)` parses, sets the viewport and runs the first frame, and returns a
   `testing/Page`: frames at chosen times, input at viewport points through the real hit test (`click(element)`
-  aims at the element's centre and checks the hit lands in it), and painting onto `testing/RecordingCanvas` (every
-  call with its transform, alpha and clip, or as a string trace). Pages are styled by the real CSS engine; hand-built
+  aims where `Document.pointerTarget` does, at the centre of the part that shows, and fails when something covers
+  it), and painting onto `testing/RecordingCanvas` (every call with its transform, alpha and clip, or as a string
+  trace). Pages are styled by the real CSS engine; hand-built
   boxes, styles and hit testers are not used. The layout suite includes ~1250 Chrome-generated fixtures from Taffy,
   run as HTML pages with Taffy's Chrome setup as a stylesheet and Ahem metrics.
 - `preview` snapshot tests render the canvas test sheet, `preview/src/test/resources/pages` and the demo UIs
@@ -629,6 +650,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (body and eyes fits at several sizes, `object-position`) whose armour stands come from a render state the autopilot
   registers (`VellumEntities`: arms, one raised, no base plate). It drives pages through `VellumAutomation`
   (docs/API.md), the public client API for dev automation: it waits for pages to settle, hovers the showcase title
-  screen's first button for a burst of screenshots a tick apart, fills in the templates demo, clicks a Mobdex row
-  scrolled out of its list, and answers the demo toast overlay through chat, checking each result.
+  screen's first button for a burst of screenshots a tick apart, opens a page under a resting cursor (hovered within
+  its first frames), screenshots an item tooltip with a title's lines and plain and `title-nowrap` titles, closes a
+  page with an `onKey` handler, fills in the templates demo, clicks a Mobdex row scrolled out of its list, and
+  answers the demo toast overlay through chat, checking each result.
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.

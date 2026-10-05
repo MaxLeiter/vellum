@@ -2,12 +2,17 @@ package dev.vellum.mod.client.replaced;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.client.render.McCanvas;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
 
 /**
  * {@code <item id="minecraft:diamond_sword" count="1" components="{...}" tooltip>}: an item stack drawn scaled from
  * 16 px to the content box's shorter side (placed by {@code object-position}), with count and durability. {@code components} is SNBT for the stack's data components
- * ({@link ItemStacks#of}). With the {@code tooltip} attribute, hovering shows the vanilla item tooltip.
+ * ({@link ItemStacks#of}). With the {@code tooltip} attribute, hovering shows the vanilla item tooltip, with the lines
+ * of the {@code title} that applies after the item's own ({@link ItemTooltips}).
  */
 final class ItemContent extends McReplaced {
     private ItemStack stack;
@@ -33,9 +38,20 @@ final class ItemContent extends McReplaced {
     }
 
     @Override
+    public boolean showsTooltip() {
+        return element.hasAttribute("tooltip") && !stack.isEmpty();
+    }
+
+    @Override
+    public boolean showTooltip(GuiGraphicsExtractor g, List<Component> extra, int x, int y) {
+        if (stack.isEmpty()) return false;
+        ItemTooltips.show(g, stack, extra, x, y);
+        return true;
+    }
+
+    @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         float size = Math.min(width, height);
         canvas.drawItem(stack, x + style().objectX(width - size), y + style().objectY(height - size), size, true);
-        if (element.isHovered() && element.hasAttribute("tooltip")) canvas.itemTooltip(stack);
     }
 }

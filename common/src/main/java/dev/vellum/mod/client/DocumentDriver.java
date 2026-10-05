@@ -16,6 +16,7 @@ import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McCanvas;
+import dev.vellum.mod.client.replaced.McReplaced;
 import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.MessagePayload;
 import net.minecraft.client.Minecraft;
@@ -45,8 +46,8 @@ import java.util.function.Predicate;
 /**
  * Hosts one Vellum document in Minecraft, for whatever shows it ({@link VellumScreen}, {@link VellumContainerScreen}
  * or a HUD overlay): loads the page, keeps its viewport in sync with the GUI-scaled window, runs frame and paint,
- * shows {@code title} tooltips, forwards input (SDL to DOM), switches SDL text input on while a text field has focus,
- * routes messages, and reloads.
+ * shows tooltips, forwards input (SDL to DOM; keys the page leaves alone go on to the mod's {@link #onKey} handlers),
+ * switches SDL text input on while a text field has focus, routes messages, and reloads.
  *
  * <p>The document is its own error boundary ({@link Document#error()}): once the engine fails, the page is replaced
  * by an {@link ErrorPanel} until it is reloaded. Render thread only.
@@ -80,6 +81,7 @@ public final class DocumentDriver {
     private final int session;
     private final Map<String, List<Consumer<JsonElement>>> listeners = new HashMap<>();
     private final List<Runnable> closeHandlers = new ArrayList<>();
+    private final List<Predicate<KeyEvent>> keyHandlers = new ArrayList<>();
     private String url;
     private @Nullable String html;
     private @Nullable String data;
@@ -91,11 +93,19 @@ public final class DocumentDriver {
     /** A child screen (link confirmation) is up and will return to this one: survive the owner's removal. */
     private boolean suspended;
     private @Nullable String pendingNavigation;
-    /** Whether the last frame asked for a tooltip (an item's while painting, or the page's title). */
+    /** Whether the last frame asked vanilla for a tooltip (the page's, an item's or a title). */
     private boolean tooltipRequested;
-    /** The last title tooltip's attributes and its wrapped lines, so JSON is parsed and lines split once. */
+    /**
+     * The last title's attributes and wrapping, and its lines: split at newlines, and as shown alone (wrapped or not),
+     * so JSON is parsed and lines split once.
+     */
     private @Nullable String tooltipSource;
+    private List<Component> titleLines = List.of();
     private List<FormattedCharSequence> tooltipLines = List.of();
+    /** Where the page last got the pointer (GUI px), from any pointer event; NaN before any since it loaded. */
+    private double pointerX = Double.NaN, pointerY = Double.NaN;
+    /** The pointer the owner screen was last rendered with ({@link #followPointer}); MIN_VALUE before the first frame. */
+    private int renderX = Integer.MIN_VALUE, renderY = Integer.MIN_VALUE;
 
     /**
      * @param url     the page ({@code ns:path/page.html}); also the base for its relative URLs
@@ -188,6 +198,8 @@ public final class DocumentDriver {
         LIVE.add(this);
         error = null;
         tooltipSource = null; // translations may have changed
+        pointerX = pointerY = Double.NaN; // the new document has not seen the pointer
+        renderX = renderY = Integer.MIN_VALUE;
         if (html == null) VellumScreens.pageLoading(url, this);
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
@@ -237,7 +249,6 @@ public final class DocumentDriver {
             McCanvas canvas = new McCanvas(g, mouseX, mouseY, owner.slots());
             doc.paint(canvas);
             canvas.finish();
-            tooltipRequested = canvas.requestedTooltip();
             syncTextInput();
             if (cursor != Cursor.AUTO && cursor != Cursor.DEFAULT) g.requestCursor(cursorType(cursor));
         }
@@ -248,18 +259,27 @@ public final class DocumentDriver {
     }
 
     /**
-     * Shows the {@code title} / {@code title-json} tooltip the page has up ({@link InputHandler#tooltip()}) at the
-     * page's pointer, wrapped like vanilla widget tooltips; none when {@code mouseX} is -1 (no pointer). Vanilla draws
-     * it on top at the end of the frame, and only if nothing set a tooltip before it (an {@code <item tooltip>}, a
-     * container slot's item).
+     * Shows the tooltip the page has up ({@link InputHandler#tooltip()}) at the page's pointer; none when
+     * {@code mouseX} is -1 (no pointer). On an {@code <item tooltip>} it is the item's vanilla tooltip with the lines
+     * of the title that applies after the item's own, unwrapped. Otherwise it is the {@code title} /
+     * {@code title-json} tooltip, wrapped like vanilla widget tooltips unless the element has {@code title-nowrap}.
+     * Vanilla draws it on top at the end of the frame, and only if nothing set a tooltip before it (a container
+     * slot's item, which its screen sets first).
      */
     void extractTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Document doc = document();
         Tooltip tooltip = doc == null || mouseX < 0 ? null : doc.input().tooltip();
         if (tooltip == null) return;
+        int x = (int) tooltip.x(), y = (int) tooltip.y();
+        if (tooltip.content() != null) {
+            if (tooltip.content().replaced instanceof McReplaced content && content.showTooltip(g, titleLines(tooltip), x, y)) {
+                tooltipRequested = true;
+            }
+            return;
+        }
         List<FormattedCharSequence> lines = tooltipLines(tooltip);
         if (lines.isEmpty()) return;
-        g.setTooltipForNextFrame(Minecraft.getInstance().font, lines, (int) tooltip.x(), (int) tooltip.y());
+        g.setTooltipForNextFrame(Minecraft.getInstance().font, lines, x, y);
         tooltipRequested = true;
     }
 
@@ -268,15 +288,28 @@ public final class DocumentDriver {
         return tooltipRequested;
     }
 
+    /** The title's lines, split at its newlines only. */
+    private List<Component> titleLines(Tooltip tooltip) {
+        parseTitle(tooltip);
+        return titleLines;
+    }
+
+    /** The title's lines as a tooltip of their own: wrapped at {@link #TOOLTIP_WIDTH} unless the tooltip says not to. */
     private List<FormattedCharSequence> tooltipLines(Tooltip tooltip) {
-        String source = tooltip.json() + "\u0000" + tooltip.text();
-        if (!source.equals(tooltipSource)) {
-            Component text = tooltip.json() != null ? McText.component(tooltip.json()) : null;
-            if (text == null && tooltip.text() != null) text = Component.literal(tooltip.text());
-            tooltipSource = source;
-            tooltipLines = text == null ? List.of() : Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
-        }
+        parseTitle(tooltip);
         return tooltipLines;
+    }
+
+    private void parseTitle(Tooltip tooltip) {
+        String source = tooltip.json() + "\u0000" + tooltip.text() + "\u0000" + tooltip.wrap();
+        if (source.equals(tooltipSource)) return;
+        Component text = tooltip.json() != null ? McText.component(tooltip.json()) : null;
+        if (text == null && tooltip.text() != null) text = Component.literal(tooltip.text());
+        tooltipSource = source;
+        titleLines = text == null ? List.of() : McText.lines(text);
+        if (text == null) tooltipLines = List.of();
+        else if (tooltip.wrap()) tooltipLines = Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
+        else tooltipLines = titleLines.stream().map(Component::getVisualOrderText).toList();
     }
 
     /**
@@ -317,36 +350,97 @@ public final class DocumentDriver {
     // ---- Input (true = consumed) ----
 
     public boolean mouseMoved(double x, double y) {
+        pointerAt(x, y);
         return input(in -> in.mouseMove((float) x, (float) y, KeyNames.current()));
     }
 
     public boolean mouseClicked(MouseButtonEvent e) {
+        pointerAt(e.x(), e.y());
         return input(in -> in.mouseDown((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
     public boolean mouseReleased(MouseButtonEvent e) {
+        pointerAt(e.x(), e.y());
         return input(in -> in.mouseUp((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
     /** The pointer left the page (an interactive HUD overlay whose screen closed): hover ends. */
     void mouseLeave() {
+        pointerX = pointerY = Double.NaN;
         Document doc = document();
         if (doc != null) doc.input().mouseLeave();
     }
 
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        pointerAt(x, y);
         return input(in -> in.wheel((float) x, (float) y, (float) -scrollX * InputHandler.WHEEL_NOTCH,
                 (float) -scrollY * InputHandler.WHEEL_NOTCH, KeyNames.current()));
     }
 
     /**
-     * Key down. Also true for any key but Escape while a text field has focus, so screen shortcuts (the inventory
-     * key, hotbar swaps) don't fire while typing.
+     * For screens, every frame before {@link #extract}: the pointer the frame is rendered with. Minecraft tells a
+     * screen where the pointer is only when it moves, and drops the first move after a screen opens, so a page opened
+     * under a resting cursor would hover nothing until the mouse moved. Vanilla widgets read the render's pointer
+     * instead. This does the same: it sends the page a move to the render's pointer when the page has not had the
+     * pointer since it loaded, or when the render's pointer changed since the last frame and is not where the page
+     * last had it. Frames with an unchanged pointer send nothing, so a move sent from code
+     * ({@code screen.mouseMoved} without moving the mouse) stands until the mouse moves. {@link VellumAutomation}
+     * moves the mouse handler's pointer along with its events, so the two agree.
+     */
+    void followPointer(int mouseX, int mouseY) {
+        boolean moved = renderX != Integer.MIN_VALUE && (mouseX != renderX || mouseY != renderY);
+        renderX = mouseX;
+        renderY = mouseY;
+        boolean elsewhere = (int) pointerX != mouseX || (int) pointerY != mouseY;
+        if (!Double.isNaN(pointerX) && !(moved && elsewhere)) return;
+        // The render's pointer is the mouse handler's, truncated: send the exact one when it is that.
+        Minecraft mc = Minecraft.getInstance();
+        double x = mc.mouseHandler.getScaledXPos(mc.getWindow()), y = mc.mouseHandler.getScaledYPos(mc.getWindow());
+        if ((int) x != mouseX || (int) y != mouseY) {
+            x = mouseX;
+            y = mouseY;
+        }
+        mouseMoved(x, y);
+    }
+
+    private void pointerAt(double x, double y) {
+        pointerX = x;
+        pointerY = y;
+    }
+
+    /**
+     * Key down: the page first, then the {@link #onKey} handlers with a key it left alone. Also true for any key but
+     * Escape while a text field has focus, so screen shortcuts (the inventory key, hotbar swaps) and the handlers
+     * don't fire while typing.
      */
     public boolean keyPressed(KeyEvent e) {
         String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
         return input(in -> in.keyDown(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers()))
-                || (in.wantsKeyboard() && !e.isEscape()));
+                || (in.wantsKeyboard() && !e.isEscape())) || keyHandled(e);
+    }
+
+    /**
+     * Asks {@code handler} about each key press the page leaves alone, before the screen's own keys (Escape, a
+     * container screen's inventory key): for a mod's key mappings, which a page can't know. Keys the page uses never
+     * reach it: one a {@code keydown} listener cancelled, one a focused control acted on (Enter on a button, arrows on
+     * a slider), and every key but Escape while a text field has focus. Returning true consumes the key. Handlers are
+     * asked in the order they were added until one returns true, and stay through navigation and reloads, as
+     * {@link #onMessage} handlers do.
+     */
+    public DocumentDriver onKey(Predicate<KeyEvent> handler) {
+        keyHandlers.add(handler);
+        return this;
+    }
+
+    private boolean keyHandled(KeyEvent e) {
+        for (Predicate<KeyEvent> handler : List.copyOf(keyHandlers)) {
+            try {
+                if (handler.test(e)) return true;
+            } catch (RuntimeException ex) {
+                Constants.LOG.error("Vellum: an onKey handler of {} failed", name(), ex);
+            }
+        }
+        return false;
     }
 
     public boolean keyReleased(KeyEvent e) {

@@ -61,7 +61,6 @@ public final class McCanvas implements Canvas {
     private float alpha = 1;
     /** The clips, mirrored by vanilla's scissor stack where they are not empty. */
     private final ScissorStack clips;
-    private boolean tooltip;
 
     private Matrix3x2f[] savedMatrices = new Matrix3x2f[16];
     private float[] savedAlpha = new float[16];
@@ -78,7 +77,7 @@ public final class McCanvas implements Canvas {
     }
 
     /**
-     * @param mouseX pointer position in GUI px, for content that reacts to it (item tooltips, gazes); -1 if none
+     * @param mouseX pointer position in GUI px, for content that reacts to it (gazes); -1 if none
      * @param slots  where {@code <slot>} elements report their painted position, or null outside container screens
      */
     public McCanvas(GuiGraphicsExtractor g, float mouseX, float mouseY, @Nullable SlotSink slots) {
@@ -286,18 +285,6 @@ public final class McCanvas implements Canvas {
         g.pose().set(m).translate(x, y).scale(size / 16f, size / 16f);
         g.item(stack, 0, 0);
         if (decorations) g.itemDecorations(mc.font, stack, 0, 0);
-    }
-
-    /** Shows the vanilla tooltip for {@code stack} at the pointer; vanilla draws it on top at the end of the frame. */
-    public void itemTooltip(ItemStack stack) {
-        if (clippedAway() || mouseX < 0 || stack.isEmpty()) return;
-        g.setTooltipForNextFrame(mc.font, stack, (int) mouseX, (int) mouseY);
-        tooltip = true;
-    }
-
-    /** Whether content asked for a tooltip while painting ({@link #itemTooltip}). */
-    public boolean requestedTooltip() {
-        return tooltip;
     }
 
     /**

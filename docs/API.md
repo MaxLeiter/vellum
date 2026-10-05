@@ -64,6 +64,14 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
   them reaches your `onMessage` handlers first.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
+- `screen.driver().onKey(handler)` gives your mod the key presses the page leaves alone, before the screen's own keys
+  (Escape, a container screen's inventory key). Use it for your own key mappings; the page doesn't know about them. A
+  key the page uses never reaches the handler: one a `keydown` listener cancelled with `preventDefault()`, one a
+  focused control acted on (Enter on a button), and every key but Escape while a text field has focus, so typing "j"
+  in an `<input>` stays text. Return true to consume the key. Handlers run in the order they were added until one
+  returns true, and stay through navigation and reloads.
+- A page opened under a resting cursor shows `:hover` there from its first frame, as vanilla screens do, and its
+  `title` tooltip half a second later, without the mouse moving.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
   a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
@@ -74,6 +82,20 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 VellumScreens.open("mymod:vellum/notes.html", notesJson).driver()
         .onMessage("save", value -> Notes.save(value.getAsJsonObject()))   // the page saves in its unload listener
         .onClose(Notes::flush);
+
+// The book closes on the mod's own key, as E closes the inventory, and M opens the map:
+VellumScreen book = VellumScreens.open("chronicle:vellum/book.html");
+book.driver().onKey(e -> {
+    if (ChronicleKeys.OPEN.matches(e)) {   // a KeyMapping
+        book.onClose();
+        return true;
+    }
+    if (ChronicleKeys.MAP.matches(e)) {
+        VellumScreens.open("chronicle:vellum/map.html");
+        return true;
+    }
+    return false;
+});
 ```
 
 ## Opening a page from the server
@@ -217,7 +239,7 @@ and `object-fit`, and placed in their box by `object-position`.
 
 | Element | Attributes | Notes |
 |---|---|---|
-| `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla tooltip. Items can't be faded: under 50% opacity they are hidden. |
+| `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla item tooltip at once, with the lines of any `title` that applies after the item's own (below). Items can't be faded: under 50% opacity they are hidden. |
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
 | `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer; `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
 | `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
@@ -228,9 +250,25 @@ and `object-fit`, and placed in their box by `object-position`.
 | `<mc-text>` | `key` + `args`, or `json` | Minecraft text as ordinary inline text: a translation (`key="block.minecraft.stone"`, comma-separated `args`) or a chat component (`json='{"text":"Gold","color":"gold","bold":true}'`). Styled parts become spans. Expanded when the element is added to the page and whenever these attributes change, so it works in templates. |
 
 Any element can have a `title` (plain text; a newline breaks the line) or a `title-json` (a chat component, for
-coloured text): after half a second of hover the vanilla tooltip shows at the pointer, wrapped like a widget
-tooltip. The nearest one from the hovered element up wins, and an `<item tooltip>` or a container slot's item
-tooltip wins over it. See SCRIPTING.md.
+coloured text): after half a second of hover the vanilla tooltip shows at the pointer, wrapped at 170 px like a
+widget tooltip. Add `title-nowrap` to the element to keep its lines whole; they then break only at newlines. The
+nearest title from the hovered element up wins, and a container slot's item tooltip wins over it. See SCRIPTING.md.
+
+Over an `<item tooltip>`, the item's own tooltip shows at once, and the title that applies (the nearest one from the
+item up) adds its lines after the item's, in the same box. Neither the item's lines nor the title's wrap. This gives a
+shop row the vanilla merchant layout: the item, then the price and a note.
+
+```html
+<div class="row" title-json='{"text":"","extra":[{"text":"Buy for 6 emeralds","color":"green"},
+     {"text":"\nIron comes a long way to get here","color":"gray","italic":true}]}'>
+  <item id="minecraft:iron_sword" tooltip></item> Iron Sword
+</div>
+```
+
+This is the default because a title on a row that holds an item usually describes that item. To show the item's
+tooltip alone, give the item an empty title: `<item id="minecraft:iron_sword" tooltip title="">`. Elsewhere in the row
+the title shows alone after the usual delay, wrapped unless the row has `title-nowrap`. On NeoForge the item's stack
+goes along to NeoForge's tooltip events, as for any item tooltip.
 
 CSS extras for Minecraft: `font-family: minecraft:default | minecraft:uniform | minecraft:alt |
 minecraft:illageralt | <any font id>` (`monospace` is uniform), `text-shadow: minecraft` (the game's own shadow),
@@ -385,7 +423,8 @@ or the element has `pointer-events: none`), they return false and send nothing, 
 elsewhere.
 
 After `click` or `wheel` the pointer stays where it is, as a real mouse would: the element keeps `:hover`, and half a
-second later its `title` tooltip shows. Call `leave()` before a screenshot.
+second later its `title` tooltip shows. Call `leave()` before a screenshot. Pages follow the pointer from their first
+frame, so the next page you open is hovered wherever the pointer was left, too.
 
 A HUD overlay takes input while it is interactive over the open screen: a screen its `Input` or predicate accepts,
 once a frame has drawn the overlay above that screen. `hover`, `click` and `wheel` then take the same path as on a
@@ -419,8 +458,10 @@ is one), so cap the wait. A HUD overlay is not settled until its page has loaded
 its error panel is settled.
 
 Vellum's own autopilot (`./gradlew :neoforge:runClient -Pautopilot`, or `:fabric:runClient`) uses all of this: it
-waits for each page to settle, hovers the showcase title screen, fills in the templates demo, clicks a row scrolled
-out of the Mobdex's list, and answers the demo toast through chat.
+waits for each page to settle, hovers the showcase title screen, opens a page under a resting cursor and checks it is
+hovered within its first frames, hovers items and titles for their tooltips, closes a page with a mod's key through
+`onKey`, fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and answers the demo toast
+through chat.
 
 ## Stability
 

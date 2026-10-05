@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import dev.vellum.engine.css.CssColors;
+import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.Host;
@@ -18,13 +19,18 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Draws a page's {@code title} tooltip ({@link Tooltip}) as Minecraft does: white shadowed lines, wrapped at 170 px
- * like widget tooltips, 12 px right of and above the pointer and kept on screen, over the {@code tooltip/background}
- * and {@code tooltip/frame} sprites. {@code title-json} is read as a chat component: text, translations, colours,
- * bold, italic, underline, strikethrough and {@code extra}; other components show as their text.
+ * Draws a page's tooltip ({@link Tooltip}) as Minecraft does: white shadowed lines, 12 px right of and above the
+ * pointer and kept on screen, over the {@code tooltip/background} and {@code tooltip/frame} sprites. A title's lines
+ * wrap at 170 px like widget tooltips unless the tooltip says not to. {@code title-json} is read as a chat component:
+ * text, translations, colours, bold, italic, underline, strikethrough and {@code extra}; other components show as
+ * their text. On an {@code <item tooltip>} the item's tooltip comes first; the previewer knows only its name (from the
+ * game's translations), which it shows with the 2 px gap vanilla leaves below an item's name, and the title's lines
+ * follow, unwrapped.
  */
 final class TooltipPainter {
     private static final int WRAP = 170, LINE_HEIGHT = 10, MOUSE_OFFSET = 12, FRAME = 12;
+    /** The space below an item's name when more lines follow (vanilla's {@code EXTRA_SPACE_AFTER_FIRST_TOOLTIP_LINE}). */
+    private static final int NAME_GAP = 2;
     private static final int WHITE = 0xFFFFFFFF;
 
     /** A styled piece of text. */
@@ -41,12 +47,15 @@ final class TooltipPainter {
         FontMetrics fonts = host.fonts();
         List<Run> runs = tooltip.json() != null ? component(host, tooltip.json()) : null;
         if (runs == null) runs = tooltip.text() == null ? List.of() : List.of(new Run(tooltip.text(), MinecraftFont.NATIVE, WHITE, 0));
-        List<List<Run>> lines = wrap(fonts, runs);
+        List<List<Run>> lines = new ArrayList<>();
+        if (tooltip.content() != null) lines.add(List.of(new Run(itemName(host, tooltip.content()), MinecraftFont.NATIVE, WHITE, 0)));
+        lines.addAll(wrap(fonts, runs, tooltip.wrap() ? WRAP : Float.POSITIVE_INFINITY));
         if (lines.isEmpty()) return;
+        int gap = tooltip.content() != null && lines.size() > 1 ? NAME_GAP : 0;
 
         float width = 0;
         for (List<Run> line : lines) width = Math.max(width, width(fonts, line));
-        int w = (int) Math.ceil(width), h = lines.size() * LINE_HEIGHT - 2;
+        int w = (int) Math.ceil(width), h = lines.size() * LINE_HEIGHT - 2 + gap;
         int x = (int) tooltip.x() + MOUSE_OFFSET, y = (int) tooltip.y() - MOUSE_OFFSET;
         if (x + w > viewportWidth) x = Math.max(x - 2 * MOUSE_OFFSET - w, 4);
         if (y + h + 3 > viewportHeight) y = (int) viewportHeight - h - 3;
@@ -54,18 +63,31 @@ final class TooltipPainter {
         canvas.drawSprite("minecraft:tooltip/background", x - FRAME, y - FRAME, w + 2 * FRAME, h + 2 * FRAME, WHITE);
         canvas.drawSprite("minecraft:tooltip/frame", x - FRAME, y - FRAME, w + 2 * FRAME, h + 2 * FRAME, WHITE);
         for (int i = 0; i < lines.size(); i++) {
-            float lx = x;
+            float lx = x, ly = y + i * LINE_HEIGHT + (i > 0 ? gap : 0);
             for (Run run : lines.get(i)) {
-                canvas.drawText(run.text, lx, y + i * LINE_HEIGHT, run.font, run.color, run.decorations, true);
+                canvas.drawText(run.text, lx, ly, run.font, run.color, run.decorations, true);
                 lx += fonts.width(run.text, run.font);
             }
         }
     }
 
+    /** An item's name, as its tooltip's first line: the translation of its item (else block) key, else its id. */
+    private static String itemName(Host host, Element item) {
+        String id = item.getAttribute("id");
+        if (id == null || id.isBlank()) return "";
+        String[] name = id.strip().split(":", 2);
+        String namespace = name.length == 2 ? name[0] : "minecraft", path = name[name.length - 1].replace('/', '.');
+        for (String kind : new String[] {"item", "block"}) {
+            String key = kind + "." + namespace + "." + path, text = host.translate(key);
+            if (!text.equals(key)) return text;
+        }
+        return id.strip();
+    }
+
     // ---- Wrapping ----
 
-    /** Lines at {@code '\n'}, then at spaces before {@link #WRAP} px; a word wider than that is broken anywhere. */
-    private static List<List<Run>> wrap(FontMetrics fonts, List<Run> runs) {
+    /** Lines at {@code '\n'}, then at spaces before {@code wrap} px; a word wider than that is broken anywhere. */
+    private static List<List<Run>> wrap(FontMetrics fonts, List<Run> runs, float wrap) {
         List<List<Run>> lines = new ArrayList<>();
         List<Run> line = new ArrayList<>();
         float x = 0;
@@ -95,15 +117,15 @@ final class TooltipPainter {
                         x += pw;
                     }
                 } else {
-                    if (x + pw > WRAP && x > 0) {
+                    if (x + pw > wrap && x > 0) {
                         trimTrailingSpaces(line);
                         lines.add(line);
                         line = new ArrayList<>();
                         x = 0;
                     }
-                    while (pw > WRAP && piece.length() > 1) { // a word wider than a line
+                    while (pw > wrap && piece.length() > 1) { // a word wider than a line
                         int cut = piece.length() - 1;
-                        while (cut > 1 && fonts.width(piece.substring(0, cut), run.font) > WRAP) cut--;
+                        while (cut > 1 && fonts.width(piece.substring(0, cut), run.font) > wrap) cut--;
                         line.add(new Run(piece.substring(0, cut), run.font, run.color, run.decorations));
                         lines.add(line);
                         line = new ArrayList<>();

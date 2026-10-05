@@ -1,5 +1,8 @@
 package dev.vellum.engine.input;
 
+import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.host.ReplacedContent;
+import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,8 @@ class TooltipTest {
         assertSame(page.byId("a"), t.element(), "the nearest element with a title, from the hovered one up");
         assertEquals("Line one\nLine two", t.text());
         assertNull(t.json());
+        assertNull(t.content());
+        assertTrue(t.wrap(), "title tooltips wrap");
         assertEquals(10, t.x());
         assertEquals(10, t.y());
         page.paint();
@@ -114,5 +119,101 @@ class TooltipTest {
         assertNull(at(2000));
         page.paint();
         assertFalse(page.doc.needsFrame(3000));
+    }
+
+    @Test
+    void titleNowrapKeepsTheLinesWhole() {
+        page.byId("a").setAttribute("title-nowrap", "");
+        page.move(10, 10);
+        assertFalse(at(500).wrap());
+    }
+
+    // ---- Content with a tooltip of its own: <item tooltip> ----
+
+    /** An item as Minecraft's: its tooltip shows while hovered when it has the {@code tooltip} attribute. */
+    private record Item(Element element) implements ReplacedContent {
+        @Override public float intrinsicWidth() { return 16; }
+        @Override public float intrinsicHeight() { return 16; }
+        @Override public void paint(Canvas canvas, float x, float y, float width, float height) {}
+        @Override public boolean showsTooltip() { return element.hasAttribute("tooltip"); }
+    }
+
+    /**
+     * Shop rows: #row has a title-json, and the item #sword inside it shows its own tooltip; in #quiet, #muted has an
+     * empty title and #icon no tooltip of its own; #bare has no title above it.
+     */
+    private static Page shop() {
+        TestHost host = new TestHost();
+        host.replaced.put("item", Item::new);
+        return host.load("""
+                <style>div { display: flex; height: 16px } span { width: 60px }</style>
+                <div id=row title-json='{"text":"Buy for 6 emeralds","color":"green"}'>
+                  <item id=sword tooltip></item><span id=name>Iron Sword</span>
+                </div>
+                <div id=quiet title="Quiet"><item id=muted tooltip title=""></item><item id=icon></item></div>
+                <div><item id=bare tooltip></item></div>""");
+    }
+
+    @Test
+    void anItemsTooltipShowsAtOnceWithTheTitleLinesAfterIt() {
+        Page shop = shop();
+        shop.hover(shop.byId("sword"));
+        shop.frame(16);
+        Tooltip t = shop.input.tooltip();
+        assertSame(shop.byId("sword"), t.content(), "the item's own tooltip, with no delay");
+        assertSame(shop.byId("row"), t.element(), "the row's title adds its lines");
+        assertEquals("{\"text\":\"Buy for 6 emeralds\",\"color\":\"green\"}", t.json());
+        assertFalse(t.wrap(), "lines after an item's tooltip don't wrap, as an item's own lines don't");
+        shop.paint();
+        assertTrue(shop.doc.settled(), "nothing is waiting out a delay");
+        assertFalse(shop.doc.needsFrame(1000));
+    }
+
+    @Test
+    void besideTheItemTheTitleShowsAloneAfterTheDelay() {
+        Page shop = shop();
+        shop.hover(shop.byId("name"));
+        shop.frame(400);
+        assertNull(shop.input.tooltip());
+        shop.frame(516);
+        Tooltip t = shop.input.tooltip();
+        assertSame(shop.byId("row"), t.element());
+        assertNull(t.content());
+        assertTrue(t.wrap());
+        shop.hover(shop.byId("sword"));
+        assertSame(shop.byId("sword"), shop.input.tooltip().content(), "and the item's comes back at once");
+    }
+
+    @Test
+    void pressingKeepsAnItemsTooltip() {
+        Page shop = shop();
+        shop.click(shop.byId("sword"));
+        shop.key("x");
+        shop.frame(1000);
+        assertSame(shop.byId("sword"), shop.input.tooltip().content(), "as Minecraft's item tooltips stay up");
+    }
+
+    @Test
+    void anEmptyTitleOnTheItemOrNoneAboveLeavesItsTooltipAlone() {
+        Page shop = shop();
+        for (String id : new String[] {"muted", "bare"}) {
+            shop.hover(shop.byId(id));
+            Tooltip t = shop.input.tooltip();
+            assertSame(shop.byId(id), t.content(), id);
+            assertNull(t.element(), id + ": no title applies");
+            assertNull(t.text());
+            assertNull(t.json());
+        }
+    }
+
+    @Test
+    void contentWithoutATooltipOfItsOwnGetsTheTitleAsAnyElement() {
+        Page shop = shop();
+        shop.hover(shop.byId("icon"));
+        shop.frame(100);
+        assertNull(shop.input.tooltip(), "the title's delay, as for any element");
+        shop.byId("icon").setAttribute("tooltip", "");
+        assertSame(shop.byId("icon"), shop.input.tooltip().content(), "the attribute is read when the host asks");
+        assertEquals("Quiet", shop.input.tooltip().text());
     }
 }

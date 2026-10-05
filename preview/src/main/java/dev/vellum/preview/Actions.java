@@ -18,8 +18,8 @@ import java.util.Locale;
  * A script of input for a page, run headless ({@code --actions <file>}): one action a line; lines starting with
  * {@code #} are comments. Frames are rendered 16 ms apart from t = 0, as in a snapshot, and every input action is
  * followed by one, so the next action and the next shot see what it did. Targets are viewport points in GUI px
- * ({@code 120 40}) or a CSS selector (the centre of the first match's border box, as painted). See
- * {@code preview/README.md}.
+ * ({@code 120 40}) or a CSS selector (the centre of the part of the first match that shows, as painted, where
+ * {@code VellumAutomation} aims in game). See {@code preview/README.md}.
  */
 final class Actions {
     /** One line of the script: an action name, its arguments split at white space, and the text after the name. */
@@ -180,7 +180,10 @@ final class Actions {
             });
         }
 
-        /** Two numbers are a point; anything else is a selector, aimed at the centre of its first match. */
+        /**
+         * Two numbers are a point; anything else is a selector, aimed where pointer input reaches its first match
+         * ({@link Document#pointerTarget}: the centre of the part that shows, scrolled into view if none does).
+         */
         private Point target(List<String> args) {
             if (args.size() == 2 && isNumber(args.get(0)) && isNumber(args.get(1))) {
                 return new Point(Float.parseFloat(args.get(0)), Float.parseFloat(args.get(1)));
@@ -189,8 +192,9 @@ final class Actions {
             Document doc = scene.document();
             Element e = doc == null ? null : doc.querySelector(selector);
             if (e == null || e.box == null) throw new IllegalStateException("nothing is shown for " + selector);
-            float[] r = e.getBoundingClientRect();
-            return new Point(r[0] + r[2] / 2, r[1] + r[3] / 2);
+            float[] at = doc.pointerTarget(e);
+            if (at == null) throw new IllegalStateException("the pointer can't reach " + selector + ": something covers it");
+            return new Point(at[0], at[1]);
         }
 
         private void frames(int n) {

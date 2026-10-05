@@ -683,9 +683,9 @@
   <main>
     <section class="wares">
       <div v-for="(w, i) in visible()" :key="w.id" class="card" :class="w.rarity" :style="{ animationDelay: i * 25 + 'ms' }"
-           :title="w.rarity" @click="add(w, $event)">
+           :title-json="deal(w)" @click="add(w, $event)">
         <i class="sweep" v-if="w.rarity === 'legendary'" :style="{ animationDelay: i * 250 + 'ms' }"></i>
-        <div class="art"><item :id="w.icon"></item></div>
+        <div class="art"><item :id="w.icon" tooltip></item></div>
         <div class="name">{{ w.name }}</div>
         <div class="meta">
           <span class="tier">{{ '◆'.repeat(5 - ORDER[w.rarity]) }}</span>
@@ -751,6 +751,7 @@
       { id: 'heart', name: 'Sea Heart', icon: 'minecraft:heart_of_the_sea', price: 30, rarity: 'epic', cat: 'magic' }
     ];
     const ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+    const TIER_COLOUR = { legendary: 'gold', epic: 'light_purple', rare: 'aqua', uncommon: 'yellow', common: 'gray' };
 
     const shop = vellum.state({
       tabs: [
@@ -773,6 +774,12 @@
       },
       ware(id) {
         return WARES.find(w => w.id === id);
+      },
+      // A card's tooltip: the rarity and the price. Over the item, these lines follow the item's own tooltip.
+      deal(w) {
+        const tier = w.rarity.charAt(0).toUpperCase() + w.rarity.slice(1);
+        return JSON.stringify({ text: '', extra: [{ text: tier, color: TIER_COLOUR[w.rarity] },
+          { text: '\n' + w.price + (w.price === 1 ? ' emerald' : ' emeralds'), color: 'green' }] });
       },
       total() {
         return this.cart.reduce((sum, l) => sum + this.ware(l.id).price * l.qty, 0);

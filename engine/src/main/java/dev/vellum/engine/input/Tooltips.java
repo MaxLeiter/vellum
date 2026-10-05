@@ -7,18 +7,25 @@ import dev.vellum.engine.dom.Element;
  * either attribute, from the hovered element up (an empty attribute means "no tooltip here", as in HTML, so a child
  * can opt out of its ancestor's). Its tooltip shows once the pointer has rested on it, or anything inside it, for
  * {@link #DELAY_MS}, and stays until the pointer moves to another tooltip's element or a button or key is pressed.
- * The attributes are read when the host asks, so scripts can change the text live.
+ * Its lines wrap unless the element has {@code title-nowrap}.
+ *
+ * <p>While the pointer is on an element whose content shows a tooltip of its own (an {@code <item tooltip>}), that
+ * tooltip shows instead, at once and through presses, as Minecraft's item tooltips do, and the title that applies
+ * (looked up from that element) adds its lines after the content's, unwrapped.
+ *
+ * <p>The attributes are read when the host asks, so scripts can change the text live.
  */
 final class Tooltips {
     /** How long the pointer rests before a tooltip shows, as for title tooltips in browsers. */
     static final double DELAY_MS = 500;
 
-    private Element owner;
+    private Element hovered, owner;
     private double since;
     private boolean dismissed, shown;
 
     /** The hover target changed (or its attributes may have): restart the delay if another element's tooltip applies. */
     void track(Element hovered, double now) {
+        this.hovered = hovered;
         Element o = owner(hovered);
         if (o == owner) return;
         owner = o;
@@ -35,22 +42,30 @@ final class Tooltips {
     /** The tooltip to show at {@code now} for the hovered element, or null. */
     Tooltip current(Element hovered, double now, float x, float y) {
         track(hovered, now);
-        if (owner == null || dismissed || now - since < DELAY_MS) return null;
-        String text = nonBlank(owner.getAttribute("title")), json = nonBlank(owner.getAttribute("title-json"));
-        if (text == null && json == null) return null;
+        String text = owner == null ? null : nonBlank(owner.getAttribute("title"));
+        String json = owner == null ? null : nonBlank(owner.getAttribute("title-json"));
+        boolean titled = text != null || json != null;
+        Element content = content();
+        if (content != null) return new Tooltip(titled ? owner : null, text, json, x, y, content, false);
+        if (!titled || dismissed || now - since < DELAY_MS) return null;
         shown = true;
-        return new Tooltip(owner, text, json, x, y);
+        return new Tooltip(owner, text, json, x, y, null, !owner.hasAttribute("title-nowrap"));
     }
 
-    /** Whether a tooltip with text is coming that the host has not been given yet: waiting out the delay, or due. */
+    /** Whether a title tooltip is coming that the host has not been given yet: waiting out the delay, or due. */
     boolean pending() {
-        return owner != null && !dismissed && !shown
+        return owner != null && !dismissed && !shown && content() == null
                 && (nonBlank(owner.getAttribute("title")) != null || nonBlank(owner.getAttribute("title-json")) != null);
     }
 
     /** Whether a tooltip becomes visible at {@code now} that the host has not been given yet. */
     boolean due(double now) {
         return now >= since + DELAY_MS && pending();
+    }
+
+    /** The hovered element when its content shows a tooltip of its own, else null. */
+    private Element content() {
+        return hovered != null && hovered.replaced != null && hovered.replaced.showsTooltip() ? hovered : null;
     }
 
     private static Element owner(Element e) {

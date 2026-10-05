@@ -42,8 +42,10 @@ way. It is handy for checking hover states, menus, typing and scrolling without 
 
 The file has one action per line; lines starting with `#` are comments. Frames run 16 ms apart from t = 0, as in a
 snapshot, and every input action is followed by one frame, so the next action and the next shot see its effect.
-A target is a point in GUI pixels (`120 40`) or a CSS selector, which aims at the centre of the first matching
-element as it is painted (after scrolling and transforms).
+A target is a point in GUI pixels (`120 40`) or a CSS selector, which aims at the first matching element as it is
+painted (after scrolling and transforms): at the centre of the part of it that shows, cut to its scroll containers
+and the window, as `VellumAutomation` aims in game. When none of it shows, the previewer first scrolls its scroll
+containers to bring it into view. An element covered by another one at that point is an error.
 
 | Action | Does |
 |---|---|

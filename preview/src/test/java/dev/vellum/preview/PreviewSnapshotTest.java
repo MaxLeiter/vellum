@@ -85,6 +85,34 @@ class PreviewSnapshotTest {
         }
     }
 
+    /**
+     * An {@code <item tooltip>} in a row with a {@code title-json}: at once, the item's tooltip (its name, in the
+     * previewer) with the row's lines after it, unwrapped. Then a {@code title-nowrap} title, half a second later.
+     */
+    @Test
+    void itemAndNowrapTooltipsMatchGoldens() throws IOException, URISyntaxException {
+        assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
+        Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/item.html").toURI());
+        try (MinecraftAssets assets = MinecraftAssets.open(List.of(), JAR)) {
+            MinecraftFont font = new MinecraftFont(assets);
+            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
+                    new Viewport(CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE));
+            FrameRenderer renderer = new FrameRenderer(assets, font);
+            int width = CanvasTest.WIDTH * SCALE, height = CanvasTest.HEIGHT * SCALE;
+            renderer.render(scene, width, height, SCALE, 0, null);
+            float[] item = scene.document().pointerTarget(scene.document().querySelector("item"));
+            scene.input(in -> in.mouseMove(item[0], item[1], Modifiers.NONE));
+            BufferedImage image = renderer.render(scene, width, height, SCALE, 16, null);
+            assertNull(scene.error(), () -> "failed: " + scene.error());
+            Snapshots.assertMatches("item-tooltip", image);
+
+            float[] button = scene.document().pointerTarget(scene.document().getElementById("nowrap"));
+            scene.input(in -> in.mouseMove(button[0], button[1], Modifiers.NONE));
+            renderer.render(scene, width, height, SCALE, 32, null);
+            Snapshots.assertMatches("nowrap-tooltip", renderer.render(scene, width, height, SCALE, 540, null));
+        }
+    }
+
     /** Ten frames, 16 ms apart from t = 0, at 427×240 GUI px: load-time timers have run and animations are under way. */
     private static BufferedImage render(Scene scene, MinecraftAssets assets, MinecraftFont font) {
         FrameRenderer renderer = new FrameRenderer(assets, font);

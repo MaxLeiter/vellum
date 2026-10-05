@@ -105,12 +105,13 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
+        driver.followPointer(mouseX, mouseY); // hovered from the first frame, as vanilla's slot highlight is
         for (Slot slot : menu.slots) hide(slot); // painting puts back the slots it draws
         driver.extractPage(g, mouseX, mouseY); // the page first, so vanilla's slot layer lands on top of it
         super.extractRenderState(g, mouseX, mouseY, a);
     }
 
-    /** A hovered slot's item tooltip first; the page's {@code title} tooltip where there is none. */
+    /** A hovered slot's item tooltip first; the page's tooltip (an {@code <item tooltip>}'s or a title) where there is none. */
     @Override
     protected void extractTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         super.extractTooltip(g, mouseX, mouseY);
