@@ -131,6 +131,23 @@ public class Element extends Node {
         return Collections.unmodifiableMap(attributes);
     }
 
+    /**
+     * A numeric attribute ({@code width="20"}, a {@code px} suffix allowed), or {@code fallback} when it is missing
+     * or not a finite number.
+     */
+    public float numberAttribute(String name, float fallback) {
+        String v = getAttribute(name);
+        if (v == null) return fallback;
+        v = v.strip();
+        if (v.endsWith("px")) v = v.substring(0, v.length() - 2);
+        try {
+            float f = Float.parseFloat(v);
+            return Float.isFinite(f) ? f : fallback;
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
     private void attributeChanged(String name, String old, String now) {
         switch (name) {
             case "class" -> classCache = null;
@@ -739,6 +756,7 @@ public class Element extends Node {
         scrollLeft = left;
         scrollTop = top;
         ownerDocument.scrolling().moved(this);
+        ownerDocument.invalidatePaint();
     }
 
     private boolean smooth(ScrollBehavior behavior) {

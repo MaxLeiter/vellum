@@ -34,6 +34,9 @@ public interface ScriptRuntime {
      */
     default void beforeRestyle() {}
 
+    /** Whether {@link #beforeRestyle} has work (templates to re-render), so a host that idles renders a frame. */
+    default boolean needsFrame() { return false; }
+
     /** Releases resources. The runtime is unusable afterwards. */
     void dispose();
 }

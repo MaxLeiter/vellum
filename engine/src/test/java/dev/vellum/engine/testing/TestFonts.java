@@ -2,31 +2,16 @@ package dev.vellum.engine.testing;
 
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.host.MinecraftGlyphs;
 
 /**
- * Deterministic font metrics with the advance widths of Minecraft's default ASCII font (glyph width + 1px spacing,
+ * Deterministic font metrics with the advance widths of Minecraft's default ASCII font ({@link MinecraftGlyphs};
  * bold adds 1px per glyph), scaled by font size / 8. Non-ASCII characters advance 6px. Good enough for layout tests
  * to look like the game; the previewer reads the real glyphs instead.
  */
 public final class TestFonts implements FontMetrics {
-    private static final int[] ASCII = new int[128];
-
-    static {
-        java.util.Arrays.fill(ASCII, 6);
-        set(" ", 4);
-        set("!',.:;i|", 2);
-        set("`l", 3);
-        set("\"()*I[]t{}", 4);
-        set("<>fk", 5);
-        set("@~", 7);
-    }
-
-    private static void set(String chars, int w) {
-        for (char c : chars.toCharArray()) ASCII[c] = w;
-    }
-
     public static int advance(int codePoint) {
-        return codePoint < 128 ? ASCII[codePoint] : 6;
+        return MinecraftGlyphs.asciiAdvance(codePoint);
     }
 
     @Override

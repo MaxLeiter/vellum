@@ -20,6 +20,7 @@ import static dev.vellum.engine.paint.TestTree.z;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PaintOrderTest {
@@ -238,17 +239,17 @@ class PaintOrderTest {
         img.replaced = new Fixed(16, 16);
         Box box = add(root, t.box(Box.Kind.REPLACED, img, 10, 10, 32, 16));
         img.style.objectFit = dev.vellum.engine.style.ObjectFit.CONTAIN;
-        RecordingCanvas.Call contain = t.paint(root).ops("drawReplaced").getFirst();
+        RecordingCanvas.Call contain = t.paint(root).ops("drawImage").getFirst();
         assertArrayEquals(new float[] {18, 10, 16, 16}, contain.bounds(), 1e-4f);
         assertNull(contain.clip());
 
         img.style.objectFit = dev.vellum.engine.style.ObjectFit.COVER;
-        RecordingCanvas.Call cover = t.paint(root).ops("drawReplaced").getFirst();
+        RecordingCanvas.Call cover = t.paint(root).ops("drawImage").getFirst();
         assertArrayEquals(new float[] {10, 2, 32, 32}, cover.bounds(), 1e-4f);
         assertArrayEquals(new float[] {10, 10, 32, 16}, cover.clip(), 1e-4f);
 
         img.style.objectFit = dev.vellum.engine.style.ObjectFit.FILL;
-        assertArrayEquals(new float[] {10, 10, 32, 16}, t.paint(root).ops("drawReplaced").getFirst().bounds(), 1e-4f);
+        assertArrayEquals(new float[] {10, 10, 32, 16}, t.paint(root).ops("drawImage").getFirst().bounds(), 1e-4f);
         assertEquals(box, img.box);
     }
 
@@ -279,11 +280,11 @@ class PaintOrderTest {
         doc.paint(before);
         assertEquals(List.of(0xFF00000A, 0xFF00000B), before.fills());
         assertEquals("b", doc.hitTest(5, 5).element().id());
-        int layouts = doc.layoutVersion();
+        Object tree = doc.layoutEngine().root();
         doc.getElementById("a").setAttribute("style",
                 "position: absolute; width: 10px; height: 10px; background: #00000a; z-index: 1");
         doc.frame(16);
-        assertEquals(layouts, doc.layoutVersion(), "z-index does not affect layout");
+        assertSame(tree, doc.layoutEngine().root(), "z-index does not affect layout: no relayout");
         RecordingCanvas after = new RecordingCanvas();
         doc.paint(after);
         assertEquals(List.of(0xFF00000B, 0xFF00000A), after.fills());
@@ -294,5 +295,11 @@ class PaintOrderTest {
         TestTree.line(block, 0, 0, block.width, 9, fragments);
     }
 
-    record Fixed(float intrinsicWidth, float intrinsicHeight) implements dev.vellum.engine.host.ReplacedContent {}
+    /** Content of a fixed natural size that paints itself as one image. */
+    record Fixed(float intrinsicWidth, float intrinsicHeight) implements dev.vellum.engine.host.ReplacedContent {
+        @Override
+        public void paint(Canvas canvas, float x, float y, float width, float height) {
+            canvas.drawImage("fixed", x, y, width, height, 0, 0, 1, 1, -1, false);
+        }
+    }
 }

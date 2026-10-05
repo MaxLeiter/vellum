@@ -37,6 +37,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     final Js js;
     final EventBindings events;
     final DomBindings dom;
+    final CanvasBindings canvases;
     final StyleBindings styles;
     final AnimationBindings animations;
     final Templates templates;
@@ -61,6 +62,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         js = new Js(this);
         events = new EventBindings(this);
         dom = new DomBindings(this);
+        canvases = new CanvasBindings(this);
         styles = new StyleBindings(this);
         animations = new AnimationBindings(this);
         templates = new Templates(this);
@@ -117,6 +119,11 @@ final class RhinoScriptRuntime implements ScriptRuntime {
             templates.digest(cx);
             return null;
         });
+    }
+
+    @Override
+    public boolean needsFrame() {
+        return templates.needsDigest();
     }
 
     @Override

@@ -1,5 +1,7 @@
 package dev.vellum.engine.paint;
 
+import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.replaced.ImageSources;
 import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.BackgroundLayer.Repeat;
 import dev.vellum.engine.style.Colors;
@@ -14,19 +16,25 @@ import java.util.List;
  * -position, -repeat and -clip. The positioning area is the padding box. Colours and gradients are clipped to the
  * rounded border shape; images and sprites to the clip box's rectangle only (DESIGN §7).
  *
- * <p>Repeated textures are one {@link Canvas#drawImage} with UVs beyond 0..1 (Minecraft samples png textures with
- * REPEAT); sprites, gradients and {@code space}d tiles are drawn tile by tile.
+ * <p>Repeated textures and canvases are one {@link Canvas#drawImage} with UVs beyond 0..1 (Minecraft samples png
+ * textures with REPEAT); sprites, gradients and {@code space}d tiles are drawn tile by tile. Natural sizes come from
+ * {@link ImageSources}.
  */
 final class Backgrounds {
     /** Tiles beyond this many per layer are not drawn (a guard against tiny tiles over huge boxes). */
     private static final int MAX_TILES = 4096;
 
+    private final Document document;
     private final Gradients gradients = new Gradients();
     /** Painting area (the background-clip box), its radii, and the positioning area (padding box). */
     private final float[] area = new float[4], areaRadii = new float[8], origin = new float[4], scratchRadii = new float[8];
     /** Tile size, then per axis: first tile position, step between tiles, tile count. */
     private float tileW, tileH;
     private final float[] tiling = new float[6];
+
+    Backgrounds(Document document) {
+        this.document = document;
+    }
 
     void paint(Canvas canvas, QuadBatch batch, Geometry g, ComputedStyle s, float dp) {
         List<BackgroundLayer> layers = s.backgroundLayers;
@@ -53,16 +61,18 @@ final class Backgrounds {
             canvas.drawSprite(sprite.id(), area[0], area[1], area[2], area[3], s.tint);
             return;
         }
-        float[] intrinsic = image instanceof Image.Url url ? canvas.imageSize(url.url()) : null;
-        if (!tileSize(layer, intrinsic)) return;
+        // Textures and canvases are drawn through a URL; a canvas that is missing draws nothing.
+        String texture = ImageSources.textureUrl(document, image);
+        if (texture == null && (image instanceof Image.Url || image instanceof Image.Canvas)) return;
+        if (!tileSize(layer, ImageSources.size(document, image))) return;
         if (!axis(0, area[0], area[2], origin[0], origin[2], tileW, layer.positionX().resolve(origin[2] - tileW), layer.repeatX())
                 || !axis(3, area[1], area[3], origin[1], origin[3], tileH, layer.positionY().resolve(origin[3] - tileH), layer.repeatY())
                 || tiling[2] * tiling[5] > MAX_TILES) {
             return;
         }
         boolean smooth = s.imageRendering == ImageRendering.SMOOTH;
-        if (image instanceof Image.Url url && layer.repeatX() != Repeat.SPACE && layer.repeatY() != Repeat.SPACE) {
-            texture(canvas, url.url(), tiling[0], tiling[3], layer.repeatX() != Repeat.NO_REPEAT,
+        if (texture != null && layer.repeatX() != Repeat.SPACE && layer.repeatY() != Repeat.SPACE) {
+            texture(canvas, texture, tiling[0], tiling[3], layer.repeatX() != Repeat.NO_REPEAT,
                     layer.repeatY() != Repeat.NO_REPEAT, s.tint, smooth);
             return;
         }
@@ -75,14 +85,14 @@ final class Backgrounds {
         for (int j = 0; j < tiling[5]; j++) {
             for (int i = 0; i < tiling[2]; i++) {
                 float x = tiling[0] + i * tiling[1], y = tiling[3] + j * tiling[4];
-                switch (image) {
-                    case Image.Url url -> texture(canvas, url.url(), x, y, false, false, s.tint, smooth);
-                    case Image.Sprite sprite -> canvas.drawSprite(sprite.id(), x, y, tileW, tileH, s.tint);
-                    default -> {
-                        batch.setClip(area[0], area[1], area[2], area[3], areaRadii, dp);
-                        batch.intersectClip(x, y, tileW, tileH);
-                        gradients.paint(batch, image, x, y, tileW, tileH, dp);
-                    }
+                if (texture != null) {
+                    texture(canvas, texture, x, y, false, false, s.tint, smooth);
+                } else if (image instanceof Image.Sprite sprite) {
+                    canvas.drawSprite(sprite.id(), x, y, tileW, tileH, s.tint);
+                } else {
+                    batch.setClip(area[0], area[1], area[2], area[3], areaRadii, dp);
+                    batch.intersectClip(x, y, tileW, tileH);
+                    gradients.paint(batch, image, x, y, tileW, tileH, dp);
                 }
             }
         }

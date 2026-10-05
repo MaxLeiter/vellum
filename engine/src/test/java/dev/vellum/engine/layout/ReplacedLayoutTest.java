@@ -2,8 +2,12 @@ package dev.vellum.engine.layout;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.ReplacedContent;
+import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
+import java.util.function.Function;
 
 import static dev.vellum.engine.layout.BlockLayoutTest.assertRect;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,17 +20,12 @@ class ReplacedLayoutTest {
     /** A host whose {@code <item>} elements are 16x16 replaced content. */
     private static final class ItemHost extends TestHost {
         @Override
-        public boolean isReplacedTag(String tag) {
-            return tag.equals("item") || super.isReplacedTag(tag);
-        }
-
-        @Override
-        public ReplacedContent createReplaced(Element element) {
-            if (!element.tagName().equals("item")) return null;
-            return new ReplacedContent() {
+        public Map<String, Function<Element, ReplacedContent>> replacedElements() {
+            return Map.of("item", element -> new ReplacedContent() {
                 public float intrinsicWidth() { return 16; }
                 public float intrinsicHeight() { return 16; }
-            };
+                public void paint(Canvas canvas, float x, float y, float width, float height) {}
+            });
         }
     }
 

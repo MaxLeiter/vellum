@@ -67,8 +67,9 @@ session.close();                  // closes the player's screen
 ## Container screens
 
 Any mod can give its own menu type a Vellum screen. The page places slots with `<slot index="n">`: menu slot `n`
-moves to the element's box after each layout. Vanilla still draws items, highlights, tooltips and the carried stack,
-and handles clicks, drags and shift-clicks. Slots without an element are hidden.
+goes where the element is painted, every frame, so slots follow scrolling, transforms and animations. Vanilla still
+draws items, highlights, tooltips and the carried stack, and handles clicks, drags and shift-clicks. Slots that are
+not painted (no element, hidden, under half opacity, or scrolled out of their container) are hidden.
 
 ```java
 // Client setup (both loaders; before the game finishes loading):
@@ -82,7 +83,7 @@ VellumScreens.registerContainer(MyMenus.FORGE, "mymod:vellum/forge.html");   // 
 ```
 
 The page's `vellum.data` is `{title, inventory, slots}`, where `slots[n]` is `{id, count, name}` for menu slot `n`.
-It updates whenever the menu's contents change, so a page can show totals or highlight search results. Clicking
+It updates when the menu's contents change (and only then), so a page can show totals or highlight search results. Clicking
 outside the page's content (where only `<html>`/`<body>` is under the pointer) drops the carried stack, as clicking
 outside a vanilla container does.
 
@@ -115,9 +116,9 @@ and `object-fit`.
 | `<entity>` | `type`, `player`, `id`, `follow-mouse`, `rotate`, `scale` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). `follow-mouse` turns its head toward the pointer; `rotate` turns it by degrees; `scale` multiplies the fitted size. 48×48 by default. |
 | `<player-head>` | `name`, `uuid` | A player's face with the hat layer. No attributes: your own face. 16×16 by default. |
 | `<sprite>` | `src` | A GUI-atlas sprite such as `minecraft:widget/button`, at its natural size. Nine-slice and tiled sprites keep their borders when resized. |
-| `<img>` | `src` | A texture (`ns:textures/....png`, or relative to the page), a sprite (`sprite:ns:path`) or a canvas (`canvas:<n>`). The natural size comes from the PNG. |
-| `<canvas>` | `width`, `height` | A pixel surface for scripts (`getContext('2d')`), 300×150 by default. Its image URL `canvas:<n>` works in `<img>` and CSS. |
-| `<mc-text>` | `key` + `args`, or `json` | Minecraft text as ordinary inline text: a translation (`key="block.minecraft.stone"`, comma-separated `args`) or a chat component (`json='{"text":"Gold","color":"gold","bold":true}'`). Styled parts become spans. Expanded when the page loads. |
+| `<img>` | `src` | A texture (`ns:textures/....png`, or relative to the page), a sprite (`sprite:ns:path`) or a canvas (`canvas:<id>`, the `<canvas>` with that id). The natural size comes from the PNG, sprite or canvas. `sprite:` and `canvas:` URLs work in CSS `url()` too. |
+| `<canvas>` | `width`, `height` | A pixel surface for scripts, 300×150 by default (at most 2048 a side). `getContext('2d')` supports `fillStyle`/`strokeStyle` (CSS colours), `lineWidth`, `globalAlpha`, `save`/`restore`, `fillRect`, `strokeRect`, `clearRect`, `getImageData`/`putImageData`/`createImageData` and `drawImage` of another canvas; coordinates are whole pixels (no antialiasing), and there is no text, paths or transforms. Show it elsewhere with `canvas:<id>`. |
+| `<mc-text>` | `key` + `args`, or `json` | Minecraft text as ordinary inline text: a translation (`key="block.minecraft.stone"`, comma-separated `args`) or a chat component (`json='{"text":"Gold","color":"gold","bold":true}'`). Styled parts become spans. Expanded when the element is added to the page and whenever these attributes change, so it works in templates. |
 
 CSS extras for Minecraft: `font-family: minecraft:default | minecraft:uniform | minecraft:alt |
 minecraft:illageralt | <any font id>` (`monospace` is uniform), `text-shadow: minecraft` (the game's own shadow),
@@ -139,7 +140,7 @@ device pixel.
 - When a page fails to load or the engine throws, the screen shows the error and its stack instead of crashing;
   `/vellum reload` tries again.
 - In a development environment Vellum reads pages from `common/src/main/resources/assets` directly and reloads open
-  pages when an `.html`, `.css` or `.js` file there is saved.
+  pages when a file they were read from is saved.
 - `config/vellum-client.properties`: `reducedMotion=true` makes pages match `@media (prefers-reduced-motion: reduce)`.
 
 ## Stability

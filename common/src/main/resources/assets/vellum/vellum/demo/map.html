@@ -92,7 +92,8 @@
     const tiles = [];
     for (let y = 0; y < 10; y++) {
       for (let x = 0; x < 16; x++) {
-        const b = biome(x, y);
+        // let, not const: Rhino binds a const in a loop body only once.
+        let b = biome(x, y);
         tiles.push({ i: y * 16 + x, name: b.name, color: b.color });
       }
     }

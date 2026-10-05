@@ -2,12 +2,8 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.layout.Box;
-import dev.vellum.engine.paint.Affine;
-import dev.vellum.engine.paint.Coordinates;
-import dev.vellum.mod.client.replaced.SlotContent;
+import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -24,9 +20,10 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * A container screen whose layout is a Vellum page. Each {@code <slot index="n">} element places menu slot
- * {@code n}: after every relayout the slot's 16×16 item area is centred in the element's content box. Slots without
- * an element move off-screen. Vanilla still draws slot items, highlights, tooltips and the carried stack, on top of
- * the page, and handles slot clicks, drags and shift-clicks; everything else goes to the page.
+ * {@code n}: every frame the slot's 16×16 item area goes where the element's content box is painted, so slots follow
+ * scrolling, transforms and animations. Slots that are not painted (no element, hidden, scrolled out of their clip)
+ * move off-screen. Vanilla still draws slot items, highlights, tooltips and the carried stack, on top of the page,
+ * and handles slot clicks, drags and shift-clicks; everything else goes to the page.
  *
  * <p>Register one for a menu type with {@link VellumScreens#registerContainer}. The page's {@code vellum.data} is
  * {@code {title, inventory, slots: [{id, count, name}, ...]}}, updated when the menu's contents change, so pages can
@@ -36,10 +33,9 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
     private static final int OFF_SCREEN = -10_000;
 
     private final DocumentDriver driver;
-    private String lastData = "";
-    /** The layout the slots were last placed from: a document and its layout version. */
-    private @Nullable Document placedDocument;
-    private int placedVersion;
+    private final McCanvas.SlotSink slotSink = this::placeSlot;
+    /** Copies of the stacks the page was last sent, so data goes out only when the menu's contents change. */
+    private @Nullable ItemStack[] sent = new ItemStack[0];
     /** Whether the current press went to the page (its release goes there too) rather than to vanilla. */
     private boolean pagePress;
 
@@ -47,7 +43,7 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         super(menu, inventory, title);
         this.driver = new DocumentDriver(this, url, null, -1);
         pushSlotData();
-        for (Slot slot : menu.slots) hide(slot); // until the page has laid them out
+        for (Slot slot : menu.slots) hide(slot); // until the page paints them
     }
 
     public DocumentDriver driver() {
@@ -65,9 +61,21 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
+        for (Slot slot : menu.slots) hide(slot); // painting puts back the slots it draws
         driver.extract(g, mouseX, mouseY); // the page first, so vanilla's slot layer lands on top of it
-        placeSlots();
         super.extractRenderState(g, mouseX, mouseY, a);
+    }
+
+    @Override
+    public McCanvas.SlotSink slots() {
+        return slotSink;
+    }
+
+    private void placeSlot(int index, int x, int y) {
+        if (index >= menu.slots.size()) return;
+        Slot slot = menu.slots.get(index);
+        slot.x = x;
+        slot.y = y;
     }
 
     @Override
@@ -77,9 +85,18 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
 
     /** Sends the title and slot contents to the page when they changed. */
     private void pushSlotData() {
+        boolean changed = sent.length != menu.slots.size();
+        if (changed) sent = new ItemStack[menu.slots.size()];
+        for (int i = 0; i < sent.length; i++) {
+            ItemStack stack = menu.slots.get(i).getItem();
+            if (sent[i] == null || !ItemStack.matches(sent[i], stack)) {
+                sent[i] = stack.copy();
+                changed = true;
+            }
+        }
+        if (!changed) return;
         JsonArray slots = new JsonArray();
-        for (Slot slot : menu.slots) {
-            ItemStack stack = slot.getItem();
+        for (ItemStack stack : sent) {
             JsonObject o = new JsonObject();
             o.addProperty("id", stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
             o.addProperty("count", stack.getCount());
@@ -90,11 +107,7 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         data.addProperty("title", title.getString());
         data.addProperty("inventory", playerInventoryTitle.getString());
         data.add("slots", slots);
-        String json = data.toString();
-        if (!json.equals(lastData)) {
-            lastData = json;
-            driver.pushData(json);
-        }
+        driver.pushData(data.toString());
     }
 
     @Override
@@ -123,32 +136,6 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
     protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top) {
         Element hit = driver.elementAt(mouseX, mouseY);
         return hit != null && (hit.tagName().equals("html") || hit.tagName().equals("body"));
-    }
-
-    /** After each relayout, moves every slot to its element (or off-screen); all off-screen while the page is down. */
-    private void placeSlots() {
-        Document doc = driver.document();
-        if (doc == placedDocument && (doc == null || doc.layoutVersion() == placedVersion)) return;
-        placedDocument = doc;
-        placedVersion = doc == null ? 0 : doc.layoutVersion();
-        boolean[] placed = new boolean[menu.slots.size()];
-        Element root = doc == null ? null : doc.documentElement();
-        Affine toViewport = new Affine();
-        if (root != null) {
-            for (Element e : root.getElementsByTagName("slot")) {
-                Box box = e.box;
-                int index = e.replaced instanceof SlotContent slot ? slot.index() : -1;
-                if (box == null || index < 0 || index >= placed.length) continue;
-                // Vanilla draws slots unscaled: centre the 16x16 slot on the content box's centre as painted.
-                Coordinates.toViewport(box, toViewport);
-                float cx = box.contentX() + box.contentWidth() / 2, cy = box.contentY() + box.contentHeight() / 2;
-                Slot slot = menu.slots.get(index);
-                slot.x = Math.round(toViewport.mapX(cx, cy) - 8);
-                slot.y = Math.round(toViewport.mapY(cx, cy) - 8);
-                placed[index] = true;
-            }
-        }
-        for (int i = 0; i < placed.length; i++) if (!placed[i]) hide(menu.slots.get(i));
     }
 
     private static void hide(Slot slot) {

@@ -1,7 +1,6 @@
 package dev.vellum.engine.paint;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.input.Controls;
 import dev.vellum.engine.layout.Box;
@@ -17,14 +16,15 @@ import java.util.List;
 
 /**
  * The painting side of {@link StackingOrder}: draws each step of the walk onto a {@link Canvas}. Per box, in order:
- * outer box-shadows, background, inset box-shadows, border, form control ({@link Controls#paint}), replaced content;
- * after its content: scrollbars and outline. Rectangle edges are snapped to device pixels.
+ * outer box-shadows, background, inset box-shadows, border, form control ({@link Controls#paint}), replaced content
+ * ({@link ReplacedContent#paint}); after its content: scrollbars and outline. Rectangle edges are snapped to device
+ * pixels.
  */
 final class BoxPainter implements StackingOrder.Visitor {
     private final Painter painter;
     private final QuadBatch batch = new QuadBatch();
     private final Geometry geometry = new Geometry();
-    private final Backgrounds backgrounds = new Backgrounds();
+    private final Backgrounds backgrounds;
     private final Borders borders = new Borders();
     private final Shadows shadows = new Shadows();
 
@@ -37,12 +37,10 @@ final class BoxPainter implements StackingOrder.Visitor {
     private final float[] rect = new float[4], radii = new float[8], widths = new float[4];
     private final BorderStyle[] styles = new BorderStyle[4];
     private final int[] colors = new int[4];
-    /** The font of the last text run, rebuilt only when the style changes. */
-    private ComputedStyle fontStyle;
-    private FontSpec font;
 
     BoxPainter(Painter painter) {
         this.painter = painter;
+        this.backgrounds = new Backgrounds(painter.document());
     }
 
     void begin(Canvas canvas) {
@@ -53,8 +51,6 @@ final class BoxPainter implements StackingOrder.Visitor {
 
     void end() {
         canvas = null;
-        fontStyle = null;
-        font = null;
     }
 
     private float snap(float v) {
@@ -165,9 +161,10 @@ final class BoxPainter implements StackingOrder.Visitor {
             }
         }
         boolean overflows = w > cw + 0.01f || h > ch + 0.01f;
-        if (overflows && !pushClip(cx, cy, cw, ch)) return;
         float x0 = snap(cx + (cw - w) / 2), y0 = snap(cy + (ch - h) / 2);
-        canvas.drawReplaced(content, box.element, x0, y0, snap(cx + (cw + w) / 2) - x0, snap(cy + (ch + h) / 2) - y0);
+        float width = snap(cx + (cw + w) / 2) - x0, height = snap(cy + (ch + h) / 2) - y0;
+        if (width <= 0 || height <= 0 || overflows && !pushClip(cx, cy, cw, ch)) return;
+        content.paint(canvas, x0, y0, width, height);
         if (overflows) popClip();
     }
 
@@ -177,11 +174,7 @@ final class BoxPainter implements StackingOrder.Visitor {
     public void textRun(Box block, Fragment.TextRun run, float x, float y) {
         ComputedStyle s = StackingOrder.styleOf(run);
         if (s.visibility != Visibility.VISIBLE || run.text().isEmpty()) return;
-        if (s != fontStyle) {
-            fontStyle = s;
-            font = FontSpec.of(s);
-        }
-        TextPainter.draw(canvas, run.text(), run.spaced(), x + run.x(), y + run.y(), font, s, s.color, dp);
+        TextPainter.draw(canvas, run.text(), run.spaced(), x + run.x(), y + run.y(), s.font(), s, s.color, dp);
     }
 
     // ---- After the content ----

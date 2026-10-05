@@ -29,6 +29,11 @@ public final class Scrolling {
 
     void moved(Element e) { moved.add(e); }
 
+    /** Whether the next {@link #tick} has work: a smooth scroll under way, or scroll events to fire. */
+    public boolean isActive() {
+        return !smooth.isEmpty() || !moved.isEmpty();
+    }
+
     /** Forgets elements of a subtree leaving the document. */
     void forget(Node removed) {
         smooth.removeIf(removed::contains);

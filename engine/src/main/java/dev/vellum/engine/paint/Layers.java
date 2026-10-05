@@ -11,9 +11,9 @@ import java.util.Map;
 
 /**
  * The z-ordered list each stacking context paints its positioned descendants and nested contexts from (CSS 2
- * Appendix E), built on first use and kept until the box tree is relaid out or a style change moves paint order
- * ({@code Document.stackingVersion()}). Painting and hit testing share it, so neither re-sorts the tree every frame or
- * on every pointer move.
+ * Appendix E), built on first use and kept until the box tree is replaced (every layout builds a new one) or a style
+ * change moves paint order ({@code Document.stackingVersion()}). Painting and hit testing share it, so neither
+ * re-sorts the tree every frame or on every pointer move.
  */
 final class Layers {
     /** Stable sort by z-index: negatives first, then auto and 0 in tree order, then positives. */
@@ -22,14 +22,13 @@ final class Layers {
 
     private final Map<Box, Box[]> lists = new IdentityHashMap<>();
     private Box root;
-    private int layoutVersion, stackingVersion;
+    private int stackingVersion;
 
-    /** Drops the lists unless they were built for this tree, layout and stacking. */
-    void validate(Box root, int layoutVersion, int stackingVersion) {
-        if (root == this.root && layoutVersion == this.layoutVersion && stackingVersion == this.stackingVersion) return;
+    /** Drops the lists unless they were built for this box tree and stacking. */
+    void validate(Box root, int stackingVersion) {
+        if (root == this.root && stackingVersion == this.stackingVersion) return;
         lists.clear();
         this.root = root;
-        this.layoutVersion = layoutVersion;
         this.stackingVersion = stackingVersion;
     }
 

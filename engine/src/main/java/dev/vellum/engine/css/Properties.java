@@ -4,6 +4,7 @@ import dev.vellum.engine.css.ComponentValue.Func;
 import dev.vellum.engine.css.Longhand.LineHeightFactor;
 import dev.vellum.engine.css.Longhand.Parser;
 import dev.vellum.engine.css.Token.Type;
+import dev.vellum.engine.host.FontFamilies;
 import dev.vellum.engine.style.Align;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.BackgroundLayer;
@@ -79,11 +80,6 @@ final class Properties {
     private static final Map<String, Float> FONT_SIZES = Map.of("xx-small", 4f, "x-small", 5f, "small", 6f,
             "medium", 8f, "large", 12f, "x-large", 16f, "xx-large", 24f, "xxx-large", 32f);
     private static final float FONT_SIZE_STEP = 1.5f;
-    private static final Map<String, String> FONT_ALIASES = Map.of("monospace", "minecraft:uniform",
-            "ui-monospace", "minecraft:uniform", "serif", ComputedStyle.DEFAULT_FONT, "sans-serif", ComputedStyle.DEFAULT_FONT,
-            "system-ui", ComputedStyle.DEFAULT_FONT, "ui-serif", ComputedStyle.DEFAULT_FONT,
-            "ui-sans-serif", ComputedStyle.DEFAULT_FONT, "cursive", ComputedStyle.DEFAULT_FONT,
-            "fantasy", ComputedStyle.DEFAULT_FONT);
     private static final Map<String, BackgroundLayer.Repeat> REPEATS =
             Keywords.table(BackgroundLayer.Repeat.class, Map.of());
     static final Set<String> DECORATION_LINES = Set.of("underline", "overline", "line-through", "blink");
@@ -412,7 +408,7 @@ final class Properties {
                 : (dense ? GridAutoFlow.ROW_DENSE : GridAutoFlow.ROW);
     }
 
-    /** Family names, quoted or as identifier sequences ({@code minecraft:uniform}), with generic aliases. */
+    /** Family names, quoted or as identifier sequences ({@code minecraft:uniform}); generics become Minecraft fonts. */
     private static Object fontFamily(ValueReader r, ValueContext ctx) {
         List<String> out = new ArrayList<>();
         do {
@@ -427,7 +423,7 @@ final class Properties {
                 name = ComponentValue.text(r.since(m)).replaceAll("\\s+", " ");
                 if (name.isEmpty()) return null;
             }
-            out.add(FONT_ALIASES.getOrDefault(name.toLowerCase(java.util.Locale.ROOT), name));
+            out.add(FontFamilies.computed(name));
         } while (r.comma());
         return List.copyOf(out);
     }

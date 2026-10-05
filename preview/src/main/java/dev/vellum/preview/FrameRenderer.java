@@ -13,15 +13,16 @@ import java.util.function.Consumer;
 
 /**
  * Renders a scene into an image: the backdrop, the scene (or the error that stopped it), then an optional overlay.
- * The one rendering path of the window, headless snapshots and the snapshot tests.
+ * The one rendering path of the window, headless snapshots and the snapshot tests. The image and its canvas are
+ * reused while the size and scale stay the same.
  */
 final class FrameRenderer {
     private final MinecraftAssets assets;
     private final MinecraftFont font;
     private BufferedImage image;
+    private ImageCanvas canvas;
     /** The backdrop is static, so it is painted once per size and scale and copied into each frame. */
     private int[] backdrop;
-    private int backdropScale;
 
     FrameRenderer(MinecraftAssets assets, MinecraftFont font) {
         this.assets = assets;
@@ -34,30 +35,29 @@ final class FrameRenderer {
      * next call.
      */
     BufferedImage render(Scene scene, int width, int height, int scale, double nowMs, Consumer<ImageCanvas> overlay) {
-        if (image == null || image.getWidth() != width || image.getHeight() != height) {
+        if (image == null || image.getWidth() != width || image.getHeight() != height || canvas.scale() != scale) {
+            if (canvas != null) canvas.dispose();
             image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            canvas = new ImageCanvas(image, scale, assets, font);
             backdrop = null;
         }
         float guiWidth = (float) Math.ceil((double) width / scale), guiHeight = (float) Math.ceil((double) height / scale);
         scene.frame(nowMs, guiWidth, guiHeight, scale);
 
         int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
-        if (backdrop == null || backdropScale != scale) {
+        canvas.reset();
+        if (backdrop == null) {
             Arrays.fill(pixels, 0);
-            ImageCanvas canvas = new ImageCanvas(image, scale, assets, font);
             Backdrop.paint(canvas, guiWidth, guiHeight, assets.hasMinecraft());
-            canvas.dispose();
             backdrop = pixels.clone();
-            backdropScale = scale;
         } else {
             System.arraycopy(backdrop, 0, pixels, 0, pixels.length);
         }
 
-        ImageCanvas canvas = new ImageCanvas(image, scale, assets, font);
+        canvas.reset();
         if (scene.error() == null) scene.paint(canvas);
         if (scene.error() != null) paintError(canvas, scene.error(), guiWidth, guiHeight);
         else if (overlay != null) overlay.accept(canvas);
-        canvas.dispose();
         return image;
     }
 

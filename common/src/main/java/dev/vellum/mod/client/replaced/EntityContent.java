@@ -17,14 +17,20 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code <entity id="123">}: an entity in the world by network id.</li>
  * </ul>
  * {@code follow-mouse} turns its head and body toward the pointer (like the inventory's player), {@code rotate}
- * turns it by degrees, and {@code scale} multiplies the fitted size. All of that is read in {@link #pose}.
+ * turns it by degrees, and {@code scale} multiplies the fitted size. Attributes are read when they change.
  */
 final class EntityContent extends McReplaced {
+    private boolean player, followMouse;
+    /** The world entity's network id, or null for a created entity of {@link #type}. */
+    private @Nullable Integer id;
+    private @Nullable Identifier type;
+    private float rotate, scale;
     private @Nullable Entity created;
     private @Nullable Level createdIn;
 
     EntityContent(Element element) {
         super(element);
+        load();
     }
 
     @Override
@@ -39,7 +45,7 @@ final class EntityContent extends McReplaced {
 
     @Override
     public void attributeChanged(String name) {
-        if (name.equals("type")) createdIn = null;
+        load();
     }
 
     @Override
@@ -49,37 +55,41 @@ final class EntityContent extends McReplaced {
     }
 
     @Override
-    public void draw(McCanvas canvas, Element element, float x, float y, float width, float height) {
+    protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Entity entity = entity();
         if (entity != null) EntityPortrait.draw(canvas, entity, pose(canvas, x, y, width, height), x, y, width, height);
+    }
+
+    private void load() {
+        player = element.hasAttribute("player");
+        followMouse = element.hasAttribute("follow-mouse");
+        float networkId = element.numberAttribute("id", Float.NaN);
+        id = Float.isNaN(networkId) ? null : (int) networkId;
+        Identifier newType = Identifier.tryParse(attr("type", "minecraft:pig"));
+        if (newType == null || !newType.equals(type)) createdIn = null; // create again
+        type = newType;
+        rotate = element.numberAttribute("rotate", 0);
+        scale = element.numberAttribute("scale", 1);
     }
 
     /** The pose from the element's attributes and the pointer: the one place that decides how the entity stands. */
     private EntityPortrait.Pose pose(McCanvas canvas, float x, float y, float width, float height) {
         float gaze = 0, tilt = 0;
-        if (element.hasAttribute("follow-mouse") && canvas.mouseX() >= 0) {
+        if (followMouse && canvas.mouseX() >= 0) {
             // As vanilla's inventory: up to about ±30° toward a pointer 40 px away from the eyes.
             gaze = (float) Math.atan((x + width / 2 - canvas.mouseX()) / 40.0F) * 20.0F;
             tilt = (float) Math.atan((y + height / 3 - canvas.mouseY()) / 40.0F) * 20.0F;
         }
-        return new EntityPortrait.Pose(number("rotate", 0) + gaze, gaze, tilt, number("scale", 1), 0, 0);
+        return new EntityPortrait.Pose(rotate + gaze, gaze, tilt, scale, 0, 0);
     }
 
     private @Nullable Entity entity() {
         Minecraft mc = Minecraft.getInstance();
         Level level = mc.level;
         if (level == null) return null;
-        if (element.hasAttribute("player")) return mc.player;
-        String id = element.getAttribute("id");
-        if (id != null) {
-            try {
-                return level.getEntity(Integer.parseInt(id.strip()));
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
+        if (player) return mc.player;
+        if (id != null) return level.getEntity(id);
         if (createdIn != level) { // once per world (and after the type changes), even when the type is unknown
-            Identifier type = Identifier.tryParse(attr("type", "minecraft:pig"));
             created = type == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(type)
                     .map(t -> EntityPortrait.create(t, level)).orElse(null);
             createdIn = level;

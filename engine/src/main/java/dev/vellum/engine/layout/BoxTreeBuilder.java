@@ -3,7 +3,6 @@ package dev.vellum.engine.layout;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.dom.Text;
-import dev.vellum.engine.host.Host;
 import dev.vellum.engine.input.Controls;
 import dev.vellum.engine.layout.InlineContent.Span;
 import dev.vellum.engine.style.ComputedStyle;
@@ -32,12 +31,6 @@ import java.util.function.Consumer;
  * </ul>
  */
 final class BoxTreeBuilder {
-    private final Host host;
-
-    BoxTreeBuilder(Host host) {
-        this.host = host;
-    }
-
     /**
      * Builds the tree for the root element and returns its box, or null when it is not rendered. Clears every
      * element's previous box first, so elements that generate no box end up with null.
@@ -60,7 +53,7 @@ final class BoxTreeBuilder {
 
     /** The principal box of an element that is block-level, an atomic inline, or a flex/grid item. */
     private LayoutBox elementBox(Element e, ComputedStyle s, Display display) {
-        boolean replaced = host.isReplacedTag(e.tagName());
+        boolean replaced = e.replaced != null;
         LayoutBox.Context context = replaced || Controls.isControl(e.tagName()) ? LayoutBox.Context.LEAF
                 : contextOf(display);
         LayoutBox box = new LayoutBox(replaced ? Box.Kind.REPLACED : Box.Kind.BLOCK, e, s, context);
@@ -116,35 +109,15 @@ final class BoxTreeBuilder {
         return box;
     }
 
-    private void naturalSize(LayoutBox box) {
+    /** The content's natural size; without one, the {@code width}/{@code height} attributes (as HTML sizes images). */
+    private static void naturalSize(LayoutBox box) {
         Element e = box.element;
-        if (e.replaced == null) e.replaced = host.createReplaced(e);
-        float w = Float.NaN, h = Float.NaN;
-        if (e.replaced != null) {
-            w = e.replaced.intrinsicWidth();
-            h = e.replaced.intrinsicHeight();
-        }
-        if (Float.isNaN(w)) w = numberAttribute(e, "width");
-        if (Float.isNaN(h)) h = numberAttribute(e, "height");
-        if (e.tagName().equals("canvas")) {
-            // A canvas is a 300x150 surface unless its attributes say otherwise.
-            w = BoxModel.or(w, 300);
-            h = BoxModel.or(h, 150);
-        } else if (Float.isNaN(w) && Float.isNaN(h)) {
-            w = h = 0;
-        }
+        float w = e.replaced.intrinsicWidth(), h = e.replaced.intrinsicHeight();
+        if (Float.isNaN(w)) w = e.numberAttribute("width", Float.NaN);
+        if (Float.isNaN(h)) h = e.numberAttribute("height", Float.NaN);
+        if (Float.isNaN(w) && Float.isNaN(h)) w = h = 0;
         box.naturalWidth = w;
         box.naturalHeight = h;
-    }
-
-    private static float numberAttribute(Element e, String name) {
-        String v = e.getAttribute(name);
-        if (v == null) return Float.NaN;
-        try {
-            return Float.parseFloat(v.trim().replace("px", ""));
-        } catch (NumberFormatException ex) {
-            return Float.NaN;
-        }
     }
 
     private static boolean rendered(ComputedStyle s) {
@@ -220,7 +193,7 @@ final class BoxTreeBuilder {
     }
 
     private boolean isAtomic(Element e) {
-        return host.isReplacedTag(e.tagName()) || Controls.isControl(e.tagName());
+        return e.replaced != null || Controls.isControl(e.tagName());
     }
 
     /** Whether an inline element has in-flow block-level content (through inline and display:contents children). */

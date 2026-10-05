@@ -54,6 +54,11 @@ public final class DocumentDriver {
         default @Nullable Screen screen() {
             return null;
         }
+
+        /** Where painted {@code <slot>} elements are reported (container screens), or null. */
+        default McCanvas.@Nullable SlotSink slots() {
+            return null;
+        }
     }
 
     private static final Set<DocumentDriver> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
@@ -135,10 +140,6 @@ public final class DocumentDriver {
         }
         Document doc = Document.parse(host, url, source, data);
         document = doc;
-        doc.guard(() -> {
-            McText.expand(doc);
-            return true;
-        });
         if (width > 0) applyViewport(doc);
     }
 
@@ -160,7 +161,7 @@ public final class DocumentDriver {
         Document doc = document();
         if (doc != null) {
             doc.frame(Util.getMillis());
-            McCanvas canvas = new McCanvas(g, mouseX, mouseY);
+            McCanvas canvas = new McCanvas(g, mouseX, mouseY, owner.slots());
             doc.paint(canvas);
             canvas.finish();
             syncTextInput();

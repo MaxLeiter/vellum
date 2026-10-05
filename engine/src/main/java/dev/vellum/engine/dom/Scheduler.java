@@ -83,6 +83,11 @@ public final class Scheduler {
         }
     }
 
+    /** Whether a frame at {@code nowMs} has callbacks to run: animation frames, or timers that are due. */
+    boolean hasWork(double nowMs) {
+        return !frameCallbacks.isEmpty() || !timers.isEmpty() && timers.peek().due <= nowMs;
+    }
+
     /**
      * Runs due timers (at most a bounded number, so an interval storm cannot hang a frame), then frame callbacks.
      * Called by {@link Document#frame}; public so tests can drive time without the rest of the pipeline.

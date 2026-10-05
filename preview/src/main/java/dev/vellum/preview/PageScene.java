@@ -68,6 +68,11 @@ final class PageScene implements Scene {
         if (document != null) document.paint(canvas);
     }
 
+    @Override
+    public boolean needsFrame(double nowMs) {
+        return document != null && document.needsFrame(nowMs);
+    }
+
     /** Input for the page; the input handler ignores it once the page has stopped. */
     void input(Consumer<InputHandler> event) {
         if (document != null) event.accept(document.input());

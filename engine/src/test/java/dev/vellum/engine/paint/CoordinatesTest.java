@@ -113,10 +113,10 @@ class CoordinatesTest {
         doc.frame(16);
         assertSame(t.box, a.box.containingBlock, "a transformed box contains positioned descendants");
         assertArrayEquals(new float[] {51, 0, 5, 5}, a.getBoundingClientRect(), 1e-3f);
-        int layouts = doc.layoutVersion();
+        Object tree = doc.layoutEngine().root();
         t.setAttribute("style", "margin-left: 50px; width: 100px; height: 100px; transform: translate(3px, 0)");
         doc.frame(32);
-        assertEquals(layouts, doc.layoutVersion(), "a new transform value only moves paint");
+        assertSame(tree, doc.layoutEngine().root(), "a new transform value only moves paint: no relayout");
         assertArrayEquals(new float[] {53, 0, 5, 5}, a.getBoundingClientRect(), 1e-3f);
     }
 }

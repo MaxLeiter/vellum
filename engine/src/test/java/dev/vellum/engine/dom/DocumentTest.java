@@ -3,12 +3,16 @@ package dev.vellum.engine.dom;
 import dev.vellum.engine.event.Event;
 import dev.vellum.engine.event.Modifiers;
 import dev.vellum.engine.host.ReplacedContent;
+import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.script.Scripting;
+import dev.vellum.engine.testing.NullCanvas;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,22 +29,17 @@ class DocumentTest {
         boolean fail;
 
         @Override
-        public boolean isReplacedTag(String tag) {
-            return tag.equals("thing") || super.isReplacedTag(tag);
-        }
-
-        @Override
-        public ReplacedContent createReplaced(Element element) {
-            if (!element.tagName().equals("thing")) return null;
-            return new ReplacedContent() {
+        public Map<String, Function<Element, ReplacedContent>> replacedElements() {
+            return Map.of("thing", element -> new ReplacedContent() {
                 public float intrinsicWidth() { return 16; }
                 public float intrinsicHeight() { return 16; }
+                public void paint(Canvas canvas, float x, float y, float width, float height) {}
                 public boolean update() {
                     if (fail) throw new IllegalStateException("broken content");
                     return false;
                 }
                 public void dispose() { disposed.add(element.id()); }
-            };
+            });
         }
     }
 
@@ -108,6 +107,43 @@ class DocumentTest {
         thing.remove();
         assertEquals(List.of("x"), host.disposed);
         assertNull(thing.replaced);
+    }
+
+    @Test
+    void mcTextExpandsWheneverItArrivesOrChanges() {
+        TestHost host = new TestHost() {
+            @Override
+            public String translate(String key, String... args) {
+                return key + "(" + String.join("|", args) + ")";
+            }
+
+            @Override
+            public List<TextRun> formatText(String json) {
+                return json.equals("bad") ? null : List.of(new TextRun("Gold", "color: gold"), new TextRun("!", ""));
+            }
+        };
+        Document doc = host.load("<mc-text id=a key=k args='x, y'>fallback</mc-text><mc-text id=b json=bad>kept</mc-text>");
+        assertEquals("k(x|y)", doc.getElementById("a").textContent());
+        assertEquals("kept", doc.getElementById("b").textContent(), "content stays when the host cannot format it");
+        doc.getElementById("a").setAttribute("key", "other");
+        assertEquals("other(x|y)", doc.getElementById("a").textContent());
+        doc.body().setInnerHTML("<p><mc-text id=c json='{}'></mc-text></p>");
+        Element c = doc.getElementById("c");
+        assertEquals("<span style=\"color: gold\">Gold</span>!", c.innerHTML());
+    }
+
+    @Test
+    void framesAreNeededOnlyWhileSomethingChanges() {
+        Document doc = new TestHost().load("<div id=s style='overflow: auto; height: 10px'><p style='height: 50px'></p></div>");
+        doc.paint(new NullCanvas());
+        assertFalse(doc.needsFrame(16), "idle");
+        doc.getElementById("s").scrollTo(0, 5);
+        assertTrue(doc.needsFrame(16), "a scroll repaints");
+        doc.frame(16);
+        doc.paint(new NullCanvas());
+        doc.scheduler().setTimeout(() -> {}, 100);
+        assertFalse(doc.needsFrame(50));
+        assertTrue(doc.needsFrame(116), "a due timer");
     }
 
     @Test

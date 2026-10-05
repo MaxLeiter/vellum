@@ -19,6 +19,10 @@ public final class Painter {
         this.document = document;
     }
 
+    Document document() {
+        return document;
+    }
+
     /**
      * Paints the current layout, then the input handler's overlays (dropdowns...) on top with an identity transform.
      * The canvas is left as it was found, also when painting throws.
@@ -38,7 +42,7 @@ public final class Painter {
     public void paint(Canvas canvas, Box root) {
         if (boxPainter == null) boxPainter = new BoxPainter(this);
         int saves = canvas.saveCount();
-        layers.validate(root, document.layoutVersion(), document.stackingVersion());
+        layers.validate(root, document.stackingVersion());
         boxPainter.begin(canvas);
         try {
             paintOrder.walk(root, boxPainter);
@@ -57,7 +61,7 @@ public final class Painter {
     /** The topmost hit at a point in {@code root}'s coordinate space, or null. */
     public HitResult hitTest(Box root, float x, float y) {
         if (hitTester == null) hitTester = new HitTester(this, document.layoutEngine().textMeasure());
-        layers.validate(root, document.layoutVersion(), document.stackingVersion());
+        layers.validate(root, document.stackingVersion());
         hitTester.begin(x, y);
         hitOrder.walk(root, hitTester);
         return hitTester.result();

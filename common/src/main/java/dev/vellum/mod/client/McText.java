@@ -3,8 +3,7 @@ package dev.vellum.mod.client;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.vellum.engine.css.CssColors;
-import dev.vellum.engine.dom.Document;
-import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.host.Host;
 import dev.vellum.mod.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -13,54 +12,37 @@ import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.Style;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
- * {@code <mc-text>}: Minecraft text as ordinary inline content, so it wraps and inherits CSS like any text.
- * <ul>
- *   <li>{@code <mc-text key="item.minecraft.diamond" args="a,b">}: a translation, with comma-separated arguments;</li>
- *   <li>{@code <mc-text json='{"text":"Hi","color":"gold"}'>}: a chat component (text, translate, colours,
- *       bold, italic, underline, strikethrough, font).</li>
- * </ul>
- * Styled parts become {@code <span style>} children. Elements are expanded once, when the page loads.
+ * Chat components for {@code <mc-text json>} ({@link Host#formatText}): the component's text (translations
+ * resolved), as runs styled with CSS for its colour, bold, italic, underline, strikethrough and font. The engine
+ * turns the runs into the element's children.
  */
 final class McText {
     private McText() {}
 
-    static void expand(Document document) {
-        Element root = document.documentElement();
-        if (root == null) return;
-        for (Element e : root.getElementsByTagName("mc-text")) {
-            Component text = component(e);
-            if (text == null) continue;
-            e.removeAllChildren();
-            text.visit((style, part) -> {
-                if (style.isEmpty()) {
-                    e.appendChild(document.createTextNode(part));
-                } else {
-                    Element span = e.appendChild(document.createElement("span"));
-                    span.setAttribute("style", css(style));
-                    span.appendChild(document.createTextNode(part));
-                }
-                return Optional.empty();
-            }, Style.EMPTY);
-        }
+    /** The runs of a chat component in JSON, or null when it is malformed. */
+    static @Nullable List<Host.TextRun> runs(String json) {
+        Component text = component(json);
+        if (text == null) return null;
+        List<Host.TextRun> runs = new ArrayList<>();
+        text.visit((style, part) -> {
+            runs.add(new Host.TextRun(part, css(style)));
+            return Optional.empty();
+        }, Style.EMPTY);
+        return runs;
     }
 
-    private static @Nullable Component component(Element e) {
-        String key = e.getAttribute("key");
-        if (key != null) {
-            String args = e.getAttribute("args");
-            return Component.translatable(key.strip(), (Object[]) (args == null || args.isBlank() ? new String[0] : args.split(",")));
-        }
-        String json = e.getAttribute("json");
-        if (json == null) return null;
+    private static @Nullable Component component(String json) {
         try {
             var level = Minecraft.getInstance().level;
             var ops = level == null ? JsonOps.INSTANCE : level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
             return ComponentSerialization.CODEC.parse(ops, JsonParser.parseString(json)).result().orElse(null);
-        } catch (RuntimeException ex) {
-            Constants.LOG.warn("Vellum: bad <mc-text json>: {}", ex.toString());
+        } catch (RuntimeException e) {
+            Constants.LOG.warn("Vellum: bad <mc-text json>: {}", e.toString());
             return null;
         }
     }

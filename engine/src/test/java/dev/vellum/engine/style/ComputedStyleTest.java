@@ -1,5 +1,7 @@
 package dev.vellum.engine.style;
 
+import dev.vellum.engine.host.FontFamilies;
+import dev.vellum.engine.host.FontSpec;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -10,6 +12,7 @@ import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -57,7 +60,7 @@ class ComputedStyleTest {
         ComputedStyle initial = new ComputedStyle();
         initial.zIndexAuto = false; // so both z-index fields show through Prop.Z_INDEX
         for (Field f : ComputedStyle.class.getDeclaredFields()) {
-            if (Modifier.isStatic(f.getModifiers())) continue;
+            if (Modifier.isStatic(f.getModifiers()) || Modifier.isTransient(f.getModifiers())) continue; // caches
             ComputedStyle changed = initial.copy();
             f.set(changed, different(f.get(initial), f.getType()));
             assertFalse(initial.sameAs(changed), f.getName() + ": sameAs");
@@ -71,6 +74,28 @@ class ComputedStyleTest {
             assertEquals(inherited, Objects.equals(f.get(ComputedStyle.inheritFrom(changed)), f.get(changed)),
                     f.getName() + ": copyInheritedFrom");
         }
+    }
+
+    @Test
+    void fontIsMemoizedWhileTheFontFieldsStayTheSame() {
+        ComputedStyle s = new ComputedStyle();
+        FontSpec font = s.font();
+        assertSame(font, s.font());
+        ComputedStyle animated = s.copy();
+        assertSame(font, animated.font(), "copies share it");
+        animated.fontSize = 12;
+        assertEquals(12, animated.font().size());
+        assertSame(font, s.font(), "the original keeps its own");
+        animated.fontWeight = 700;
+        assertTrue(animated.font().bold());
+    }
+
+    @Test
+    void familiesResolveToMinecraftFonts() {
+        assertEquals("minecraft:uniform", FontFamilies.fontId("monospace"));
+        assertEquals("minecraft:uniform", FontFamilies.fontId(" Uniform "));
+        assertEquals("mymod:runes", FontFamilies.fontId("mymod:runes"));
+        assertEquals("My Font", FontFamilies.computed("My Font"), "computed values keep other names as written");
     }
 
     /** A value of the same type as {@code v} that is not equal to it; {@code nullType} is the type when v is null. */

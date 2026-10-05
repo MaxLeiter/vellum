@@ -59,6 +59,16 @@ public final class CssColors {
 
     private CssColors() {}
 
+    /**
+     * Parses text that is exactly one colour (a canvas {@code fillStyle}), with {@code currentColor} as given; null
+     * when it is not a colour.
+     */
+    public static Integer parse(String text, int currentColor) {
+        ValueReader r = new ValueReader(CssParser.parseComponentValues(text));
+        Integer c = read(r, new ValueContext().currentColor(currentColor));
+        return c != null && r.atEnd() ? c : null;
+    }
+
     /** Reads one colour, or returns null without consuming anything. */
     static Integer read(ValueReader r, ValueContext ctx) {
         int m = r.mark();

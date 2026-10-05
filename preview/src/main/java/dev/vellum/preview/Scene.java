@@ -9,6 +9,9 @@ interface Scene {
 
     void paint(Canvas canvas);
 
+    /** Whether a frame at {@code nowMs} would look different from the last one painted, input aside. */
+    default boolean needsFrame(double nowMs) { return false; }
+
     /** The failure that stopped the scene, shown in its place; null while it works. */
     default Throwable error() { return null; }
 }
