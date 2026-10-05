@@ -1,0 +1,917 @@
+<!doctype html>
+<html>
+<head>
+  <title>Wandering Trader</title>
+  <style>
+    /*
+     * The Wandering Trader's night market. The trader's own colours (indigo robe, ochre trim) under a striped
+     * awning with swinging lanterns. Cards are coloured by rarity; epic and legendary ones glow, and legendary
+     * ones get a gradient frame and a light sweep. The satchel (cart) is a template over vellum.state, and its
+     * totals count up instead of jumping.
+     */
+    :root {
+      --cloth: #1b2347;
+      --cloth-deep: #10152e;
+      --trim: #d9a334;
+      --trim-soft: rgba(217, 163, 52, 0.35);
+      --cream: #f1e3bf;
+      --card: rgba(8, 10, 26, 0.6);
+      --common: #b8b8b8;
+      --uncommon: #55ff55;
+      --rare: #55ffff;
+      --epic: #ff55ff;
+      --legendary: #ffaa00;
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      color: var(--cream);
+      /* Indigo cloth: a faint diagonal weave over a vertical shade. */
+      background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 2px, rgba(0, 0, 0, 0) 2px 6px),
+        linear-gradient(var(--cloth), var(--cloth-deep));
+    }
+
+    /* ---------- Awning and lanterns ---------- */
+
+    /* Stripes from a repeating gradient; the scalloped edge is a radial gradient tiled along the bottom. */
+    .awning {
+      position: relative;
+      flex: none;
+      height: 16px;
+      background: radial-gradient(circle at 50% 0, #2f4fa8 6px, rgba(0, 0, 0, 0) 6.5px) 0 10px / 24px 6px repeat-x,
+        radial-gradient(circle at 50% 0, #e9dcb4 6px, rgba(0, 0, 0, 0) 6.5px) 12px 10px / 24px 6px repeat-x,
+        repeating-linear-gradient(90deg, #2f4fa8 0 12px, #e9dcb4 12px 24px) 0 0 / auto 10px no-repeat;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .lantern {
+      position: absolute;
+      top: 10px;
+      width: 16px;
+      height: 30px;
+      transform-origin: 8px 0;
+      animation: swing 3s ease-in-out infinite alternate;
+      z-index: 2;
+    }
+
+    .lantern.left { left: 10px; }
+    .lantern.right { right: 10px; animation-delay: -1.5s; }
+
+    .lantern .chain {
+      position: absolute;
+      left: 7px;
+      top: 0;
+      width: 2px;
+      height: 12px;
+      background: repeating-linear-gradient(#5a5a66 0 2px, #2c2c36 2px 4px);
+    }
+
+    .lantern item {
+      position: absolute;
+      left: 0;
+      top: 12px;
+    }
+
+    /* The warm pool of light around each lantern flickers a little. */
+    .lantern .light {
+      position: absolute;
+      left: -22px;
+      top: -4px;
+      width: 60px;
+      height: 60px;
+      background: radial-gradient(circle, rgba(255, 190, 90, 0.35), rgba(255, 160, 60, 0) 70%);
+      animation: flicker 2.2s steps(4) infinite;
+    }
+
+    @keyframes swing {
+      from { transform: rotate(-7deg); }
+      to { transform: rotate(7deg); }
+    }
+
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      25% { opacity: 0.8; }
+      60% { opacity: 0.92; }
+    }
+
+    /* ---------- Header ---------- */
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+      padding: 4px 34px 4px 34px;
+      animation: fade-down 500ms ease-out both;
+    }
+
+    @keyframes fade-down {
+      from { opacity: 0; transform: translateY(-6px); }
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--trim);
+      text-shadow: 1px 1px 0 #5a3a08, 2px 2px 0 #1a1004;
+    }
+
+    .motto {
+      flex: 1;
+      padding-top: 6px;
+      color: #8f95c4;
+    }
+
+    /* The purse: an emerald pill. Its number counts towards the real balance (see tween() below). */
+    .purse {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px 2px 3px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(85, 255, 85, 0.35);
+      border-radius: 8px;
+      color: mc-green;
+      text-shadow: minecraft;
+    }
+
+    /* ---------- Tabs and search ---------- */
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+      margin: 0 6px 4px;
+      animation: fade-down 500ms ease-out 100ms both;
+    }
+
+    .tabs {
+      position: relative;
+      display: flex;
+      gap: 2px;
+    }
+
+    .tabs button {
+      height: 14px;
+      padding: 0 6px;
+      background: none;
+      color: #9aa0cc;
+      text-shadow: none;
+      transition: color 150ms, background-color 150ms;
+    }
+
+    .tabs button:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--cream);
+    }
+
+    .tabs button.on {
+      color: var(--trim);
+    }
+
+    /* One underline for all tabs: the script moves it under the active tab and the transition slides it. */
+    .indicator {
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--trim);
+      box-shadow: 0 0 4px var(--trim);
+      transition: left 220ms cubic-bezier(0.3, 1.3, 0.5, 1), width 220ms ease-out;
+    }
+
+    .search {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    .search sprite {
+      position: absolute;
+      left: 3px;
+      top: 1px;
+    }
+
+    .search input {
+      width: 100%;
+      height: 14px;
+      padding: 0 4px 0 18px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      color: var(--cream);
+      transition: border-color 150ms, background-color 150ms;
+    }
+
+    .search input:focus {
+      background: rgba(0, 0, 0, 0.5);
+      border-color: var(--trim);
+    }
+
+    /* ---------- Market: cards and satchel ---------- */
+
+    main {
+      display: flex;
+      gap: 6px;
+      flex: 1;
+      min-height: 0;
+      margin: 0 6px 6px;
+    }
+
+    .wares {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+      grid-auto-rows: 70px;
+      gap: 4px;
+      align-content: start;
+      overflow-y: auto;
+      padding: 3px 3px 3px 1px;
+    }
+
+    .card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 2px 3px;
+      overflow: hidden;
+      background: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)) , var(--card);
+      border: 1px solid;
+      border-color: color-mix(in srgb, var(--tier) 45%, transparent);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: transform 160ms ease-out, border-color 160ms, box-shadow 200ms;
+      animation: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+    }
+
+    @keyframes card-in {
+      from { opacity: 0; transform: translateY(8px) scale(0.92); }
+    }
+
+    .card.common { --tier: var(--common); }
+    .card.uncommon { --tier: var(--uncommon); }
+    .card.rare { --tier: var(--rare); }
+    .card.epic { --tier: var(--epic); }
+    .card.legendary { --tier: var(--legendary); }
+
+    /* Hover: lift, grow a little, light the frame; the item starts to bob. */
+    .card:hover {
+      transform: translateY(-2px) scale(1.04);
+      border-color: var(--tier);
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5), 0 0 6px color-mix(in srgb, var(--tier) 50%, transparent);
+    }
+
+    .card:active {
+      transform: translateY(0) scale(0.97);
+    }
+
+    .art {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* A soft pool of the rarity colour behind the item. */
+    .art::before {
+      content: "";
+      position: absolute;
+      left: -10px;
+      top: -8px;
+      width: 52px;
+      height: 48px;
+      background: radial-gradient(circle, color-mix(in srgb, var(--tier) 30%, transparent), rgba(0, 0, 0, 0) 65%);
+    }
+
+    /* 32px: the item drawn at exactly 2x, so it stays crisp. */
+    .art item {
+      width: 32px;
+      height: 32px;
+    }
+
+    .card:hover .art item {
+      animation: bob 700ms ease-in-out infinite;
+    }
+
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    .name {
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--tier);
+      text-shadow: minecraft;
+    }
+
+    .card.common .name { color: #e8e8e8; }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      align-self: stretch;
+      padding: 0 3px;
+    }
+
+    /* Rarity pips: one diamond per tier. */
+    .tier {
+      color: var(--tier);
+      letter-spacing: -1px;
+    }
+
+    .price {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: #8fe88f;
+    }
+
+    .price item {
+      width: 8px;
+      height: 8px;
+    }
+
+    /* Epic cards breathe; legendary cards glow harder and get a gradient frame. */
+    .card.epic {
+      animation: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards, breathe-epic 2.4s ease-in-out infinite;
+    }
+
+    @keyframes breathe-epic {
+      0%, 100% { box-shadow: 0 0 2px rgba(255, 85, 255, 0.25); }
+      50% { box-shadow: 0 0 7px rgba(255, 85, 255, 0.6); }
+    }
+
+    /* The gradient border: a transparent border, then background layers clipped to different boxes. The
+       bottom layer (border-box) is the gold gradient; the opaque layers above it are clipped to the padding box,
+       so the gradient only shows through the 1px border. */
+    .card.legendary {
+      border-color: transparent;
+      background: linear-gradient(rgba(255, 200, 80, 0.16), rgba(255, 170, 0, 0)) padding-box,
+        linear-gradient(#0e1126, #0e1126) padding-box,
+        linear-gradient(135deg, #fff3b0, #ff9a10 35%, #ffd36b 60%, #b85a00) border-box;
+      animation: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards, breathe-legend 1.8s ease-in-out infinite;
+    }
+
+    .card.legendary:hover {
+      border-color: transparent;
+    }
+
+    @keyframes breathe-legend {
+      0%, 100% { box-shadow: 0 0 3px rgba(255, 170, 0, 0.35); }
+      50% { box-shadow: 0 0 10px rgba(255, 190, 40, 0.75); }
+    }
+
+    /* The sweep: a tilted band of light that crosses the card every few seconds (clipped by overflow). */
+    .sweep {
+      position: absolute;
+      top: -20px;
+      left: -24px;
+      width: 10px;
+      height: 100px;
+      background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 245, 200, 0.45), rgba(255, 255, 255, 0));
+      transform: rotate(20deg);
+      animation: sweep 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes sweep {
+      0% { transform: translateX(0) rotate(20deg); }
+      45%, 100% { transform: translateX(150px) rotate(20deg); }
+    }
+
+    .card.legendary .art item {
+      animation: float 2.4s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    .empty {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding-top: 30px;
+      color: #8f95c4;
+    }
+
+    /* ---------- Satchel ---------- */
+
+    aside {
+      display: flex;
+      flex-direction: column;
+      width: 132px;
+      flex: none;
+      padding: 4px;
+      background: linear-gradient(rgba(255, 220, 160, 0.05), rgba(0, 0, 0, 0)), rgba(6, 8, 20, 0.6);
+      border: 1px solid var(--trim-soft);
+      border-radius: 3px;
+      animation: slide-left 500ms ease-out 200ms both;
+    }
+
+    @keyframes slide-left {
+      from { opacity: 0; transform: translateX(12px); }
+    }
+
+    aside h2 {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0 0 3px;
+      padding-bottom: 3px;
+      font-size: 8px;
+      font-weight: 400;
+      color: var(--trim);
+      border-bottom: 1px solid var(--trim-soft);
+    }
+
+    .badge {
+      margin-left: auto;
+      min-width: 10px;
+      padding: 0 2px;
+      background: var(--trim);
+      border-radius: 4px;
+      color: #2a1a00;
+      text-align: center;
+    }
+
+    .lines {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .line {
+      display: grid;
+      grid-template-columns: 16px 1fr auto;
+      grid-template-areas: "icon name step" "icon cost step";
+      column-gap: 3px;
+      align-items: center;
+      padding: 1px 2px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 2px;
+      animation: line-in 300ms ease-out backwards;
+    }
+
+    @keyframes line-in {
+      from { opacity: 0; transform: translateX(10px); }
+    }
+
+    .line item { grid-area: icon; }
+
+    .line .l-name {
+      grid-area: name;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .line .l-cost {
+      grid-area: cost;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: #8fe88f;
+    }
+
+    .line .l-cost item {
+      width: 8px;
+      height: 8px;
+    }
+
+    .stepper {
+      grid-area: step;
+      display: flex;
+      align-items: center;
+      gap: 1px;
+    }
+
+    .stepper button {
+      width: 9px;
+      height: 9px;
+      padding: 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      color: var(--cream);
+      text-shadow: none;
+      transition: background-color 120ms, transform 120ms;
+    }
+
+    .stepper button:hover {
+      background: var(--trim);
+      color: #2a1a00;
+    }
+
+    .stepper button:active {
+      transform: scale(0.85);
+    }
+
+    .stepper span {
+      min-width: 12px;
+      text-align: center;
+    }
+
+    .nothing {
+      padding: 12px 4px;
+      color: #8f95c4;
+      text-align: center;
+    }
+
+    .total {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      margin-top: 3px;
+      padding-top: 3px;
+      border-top: 1px solid var(--trim-soft);
+    }
+
+    .total .sum {
+      margin-left: auto;
+      font-size: 16px;
+      color: mc-green;
+      text-shadow: 1px 1px 0 #0a3a0a;
+    }
+
+    .total.short .sum {
+      color: mc-red;
+      text-shadow: 1px 1px 0 #3a0a0a;
+    }
+
+    .after {
+      margin-bottom: 3px;
+      color: #8f95c4;
+      text-align: right;
+    }
+
+    /* The buy button: gold. When you cannot afford the satchel, the total shakes instead (see shake()). */
+    .buy {
+      position: relative;
+      width: 100%;
+      height: 18px;
+      overflow: hidden;
+      background: linear-gradient(#f2c14e, #c98a12);
+      border: 1px solid #ffe08a;
+      border-bottom-color: #8a5a06;
+      border-radius: 2px;
+      color: #2a1a00;
+      text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6);
+      transition: transform 120ms, box-shadow 160ms;
+    }
+
+    .buy:hover {
+      background: linear-gradient(#ffd56a, #dc9a1c);
+      box-shadow: 0 0 8px rgba(255, 190, 60, 0.6);
+    }
+
+    .buy:active {
+      transform: translateY(1px);
+    }
+
+    .buy:disabled {
+      background: linear-gradient(#5a5a6a, #3a3a48);
+      border-color: #6a6a7a;
+      color: #a0a0b0;
+      text-shadow: none;
+    }
+
+    /* ---------- Effects layer: flying items, confetti and the toast ---------- */
+
+    .fx {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .fx > * {
+      position: absolute;
+      display: block;
+    }
+
+    .bit {
+      width: 3px;
+      height: 3px;
+    }
+
+    .toast {
+      left: 50%;
+      top: 46%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 164px;
+      margin-left: -82px;
+      padding: 5px 8px;
+      background: rgba(10, 16, 10, 0.92);
+      border: 1px solid mc-green;
+      border-radius: 3px;
+      box-shadow: 0 0 10px rgba(85, 255, 85, 0.35);
+      animation: toast 2.6s ease-in-out forwards;
+    }
+
+    .toast b {
+      display: block;
+      color: mc-green;
+      font-weight: 400;
+    }
+
+    .toast.sad {
+      border-color: mc-red;
+      box-shadow: 0 0 10px rgba(255, 85, 85, 0.35);
+    }
+
+    .toast.sad b {
+      color: mc-red;
+    }
+
+    @keyframes toast {
+      0% { opacity: 0; transform: translateY(-14px) scale(0.9); }
+      12% { opacity: 1; transform: translateY(0) scale(1.03); }
+      18%, 82% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { opacity: 0; transform: translateY(-10px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .lantern, .light, .sweep, .card.epic, .card.legendary, .card.legendary .art item { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="awning">
+    <div class="lantern left"><i class="light"></i><i class="chain"></i><item id="minecraft:lantern"></item></div>
+    <div class="lantern right"><i class="light"></i><i class="chain"></i><item id="minecraft:lantern"></item></div>
+  </div>
+
+  <header>
+    <h1>Wandering Trader</h1>
+    <span class="motto">Hmm? Hrmm!</span>
+    <div class="purse"><item id="minecraft:emerald"></item><span>{{ Math.round(shownPurse) }}</span></div>
+  </header>
+
+  <div class="toolbar">
+    <nav class="tabs" id="tabs">
+      <button v-for="t in tabs" :key="t.id" :class="{ on: tab === t.id }" :data-tab="t.id" @click="pick(t.id)">{{ t.label }}</button>
+      <i class="indicator" id="indicator"></i>
+    </nav>
+    <label class="search">
+      <sprite src="minecraft:icon/search"></sprite>
+      <input type="search" placeholder="Search wares..." v-model="query">
+    </label>
+  </div>
+
+  <main>
+    <section class="wares">
+      <div v-for="(w, i) in visible()" :key="w.id" class="card" :class="w.rarity" :style="{ animationDelay: i * 25 + 'ms' }"
+           :title="w.rarity" @click="add(w, $event)">
+        <i class="sweep" v-if="w.rarity === 'legendary'" :style="{ animationDelay: i * 250 + 'ms' }"></i>
+        <div class="art"><item :id="w.icon"></item></div>
+        <div class="name">{{ w.name }}</div>
+        <div class="meta">
+          <span class="tier">{{ '◆'.repeat(5 - ORDER[w.rarity]) }}</span>
+          <span class="price"><item id="minecraft:emerald"></item><span>{{ w.price }}</span></span>
+        </div>
+      </div>
+      <div class="empty" v-if="visible().length === 0">
+        <item id="minecraft:bundle"></item>
+        <span>Hmm? Nothing like that.</span>
+      </div>
+    </section>
+
+    <aside>
+      <h2><item id="minecraft:bundle" id="satchel"></item><span>Satchel</span><span class="badge" id="badge">{{ count() }}</span></h2>
+      <div class="lines">
+        <div class="line" v-for="l in cart" :key="l.id">
+          <item :id="ware(l.id).icon"></item>
+          <span class="l-name">{{ ware(l.id).name }}</span>
+          <span class="l-cost"><item id="minecraft:emerald"></item><span>{{ ware(l.id).price * l.qty }}</span></span>
+          <span class="stepper">
+            <button @click="step(l, -1)">-</button>
+            <span>{{ l.qty }}</span>
+            <button @click="step(l, 1)">+</button>
+          </span>
+        </div>
+        <div class="nothing" v-if="cart.length === 0">Your satchel is empty.</div>
+      </div>
+      <div class="total" :class="{ short: total() > purse }" id="total">
+        <item id="minecraft:emerald"></item>
+        <span>Total</span>
+        <span class="sum">{{ Math.round(shownTotal) }}</span>
+      </div>
+      <div class="after">{{ cart.length === 0 ? 'Click a ware to add it' : total() > purse ? 'Need ' + (total() - purse) + ' more' : 'Left after: ' + (purse - total()) }}</div>
+      <button class="buy" id="buy" :disabled="cart.length === 0" @click="purchase">Purchase</button>
+    </aside>
+  </main>
+
+  <div class="fx" id="fx"></div>
+
+  <script>
+    // Note: Rhino initialises a const inside a loop body only once, so loops here use let.
+
+    const WARES = [
+      { id: 'bread', name: 'Bread', icon: 'minecraft:bread', price: 1, rarity: 'common', cat: 'food' },
+      { id: 'beef', name: 'Steak', icon: 'minecraft:cooked_beef', price: 2, rarity: 'common', cat: 'food' },
+      { id: 'arrows', name: '16 Arrows', icon: 'minecraft:arrow', price: 3, rarity: 'common', cat: 'weapons' },
+      { id: 'bucket', name: 'Bucket', icon: 'minecraft:bucket', price: 4, rarity: 'common', cat: 'tools' },
+      { id: 'bow', name: 'Bow', icon: 'minecraft:bow', price: 7, rarity: 'uncommon', cat: 'weapons' },
+      { id: 'tag', name: 'Name Tag', icon: 'minecraft:name_tag', price: 8, rarity: 'uncommon', cat: 'tools' },
+      { id: 'spyglass', name: 'Spyglass', icon: 'minecraft:spyglass', price: 9, rarity: 'uncommon', cat: 'tools' },
+      { id: 'xp', name: 'XP Bottle', icon: 'minecraft:experience_bottle', price: 5, rarity: 'uncommon', cat: 'magic' },
+      { id: 'pearl', name: 'Ender Pearl', icon: 'minecraft:ender_pearl', price: 10, rarity: 'rare', cat: 'magic' },
+      { id: 'gapple', name: 'Gold Apple', icon: 'minecraft:golden_apple', price: 14, rarity: 'rare', cat: 'food' },
+      { id: 'diamond', name: 'Diamond', icon: 'minecraft:diamond', price: 12, rarity: 'rare', cat: 'tools' },
+      { id: 'echo', name: 'Echo Shard', icon: 'minecraft:echo_shard', price: 16, rarity: 'rare', cat: 'magic' },
+      { id: 'trident', name: 'Trident', icon: 'minecraft:trident', price: 26, rarity: 'epic', cat: 'weapons' },
+      { id: 'mending', name: 'Mending', icon: 'minecraft:enchanted_book', price: 24, rarity: 'epic', cat: 'magic' },
+      { id: 'totem', name: 'Totem', icon: 'minecraft:totem_of_undying', price: 32, rarity: 'epic', cat: 'magic' },
+      { id: 'pigstep', name: 'Pigstep', icon: 'minecraft:music_disc_pigstep', price: 20, rarity: 'epic', cat: 'magic' },
+      { id: 'elytra', name: 'Elytra', icon: 'minecraft:elytra', price: 48, rarity: 'legendary', cat: 'magic' },
+      { id: 'star', name: 'Nether Star', icon: 'minecraft:nether_star', price: 64, rarity: 'legendary', cat: 'magic' },
+      { id: 'mace', name: 'Mace', icon: 'minecraft:mace', price: 56, rarity: 'legendary', cat: 'weapons' },
+      { id: 'heart', name: 'Sea Heart', icon: 'minecraft:heart_of_the_sea', price: 30, rarity: 'epic', cat: 'magic' }
+    ];
+    const ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+
+    const shop = vellum.state({
+      tabs: [
+        { id: 'all', label: 'All' }, { id: 'weapons', label: 'Weapons' }, { id: 'tools', label: 'Tools' },
+        { id: 'magic', label: 'Magic' }, { id: 'food', label: 'Food' }
+      ],
+      tab: 'all',
+      query: '',
+      purse: 96,
+      cart: [{ id: 'gapple', qty: 2 }, { id: 'pearl', qty: 1 }, { id: 'spyglass', qty: 1 }],
+      // What the purse and total show; tween() eases them towards the real values every frame.
+      shownPurse: 96,
+      shownTotal: 0,
+
+      // Rarest first, filtered by the tab and the search box.
+      visible() {
+        const q = this.query.trim().toLowerCase();
+        return WARES.filter(w => (this.tab === 'all' || w.cat === this.tab) && w.name.toLowerCase().includes(q))
+          .toSorted((a, b) => ORDER[a.rarity] - ORDER[b.rarity] || b.price - a.price);
+      },
+      ware(id) {
+        return WARES.find(w => w.id === id);
+      },
+      total() {
+        return this.cart.reduce((sum, l) => sum + this.ware(l.id).price * l.qty, 0);
+      },
+      count() {
+        return this.cart.reduce((sum, l) => sum + l.qty, 0);
+      },
+
+      pick(id) {
+        this.tab = id;
+        vellum.playSound('minecraft:ui.button.click', 0.4, 1.4);
+        vellum.nextTick(moveIndicator);
+      },
+      add(w, event) {
+        const line = this.cart.find(l => l.id === w.id);
+        if (line) line.qty++;
+        else this.cart.push({ id: w.id, qty: 1 });
+        flyToSatchel(w.icon, event.currentTarget);
+        vellum.playSound('minecraft:entity.item.pickup', 0.5, 1.2);
+      },
+      step(line, delta) {
+        line.qty += delta;
+        if (line.qty <= 0) this.cart = this.cart.filter(l => l !== line);
+      },
+      purchase() {
+        const cost = this.total();
+        if (cost > this.purse) {
+          shake(document.getElementById('total'));
+          toast('Hmm... not enough.', 'Need ' + (cost - this.purse) + ' more emeralds', 'sad');
+          vellum.playSound('minecraft:entity.wandering_trader.no');
+          return;
+        }
+        this.purse -= cost;
+        this.cart = [];
+        confetti(document.getElementById('buy'));
+        toast('Trade complete!', 'Paid ' + cost + ' emeralds', '');
+        vellum.playSound('minecraft:entity.wandering_trader.yes');
+      }
+    });
+
+    // ---------- Counting numbers ----------
+
+    // Each frame, move the shown numbers a fraction of the way to the real ones: an ease-out count.
+    function tween() {
+      const target = shop.total();
+      shop.shownTotal += (target - shop.shownTotal) * 0.18;
+      shop.shownPurse += (shop.purse - shop.shownPurse) * 0.12;
+      if (Math.abs(target - shop.shownTotal) < 0.05) shop.shownTotal = target;
+      if (Math.abs(shop.purse - shop.shownPurse) < 0.05) shop.shownPurse = shop.purse;
+      requestAnimationFrame(tween);
+    }
+    requestAnimationFrame(tween);
+
+    // ---------- The tab underline ----------
+
+    function moveIndicator() {
+      const tabs = document.getElementById('tabs').getBoundingClientRect();
+      const on = document.querySelector('.tabs button.on');
+      if (!on) return;
+      const r = on.getBoundingClientRect();
+      const bar = document.getElementById('indicator');
+      bar.style.left = (r.left - tabs.left + 3) + 'px';
+      bar.style.width = (r.width - 6) + 'px';
+    }
+    vellum.nextTick(moveIndicator);
+
+    // ---------- Effects ----------
+
+    const fx = document.getElementById('fx');
+
+    // An item icon arcs from the card into the satchel, then the badge pops.
+    function flyToSatchel(icon, card) {
+      const from = card.getBoundingClientRect();
+      const to = document.getElementById('badge').getBoundingClientRect();
+      const it = document.createElement('item');
+      it.setAttribute('id', icon);
+      it.style.left = (from.left + from.width / 2 - 8) + 'px';
+      it.style.top = (from.top + 8) + 'px';
+      fx.appendChild(it);
+      const dx = to.left - from.left - from.width / 2 + 4, dy = to.top - from.top - 8;
+      it.animate([
+        { transform: 'translate(0px, 0px) scale(1.3)', opacity: 1 },
+        { transform: 'translate(' + dx * 0.5 + 'px, ' + (dy * 0.5 - 30) + 'px) scale(1)', opacity: 1, offset: 0.5 },
+        { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(0.4)', opacity: 0.2 }
+      ], { duration: 520, easing: 'ease-in' }).finished.then(() => {
+        it.remove();
+        document.getElementById('badge').animate([{ transform: 'scale(1.6)' }, { transform: 'none' }], { duration: 250, easing: 'ease-out' });
+      });
+    }
+
+    // Confetti: emeralds and coloured bits burst from the button, arc up, fall and fade, then are removed.
+    const COLOURS = ['#55ff55', '#ffaa00', '#ff55ff', '#55ffff', '#f1e3bf', '#ffff55'];
+    function confetti(button) {
+      const r = button.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top;
+      for (let i = 0; i < 44; i++) {
+        let el;
+        if (i < 8) {
+          el = document.createElement('item');
+          el.setAttribute('id', 'minecraft:emerald');
+        } else {
+          el = document.createElement('i');
+          el.className = 'bit';
+          el.style.background = COLOURS[i % COLOURS.length];
+        }
+        el.style.left = (cx - 4) + 'px';
+        el.style.top = (cy - 4) + 'px';
+        fx.appendChild(el);
+        burst(el, i);
+      }
+    }
+
+    // A separate function so each particle gets its own variables (closures in loops share let bindings).
+    function burst(el, i) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 2.8;
+      const speed = 50 + Math.random() * 80;
+      const dx = Math.cos(angle) * speed, dy = Math.sin(angle) * speed;
+      const spin = Math.round((Math.random() - 0.5) * 720);
+      el.animate([
+        { transform: 'translate(0px, 0px) rotate(0deg) scale(' + (i < 8 ? 1 : 1.5) + ')', opacity: 1 },
+        { transform: 'translate(' + dx + 'px, ' + dy + 'px) rotate(' + spin / 2 + 'deg)', opacity: 1, offset: 0.45 },
+        { transform: 'translate(' + dx * 1.3 + 'px, ' + (dy + 90) + 'px) rotate(' + spin + 'deg)', opacity: 0 }
+      ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(0.2, 0.6, 0.4, 1)' }).finished.then(() => el.remove());
+    }
+
+    function toast(title, text, kind) {
+      const t = document.createElement('div');
+      t.className = 'toast ' + kind;
+      t.innerHTML = '<item id="minecraft:' + (kind ? 'barrier' : 'emerald') + '"></item><div><b></b><span></span></div>';
+      t.querySelector('b').textContent = title;
+      t.querySelector('span').textContent = text;
+      t.addEventListener('animationend', () => t.remove());
+      fx.appendChild(t);
+    }
+
+    function shake(el) {
+      el.animate([{ transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(-2px)' },
+        { transform: 'translateX(2px)' }, { transform: 'none' }], { duration: 360 });
+    }
+  </script>
+</body>
+</html>
