@@ -27,7 +27,7 @@ import java.util.Map;
  * scales, and every layer, whatever order it is submitted in) into a collector that only looks at where the models'
  * cubes are. Renderers that draw something else than models (an ender dragon's custom geometry) are measured by their
  * bounding box. Measured once per entity type, age and size (slimes come in sizes), and separately for states a mod
- * supplied (which may show other parts), from the first state drawn.
+ * supplied (which may show other parts), in a neutral pose.
  */
 record EntityReach(float radius, float bottom, float top) {
     private record Key(EntityType<?> type, boolean baby, float width, float height, boolean supplied) {}
@@ -46,7 +46,35 @@ record EntityReach(float radius, float bottom, float top) {
         return reach;
     }
 
+    /**
+     * Measures {@code state} in a neutral pose (looking ahead, standing still, at age 0), so the first pose a type
+     * happens to be drawn in (a turned head, a stride) doesn't size every later portrait of it. The state's own pose
+     * is put back afterwards.
+     */
     private static EntityReach measure(EntityRenderState state) {
+        float age = state.ageInTicks;
+        state.ageInTicks = 0;
+        if (!(state instanceof LivingEntityRenderState living)) {
+            try {
+                return submitted(state);
+            } finally {
+                state.ageInTicks = age;
+            }
+        }
+        float yRot = living.yRot, xRot = living.xRot, walkPos = living.walkAnimationPos, walkSpeed = living.walkAnimationSpeed;
+        living.yRot = living.xRot = living.walkAnimationPos = living.walkAnimationSpeed = 0;
+        try {
+            return submitted(state);
+        } finally {
+            state.ageInTicks = age;
+            living.yRot = yRot;
+            living.xRot = xRot;
+            living.walkAnimationPos = walkPos;
+            living.walkAnimationSpeed = walkSpeed;
+        }
+    }
+
+    private static EntityReach submitted(EntityRenderState state) {
         Collector collector = new Collector();
         Minecraft.getInstance().getEntityRenderDispatcher().submit(state, new CameraRenderState(), 0, 0, 0, new PoseStack(), collector);
         Measure m = collector.measure;
