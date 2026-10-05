@@ -37,11 +37,6 @@ public final class StyleEngine {
     }
 
     /**
-     * Computes the style that results from applying CSS declarations ({@code "opacity: 0; transform: scale(2)"})
-     * to {@code element} on top of {@code base}: used by {@code element.animate()} keyframes from scripts.
-     * Returns the new style and the set of properties the declarations set, as a keyframe at offset 0.
-     */
-    /**
      * The computed value of {@code property} (CSS name, longhand or common shorthand) serialised as CSS text, for
      * {@code getComputedStyle}. Returns "" for unknown properties.
      */
@@ -49,6 +44,11 @@ public final class StyleEngine {
         return "";
     }
 
+    /**
+     * Computes the style that results from applying CSS declarations ({@code "opacity: 0; transform: scale(2)"})
+     * to {@code element} on top of {@code base}: used by {@code element.animate()} keyframes from scripts.
+     * Returns the new style and the set of properties the declarations set, as a keyframe at offset 0.
+     */
     public ResolvedKeyframe computeDeclarations(Element element, String declarations, ComputedStyle base) {
         return new ResolvedKeyframe(0, null, base, java.util.Set.of());
     }
