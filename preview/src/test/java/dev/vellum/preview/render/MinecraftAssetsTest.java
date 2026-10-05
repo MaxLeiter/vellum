@@ -71,6 +71,8 @@ class MinecraftAssetsTest {
         assertFalse(MinecraftAssets.isAssetId("/pages/a.html"));
         assertEquals("minecraft:textures/gui/sprites/widget/button.png", MinecraftAssets.assetUrl("widget/button", "textures/gui/sprites/", ".png"));
         assertEquals("vellum:font/x.json", MinecraftAssets.assetUrl("vellum:x", "font/", ".json"));
+        assertEquals("item.minecraft.diamond_sword", MinecraftAssets.descriptionId("item", "diamond_sword"));
+        assertEquals("block.vellum.lamp.on", MinecraftAssets.descriptionId("block", "vellum:lamp/on"));
         Path file = Files.writeString(dir.resolve("page.html"), "<p>hi");
         MinecraftAssets assets = MinecraftAssets.open(List.of(), Optional.empty());
         assertEquals(Optional.of("<p>hi"), assets.readText(file.toString()));

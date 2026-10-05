@@ -12,6 +12,7 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
 
 import java.util.ArrayList;
@@ -71,17 +72,19 @@ final class TooltipPainter {
         }
     }
 
-    /** An item's name, as its tooltip's first line: the translation of its item (else block) key, else its id. */
+    /**
+     * An item's name, as its tooltip's first line: the translation of its item key, else of its block key (as the
+     * stand-in's texture falls back from item to block), else its id.
+     */
     private static String itemName(Host host, Element item) {
         String id = item.getAttribute("id");
         if (id == null || id.isBlank()) return "";
-        String[] name = id.strip().split(":", 2);
-        String namespace = name.length == 2 ? name[0] : "minecraft", path = name[name.length - 1].replace('/', '.');
+        id = id.strip();
         for (String kind : new String[] {"item", "block"}) {
-            String key = kind + "." + namespace + "." + path, text = host.translate(key);
+            String key = MinecraftAssets.descriptionId(kind, id), text = host.translate(key);
             if (!text.equals(key)) return text;
         }
-        return id.strip();
+        return id;
     }
 
     // ---- Wrapping ----

@@ -145,6 +145,17 @@ public final class MinecraftAssets implements AutoCloseable {
         return m.matches() ? m.group(1) + ":" + prefix + m.group(2) + suffix : "minecraft:" + prefix + id + suffix;
     }
 
+    /**
+     * Turns an id into the name Minecraft gives its translation key: {@code descriptionId("item", "diamond_sword")} is
+     * {@code item.minecraft.diamond_sword}, with any {@code /} in the path a {@code .}. Ids without a namespace are
+     * {@code minecraft:}.
+     */
+    public static String descriptionId(String kind, String id) {
+        Matcher m = ASSET_ID.matcher(id);
+        String namespace = m.matches() ? m.group(1) : "minecraft", path = m.matches() ? m.group(2) : id;
+        return kind + "." + namespace + "." + path.replace('/', '.');
+    }
+
     /** Finds a resource: an {@code ns:path} id in the first root that has it, or an existing file. */
     public Optional<Path> locate(String url) {
         Matcher id = ASSET_ID.matcher(url);
