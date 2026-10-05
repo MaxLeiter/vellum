@@ -84,7 +84,7 @@ public final class LayoutEngine {
         box.scrollHeight = Math.max(box.paddingBoxHeight(), content ? bottom - box.borderTop + box.paddingBottom : 0);
         if (box.context == LayoutBox.Context.LEAF) Controls.overflow(box);
         if (box.isScrollContainer()) box.element.clampScroll();
-        // What the box contributes to its parent's extent, in its own space: just its border box when it clips.
+        // What the box contributes to its parent's extent, in its own space: only its border box when it clips.
         box.overflowRight = box.style.overflowX.clips() || !content ? box.width : Math.max(box.width, right);
         box.overflowBottom = box.style.overflowY.clips() || !content ? box.height : Math.max(box.height, bottom);
     }

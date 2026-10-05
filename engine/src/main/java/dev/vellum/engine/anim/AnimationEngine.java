@@ -127,7 +127,7 @@ public final class AnimationEngine {
         return document.host().prefersReducedMotion();
     }
 
-    /** The timing a keyframe animation actually plays with: instant under reduced motion. */
+    /** The timing a keyframe animation plays with: instant under reduced motion. */
     Timing effective(Timing timing) {
         return reducedMotion() ? timing.instant() : timing;
     }

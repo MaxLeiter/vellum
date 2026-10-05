@@ -12,8 +12,8 @@ import java.util.List;
  *
  * <p><b>Coordinates.</b> {@link #x}/{@link #y} are the border-box origin relative to the parent box's border-box
  * origin, ignoring the parent's scroll offset and transforms. Line fragments use the same space as children: relative
- * to this box's border-box origin. Where a box is on screen (scroll offsets, transforms) is
- * {@code paint.Coordinates}' business: it is the one mapping to and from viewport coordinates.
+ * to this box's border-box origin. {@code paint.Coordinates} maps to and from viewport coordinates, applying scroll
+ * offsets and transforms.
  *
  * <p>Absolutely and fixed positioned boxes stay children of their DOM parent's box (so paint order follows the
  * tree), with x/y converted into that parent's space; {@link #containingBlock} records what they are placed against,

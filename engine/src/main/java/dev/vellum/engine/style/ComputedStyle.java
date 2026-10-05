@@ -96,7 +96,7 @@ public final class ComputedStyle implements Cloneable {
     public TextAlign textAlign = TextAlign.START;
     public TextTransform textTransform = TextTransform.NONE;
     /**
-     * Text decorations. Unlike CSS these simply inherit (CSS propagates them to inline descendants, which looks the
+     * Text decorations. Unlike CSS these inherit (CSS propagates them to inline descendants, which looks the
      * same for text). They map onto Minecraft's underline and strikethrough styles.
      */
     public boolean underline, lineThrough;

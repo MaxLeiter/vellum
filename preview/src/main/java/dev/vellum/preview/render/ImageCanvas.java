@@ -244,7 +244,7 @@ public final class ImageCanvas implements Canvas {
             appliedColor = null;
             g.fill(source);
         } else if (whole.x == 0 && whole.y == 0 && whole.width == w && whole.height == h || !smooth && source.equals(whole)) {
-            // Whole texels: draw just them. (Filtered sampling must still see the neighbouring texels, as on a GPU.)
+            // Whole texels: draw only them. (Filtered sampling must still see the neighbouring texels, as on a GPU.)
             boolean all = whole.x == 0 && whole.y == 0 && whole.width == w && whole.height == h;
             g.drawImage(all ? tinted : tinted.getSubimage(whole.x, whole.y, whole.width, whole.height), whole.x, whole.y, null);
         } else {

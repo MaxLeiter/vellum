@@ -58,7 +58,7 @@ final class Backgrounds {
         if (area[2] <= 0 || area[3] <= 0) return;
         if (image instanceof Image.Sprite sprite && layer.sizeKeyword() == null
                 && !layer.width().isFixed() && !layer.height().isFixed()) {
-            // A sprite scales itself (stretch, tile, nine-slice): by default it simply fills the painting area.
+            // A sprite scales itself (stretch, tile, nine-slice): by default it fills the painting area.
             canvas.drawSprite(sprite.id(), area[0], area[1], area[2], area[3], s.tint);
             return;
         }

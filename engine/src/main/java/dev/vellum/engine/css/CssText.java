@@ -32,7 +32,7 @@ final class CssText {
     }
 
     /**
-     * The shortest box-shorthand form of {@code values} (top, right, bottom, left — or corners, or a pair):
+     * The shortest box-shorthand form of {@code values} (top, right, bottom, left; or corners, or a pair):
      * {@code 1px 1px 1px 1px} → {@code 1px}, {@code 1px 2px 1px 2px} → {@code 1px 2px}.
      */
     static String collapse(List<String> values) {
