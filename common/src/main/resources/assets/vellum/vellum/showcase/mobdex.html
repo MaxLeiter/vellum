@@ -1053,33 +1053,46 @@
 
     // One dex entry: the game's data (or, without it, the flavoured mob's id) with the flavour on top.
     function entry(m) {
-      const parts = m.id.split(':'), ns = parts[0], path = parts[1];
+      const parts = m.id.split(':'), ns = parts[0], path = parts[1], vanilla = ns === 'minecraft';
       const tab = CATEGORY_TAB[m.category] || 'other';
-      const flavour = ns === 'minecraft' ? FLAVOUR[path] : null;
-      const e = Object.assign({ name: titleCase(path), cats: [tab], home: ns === 'minecraft' ? '—' : ns.toUpperCase(),
-        drops: null, desc: KIND[tab] + (ns === 'minecraft' ? '' : ' from ' + ns) + '. Stands ' + m.height + ' blocks tall.',
-        known: m.hp !== undefined }, m, flavour || {});
+      const e = Object.assign({ name: titleCase(path), cats: [tab], home: vanilla ? '—' : ns.toUpperCase(),
+        drops: null, desc: KIND[tab] + (vanilla ? '' : ' from ' + ns) + '. Stands ' + m.height + ' blocks tall.',
+        known: m.hp !== undefined }, m, (vanilla && FLAVOUR[path]) || {});
       e.caught = (m.killed || 0) > 0;
       e.seen = !e.known || e.caught || (m.killedBy || 0) > 0;
+      // Seen, with the game's numbers: stats, size, hearts and threat show.
+      e.logged = e.seen && e.known;
+      // Flavoured mobs first, in dex order, then the rest: vanilla before modded.
+      const i = vanilla ? ORDER.indexOf(path) : -1;
+      e.rank = i >= 0 ? i : ORDER.length + (vanilla ? 0 : 1000);
       return e;
     }
 
-    // Flavoured mobs first, in dex order, then the rest: vanilla before modded, by name.
-    function build(data) {
+    // MOBS in dex order (then by name), BY_ID to look them up, and the counts for the header. Templates are checked
+    // often (every 16 ms while the description types), so the list is not scanned per lookup.
+    let MOBS = [], BY_ID = {}, SEEN = 0, CAUGHT = 0;
+    // filtered()'s last result and the filter and query it was for.
+    let listed = null, listedFor = '';
+
+    function setMobs(data) {
       const list = data && data.mobs ? data.mobs : ORDER.map(path => ({ id: 'minecraft:' + path }));
-      const rank = e => {
-        const i = ORDER.indexOf(e.id.replace('minecraft:', ''));
-        return e.id.startsWith('minecraft:') && i >= 0 ? i : ORDER.length + (e.id.startsWith('minecraft:') ? 0 : 1000);
-      };
-      const mobs = list.map(entry);
-      mobs.sort((a, b) => rank(a) - rank(b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-      mobs.forEach((m, i) => { m.no = i + 1; });
-      return mobs;
+      MOBS = list.map(entry);
+      MOBS.sort((a, b) => a.rank - b.rank || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      BY_ID = {};
+      SEEN = 0;
+      CAUGHT = 0;
+      MOBS.forEach((m, i) => {
+        m.no = i + 1;
+        BY_ID[m.id] = m;
+        if (m.seen) SEEN++;
+        if (m.caught) CAUGHT++;
+      });
+      listed = null;
     }
 
-    let MOBS = build(vellum.data);
+    setMobs(vellum.data);
     // Statistics arrive from the server after the page opens: refresh the entries, keep the view.
-    vellum.on('data', data => { MOBS = build(data); });
+    vellum.on('data', setMobs);
 
     // ---- State. A mod can open the dex on a mob or a filter with data {start: {mob: 'creeper', filter: 'hostile'}}.
     // The options sit under one key because templates look names up in vellum.data before state and globals:
@@ -1097,41 +1110,46 @@
 
     function pad(n) { return String(n).padStart(3, '0'); }
     function color(cat) { return COLORS[cat] || COLORS.all; }
-    function mob() { return MOBS.find(m => m.id === state.sel) || MOBS[0]; }
-    function seenCount() { return MOBS.filter(m => m.seen).length; }
-    function caughtCount() { return MOBS.filter(m => m.caught).length; }
+    function mob() { return BY_ID[state.sel] || MOBS[0]; }
+    function seenCount() { return SEEN; }
+    function caughtCount() { return CAUGHT; }
     function filterName() { return state.filter === 'all' ? 'ALL MOBS' : state.filter.toUpperCase(); }
 
+    // The mobs the filter and the search let through, worked out again only when one of them or the list changed.
     function filtered() {
+      const key = state.filter + '|' + state.query;
+      if (listed !== null && listedFor === key) return listed;
       const q = state.query.trim().toLowerCase();
-      return MOBS.filter(m => {
+      listed = MOBS.filter(m => {
         if (state.filter !== 'all' && !m.cats.includes(state.filter)) return false;
         if (q === '') return true;
         // Unseen mobs can only be found by number: their names are a mystery.
         return (m.seen && m.name.toLowerCase().includes(q)) || pad(m.no).includes(q.replace('#', ''));
       });
+      listedFor = key;
+      return listed;
     }
 
     function statWidth(s) {
       const m = mob();
-      return m.seen && m.known ? Math.min(100, m[s.key] / s.max * 100) + '%' : '0%';
+      return m.logged ? Math.min(100, m[s.key] / s.max * 100) + '%' : '0%';
     }
 
     function statText(s) {
       const m = mob();
-      if (!m.seen || !m.known) return '??';
+      if (!m.logged) return '??';
       return s.key === 'spd' ? m.spd.toFixed(2) : String(Math.round(m[s.key] * 10) / 10);
     }
 
     function size() {
       const m = mob();
-      return m.seen && m.known ? m.width + ' × ' + m.height : '???';
+      return m.logged ? m.width + ' × ' + m.height : '???';
     }
 
     // Health as vanilla hearts: up to ten, full or half.
     function hearts() {
       const m = mob();
-      if (!m.seen || !m.known) return [];
+      if (!m.logged) return [];
       const shown = Math.min(m.hp, 20), out = [];
       for (let i = 0; i < 10; i++) out.push(shown >= (i + 1) * 2 ? 'full' : shown >= i * 2 + 1 ? 'half' : 'none');
       return out;
@@ -1140,11 +1158,8 @@
     // Threat as five skulls: passive mobs are harmless, neutral ones top out at three; some mobs say otherwise.
     function threat() {
       const m = mob(), out = [];
-      let n = m.risk || 0;
-      if (!m.risk && m.known && !m.cats.includes('passive')) {
-        n = Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5));
-      }
-      if (!m.seen) n = 0;
+      const rated = m.known && !m.cats.includes('passive');
+      const n = !m.seen ? 0 : m.risk || (rated ? Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5)) : 0);
       for (let i = 0; i < 5; i++) out.push(i < n);
       return out;
     }
