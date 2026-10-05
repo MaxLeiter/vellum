@@ -187,7 +187,7 @@ or the slots changed, so it can read from the menu, synced `ContainerData`, or c
 (`driver().push` would replace all of `vellum.data`, slots included, until the next change; use the function
 instead.)
 
-Try it: `/vellum demo chest` opens a chest whose screen is `assets/vellum/vellum/demo/inventory.html`.
+Try it: `/vellum demo chest` opens a chest whose screen is `assets/vellum/vellum/demo/chest.html`.
 
 ## HUD overlays
 

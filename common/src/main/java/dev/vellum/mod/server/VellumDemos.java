@@ -15,7 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * Server halves of the demos: a chest whose screen is the {@code inventory.html} page (proving that {@code <slot>}
+ * Server halves of the demos: a chest whose screen is the {@code chest.html} page (proving that {@code <slot>}
  * elements are real slots), and a live session that exercises the server API both ways.
  */
 public final class VellumDemos {
