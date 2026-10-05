@@ -546,10 +546,12 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - `DocumentDriver`: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
   input, messages, reload. After painting it shows the engine's tooltip at the engine's pointer through
   `setTooltipForNextFrame`. A title alone gets lines from `Font.split` at 170 px, as vanilla widget tooltips, or
-  split only at newlines with `title-nowrap`; `title-json` is parsed like `<mc-text json>` and cut into lines at its
-  newlines by `McText.lines`. Over an `<item tooltip>` the item content (`McReplaced.showTooltip`, `ItemTooltips`)
-  sets one tooltip: vanilla's item tooltip as is when no title applies, else the item's lines
-  (`Screen.getTooltipFromItem`), then the title's, with the item's tooltip image, style and the gap after its name.
+  split only at newlines with `title-nowrap` (shown as vanilla's `List<Component>` tooltip); `title-json` is parsed
+  like `<mc-text json>` and cut into lines at its newlines by `McText.lines`. The driver keeps the last title's text
+  and makes each form of its lines when first asked for. Over an `<item tooltip>` the item content
+  (`McReplaced.showTooltip`, `ItemTooltips`) sets one tooltip: the item's lines (`Screen.getTooltipFromItem`), then
+  those of the title that applies, if any, with the item's tooltip image, style and the gap after its name, as
+  vanilla's item tooltip has them.
   NeoForge's client entry installs the overload that passes the stack on, so its tooltip events (gather components,
   colour, pre) see the item as for vanilla item tooltips.
   `onKey(Predicate<KeyEvent>)` handlers get key presses the page left alone (not cancelled, not used by a focused

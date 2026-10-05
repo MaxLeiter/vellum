@@ -17,10 +17,12 @@ import java.util.List;
  */
 final class ItemContent extends McReplaced {
     private ItemStack stack;
+    private boolean tooltip;
 
     ItemContent(Element element) {
         super(element);
         this.stack = ItemStacks.of(element, "id");
+        this.tooltip = element.hasAttribute("tooltip");
     }
 
     @Override
@@ -36,11 +38,12 @@ final class ItemContent extends McReplaced {
     @Override
     public void attributeChanged(String name) {
         if (name.equals("id") || name.equals("count") || name.equals("components")) stack = ItemStacks.of(element, "id");
+        if (name.equals("tooltip")) tooltip = element.hasAttribute("tooltip");
     }
 
     @Override
     public boolean showsTooltip() {
-        return element.hasAttribute("tooltip") && !stack.isEmpty();
+        return tooltip && !stack.isEmpty();
     }
 
     @Override

@@ -12,9 +12,14 @@ import dev.vellum.engine.dom.Element;
  * ({@link dev.vellum.engine.host.ReplacedContent#showsTooltip}, an {@code <item tooltip>}): the host shows that
  * tooltip with the title's lines after its own, in one box. {@code element}, {@code text} and {@code json} are then
  * null when no title applies. Otherwise {@code element} is set and at least one of {@code text} and {@code json} is.
- *
- * @param wrap whether the title's lines wrap at the host's tooltip width (vanilla's 170 px for widget tooltips);
- *             false for lines after a content's tooltip, which never wrap, and for a title with {@code title-nowrap}.
- *             Lines always break at {@code '\n'}.
  */
-public record Tooltip(Element element, String text, String json, float x, float y, Element content, boolean wrap) {}
+public record Tooltip(Element element, String text, String json, float x, float y, Element content) {
+    /**
+     * Whether the title's lines wrap at the host's tooltip width (vanilla's 170 px for widget tooltips): false for
+     * lines after a content's tooltip, which never wrap, and for a title with {@code title-nowrap}. Lines always break
+     * at {@code '\n'}.
+     */
+    public boolean wrap() {
+        return content == null && !element.hasAttribute("title-nowrap");
+    }
+}
