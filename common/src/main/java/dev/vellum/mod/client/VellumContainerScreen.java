@@ -110,7 +110,7 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         super.extractRenderState(g, mouseX, mouseY, a);
     }
 
-    /** A hovered slot's item tooltip first; the page's {@code title} tooltip where there is none. */
+    /** A hovered slot's item tooltip first; the page's tooltip (an {@code <item tooltip>}'s or a title) where there is none. */
     @Override
     protected void extractTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         super.extractTooltip(g, mouseX, mouseY);

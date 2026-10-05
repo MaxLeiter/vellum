@@ -217,7 +217,7 @@ and `object-fit`, and placed in their box by `object-position`.
 
 | Element | Attributes | Notes |
 |---|---|---|
-| `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla tooltip. Items can't be faded: under 50% opacity they are hidden. |
+| `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla item tooltip at once, with the lines of any `title` that applies after the item's own (below). Items can't be faded: under 50% opacity they are hidden. |
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
 | `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer; `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
 | `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
@@ -228,9 +228,25 @@ and `object-fit`, and placed in their box by `object-position`.
 | `<mc-text>` | `key` + `args`, or `json` | Minecraft text as ordinary inline text: a translation (`key="block.minecraft.stone"`, comma-separated `args`) or a chat component (`json='{"text":"Gold","color":"gold","bold":true}'`). Styled parts become spans. Expanded when the element is added to the page and whenever these attributes change, so it works in templates. |
 
 Any element can have a `title` (plain text; a newline breaks the line) or a `title-json` (a chat component, for
-coloured text): after half a second of hover the vanilla tooltip shows at the pointer, wrapped like a widget
-tooltip. The nearest one from the hovered element up wins, and an `<item tooltip>` or a container slot's item
-tooltip wins over it. See SCRIPTING.md.
+coloured text): after half a second of hover the vanilla tooltip shows at the pointer, wrapped at 170 px like a
+widget tooltip. Add `title-nowrap` to the element to keep its lines whole; they then break only at newlines. The
+nearest title from the hovered element up wins, and a container slot's item tooltip wins over it. See SCRIPTING.md.
+
+Over an `<item tooltip>`, the item's own tooltip shows at once, and the title that applies (the nearest one from the
+item up) adds its lines after the item's, in the same box. Neither the item's lines nor the title's wrap. A shop row
+gets the vanilla merchant look this way: the item, then the price and a note.
+
+```html
+<div class="row" title-json='{"text":"","extra":[{"text":"Buy for 6 emeralds","color":"green"},
+     {"text":"\nIron comes a long way to get here","color":"gray","italic":true}]}'>
+  <item id="minecraft:iron_sword" tooltip></item> Iron Sword
+</div>
+```
+
+This is the default because a title on a row that holds an item describes that row's item. To show the item's
+tooltip alone, give the item an empty title: `<item id="minecraft:iron_sword" tooltip title="">`. Elsewhere in the row
+the title shows alone after the usual delay, wrapped unless the row has `title-nowrap`. On NeoForge the item's stack
+goes along to NeoForge's tooltip events, as for any item tooltip.
 
 CSS extras for Minecraft: `font-family: minecraft:default | minecraft:uniform | minecraft:alt |
 minecraft:illageralt | <any font id>` (`monospace` is uniform), `text-shadow: minecraft` (the game's own shadow),

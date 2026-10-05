@@ -209,10 +209,15 @@ Pressing Escape closes the screen unless a `keydown` listener calls `preventDefa
 
 The `title` attribute shows a tooltip, as in browsers but drawn like Minecraft's: when the pointer has rested on an
 element for half a second, the nearest `title` from the hovered element up shows at the pointer. A newline in the
-value breaks the line (`&#10;` in HTML, `'\n'` in a script string); long lines wrap. `title-json` takes a chat
-component instead, for coloured text (`title-json='{"text":"Rare","color":"gold"}'`), read like `<mc-text json>`.
-An empty `title` hides an ancestor's. Pressing a button or key hides the tooltip until the pointer moves to another
-element with one. Changing the attribute from a script changes the tooltip while it shows.
+value breaks the line (`&#10;` in HTML, `'\n'` in a script string); long lines wrap at 170 px unless the element has
+`title-nowrap`. `title-json` takes a chat component instead, for coloured text
+(`title-json='{"text":"Rare","color":"gold"}'`), read like `<mc-text json>`. An empty `title` hides an ancestor's.
+Pressing a button or key hides the tooltip until the pointer moves to another element with one. Changing the
+attribute from a script changes the tooltip while it shows.
+
+Over an `<item tooltip>` the item's tooltip shows at once, as in vanilla screens, and the title that applies adds its
+lines after the item's in the same box, unwrapped: a shop row's price under the item. An empty `title` on the item
+leaves its tooltip alone.
 
 ## Animations
 

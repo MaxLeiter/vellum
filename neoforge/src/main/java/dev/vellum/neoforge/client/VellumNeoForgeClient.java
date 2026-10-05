@@ -8,6 +8,7 @@ import dev.vellum.mod.client.VellumHud;
 import dev.vellum.mod.client.VellumScreens;
 import dev.vellum.mod.client.render.GuiSceneRenderState;
 import dev.vellum.mod.client.render.GuiSceneRenderer;
+import dev.vellum.mod.client.replaced.ItemTooltips;
 import dev.vellum.mod.net.VellumNetwork;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -34,6 +35,9 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class VellumNeoForgeClient {
     public VellumNeoForgeClient(IEventBus modBus, ModContainer container) {
         VellumClient.init(payload -> ClientPacketDistributor.sendToServer(payload));
+        // Item tooltips with a title's lines after them: pass the stack on to NeoForge's tooltip events.
+        ItemTooltips.install((g, font, lines, image, stack, x, y, style) ->
+                g.setTooltipForNextFrame(font, lines, image, stack, x, y, style, true));
         modBus.addListener(VellumNeoForgeClient::registerPayloadHandlers);
         modBus.addListener((RegisterGuiLayersEvent e) -> e.registerAbove(VanillaGuiLayers.TITLE, Constants.id("hud"), VellumHud::extract));
         modBus.addListener((RegisterPictureInPictureRenderersEvent e) -> e.register(GuiSceneRenderState.class, GuiSceneRenderer::new));

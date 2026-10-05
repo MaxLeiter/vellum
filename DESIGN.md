@@ -83,7 +83,7 @@ host: frame(nowMs)                   every frame:
         updateLayout       if layout dirty: box tree → element.box
         input.afterLayout  after any layout (also one a script flushed): caret in view, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
-host: input.tooltip()                every frame, after paint: the title tooltip to draw on top, or null
+host: input.tooltip()                every frame, after paint: the tooltip to draw on top, or null
 host: close()                        pagehide, unload (scripts still run), then dispose scripts, timers, replaced content
 ```
 
@@ -198,7 +198,7 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 
 | Element | Behaviour |
 |---|---|
-| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover. |
+| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover, with the lines of the `title` that applies after it. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
 | `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
 | `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box (or placed by `object-position`): at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
@@ -454,9 +454,14 @@ the scrollbar).
 - Tooltips (`input.Tooltips`): the element whose `title` / `title-json` applies is the nearest one with either
   attribute from the hover target up (an empty one means none, as in HTML). Its tooltip is due once the pointer has
   rested on it (or inside it) for 500 ms, and is hidden by a button or key press until the pointer reaches another
-  tooltip's element. The engine only decides; hosts ask `InputHandler.tooltip()` each frame after painting (a
-  `Tooltip` record: element, text, JSON, pointer position) and draw it, so scripts can change the attributes live.
-  `needsFrame` covers the moment the delay ends.
+  tooltip's element. Its lines wrap at the host's width unless the element has `title-nowrap`. When the hover target
+  is replaced content that shows its own tooltip (`ReplacedContent.showsTooltip`: an `<item tooltip>`), that
+  tooltip shows instead, at once and through presses, and the title that applies adds its lines after the content's,
+  never wrapped. Hovering a titled row that holds an item almost always means "this item, and this about it", so
+  that composition is the default; an empty `title` on the item opts out (D-013). The engine only decides; hosts ask
+  `InputHandler.tooltip()` each frame after painting (a `Tooltip` record: the title's element, text and JSON, the
+  pointer position, the content element when there is one, and whether to wrap) and draw it, so scripts can change
+  the attributes live. `needsFrame` covers the moment the delay ends; a content tooltip has no delay to wait out.
 - Pointer leave: `InputHandler.mouseLeave()` when the host stops giving the document the pointer (an interactive
   HUD overlay whose screen closed): hover ends with `mouseout`/`mouseleave`, a drag ends, no tooltip.
 - Focus: `focus`/`blur`/`focusin`/`focusout`; `:focus-visible` after keyboard navigation; `autofocus`; elements
@@ -526,9 +531,14 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - Replaced elements: `item`, `slot`, `entity`, `model`, `player-head` (`McReplaced.ELEMENTS`); canvases are
   `McSurface`s (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
 - `DocumentDriver`: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
-  input, messages, reload. After painting it shows the page's title tooltip through `setTooltipForNextFrame` (lines
-  from `Font.split` at 170 px, as vanilla widget tooltips; `title-json` parsed like `<mc-text json>`), at the
-  engine's pointer; vanilla's first-set-wins rule keeps an `<item tooltip>` (set while painting) on top.
+  input, messages, reload. After painting it shows the engine's tooltip at the engine's pointer through
+  `setTooltipForNextFrame`. A title alone gets lines from `Font.split` at 170 px, as vanilla widget tooltips, or
+  split only at newlines with `title-nowrap`; `title-json` is parsed like `<mc-text json>` and cut into lines at its
+  newlines by `McText.lines`. Over an `<item tooltip>` the item content (`McReplaced.showTooltip`, `ItemTooltips`)
+  sets one tooltip: vanilla's item tooltip as is when no title applies, else the item's lines
+  (`Screen.getTooltipFromItem`), then the title's, with the item's tooltip image, style and the gap after its name.
+  NeoForge's client entry installs the overload that passes the stack on, so its tooltip events (gather components,
+  colour, pre) see the item as for vanilla item tooltips.
   `onClose(Runnable)` handlers run once when the owner closes the page for good (screen removed, overlay hidden),
   after the page's `unload`; not on navigation, reload or while suspended (link confirmation).
 - 3D content: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
@@ -579,8 +589,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   positions, relative to it as in vanilla, are placed against the same area. Slot data is sent to the page only when
   a stack changed.
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
-  tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
-  slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
+  tick and the page is updated when its result or a stack changed. The page's tooltip (an `<item tooltip>`'s or a
+  title) is shown after vanilla's slot tooltip (in `extractTooltip`), and only without one, so a hovered slot's item
+  wins.
 - HUD layers: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
   `register(id, url, Predicate<Screen> interactiveOver)` (or `Input.WHEN_CHAT_OPEN`, `Input.WHEN_CURSOR_FREE`: any
   screen) makes it interactive over the screens the predicate accepts, asked each frame and pointer event with the

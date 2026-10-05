@@ -16,6 +16,7 @@ import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McCanvas;
+import dev.vellum.mod.client.replaced.McReplaced;
 import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.MessagePayload;
 import net.minecraft.client.Minecraft;
@@ -45,8 +46,8 @@ import java.util.function.Predicate;
 /**
  * Hosts one Vellum document in Minecraft, for whatever shows it ({@link VellumScreen}, {@link VellumContainerScreen}
  * or a HUD overlay): loads the page, keeps its viewport in sync with the GUI-scaled window, runs frame and paint,
- * shows {@code title} tooltips, forwards input (SDL to DOM), switches SDL text input on while a text field has focus,
- * routes messages, and reloads.
+ * shows tooltips, forwards input (SDL to DOM), switches SDL text input on while a text field has focus, routes
+ * messages, and reloads.
  *
  * <p>The document is its own error boundary ({@link Document#error()}): once the engine fails, the page is replaced
  * by an {@link ErrorPanel} until it is reloaded. Render thread only.
@@ -91,10 +92,14 @@ public final class DocumentDriver {
     /** A child screen (link confirmation) is up and will return to this one: survive the owner's removal. */
     private boolean suspended;
     private @Nullable String pendingNavigation;
-    /** Whether the last frame asked for a tooltip (an item's while painting, or the page's title). */
+    /** Whether the last frame asked vanilla for a tooltip (the page's, an item's or a title). */
     private boolean tooltipRequested;
-    /** The last title tooltip's attributes and its wrapped lines, so JSON is parsed and lines split once. */
+    /**
+     * The last title's attributes and wrapping, and its lines: split at newlines, and as shown alone (wrapped or not),
+     * so JSON is parsed and lines split once.
+     */
     private @Nullable String tooltipSource;
+    private List<Component> titleLines = List.of();
     private List<FormattedCharSequence> tooltipLines = List.of();
 
     /**
@@ -237,7 +242,6 @@ public final class DocumentDriver {
             McCanvas canvas = new McCanvas(g, mouseX, mouseY, owner.slots());
             doc.paint(canvas);
             canvas.finish();
-            tooltipRequested = canvas.requestedTooltip();
             syncTextInput();
             if (cursor != Cursor.AUTO && cursor != Cursor.DEFAULT) g.requestCursor(cursorType(cursor));
         }
@@ -248,18 +252,27 @@ public final class DocumentDriver {
     }
 
     /**
-     * Shows the {@code title} / {@code title-json} tooltip the page has up ({@link InputHandler#tooltip()}) at the
-     * page's pointer, wrapped like vanilla widget tooltips; none when {@code mouseX} is -1 (no pointer). Vanilla draws
-     * it on top at the end of the frame, and only if nothing set a tooltip before it (an {@code <item tooltip>}, a
-     * container slot's item).
+     * Shows the tooltip the page has up ({@link InputHandler#tooltip()}) at the page's pointer; none when
+     * {@code mouseX} is -1 (no pointer). On an {@code <item tooltip>} it is the item's vanilla tooltip with the lines
+     * of the title that applies after the item's own, unwrapped. Otherwise it is the {@code title} /
+     * {@code title-json} tooltip, wrapped like vanilla widget tooltips unless the element has {@code title-nowrap}.
+     * Vanilla draws it on top at the end of the frame, and only if nothing set a tooltip before it (a container
+     * slot's item, which its screen sets first).
      */
     void extractTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         Document doc = document();
         Tooltip tooltip = doc == null || mouseX < 0 ? null : doc.input().tooltip();
         if (tooltip == null) return;
+        int x = (int) tooltip.x(), y = (int) tooltip.y();
+        if (tooltip.content() != null) {
+            if (tooltip.content().replaced instanceof McReplaced content && content.showTooltip(g, titleLines(tooltip), x, y)) {
+                tooltipRequested = true;
+            }
+            return;
+        }
         List<FormattedCharSequence> lines = tooltipLines(tooltip);
         if (lines.isEmpty()) return;
-        g.setTooltipForNextFrame(Minecraft.getInstance().font, lines, (int) tooltip.x(), (int) tooltip.y());
+        g.setTooltipForNextFrame(Minecraft.getInstance().font, lines, x, y);
         tooltipRequested = true;
     }
 
@@ -268,15 +281,28 @@ public final class DocumentDriver {
         return tooltipRequested;
     }
 
+    /** The title's lines, split at its newlines only. */
+    private List<Component> titleLines(Tooltip tooltip) {
+        parseTitle(tooltip);
+        return titleLines;
+    }
+
+    /** The title's lines as a tooltip of their own: wrapped at {@link #TOOLTIP_WIDTH} unless the tooltip says not to. */
     private List<FormattedCharSequence> tooltipLines(Tooltip tooltip) {
-        String source = tooltip.json() + "\u0000" + tooltip.text();
-        if (!source.equals(tooltipSource)) {
-            Component text = tooltip.json() != null ? McText.component(tooltip.json()) : null;
-            if (text == null && tooltip.text() != null) text = Component.literal(tooltip.text());
-            tooltipSource = source;
-            tooltipLines = text == null ? List.of() : Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
-        }
+        parseTitle(tooltip);
         return tooltipLines;
+    }
+
+    private void parseTitle(Tooltip tooltip) {
+        String source = tooltip.json() + "\u0000" + tooltip.text() + "\u0000" + tooltip.wrap();
+        if (source.equals(tooltipSource)) return;
+        Component text = tooltip.json() != null ? McText.component(tooltip.json()) : null;
+        if (text == null && tooltip.text() != null) text = Component.literal(tooltip.text());
+        tooltipSource = source;
+        titleLines = text == null ? List.of() : McText.lines(text);
+        if (text == null) tooltipLines = List.of();
+        else if (tooltip.wrap()) tooltipLines = Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
+        else tooltipLines = titleLines.stream().map(Component::getVisualOrderText).toList();
     }
 
     /**

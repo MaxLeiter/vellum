@@ -46,7 +46,7 @@ final class ReplacedElements {
         }
     }
 
-    /** {@code <item id count>}: the flat texture, and the stack size like vanilla's {@code itemCount}. */
+    /** {@code <item id count tooltip>}: the flat texture, and the stack size like vanilla's {@code itemCount}. */
     private static final class Item implements ReplacedContent {
         private final Element element;
         private final MinecraftAssets assets;
@@ -62,6 +62,13 @@ final class ReplacedElements {
 
         @Override public float intrinsicWidth() { return 16; }
         @Override public float intrinsicHeight() { return 16; }
+
+        /** With {@code tooltip}, as in game: the previewer shows the item's name, then the title's lines. */
+        @Override
+        public boolean showsTooltip() {
+            String id = element.getAttribute("id");
+            return element.hasAttribute("tooltip") && id != null && !id.isBlank();
+        }
 
         /** A square as wide as the box's shorter side, placed by object-position, as in game. */
         @Override

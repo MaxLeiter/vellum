@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <style>
+    body { padding: 20px; display: flex; flex-direction: column; gap: 6px; align-items: start; }
+    .row { display: flex; align-items: center; gap: 4px; }
+    item { width: 16px; height: 16px; }
+  </style>
+</head>
+<body>
+  <!-- A shop row: the item's tooltip, then the deal and a note, in one box and unwrapped. -->
+  <div class="row" id="row" title-json='{"text":"","extra":[{"text":"Buy for 6 emeralds","color":"green"},{"text":"\nIron comes a long way to get here, so it costs more in Rauca","color":"gray","italic":true}]}'>
+    <item id="minecraft:iron_sword" tooltip></item> Iron Sword
+  </div>
+  <!-- A plain title that keeps its lines whole. -->
+  <button id="nowrap" title-nowrap
+          title-json='[{"text":"Sells to anyone who asks, at any hour of the night","color":"gold"},{"text":"\nAnd a second line","color":"gray"}]'>Ask</button>
+</body>
+</html>

@@ -5,7 +5,10 @@ import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.mod.client.render.McCanvas;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.network.chat.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -37,6 +40,15 @@ public abstract class McReplaced implements ReplacedContent {
 
     /** Draws into the content box {@code (x, y, width, height)}, in the canvas's current transform. */
     protected abstract void draw(McCanvas canvas, float x, float y, float width, float height);
+
+    /**
+     * Shows the content's own tooltip ({@link #showsTooltip}) for this frame at GUI point ({@code x}, {@code y}),
+     * followed by {@code extra} (the lines of the {@code title} that applies), in one vanilla tooltip. Returns whether
+     * it set a tooltip.
+     */
+    public boolean showTooltip(GuiGraphicsExtractor g, List<Component> extra, int x, int y) {
+        return false;
+    }
 
     /** The element's style, or the initial one before it has one. */
     protected ComputedStyle style() {
