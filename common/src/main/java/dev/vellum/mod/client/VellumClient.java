@@ -3,6 +3,7 @@ package dev.vellum.mod.client;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McFontMetrics;
 import dev.vellum.mod.client.render.McImages;
+import dev.vellum.mod.client.showcase.Mobdex;
 import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.DataPayload;
 import dev.vellum.mod.net.OpenPayload;
@@ -33,6 +34,7 @@ public final class VellumClient {
         VellumResources.init();
         VellumScreens.registerContainer(VellumDemos.CHEST, VellumDemos.CHEST_PAGE);
         VellumHud.register(DEMO_HUD, "vellum:vellum/demo/hud.html");
+        VellumScreens.onPageLoad(Mobdex.URL, Mobdex::load);
     }
 
     public static void sendToServer(CustomPacketPayload payload) {
@@ -63,6 +65,11 @@ public final class VellumClient {
         McFontMetrics.INSTANCE.clearCache();
         McImages.clearCaches();
         DocumentDriver.reloadAll();
+    }
+
+    /** The player's statistics arrived from the server (they are only sent when asked for). */
+    public static void onStatsUpdated() {
+        Mobdex.statsUpdated();
     }
 
     private static @Nullable VellumScreen sessionScreen(int session) {

@@ -12,9 +12,9 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * The previewer's stand-ins for the Minecraft elements, at the game's sizes: items as their flat item (or block)
- * texture with the stack size, player heads as the default skin's face, entities as a silhouette, and slots as
- * nothing (CSS draws the slot). Attributes are read when painting, so edits show up without reloading.
+ * The previewer's stand-ins for the Minecraft elements, at the game's sizes: items and models as their flat item (or
+ * block) texture (items with the stack size), player heads as the default skin's face, entities as a silhouette,
+ * and slots as nothing (CSS draws the slot). Attributes are read when painting, so edits show up without reloading.
  */
 final class ReplacedElements {
     private static final int WHITE = 0xFFFFFFFF;
@@ -28,6 +28,7 @@ final class ReplacedElements {
                 "item", element -> new Item(element, assets, fonts),
                 "slot", element -> new Fixed(18, 18, (canvas, x, y, w, h) -> {}),
                 "entity", element -> new Fixed(48, 48, ReplacedElements::paintSilhouette),
+                "model", element -> new Fixed(32, 32, (canvas, x, y, w, h) -> paintModel(canvas, element, assets, x, y, w, h)),
                 "player-head", element -> new Fixed(16, 16, ReplacedElements::paintFace));
     }
 
@@ -59,17 +60,9 @@ final class ReplacedElements {
         @Override public float intrinsicWidth() { return 16; }
         @Override public float intrinsicHeight() { return 16; }
 
-        /** The flat item texture, else the block texture of the same name (the missing texture if neither exists). */
-        private String texture() {
-            String id = element.getAttribute("id");
-            if (id == null) return "";
-            String item = MinecraftAssets.assetUrl(id, "textures/item/", ".png");
-            return assets.texture(item).isPresent() ? item : MinecraftAssets.assetUrl(id, "textures/block/", ".png");
-        }
-
         @Override
         public void paint(Canvas canvas, float x, float y, float width, float height) {
-            canvas.drawImage(texture(), x, y, width, height, 0, 0, 1, 1, WHITE, false);
+            canvas.drawImage(flatTexture(assets, element.getAttribute("id")), x, y, width, height, 0, 0, 1, 1, WHITE, false);
             String count = element.getAttribute("count");
             if (count == null || count.isBlank() || count.equals("1")) return;
             // Vanilla draws the count at (17 - width, 9) in the 16px slot, white with the native shadow.
@@ -77,6 +70,21 @@ final class ReplacedElements {
             if (countFont.size() != 8 * s) countFont = new FontSpec(MinecraftFont.NATIVE.families(), 8 * s, false, false);
             canvas.drawText(count, x + 17 * s - fonts.width(count, countFont), y + 9 * s, countFont, WHITE, 0, true);
         }
+    }
+
+    /** The flat item texture, else the block texture of the same name (the missing texture if neither exists). */
+    private static String flatTexture(MinecraftAssets assets, String id) {
+        if (id == null) return "";
+        String item = MinecraftAssets.assetUrl(id, "textures/item/", ".png");
+        return assets.texture(item).isPresent() ? item : MinecraftAssets.assetUrl(id, "textures/block/", ".png");
+    }
+
+    /** {@code <model item>} or {@code <model block>}: the flat texture, centred, at the size the model would be. */
+    private static void paintModel(Canvas canvas, Element element, MinecraftAssets assets, float x, float y, float width, float height) {
+        String block = element.getAttribute("block");
+        String id = block != null ? block.split("\\[", 2)[0].strip() : element.getAttribute("item");
+        float size = Math.min(width, height) * (block != null ? 0.625f : 1);
+        canvas.drawImage(flatTexture(assets, id), x + (width - size) / 2, y + (height - size) / 2, size, size, 0, 0, 1, 1, WHITE, false);
     }
 
     /** The default skin's face and hat layer. */

@@ -378,6 +378,29 @@
       animation: blink 1s steps(1) infinite;
     }
 
+    /* The Turntable page, linked from the header: a real block model spinning as its icon. */
+    header a {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding-bottom: 1px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 150ms;
+    }
+
+    header a:hover { color: #7fb0ff; }
+
+    header model {
+      width: 16px;
+      height: 16px;
+      animation: spin 4s linear infinite;
+    }
+
+    @keyframes spin {
+      to { -mc-yaw: 360deg; }
+    }
+
     footer {
       flex: none;
       color: var(--muted);
@@ -390,6 +413,7 @@
   <header>
     <h1>Vellum showcase</h1>
     <span>HTML and CSS, painted by Minecraft</span>
+    <a href="models.html"><model block="minecraft:grass_block"></model>Turntable: blocks, items and mobs in 3D</a>
   </header>
 
   <nav class="grid">

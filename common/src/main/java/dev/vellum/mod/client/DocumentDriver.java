@@ -132,6 +132,7 @@ public final class DocumentDriver {
         disposeDocument();
         LIVE.add(this);
         error = null;
+        if (html == null) VellumScreens.pageLoading(url, this);
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
             Constants.LOG.error("Vellum: page not found: {}", url);
@@ -232,6 +233,16 @@ public final class DocumentDriver {
     }
 
     // ---- Messages ----
+
+    /** The page's URL ({@code ns:path/page.html}); for inline HTML, the base its relative URLs resolve against. */
+    public String url() {
+        return url;
+    }
+
+    /** The page's {@code vellum.data} as last pushed, or null. */
+    public @Nullable JsonElement data() {
+        return data == null ? null : JsonParser.parseString(data);
+    }
 
     /** Replaces {@code vellum.data}; the page's {@code vellum.on('data', fn)} listeners run. Kept across reloads. */
     public void push(JsonElement data) {

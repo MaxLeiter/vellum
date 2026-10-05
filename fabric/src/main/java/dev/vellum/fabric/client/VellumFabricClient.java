@@ -6,12 +6,14 @@ import dev.vellum.mod.client.VellumClient;
 import dev.vellum.mod.client.VellumClientCommands;
 import dev.vellum.mod.client.VellumHud;
 import dev.vellum.mod.client.VellumScreens;
+import dev.vellum.mod.client.render.GuiSceneRenderer;
 import dev.vellum.mod.net.VellumNetwork;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
@@ -27,6 +29,7 @@ public final class VellumFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         VellumClient.init(ClientPlayNetworking::send);
         for (VellumNetwork.Clientbound<?> c : VellumNetwork.CLIENTBOUND) register(c);
+        PictureInPictureRendererRegistry.register(context -> new GuiSceneRenderer());
         HudElementRegistry.attachElementAfter(VanillaHudElements.TITLE_AND_SUBTITLE, Constants.id("hud"), VellumHud::extract);
         // After every mod's client entrypoint has had the chance to call VellumScreens.registerContainer.
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {

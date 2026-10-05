@@ -341,7 +341,7 @@
       align-items: center;
       gap: 4px;
       height: 12px;
-      padding: 0 3px 0 4px;
+      padding: 0 3px 0 2px;
       cursor: pointer;
       transition: background-color 120ms, padding-left 150ms ease-out;
       /* Rows slide in one after another when the list first appears (delay set per row inline). */
@@ -356,6 +356,8 @@
     .row:hover { background: rgba(92, 200, 255, 0.08); }
 
     .row .no { color: var(--dim); }
+    .row item, .row .no-egg { flex: none; width: 10px; height: 10px; }
+    .row .no-egg { text-align: center; color: #34505f; }
     .row .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .row.unseen .nm { color: #34505f; }
 
@@ -473,25 +475,49 @@
       min-height: 0;
     }
 
-    /* The holo stage: a spotlight, a perspective-free floor grid, corner brackets and a scan line. */
-    /* The stage grows with the screen; the entity fills it, minus a margin. */
+    /* The holo stage: a spotlight, a perspective-free floor grid, corner brackets, a scan line, and a turntable
+       disc the mob stands on. */
     .stage {
       position: relative;
       flex: 0 0 38%;
       overflow: hidden;
       background:
-        radial-gradient(ellipse at 50% 88%, rgba(92, 200, 255, 0.35) 0%, rgba(92, 200, 255, 0) 45%),
         radial-gradient(circle at 50% 40%, rgba(92, 200, 255, 0.14) 0%, rgba(92, 200, 255, 0) 70%),
         repeating-linear-gradient(to right, rgba(92, 200, 255, 0.07) 0 1px, transparent 1px 8px),
         repeating-linear-gradient(to bottom, rgba(92, 200, 255, 0.07) 0 1px, transparent 1px 8px);
       border: 1px solid #1d3442;
     }
 
+    /* The disc's middle is the floor line: the entity's box ends there, and entities stand on the bottom of their
+       box. */
+    .turntable {
+      position: absolute;
+      left: 10%;
+      right: 10%;
+      bottom: 4px;
+      height: 10px;
+      border: 1px solid rgba(92, 200, 255, 0.55);
+      border-radius: 50%;
+      background: radial-gradient(ellipse at 50% 50%, rgba(92, 200, 255, 0.4), rgba(92, 200, 255, 0.05) 70%);
+      box-shadow: 0 0 6px rgba(92, 200, 255, 0.5);
+    }
+
+    /* The mob turns on its own (-mc-yaw from @keyframes); hovering the stage holds it still so you can look, and
+       dragging turns it (rotatable). Unseen mobs are silhouettes: the picture is tinted almost black. */
     .stage entity {
       position: absolute;
-      inset: 8px 6px 4px;
-      width: auto;
-      height: auto;
+      left: 4px;
+      top: 14px;
+      width: calc(100% - 8px);
+      height: calc(100% - 23px);
+      animation: turn 9s linear infinite;
+    }
+
+    .stage:hover entity { animation-play-state: paused; }
+    .stage entity.unseen { -mc-tint: #0a1c28; }
+
+    @keyframes turn {
+      to { -mc-yaw: 360deg; }
     }
 
     .corner {
@@ -542,6 +568,7 @@
     .noise {
       position: absolute;
       inset: -8px 0 0;
+      pointer-events: none;
       background:
         repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
         repeating-linear-gradient(to right, rgba(92, 200, 255, 0.06) 0 2px, transparent 2px 5px);
@@ -556,7 +583,8 @@
       position: absolute;
       left: 0;
       right: 0;
-      top: 40px;
+      top: 4px;
+      pointer-events: none;
       color: var(--danger);
       text-align: center;
       animation: blink 1s steps(1) infinite;
@@ -567,6 +595,7 @@
       position: absolute;
       left: 4px;
       top: 4px;
+      pointer-events: none;
       display: flex;
       align-items: center;
       gap: 2px;
@@ -756,12 +785,14 @@
     }
 
     .key:hover { background: #1d3a4c; }
+    .key.wide { width: auto; padding: 0 3px; }
+    .key.on { color: #071017; background: var(--cyan); border-color: #bfeaff; }
     .key:active { transform: translateY(1px); }
 
     .keys .sp { flex: 1; }
 
     @media (prefers-reduced-motion: reduce) {
-      .lens, .led, .scan, .noise, .row, .row.sel::before { animation: none; }
+      .lens, .led, .scan, .noise, .row, .row.sel::before, .stage entity { animation: none; }
     }
   </style>
 </head>
@@ -798,10 +829,12 @@
             <span>{{ filtered().length }} {{ filtered().length === 1 ? 'ENTRY' : 'ENTRIES' }}</span>
           </div>
           <div class="list" id="list">
-            <div v-for="(m, i) in filtered()" :key="m.id" class="row" :id="'row-' + m.id"
+            <div v-for="(m, i) in filtered()" :key="m.id" class="row" :id="'row-' + m.no"
                  :class="{ sel: m.id === sel, unseen: !m.seen }"
                  :style="{ '--c': color(m.cats[0]), animationDelay: Math.min(i, 14) * 25 + 'ms' }"
                  @click="select(m.id)">
+              <item v-if="m.seen && m.egg" :id="m.egg"></item>
+              <span class="no-egg" v-else>?</span>
               <span class="no">#{{ pad(m.no) }}</span>
               <span class="nm">{{ m.seen ? m.name : '??????' }}</span>
               <span class="ball" v-if="m.caught"></span>
@@ -831,11 +864,12 @@
 
             <div class="entry-main">
               <div class="stage" @mouseenter="hovering = true" @mouseleave="hovering = false">
-                <div v-if="mob().seen">
-                  <!-- rotate is driven from a script (see spin()); follow-mouse while hovered. -->
-                  <entity :type="'minecraft:' + mob().id" :follow-mouse="hovering"></entity>
-                </div>
-                <div v-else>
+                <div class="turntable"></div>
+                <!-- Turned by CSS (@keyframes turn on -mc-yaw), held still while hovered, turned by dragging. Unseen
+                     mobs are silhouettes. -->
+                <entity :type="mob().id" rotatable :follow-mouse="hovering && mob().seen" :baby="baby"
+                        :walk="walking" :class="{ unseen: !mob().seen }"></entity>
+                <div v-if="!mob().seen">
                   <div class="noise"></div>
                   <div class="nodata">NO DATA</div>
                 </div>
@@ -843,7 +877,7 @@
                 <div class="corner bl"></div><div class="corner br"></div>
                 <div class="scan"></div>
                 <div class="flash" v-for="k in [sel]" :key="k"></div>
-                <div class="live" v-if="mob().seen">{{ hovering ? 'LOCK' : 'LIVE' }}</div>
+                <div class="live" v-if="mob().seen">{{ hovering ? 'DRAG' : 'LIVE' }}</div>
               </div>
 
               <div class="stats">
@@ -864,16 +898,21 @@
                   <span>{{ mob().seen ? mob().home : '???' }}</span>
                 </div>
                 <div class="info">
+                  <span class="k">SIZE</span>
+                  <span>{{ size() }}</span>
+                </div>
+                <div class="info">
                   <span class="k">RISK</span>
                   <span v-for="(on, i) in threat()" class="skull" :class="{ on: on }">☠</span>
                 </div>
                 <div class="drops" v-for="k in [sel]" :key="k">
                   <span class="k">DROPS</span>
-                  <div class="drop" v-for="(d, i) in (mob().seen ? mob().drops : [])" :key="d"
+                  <div class="drop" v-for="(d, i) in (mob().seen && mob().drops ? mob().drops : [])" :key="d"
                        :style="{ animationDelay: (200 + i * 70) + 'ms' }">
                     <item :id="'minecraft:' + d" tooltip></item>
                   </div>
-                  <span v-if="mob().seen && mob().drops.length === 0">NOTHING</span>
+                  <span v-if="mob().seen && mob().drops && mob().drops.length === 0">NOTHING</span>
+                  <span v-if="mob().seen && !mob().drops">NOT LOGGED</span>
                   <span v-if="!mob().seen">???</span>
                 </div>
               </div>
@@ -886,9 +925,10 @@
             <div class="keys">
               <div class="key" @click="step(-1)">▲</div>
               <div class="key" @click="step(1)">▼</div>
-              <span>or arrow keys</span>
+              <div class="key wide" :class="{ on: baby }" @click="baby = !baby">BABY</div>
+              <div class="key wide" :class="{ on: walking }" @click="walking = !walking">WALK</div>
               <span class="sp"></span>
-              <span>{{ mob().caught ? 'IN BOX 1' : mob().seen ? 'SEEN ONLY' : 'UNKNOWN' }}</span>
+              <span>{{ mob().caught ? mob().killed + ' CAUGHT' : mob().seen ? 'SEEN ONLY' : 'UNKNOWN' }}</span>
             </div>
           </div>
         </div>
@@ -897,83 +937,91 @@
   </main>
 
   <script>
-    // ---- Data. A real mod would push this from the server (vellum.data) instead of embedding it.
-    // hp in health points (two per heart), atk = damage on Normal, def = natural armor, spd = movement speed.
-    const MOBS = [
-      { id: 'zombie', name: 'Zombie', home: 'Overworld', cats: ['hostile'], hp: 20, atk: 3, def: 2, spd: 0.23, drops: ['rotten_flesh', 'iron_ingot', 'carrot'], caught: true,
+    // ---- Data. The mod gives the page every living mob in the game, vanilla and modded, with the player's kill
+    // statistics (vellum.data.mobs, see dev.vellum.mod.client.showcase.Mobdex): {id, name, category, hp, atk, def,
+    // spd, width, height, egg, killed, killedBy}. Defeating a mob catches it; being defeated by one counts as seeing it.
+    // FLAVOUR adds hand-written entries for vanilla mobs, in dex order; other mobs follow by name and get a generic
+    // entry. Without data (the previewer), the page shows the flavoured mobs.
+    const FLAVOUR = {
+      zombie: { home: 'Overworld', cats: ['hostile'], drops: ['rotten_flesh', 'iron_ingot', 'carrot'],
         desc: 'Shambles toward any light at night. Burns at dawn, unless it found a hat.' },
-      { id: 'skeleton', name: 'Skeleton', home: 'Overworld', cats: ['hostile'], hp: 20, atk: 4, def: 0, spd: 0.25, drops: ['bone', 'arrow'], caught: true,
+      skeleton: { home: 'Overworld', cats: ['hostile'], drops: ['bone', 'arrow'],
         desc: 'A crack shot that strafes while it aims. Runs from wolves on sight.' },
-      { id: 'creeper', name: 'Creeper', home: 'Overworld', cats: ['hostile'], hp: 20, atk: 43, def: 0, spd: 0.25, drops: ['gunpowder', 'music_disc_cat'], caught: true,
+      creeper: { home: 'Overworld', cats: ['hostile'], drops: ['gunpowder', 'music_disc_cat'], risk: 5,
         desc: 'Hugs are its love language. So are explosions. Hates cats.' },
-      { id: 'spider', name: 'Spider', home: 'Overworld', cats: ['hostile'], hp: 16, atk: 2, def: 0, spd: 0.3, drops: ['string', 'spider_eye'], caught: true,
+      spider: { home: 'Overworld', cats: ['hostile'], drops: ['string', 'spider_eye'],
         desc: 'Climbs any wall. Calm in daylight, but its red eyes mean business at dusk.' },
-      { id: 'enderman', name: 'Enderman', home: 'Everywhere', cats: ['neutral'], hp: 40, atk: 7, def: 0, spd: 0.3, drops: ['ender_pearl'], caught: false,
+      enderman: { home: 'Everywhere', cats: ['neutral'], drops: ['ender_pearl'],
         desc: 'Do not meet its gaze. Redecorates your house one block at a time.' },
-      { id: 'witch', name: 'Witch', home: 'Swamp huts', cats: ['hostile'], hp: 26, atk: 6, def: 0, spd: 0.25, drops: ['redstone', 'glowstone_dust', 'stick'], caught: false,
+      witch: { home: 'Swamp huts', cats: ['hostile'], drops: ['redstone', 'glowstone_dust', 'stick'],
         desc: 'Brews on the go and drinks its own healing potions mid-fight.' },
-      { id: 'slime', name: 'Slime', home: 'Swamps', cats: ['hostile'], hp: 16, atk: 4, def: 0, spd: 0.3, drops: ['slime_ball'], caught: true,
+      slime: { home: 'Swamps', cats: ['hostile'], drops: ['slime_ball'],
         desc: 'Splits in two when struck. Loves swamps and certain chunks deep down.' },
-      { id: 'blaze', name: 'Blaze', home: 'Fortresses', cats: ['hostile'], hp: 20, atk: 6, def: 0, spd: 0.23, drops: ['blaze_rod'], caught: false,
+      blaze: { home: 'Fortresses', cats: ['hostile'], drops: ['blaze_rod'],
         desc: 'A whirl of rods and smoke. Snowballs sting it more than swords do.' },
-      { id: 'ghast', name: 'Ghast', home: 'Nether', cats: ['hostile'], hp: 10, atk: 17, def: 0, spd: 0.4, drops: ['ghast_tear', 'gunpowder'], caught: false,
+      ghast: { home: 'Nether', cats: ['hostile'], drops: ['ghast_tear', 'gunpowder'], risk: 3,
         desc: 'Cries like a lost kitten. Swing at its fireballs to send them home.' },
-      { id: 'pig', name: 'Pig', home: 'Grassland', cats: ['passive'], hp: 10, atk: 0, def: 0, spd: 0.25, drops: ['porkchop'], caught: true,
+      pig: { home: 'Grassland', cats: ['passive'], drops: ['porkchop'],
         desc: 'Happy in mud. Rides well with a saddle and a carrot on a stick.' },
-      { id: 'cow', name: 'Cow', home: 'Grassland', cats: ['passive'], hp: 10, atk: 0, def: 0, spd: 0.2, drops: ['beef', 'leather'], caught: true,
+      cow: { home: 'Grassland', cats: ['passive'], drops: ['beef', 'leather'],
         desc: 'Fills a bucket with milk. Its moo is the sound of every farm.' },
-      { id: 'sheep', name: 'Sheep', home: 'Grassland', cats: ['passive'], hp: 8, atk: 0, def: 0, spd: 0.23, drops: ['mutton'], caught: true,
+      sheep: { home: 'Grassland', cats: ['passive'], drops: ['mutton'],
         desc: 'Dye it once and it stays that colour. Regrows wool by eating grass.' },
-      { id: 'chicken', name: 'Chicken', home: 'Grassland', cats: ['passive'], hp: 4, atk: 0, def: 0, spd: 0.25, drops: ['feather', 'chicken', 'egg'], caught: true,
+      chicken: { home: 'Grassland', cats: ['passive'], drops: ['feather', 'chicken', 'egg'],
         desc: 'Lays an egg every few minutes. Falls slowly, flapping hopefully.' },
-      { id: 'rabbit', name: 'Rabbit', home: 'Deserts', cats: ['passive'], hp: 3, atk: 0, def: 0, spd: 0.3, drops: ['rabbit_hide', 'rabbit_foot'], caught: false,
+      rabbit: { home: 'Deserts', cats: ['passive'], drops: ['rabbit_hide', 'rabbit_foot'],
         desc: 'Raids carrot farms at speed. A lucky foot is worth the chase.' },
-      { id: 'horse', name: 'Horse', home: 'Plains', cats: ['passive'], hp: 22, atk: 0, def: 0, spd: 0.225, drops: ['leather'], caught: true,
+      horse: { home: 'Plains', cats: ['passive'], drops: ['leather'],
         desc: 'Tame it with patience and an empty hand. Speed runs in the family.' },
-      { id: 'fox', name: 'Fox', home: 'Taiga', cats: ['passive'], hp: 10, atk: 2, def: 0, spd: 0.3, drops: ['sweet_berries'], caught: false,
+      fox: { home: 'Taiga', cats: ['passive'], drops: ['sweet_berries'],
         desc: 'Sleeps all day, steals your sword at night. Trusts only the sneaky.' },
-      { id: 'villager', name: 'Villager', home: 'Villages', cats: ['passive'], hp: 20, atk: 0, def: 0, spd: 0.5, drops: [], caught: true,
+      villager: { home: 'Villages', cats: ['passive'], drops: [],
         desc: 'Hrmm. Trades emeralds for nearly anything, and gossips about you.' },
-      { id: 'allay', name: 'Allay', home: 'Outposts', cats: ['passive'], hp: 20, atk: 0, def: 0, spd: 0.1, drops: [], caught: false,
+      allay: { home: 'Outposts', cats: ['passive'], drops: [],
         desc: 'Fetches any item you show it. Dances whenever a note block plays.' },
-      { id: 'wolf', name: 'Wolf', home: 'Forests', cats: ['neutral'], hp: 8, atk: 4, def: 0, spd: 0.3, drops: [], caught: true,
+      wolf: { home: 'Forests', cats: ['neutral'], drops: [],
         desc: 'A bone makes a friend for life. The whole pack defends its owner.' },
-      { id: 'iron_golem', name: 'Iron Golem', home: 'Villages', cats: ['neutral'], hp: 100, atk: 15, def: 0, spd: 0.25, drops: ['iron_ingot', 'poppy'], caught: true,
+      iron_golem: { home: 'Villages', cats: ['neutral'], drops: ['iron_ingot', 'poppy'],
         desc: 'Guardian of villages. Offers poppies to the children it likes.' },
-      { id: 'bee', name: 'Bee', home: 'Flower fields', cats: ['neutral'], hp: 10, atk: 2, def: 0, spd: 0.3, drops: [], caught: false,
+      bee: { home: 'Flower fields', cats: ['neutral'], drops: [],
         desc: 'Pollinates crops on its rounds. It can sting only once, so it rarely does.' },
-      { id: 'llama', name: 'Llama', home: 'Mountains', cats: ['neutral'], hp: 22, atk: 1, def: 0, spd: 0.175, drops: ['leather'], caught: false,
+      llama: { home: 'Mountains', cats: ['neutral'], drops: ['leather'],
         desc: 'Spits when insulted. Carries chests for wandering traders.' },
-      { id: 'polar_bear', name: 'Polar Bear', home: 'Ice plains', cats: ['neutral'], hp: 30, atk: 6, def: 0, spd: 0.25, drops: ['cod', 'salmon'], caught: false,
+      polar_bear: { home: 'Ice plains', cats: ['neutral'], drops: ['cod', 'salmon'],
         desc: 'Gentle unless a cub is near. Fishes the icy seas for supper.' },
-      { id: 'piglin', name: 'Piglin', home: 'Crimson', cats: ['neutral'], hp: 16, atk: 5, def: 0, spd: 0.35, drops: ['gold_ingot'], caught: false,
+      piglin: { home: 'Crimson', cats: ['neutral'], drops: ['gold_ingot'],
         desc: 'Loves gold above all else. Wear some, or be chased out of the Nether.' },
-      { id: 'squid', name: 'Squid', home: 'Oceans', cats: ['water'], hp: 10, atk: 0, def: 0, spd: 0.7, drops: ['ink_sac'], caught: true,
+      squid: { home: 'Oceans', cats: ['water'], drops: ['ink_sac'],
         desc: 'Inks the water when startled. Mostly tentacles and good intentions.' },
-      { id: 'glow_squid', name: 'Glow Squid', home: 'Dark water', cats: ['water', 'ambient'], hp: 10, atk: 0, def: 0, spd: 0.7, drops: ['glow_ink_sac'], caught: false,
+      glow_squid: { home: 'Dark water', cats: ['water', 'ambient'], drops: ['glow_ink_sac'],
         desc: 'Lights the deepest caves. Its ink makes sign text shine.' },
-      { id: 'axolotl', name: 'Axolotl', home: 'Lush caves', cats: ['water'], hp: 14, atk: 2, def: 0, spd: 1, drops: [], caught: true,
+      axolotl: { home: 'Lush caves', cats: ['water'], drops: [],
         desc: 'Plays dead to heal. A loyal ally against drowned and guardians.' },
-      { id: 'dolphin', name: 'Dolphin', home: 'Warm oceans', cats: ['water'], hp: 10, atk: 3, def: 0, spd: 1.2, drops: ['cod'], caught: false,
+      dolphin: { home: 'Warm oceans', cats: ['water'], drops: ['cod'],
         desc: 'Leads swimmers to sunken treasure. Feed it fish and it follows.' },
-      { id: 'turtle', name: 'Turtle', home: 'Beaches', cats: ['water', 'passive'], hp: 30, atk: 0, def: 0, spd: 0.25, drops: ['seagrass'], caught: false,
+      turtle: { home: 'Beaches', cats: ['water', 'passive'], drops: ['seagrass'],
         desc: 'Always returns to the beach it hatched on. Scutes make fine helmets.' },
-      { id: 'guardian', name: 'Guardian', home: 'Monuments', cats: ['water', 'hostile'], hp: 30, atk: 6, def: 0, spd: 0.5, drops: ['prismarine_shard', 'prismarine_crystals'], caught: false,
+      guardian: { home: 'Monuments', cats: ['water', 'hostile'], drops: ['prismarine_shard', 'prismarine_crystals'],
         desc: 'Patrols ocean monuments with a charging eye laser. Very spiky.' },
-      { id: 'bat', name: 'Bat', home: 'Caves', cats: ['ambient'], hp: 6, atk: 0, def: 0, spd: 0.1, drops: [], caught: false,
+      bat: { home: 'Caves', cats: ['ambient'], drops: [],
         desc: 'Squeaks in caves. Does nothing at all, and is proud of it.' },
-      { id: 'shulker', name: 'Shulker', home: 'End cities', cats: ['hostile'], hp: 30, atk: 4, def: 20, spd: 0, drops: ['shulker_shell'], caught: false,
+      shulker: { home: 'End cities', cats: ['hostile'], drops: ['shulker_shell'],
         desc: 'Hides in its shell in End cities. Its bullets make you float.' },
-      { id: 'ender_dragon', name: 'Ender Dragon', home: 'The End', cats: ['boss'], hp: 200, atk: 15, def: 0, spd: 0.7, drops: ['dragon_breath'], caught: false,
+      ender_dragon: { home: 'The End', cats: ['boss'], drops: ['dragon_breath'], risk: 5,
         desc: 'Rules the End from obsidian pillars, healing at its crystals.' },
-      { id: 'wither', name: 'Wither', home: 'Summoned', cats: ['boss', 'hostile'], hp: 300, atk: 8, def: 4, spd: 0.6, drops: ['nether_star'], caught: false, seen: false },
-      { id: 'warden', name: 'Warden', home: 'Deep Dark', cats: ['hostile'], hp: 500, atk: 30, def: 0, spd: 0.3, drops: ['sculk_catalyst'], caught: false, seen: false },
-      { id: 'sniffer', name: 'Sniffer', home: 'Ancient', cats: ['passive'], hp: 14, atk: 0, def: 0, spd: 0.1, drops: ['moss_block'], caught: false, seen: false }
-    ];
-    MOBS.forEach((m, i) => {
-      m.no = i + 1;
-      if (m.seen === undefined) m.seen = true;
-    });
+      wither: { home: 'Summoned', cats: ['boss', 'hostile'], drops: ['nether_star'], risk: 5,
+        desc: 'Three heads, no mercy. Built from soul sand and skulls by the reckless.' },
+      warden: { home: 'Deep Dark', cats: ['hostile'], drops: ['sculk_catalyst'], risk: 5,
+        desc: 'Blind, but it hears your footsteps. Best left undisturbed.' },
+      sniffer: { home: 'Ancient', cats: ['passive'], drops: ['moss_block'],
+        desc: 'Hatched from an ancient egg. Sniffs out seeds the world forgot.' }
+    };
+
+    // Spawn categories, as filter tabs; misc mobs (golems, villagers, armor stands) appear under ALL only.
+    const CATEGORY_TAB = { monster: 'hostile', creature: 'passive', ambient: 'ambient', axolotls: 'water',
+      water_creature: 'water', water_ambient: 'water', underground_water_creature: 'water', misc: 'other' };
+    const KIND = { hostile: 'A hostile creature', passive: 'A peaceful creature', water: 'A water creature',
+      ambient: 'An ambient creature', other: 'A curious creature' };
 
     const TABS = [
       { id: 'all' },
@@ -994,17 +1042,56 @@
     ];
 
     // One colour per category: filter tabs, badges and the selected row get it as --c.
-    const COLORS = { all: '#5cc8ff', hostile: '#e5484d', passive: '#46a758', neutral: '#f0a020', water: '#3e9be9', ambient: '#8e6bd8', boss: '#c13cd6' };
+    const COLORS = { all: '#5cc8ff', hostile: '#e5484d', passive: '#46a758', neutral: '#f0a020', water: '#3e9be9',
+      ambient: '#8e6bd8', boss: '#c13cd6', other: '#7d8f9b' };
+
+    const ORDER = Object.keys(FLAVOUR);
+
+    function titleCase(path) {
+      return path.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    // One dex entry: the game's data (or, without it, the flavoured mob's id) with the flavour on top.
+    function entry(m) {
+      const parts = m.id.split(':'), ns = parts[0], path = parts[1];
+      const tab = CATEGORY_TAB[m.category] || 'other';
+      const flavour = ns === 'minecraft' ? FLAVOUR[path] : null;
+      const e = Object.assign({ name: titleCase(path), cats: [tab], home: ns === 'minecraft' ? '—' : ns.toUpperCase(),
+        drops: null, desc: KIND[tab] + (ns === 'minecraft' ? '' : ' from ' + ns) + '. Stands ' + m.height + ' blocks tall.',
+        known: m.hp !== undefined }, m, flavour || {});
+      e.caught = (m.killed || 0) > 0;
+      e.seen = !e.known || e.caught || (m.killedBy || 0) > 0;
+      return e;
+    }
+
+    // Flavoured mobs first, in dex order, then the rest: vanilla before modded, by name.
+    function build(data) {
+      const list = data && data.mobs ? data.mobs : ORDER.map(path => ({ id: 'minecraft:' + path }));
+      const rank = e => {
+        const i = ORDER.indexOf(e.id.replace('minecraft:', ''));
+        return e.id.startsWith('minecraft:') && i >= 0 ? i : ORDER.length + (e.id.startsWith('minecraft:') ? 0 : 1000);
+      };
+      const mobs = list.map(entry);
+      mobs.sort((a, b) => rank(a) - rank(b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      mobs.forEach((m, i) => { m.no = i + 1; });
+      return mobs;
+    }
+
+    let MOBS = build(vellum.data);
+    // Statistics arrive from the server after the page opens: refresh the entries, keep the view.
+    vellum.on('data', data => { MOBS = build(data); });
 
     // ---- State. A mod can open the dex on a mob or a filter with data {start: {mob: 'creeper', filter: 'hostile'}}.
     // The options sit under one key because templates look names up in vellum.data before state and globals:
     // a top-level `filter` in the data would shadow state.filter for good.
     const opening = vellum.data.start || {};
     const state = vellum.state({
-      sel: opening.mob || 'creeper',
+      sel: opening.mob ? (opening.mob.includes(':') ? opening.mob : 'minecraft:' + opening.mob) : 'minecraft:creeper',
       filter: opening.filter || 'all',
       query: opening.query || '',
       hovering: false,
+      baby: false,
+      walking: false,
       typedLen: 0
     });
 
@@ -1027,29 +1114,37 @@
 
     function statWidth(s) {
       const m = mob();
-      return m.seen ? Math.min(100, m[s.key] / s.max * 100) + '%' : '0%';
+      return m.seen && m.known ? Math.min(100, m[s.key] / s.max * 100) + '%' : '0%';
     }
 
     function statText(s) {
       const m = mob();
-      if (!m.seen) return '??';
-      return s.key === 'spd' ? m.spd.toFixed(2) : String(m[s.key]);
+      if (!m.seen || !m.known) return '??';
+      return s.key === 'spd' ? m.spd.toFixed(2) : String(Math.round(m[s.key] * 10) / 10);
+    }
+
+    function size() {
+      const m = mob();
+      return m.seen && m.known ? m.width + ' × ' + m.height : '???';
     }
 
     // Health as vanilla hearts: up to ten, full or half.
     function hearts() {
       const m = mob();
-      if (!m.seen) return [];
+      if (!m.seen || !m.known) return [];
       const shown = Math.min(m.hp, 20), out = [];
       for (let i = 0; i < 10; i++) out.push(shown >= (i + 1) * 2 ? 'full' : shown >= i * 2 + 1 ? 'half' : 'none');
       return out;
     }
 
-    // Threat as five skulls: passive mobs are harmless, neutral ones top out at three.
+    // Threat as five skulls: passive mobs are harmless, neutral ones top out at three; some mobs say otherwise.
     function threat() {
       const m = mob(), out = [];
-      let n = 0;
-      if (m.seen && !m.cats.includes('passive')) n = Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5));
+      let n = m.risk || 0;
+      if (!m.risk && m.known && !m.cats.includes('passive')) {
+        n = Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5));
+      }
+      if (!m.seen) n = 0;
       for (let i = 0; i < 5; i++) out.push(i < n);
       return out;
     }
@@ -1057,7 +1152,7 @@
     // ---- The description types itself out, Pokédex style.
     function entryText() {
       const m = mob();
-      return m.seen ? m.desc : 'Not yet encountered. Explore further to log this mob.';
+      return m.seen ? m.desc : 'Not yet encountered. Defeat one, or be defeated by one, to log it.';
     }
     function typed() { return entryText().slice(0, state.typedLen); }
     function typing() { return state.typedLen < entryText().length; }
@@ -1106,7 +1201,7 @@
     // Scroll the list just enough to show the selected row.
     function revealSelected() {
       const list = document.getElementById('list');
-      const row = document.getElementById('row-' + state.sel);
+      const row = document.getElementById('row-' + mob().no);
       if (!list || !row) return;
       const l = list.getBoundingClientRect(), r = row.getBoundingClientRect();
       if (r.top < l.top) list.scrollTop -= l.top - r.top;
@@ -1118,17 +1213,6 @@
       if (e.key === 'ArrowDown') { step(1); e.preventDefault(); }
       if (e.key === 'ArrowUp') { step(-1); e.preventDefault(); }
     });
-
-    // ---- The turntable: <entity rotate="deg"> is a static pose, so a timer turns it. Hovering eases the mob to
-    // face you (rotate 0) and follow-mouse takes over. 30 updates a second looks smooth and halves the cost of a
-    // per-frame loop: each setAttribute restyles the document, and each timer tick re-checks the templates.
-    let angle = 0;
-    setInterval(() => {
-      if (state.hovering) angle += (((0 - angle + 540) % 360) - 180) * 0.25;
-      else angle = (angle + 1.2) % 360;
-      const e = document.querySelector('.stage entity');
-      if (e) e.setAttribute('rotate', angle.toFixed(1));
-    }, 33);
 
     vellum.nextTick(revealSelected);
   </script>
