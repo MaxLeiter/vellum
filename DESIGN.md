@@ -187,7 +187,7 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 | `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
 | `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
-| `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box: at yaw and pitch 0 as in the inventory, turned by the same properties; `rotatable`. |
+| `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box: at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
 | `<player-head name="..." uuid="...">` | A player's face from their skin. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
 | `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated (`Host.translate`) or component text (`Host.formatText` gives styled runs, which become spans), as a normal inline element. Expanded by the engine when the element is parsed or inserted and when those attributes change, so templates and scripts can use it. |
@@ -454,8 +454,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   stack is only 16 deep); clip stack → `enableScissor`; alpha stack multiplied into colours; `fillRect` → `fill`
   (sub-pixel via pose translate); `fillQuads` → a custom `GuiElementRenderState` with `RenderPipelines.GUI`
   (submitted into the widened `guiRenderState`, clipped to the widened `scissorStack`); `drawText` → `Font` with a
-  `Style` (font, bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi reordering only when
-  the text has right-to-left characters; `drawImage` → a textured quad (identifiers cached in `McImages`, canvases
+  `Style` (font, bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi
+  reordering only when the text has right-to-left characters; `drawImage` → a textured quad (identifiers cached in `McImages`, canvases
   are registered dynamic textures); `drawSprite` → `blitSprite`. Rectangles are one render state each, sharing a copy
   of the transform until it changes.
 - **McFontMetrics**: `Font.getSplitter().stringWidth(...)` with the style (bold widens), scaled. Each `FontSpec` keeps
@@ -473,13 +473,21 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - **3D content**: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
   (`GuiSceneRenderState`, `GuiSceneRenderer`, registered by both loaders, which pool renderers so any number draw in a
   frame). The picture is rendered at the GUI scale into the element's box and blitted with a colour, so 3D content
-  is crisp at any size, fades with `opacity` and takes `-mc-tint`. Still models keep their picture between frames.
-  Entities stand on the bottom of their box, fitted (with a small margin) to the room they need at any turn
-  (`EntityPortrait`: twice their bounding box width, since heads, tails and arms reach past it); display entities
-  are created client-side, never added to the world, and play their idle animations on the clock. Blocks are
-  resolved with `BlockModelResolver` and items in the `NONE` display context; both start from the inventory's view
-  (blocks and block-like items 30° from above, turned 225°; flat items face on), and items whose model reaches past
-  a block are centred on their bounds and scaled to fit.
+  is crisp at any size, fades with `opacity` and takes `-mc-tint`. Content asks `McCanvas.sceneVisible` first and
+  resolves nothing for a box that is clipped away or transparent. Still models keep their picture between frames.
+  - Entities stand on the bottom of their box, fitted (with a small margin) to the room they need at any turn and
+    at the current pitch. `EntityReach` measures that room by submitting the entity through its renderer into a
+    collector that reads the model cubes of every layer (whatever `order(n)` it is submitted in); never less than
+    the bounding box, measured once per entity type, age and size. Display entities are created client-side, never
+    added to the world, and play their idle animations on the clock.
+  - Blocks are resolved with one shared `BlockModelResolver` and drawn in vanilla's `block/block` GUI view (30° from
+    above, turned 225°, 0.625 of the box) whatever the block: blocks whose item model uses another view (stairs are
+    turned 135°) differ from their inventory icon at yaw 0.
+  - Items are resolved in the `GUI` display context, so their own GUI transform applies and at yaw and pitch 0 the
+    picture is the inventory icon, an item filling the box as it fills a slot. Yaw and pitch are applied in front of
+    that transform: block-like items (`usesBlockLight`) are first tilted back by the 30° their transform adds, so they
+    turn about their upright axis; flat items turn about the screen's vertical axis, and an item whose GUI transform
+    has another tilt turns about a slanted axis.
 - **Page hooks**: `VellumScreens.onPageLoad(url, hook)` runs when a page loads in any screen or overlay (opened,
   linked to, reloaded), before its scripts, so client-side pages get live data however they are reached;
   `VellumScreens.pages(url)` finds the drivers showing a page later, and `driver.merge(fields)` updates some fields
