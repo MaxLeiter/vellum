@@ -1,8 +1,12 @@
 # Vellum
 
-*Minecraft GUIs in HTML, CSS and JavaScript.* A Minecraft 26.3 mod (NeoForge and Fabric) with a small web engine inside. You write a screen, inventory, HUD or map as a web page, and Vellum lays it out, animates it, runs its scripts and paints it with the game's own GUI renderer.
+*Minecraft GUIs in HTML, CSS and JavaScript.* A Minecraft 26.3 mod (NeoForge and Fabric) with a small web engine inside. You write a screen, inventory, HUD or map as a web page, and Vellum lays it out, animates it, runs its scripts and paints it with the regular GUI renderer.
 
-The layout is real CSS: block, inline, flexbox, grid and positioning, plus transitions and `@keyframes`. Text uses the game's font (resource-pack fonts too), `<item>` shows a real item, and `<slot>` is a real container slot, so click, drag, shift-click and tooltips keep working. Scripts run in a Rhino sandbox with no Java access and no network.
+The layout is _most_ CSS: block, inline, flexbox, grid and positioning, plus transitions and `@keyframes`. This is a 90-10 solution.
+
+Scripts run in a Rhino sandbox with no Java access and no network.
+
+LLMs were used extensively in the development of Vellum.
 
 ```html
 <div class="mc-panel chest">
@@ -51,11 +55,11 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 ## Layout
 | Module | What |
 |---|---|
-| `engine/` | Pure Java 21 with no Minecraft dependencies: DOM, HTML and CSS parsers, cascade, layout, animation, painting to an abstract canvas, input and forms, sandboxed scripting |
+| `engine/` | No Minecraft dependencies. Contains the DOM, HTML and CSS parsers, cascade, layout, animation, painting to an abstract canvas, input and forms, sandboxed scripting |
 | `rhino/` | Mozilla Rhino 1.9.1, relocated to `dev.vellum.shadow.rhino` |
 | `common/` | Vanilla-only Minecraft code: the canvas over `GuiGraphicsExtractor`, screens, container screens, HUD overlays, networking, the public API, demos |
 | `neoforge/`, `fabric/` | Loader entrypoints |
-| `preview/` | The standalone previewer and its snapshot tests |
+| `preview/` | The standalone previewer |
 
 [`DESIGN.md`](DESIGN.md) covers the architecture and which HTML, CSS and JS work. [`DECISIONS.md`](DECISIONS.md) has the reasons behind the choices. For mod authors, [`docs/API.md`](docs/API.md) is the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) a guide to porting hand-drawn screens.
 
