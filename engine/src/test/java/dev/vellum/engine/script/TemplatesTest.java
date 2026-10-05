@@ -6,6 +6,8 @@ import dev.vellum.engine.event.InputEvent;
 import dev.vellum.engine.event.KeyboardEvent;
 import dev.vellum.engine.event.Modifiers;
 import dev.vellum.engine.html.HtmlSerializer;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -28,24 +30,24 @@ class TemplatesTest {
 
     @Test
     void bindsWithoutAnyScript() {
-        Page page = new Page("<p title='{{ 1 + 1 }}'>{{ 'a' + 'b' }} and {{ [1, 2] }}{{ null }}</p>");
+        Page page = new TestHost().load("<p title='{{ 1 + 1 }}'>{{ 'a' + 'b' }} and {{ [1, 2] }}{{ null }}</p>");
         assertEquals("<p title=\"2\">ab and [1,2]</p>", body(page));
     }
 
     @Test
     void interpolationFollowsData() {
-        Page page = new Page("<p id=p>Hello {{ name }}, {{ stats.hp }} HP</p>", false); // undefined until data arrives
+        Page page = new TestHost().recordErrors().load("<p id=p>Hello {{ name }}, {{ stats.hp }} HP</p>"); // undefined until data arrives
         page.doc.receive("data", "{\"name\": \"Steve\", \"stats\": {\"hp\": 20}}");
-        page.render();
+        page.frame();
         assertEquals("Hello Steve, 20 HP", page.byId("p").textContent());
         page.doc.receive("data", "{\"name\": \"Alex\", \"stats\": {\"hp\": 7}}");
-        page.render();
+        page.frame();
         assertEquals("Hello Alex, 7 HP", page.byId("p").textContent());
     }
 
     @Test
     void stateAndHandlers() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <button id=b @click="count++">{{ count }} / {{ doubled() }}</button>
                 <script>
                 const state = vellum.state({count: 1});
@@ -54,16 +56,16 @@ class TemplatesTest {
         assertEquals("1 / 2", page.byId("b").textContent());
         page.byId("b").click();
         page.byId("b").click();
-        page.render();
+        page.frame();
         assertEquals("3 / 6", page.byId("b").textContent());
         page.run("state.count = 10");
-        page.render();
+        page.frame();
         assertEquals("10 / 20", page.byId("b").textContent(), "any entry re-renders");
     }
 
     @Test
     void ifElseChains() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <div id=d>
                   <p v-if="n === 0">zero</p>
                   <p v-else-if="n === 1">one</p>
@@ -73,40 +75,40 @@ class TemplatesTest {
         Element zero = page.byId("d").children().getFirst();
         assertEquals(List.of("zero"), texts(page.byId("d")));
         page.run("s.n = 1");
-        page.render();
+        page.frame();
         assertEquals(List.of("one"), texts(page.byId("d")));
         page.run("s.n = 5");
-        page.render();
+        page.frame();
         assertEquals(List.of("many"), texts(page.byId("d")));
         page.run("s.n = 0");
-        page.render();
+        page.frame();
         assertSame(zero, page.byId("d").children().getFirst(), "branches are kept and reused");
     }
 
     @Test
     void keyedListsMoveElementsInsteadOfRecreating() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <ul id=list><li v-for="(item, i) in items" :key="item.id" :data-index="i">{{ item.name }}</li></ul>
                 <script>const s = vellum.state({items: [{id: 1, name: 'a'}, {id: 2, name: 'b'}, {id: 3, name: 'c'}]})</script>""");
         Element list = page.byId("list");
         List<Element> before = list.children();
         assertEquals(List.of("a", "b", "c"), texts(list));
         page.run("s.items.reverse(); s.items[0].name = 'C'");
-        page.render();
+        page.frame();
         List<Element> after = list.children();
         assertEquals(List.of("C", "b", "a"), texts(list));
         assertSame(before.get(2), after.get(0));
         assertSame(before.get(0), after.get(2));
         assertEquals("0", after.getFirst().getAttribute("data-index"));
         page.run("s.items.splice(1, 1); s.items.push({id: 9, name: 'z'})");
-        page.render();
+        page.frame();
         assertEquals(List.of("C", "a", "z"), texts(list));
         assertSame(before.get(0), list.children().get(1));
     }
 
     @Test
     void forOverObjectsRangesAndNesting() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <p id=o><b v-for="(value, key, index) in {x: 1, y: 2}">{{ index }}{{ key }}={{ value }}</b></p>
                 <p id=r><i v-for="n in 3">{{ n }}</i></p>
                 <p id=n><span v-for="row in [[1, 2], [3]]"><u v-for="cell in row" v-if="cell !== 2">{{ cell }}</u></span></p>""");
@@ -117,7 +119,7 @@ class TemplatesTest {
 
     @Test
     void showClassAndStyle() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <div id=d class="base" style="color: red" v-show="visible" :class="{active: on, off: !on}" :style="{marginTop: gap + 'px'}"
                      :title="on ? 'yes' : null" :disabled="!on"></div>
                 <p id=p v-class="['x', {y: on}]" v-style="'color: blue'"></p>
@@ -131,7 +133,7 @@ class TemplatesTest {
         assertEquals("yes", d.getAttribute("title"));
         assertFalse(d.hasAttribute("disabled"));
         page.run("s.visible = false; s.on = false");
-        page.render();
+        page.frame();
         assertEquals("base off", d.getAttribute("class"));
         assertTrue(d.hasAttribute("v-hidden"));
         assertNull(d.getAttribute("title"));
@@ -140,7 +142,7 @@ class TemplatesTest {
 
     @Test
     void eventModifiers() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <div id=outer @click="log.push('outer')">
                   <a id=a href=x @click.prevent.stop="log.push('a')">a</a>
                   <b id=b @click.once="log.push('once')">b</b>
@@ -172,7 +174,7 @@ class TemplatesTest {
 
     @Test
     void textModelRoundTrip() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <input id=name v-model="name"><input id=age type=number v-model="age"><input id=t v-model.trim.lazy="note">
                 <textarea id=area v-model="name"></textarea>
                 <script>const s = vellum.state({name: 'Steve', age: 3, note: ''})</script>""");
@@ -181,7 +183,7 @@ class TemplatesTest {
         assertEquals("Steve", page.byId("area").value());
         type(name, "Alex");
         assertEquals("Alex", page.eval("s.name"));
-        page.render();
+        page.frame();
         assertEquals("Alex", page.byId("area").value(), "other bindings re-render after the input event");
         type(page.byId("age"), "12");
         assertEquals("number 12", page.eval("typeof s.age + ' ' + s.age"));
@@ -190,13 +192,13 @@ class TemplatesTest {
         page.byId("t").dispatchEvent(new Event("change", true, false));
         assertEquals("spaced", page.eval("s.note"));
         page.run("s.name = 'Zed'");
-        page.render();
+        page.frame();
         assertEquals("Zed", name.value());
     }
 
     @Test
     void checkboxRadioAndSelectModels() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <input id=c type=checkbox v-model="agreed">
                 <input id=x type=checkbox value=x v-model="picked"><input id=y type=checkbox value=y v-model="picked">
                 <input id=r1 type=radio name=r value=1 v-model.number="size"><input id=r2 type=radio name=r value=2 v-model.number="size">
@@ -226,7 +228,7 @@ class TemplatesTest {
 
     @Test
     void textHtmlCloakAndPre() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <p id=t v-text="'<b>' + n">ignored {{ n }}</p>
                 <p id=h v-html="'<b>' + n + '</b>'"></p>
                 <p id=c v-cloak>{{ n }}</p>
@@ -240,11 +242,11 @@ class TemplatesTest {
 
     @Test
     void brokenExpressionsAreReportedOnceAndOthersStillRender() {
-        Page page = new Page("<p id=a>{{ missing.x }}</p><p id=b>{{ n }}</p><script>const s = vellum.state({n: 1})</script>", false);
+        Page page = new TestHost().recordErrors().load("<p id=a>{{ missing.x }}</p><p id=b>{{ n }}</p><script>const s = vellum.state({n: 1})</script>");
         page.run("s.n = 2");
-        page.render();
+        page.frame();
         page.run("s.n = 3");
-        page.render();
+        page.frame();
         assertEquals("3", page.byId("b").textContent());
         assertEquals(1, page.host.errors.size(), page.errors());
         assertTrue(page.errors().contains("Error in template text \"{{ missing.x }}\": ReferenceError"), page.errors());
@@ -252,26 +254,26 @@ class TemplatesTest {
 
     @Test
     void listItemsShareCompiledExpressions() {
-        Page page = new Page("<ul><li v-for=\"x in [1, 2, 3]\">{{ x.a.b }}</li></ul><ul><li v-for=\"x in [1, 2]\">{{ x.c.d }}</li></ul>", false);
+        Page page = new TestHost().recordErrors().load("<ul><li v-for=\"x in [1, 2, 3]\">{{ x.a.b }}</li></ul><ul><li v-for=\"x in [1, 2]\">{{ x.c.d }}</li></ul>");
         assertEquals(2, page.host.errors.size(), page.errors()); // one per site, not one per item
     }
 
     @Test
     void syntaxErrorsInTemplatesAreReported() {
-        Page page = new Page("<p :title=\"a +\">x</p>", false);
+        Page page = new TestHost().recordErrors().load("<p :title=\"a +\">x</p>");
         assertTrue(page.errors().contains("SyntaxError"), page.errors());
     }
 
     @Test
     void unstableTemplatesStopAfterTenPasses() {
-        Page page = new Page("<p>{{ s.n++ }}</p><script>const s = vellum.state({n: 0})</script>");
+        Page page = new TestHost().load("<p>{{ s.n++ }}</p><script>const s = vellum.state({n: 0})</script>");
         assertTrue(page.host.logs.stream().anyMatch(l -> l.startsWith("WARN: Templates still changing")), page.host.logs.toString());
         assertEquals("10", page.eval("s.n"));
     }
 
     @Test
     void templatesRenderOncePerFrame() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <button id=b @click="s.n++">{{ render() }}</button>
                 <script>
                 let renders = 0;
@@ -292,7 +294,7 @@ class TemplatesTest {
 
     @Test
     void nextTickRunsOnceTheDomShowsTheState() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <p id=p>{{ s.n }}</p>
                 <script>
                 const s = vellum.state({n: 1}), seen = [];
@@ -300,7 +302,7 @@ class TemplatesTest {
                 addEventListener('load', () => seen.push('load ' + text()));
                 </script>""");
         page.run("s.n = 2; seen.push(text()); vellum.nextTick(() => seen.push(text()))");
-        page.render();
+        page.frame();
         assertEquals("load 1,1,2", page.eval("seen.join()"));
     }
 

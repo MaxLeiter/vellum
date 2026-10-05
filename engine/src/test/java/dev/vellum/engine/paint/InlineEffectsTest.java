@@ -1,8 +1,8 @@
 package dev.vellum.engine.paint;
 
-import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.RecordingCanvas;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
@@ -15,37 +15,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** An inline element's fragments are painted as a group: its opacity and outline apply to them. */
 class InlineEffectsTest {
-    private static Document page(String body) {
-        return new TestHost().load("<body>" + body + "</body>");
-    }
-
-    private static RecordingCanvas paint(Document doc) {
-        RecordingCanvas canvas = new RecordingCanvas();
-        doc.paint(canvas);
-        return canvas;
-    }
 
     @Test
     void opacityAppliesToTheInlineElementsFragments() {
-        Document doc = page("<p style='margin: 0'>a <span style='opacity: 0.5; background: #00f'>b <i>c</i></span> d</p>");
-        RecordingCanvas c = paint(doc);
+        Page page = new TestHost().load("<p style='margin: 0'>a <span style='opacity: 0.5; background: #00f'>b <i>c</i></span> d</p>");
+        RecordingCanvas c = page.paint();
         List<String> texts = c.ops("drawText").stream().map(call -> call.text() + "@" + call.alpha()).toList();
         assertEquals(List.of("a @1.0", "b @0.5", "c@0.5", " d@1.0"), texts);
         assertEquals(0.5f, c.ops("fillRect").stream().filter(f -> f.color() == 0xFF0000FF).findFirst().orElseThrow().alpha());
         assertTrue(c.balanced());
-        assertEquals(List.of("a "), paint(page("<p style='margin: 0'>a <span style='opacity: 0'>b</span></p>"))
+        assertEquals(List.of("a "), new TestHost().load("<p style='margin: 0'>a <span style='opacity: 0'>b</span></p>").paint()
                 .ops("drawText").stream().map(RecordingCanvas.Call::text).toList(), "transparent: skipped");
     }
 
     @Test
     void focusedLinksGetTheirFocusRing() {
-        Document doc = page("<p style='margin: 0'>go <a id=a href=x>there</a></p>");
-        Element a = doc.getElementById("a");
-        assertEquals(0, paint(doc).ops("fillBorder").size());
-        doc.input().keyDown("Tab", "Tab", Modifiers.NONE);
-        doc.frame(16);
-        assertSame(a, doc.focusedElement());
-        RecordingCanvas.Call ring = paint(doc).ops("fillBorder").getFirst();
+        Page page = new TestHost().load("<p style='margin: 0'>go <a id=a href=x>there</a></p>");
+        Element a = page.byId("a");
+        assertEquals(0, page.paint().ops("fillBorder").size());
+        page.key("Tab");
+        page.frame();
+        assertSame(a, page.doc.focusedElement());
+        RecordingCanvas.Call ring = page.paint().ops("fillBorder").getFirst();
         float[] link = a.getBoundingClientRect();
         // outline: 1px solid #fff, offset 1px: two pixels out all round.
         assertArrayEquals(new float[] {link[0] - 2, link[1] - 2, link[2] + 4, link[3] + 4}, ring.bounds(), 1e-3f);
@@ -54,9 +45,9 @@ class InlineEffectsTest {
 
     @Test
     void hitsOnInlineContentReportTheInlineBox() {
-        Document doc = page("<p style='margin: 0'>go <b id=b>bold</b></p>");
-        Element b = doc.getElementById("b");
-        HitResult hit = doc.hitTest(b.getBoundingClientRect()[0] + 2, 3);
+        Page page = new TestHost().load("<p style='margin: 0'>go <b id=b>bold</b></p>");
+        Element b = page.byId("b");
+        HitResult hit = page.doc.hitTest(b.getBoundingClientRect()[0] + 2, 3);
         assertSame(b, hit.element());
         assertSame(b.box, hit.box());
         assertEquals(2, hit.localX(), 1e-3);

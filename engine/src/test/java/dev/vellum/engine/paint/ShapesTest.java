@@ -2,10 +2,10 @@ package dev.vellum.engine.paint;
 
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Length;
+import dev.vellum.engine.testing.RecordingCanvas;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -99,7 +99,7 @@ class ShapesTest {
         Shapes.fillBorder(c, new float[] {0, 0, 20, 10}, new float[8], new float[] {1, 2, 3, 4}, new int[] {RED, GREEN, BLUE, WHITE});
         assertEquals(4, c.quadCount());
         assertEquals(20 * 10 - 14 * 6, c.quadArea(), 1e-3);
-        Map<Integer, Double> areas = areaByColor(c);
+        Map<Integer, Double> areas = c.quadAreaByColor();
         // top trapezoid: outer 20 wide, inner 14 wide, 1 tall
         assertEquals((20 + 14) / 2.0 * 1, areas.get(RED), 1e-3);
         assertEquals((10 + 6) / 2.0 * 2, areas.get(GREEN), 1e-3);
@@ -115,7 +115,7 @@ class ShapesTest {
         double outer = 40 * 40 - (4 - Math.PI) * 64, inner = 36 * 36 - (4 - Math.PI) * 36;
         assertEquals(outer - inner, c.quadArea(), (outer - inner) * 0.01);
         // Equal widths on a square: each side owns exactly a quarter, corners split on the diagonal.
-        Map<Integer, Double> areas = areaByColor(c);
+        Map<Integer, Double> areas = c.quadAreaByColor();
         for (int color : new int[] {RED, GREEN, BLUE, WHITE}) assertEquals(c.quadArea() / 4, areas.get(color), 1e-2);
     }
 
@@ -125,7 +125,7 @@ class ShapesTest {
         c.devicePixel = 0.25f;
         // Only the top has width: the top-left corner belongs to it entirely.
         Shapes.fillBorder(c, new float[] {0, 0, 40, 40}, uniform(8), new float[] {4, 0, 0, 0}, new int[] {RED, GREEN, BLUE, WHITE});
-        assertEquals(Map.of(RED, areaByColor(c).get(RED)), areaByColor(c));
+        assertEquals(Map.of(RED, c.quadAreaByColor().get(RED)), c.quadAreaByColor());
     }
 
     @Test
@@ -158,16 +158,5 @@ class ShapesTest {
         float[] q = new float[8];
         Shapes.sideQuad(Shapes.TOP, 0, 0, 40, 20, uniform(5), new float[] {2, 2, 2, 2}, q);
         assertArrayEquals(new float[] {35, 0, 5, 0, 5, 2, 35, 2}, q);
-    }
-
-    static Map<Integer, Double> areaByColor(RecordingCanvas c) {
-        Map<Integer, Double> areas = new HashMap<>();
-        for (RecordingCanvas.Call call : c.ops("fillQuads")) {
-            for (int i = 0; i < call.quads().length / 8; i++) {
-                float[] q = Arrays.copyOfRange(call.quads(), i * 8, i * 8 + 8);
-                areas.merge(call.quadColors()[i * 4], -RecordingCanvas.signedArea(q), Double::sum);
-            }
-        }
-        return areas;
     }
 }

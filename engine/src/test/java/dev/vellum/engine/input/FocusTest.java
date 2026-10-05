@@ -1,14 +1,14 @@
 package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.style.Overflow;
-import dev.vellum.engine.style.Visibility;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static dev.vellum.engine.input.Fixture.SHIFT;
+import static dev.vellum.engine.testing.Page.SHIFT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -16,132 +16,111 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FocusTest {
-    /** Gives every element a box, except those listed. */
-    private static void boxAll(Fixture fx, String... except) {
-        List<String> skip = List.of(except);
-        for (Element e : fx.doc.getElementsByTagName("*")) if (!skip.contains(e.id())) fx.box(e, null, 0, 0, 10, 10);
-    }
-
-    private static List<String> ids(List<Element> elements) {
-        List<String> out = new ArrayList<>();
-        for (Element e : elements) out.add(e.id());
-        return out;
-    }
-
-    private static List<String> order(Fixture fx) {
-        return ids(new FocusNavigator(fx.doc).order());
+    private static List<String> order(Page page) {
+        List<String> ids = new ArrayList<>();
+        for (Element e : new FocusNavigator(page.doc).order()) ids.add(e.id());
+        return ids;
     }
 
     @Test
     void tabOrderIsPositiveTabindexFirstThenTreeOrder() {
-        Fixture fx = new Fixture("""
+        Page page = new TestHost().load("""
                 <button id=a>a</button><input id=b tabindex=2><a id=c href=x>c</a><input id=d tabindex=1>
                 <button id=e disabled>e</button><div id=f tabindex=0>f</div><div id=g tabindex=-1>g</div>
-                <input id=h type=hidden><button id=i>no box</button><button id=j>hidden</button>
+                <input id=h type=hidden><button id=i style="display: none">no box</button>
+                <button id=j style="visibility: hidden">hidden</button>
                 <details id=k><summary id=l>s</summary><button id=m>inside</button></details>
                 <fieldset disabled><input id=o></fieldset><span id=n tabindex=0>inline</span>""");
-        boxAll(fx, "i", "m"); // m: hidden in the closed details, so layout gave it no box
-        fx.el("j").style.visibility = Visibility.HIDDEN;
-        assertEquals(List.of("d", "b", "a", "c", "f", "l", "n"), order(fx));
-        fx.el("k").setAttribute("open", "");
-        fx.box("m", null, 0, 0, 10, 10);
-        assertEquals(List.of("d", "b", "a", "c", "f", "l", "m", "n"), order(fx));
+        assertEquals(List.of("d", "b", "a", "c", "f", "l", "n"), order(page));
+        page.byId("k").setAttribute("open", "");
+        page.frame();
+        assertEquals(List.of("d", "b", "a", "c", "f", "l", "m", "n"), order(page), "m is rendered once its details opens");
     }
 
     @Test
     void tabAndShiftTabCycle() {
-        Fixture fx = new Fixture("<button id=a></button><button id=b></button><button id=c></button>");
-        boxAll(fx);
-        assertTrue(fx.key("Tab"));
-        assertSame(fx.el("a"), fx.doc.focusedElement());
-        fx.key("Tab");
-        fx.key("Tab");
-        fx.key("Tab");
-        assertSame(fx.el("a"), fx.doc.focusedElement(), "wraps around");
-        fx.key("Tab", SHIFT);
-        assertSame(fx.el("c"), fx.doc.focusedElement());
+        Page page = new TestHost().load("<button id=a></button><button id=b></button><button id=c></button>");
+        assertTrue(page.key("Tab"));
+        assertSame(page.byId("a"), page.doc.focusedElement());
+        page.key("Tab");
+        page.key("Tab");
+        page.key("Tab");
+        assertSame(page.byId("a"), page.doc.focusedElement(), "wraps around");
+        page.key("Tab", SHIFT);
+        assertSame(page.byId("c"), page.doc.focusedElement());
     }
 
     @Test
     void tabWithNothingFocusableIsLeftToTheHost() {
-        Fixture fx = new Fixture("<div>text</div>");
-        assertFalse(fx.key("Tab"));
+        Page page = new TestHost().load("<div>text</div>");
+        assertFalse(page.key("Tab"));
     }
 
     @Test
     void radioGroupsAreOneTabStop() {
-        Fixture fx = new Fixture("""
+        Page page = new TestHost().load("""
                 <input type=radio name=r id=r1><input type=radio name=r id=r2 checked><input type=radio name=r id=r3>
                 <input type=radio name=q id=q1><input type=radio name=q id=q2>""");
-        boxAll(fx);
-        assertEquals(List.of("r2", "q1", "q2"), order(fx));
+        assertEquals(List.of("r2", "q1", "q2"), order(page));
     }
 
     @Test
     void focusVisibleAfterKeyboardNotAfterPointer() {
-        Fixture fx = new Fixture("<button id=a></button><button id=b></button>");
-        boxAll(fx);
-        fx.key("Tab");
-        assertTrue(fx.input.focusVisible());
-        fx.forcedHit = fx.el("b");
-        fx.click(0, 0);
-        assertSame(fx.el("b"), fx.doc.focusedElement());
-        assertFalse(fx.input.focusVisible());
+        Page page = new TestHost().load("<button id=a></button><button id=b></button>");
+        page.key("Tab");
+        assertTrue(page.input.focusVisible());
+        page.click(page.byId("b"));
+        assertSame(page.byId("b"), page.doc.focusedElement());
+        assertFalse(page.input.focusVisible());
     }
 
     @Test
     void autofocusOnTheFirstLayoutOnly() {
-        Fixture fx = new Fixture("<input id=a><input id=b autofocus><input id=c autofocus>");
-        boxAll(fx);
-        fx.input.afterLayout();
-        assertSame(fx.el("b"), fx.doc.focusedElement());
-        assertTrue(fx.input.focusVisible());
-        fx.el("b").blur();
-        fx.input.afterLayout();
-        assertNull(fx.doc.focusedElement());
+        Page page = new TestHost().load("<input id=a><input id=b autofocus><input id=c autofocus>");
+        assertSame(page.byId("b"), page.doc.focusedElement());
+        assertTrue(page.input.focusVisible());
+        page.byId("b").blur();
+        page.doc.invalidateLayout();
+        page.frame();
+        assertNull(page.doc.focusedElement());
     }
 
     @Test
     void autofocusDefersToScriptFocus() {
-        Fixture fx = new Fixture("<input id=a><input id=b autofocus>");
-        boxAll(fx);
-        fx.el("a").focus();
-        fx.input.afterLayout();
-        assertSame(fx.el("a"), fx.doc.focusedElement());
+        Page page = new TestHost().load("<input id=a><input id=b autofocus><script>document.getElementById('a').focus()</script>");
+        assertSame(page.byId("a"), page.doc.focusedElement());
     }
 
-    /** A 50px tall scroll container holding "top" at y 0 and "low" at y 120. */
-    private static Fixture scrolling() {
-        Fixture fx = new Fixture("<div id=s><button id=top></button><button id=low></button></div>");
-        var s = fx.box("s", null, 0, 0, 100, 50);
-        s.scrollHeight = 200;
-        fx.el("s").style.overflowY = Overflow.AUTO;
-        fx.box("top", s, 0, 0, 100, 20);
-        fx.box("low", s, 0, 120, 100, 20);
-        return fx;
+    /** A 50px tall scroll container holding "top" at y 0 and "low" at y 40, which shows its first 10px. */
+    private static Page scrolling() {
+        return new TestHost().load("""
+                <div id=s style="overflow-y: auto; width: 100px; height: 50px">
+                  <button id=top style="display: block; width: 100px; height: 20px"></button>
+                  <button id=low style="display: block; width: 100px; height: 20px; margin-top: 20px"></button>
+                  <div style="height: 140px"></div>
+                </div>""");
     }
 
     @Test
     void keyboardFocusScrollsIntoView() {
-        Fixture fx = scrolling();
-        fx.key("Tab");
-        assertEquals(0, fx.el("s").scrollTop());
-        fx.key("Tab");
-        assertEquals(90, fx.el("s").scrollTop(), "bottom edge aligned");
-        fx.key("Tab");
-        assertEquals(0, fx.el("s").scrollTop(), "top edge aligned");
+        Page page = scrolling();
+        page.key("Tab");
+        assertEquals(0, page.byId("s").scrollTop());
+        page.key("Tab");
+        assertEquals(10, page.byId("s").scrollTop(), "bottom edge aligned");
+        page.key("Tab");
+        assertEquals(0, page.byId("s").scrollTop(), "top edge aligned");
     }
 
     @Test
     void scriptFocusScrollsIntoViewButPointerFocusDoesNot() {
-        Fixture fx = scrolling();
-        fx.el("low").focus();
-        assertEquals(90, fx.el("s").scrollTop());
-        fx.el("top").focus();
-        assertEquals(0, fx.el("s").scrollTop());
-        fx.forcedHit = fx.el("low");
-        fx.click(0, 0);
-        assertTrue(fx.el("low").isFocused());
-        assertEquals(0, fx.el("s").scrollTop());
+        Page page = scrolling();
+        page.byId("low").focus();
+        assertEquals(10, page.byId("s").scrollTop());
+        page.byId("top").focus();
+        assertEquals(0, page.byId("s").scrollTop());
+        page.click(50, 45);
+        assertTrue(page.byId("low").isFocused());
+        assertEquals(0, page.byId("s").scrollTop());
     }
 }

@@ -2,6 +2,8 @@ package dev.vellum.engine.script;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.html.HtmlSerializer;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,14 +11,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class DomBindingsTest {
     @Test
     void createAppendInsertRemove() {
-        Page page = Page.withScript("<ul id=list><li>b</li></ul>", """
-                const list = document.getElementById('list');
+        Page page = new TestHost().load("""
+                <ul id=list><li>b</li></ul>
+                <script>
+const list = document.getElementById('list');
                 const a = document.createElement('li');
                 a.textContent = 'a';
                 list.insertBefore(a, list.firstChild);
                 list.appendChild(document.createElement('li')).append('c', document.createTextNode('!'));
                 list.removeChild(list.children[1]);
-                """);
+                </script>""");
         assertEquals("<li>a</li><li>c!</li>", page.byId("list").innerHTML());
         assertEquals("2 LI li 1 true", page.eval("[list.childElementCount, list.lastChild.tagName, list.lastChild.localName, "
                 + "list.nodeType, list.firstChild.nextSibling === list.lastElementChild].join(' ')"));
@@ -24,7 +28,7 @@ class DomBindingsTest {
 
     @Test
     void wrappersAreUniqueAndTyped() {
-        Page page = Page.withScript("<p id=p>hi</p>", "");
+        Page page = new TestHost().load("<p id=p>hi</p>");
         assertEquals("true true true false true", page.eval("[document.getElementById('p') === document.body.firstElementChild, "
                 + "document.body.firstChild instanceof Element, document.body.firstChild instanceof Node, "
                 + "document.body.firstChild instanceof Text, document.body.firstChild.firstChild instanceof Text].join(' ')"));
@@ -34,7 +38,7 @@ class DomBindingsTest {
 
     @Test
     void collectionsAreArraySnapshots() {
-        Page page = Page.withScript("<div id=d><i class='x y'></i><b class=y></b> text</div>", "const d = document.getElementById('d');");
+        Page page = new TestHost().load("<div id=d><i class='x y'></i><b class=y></b> text</div><script>const d = document.getElementById('d');</script>");
         assertEquals("true 3 2 1 2 1", page.eval("[Array.isArray(d.childNodes), d.childNodes.length, d.children.length, "
                 + "d.getElementsByTagName('i').length, document.getElementsByClassName('y').length, "
                 + "document.getElementsByClassName('x y').length].join(' ')"));
@@ -43,12 +47,14 @@ class DomBindingsTest {
 
     @Test
     void attributes() {
-        Page page = Page.withScript("<div id=d data-x=1></div>", """
-                const d = document.getElementById('d');
+        Page page = new TestHost().load("""
+                <div id=d data-x=1></div>
+                <script>
+const d = document.getElementById('d');
                 d.setAttribute('title', 'hello');
                 d.removeAttribute('data-x');
                 d.toggleAttribute('hidden');
-                """);
+                </script>""");
         Element d = page.byId("d");
         assertEquals("hello", d.getAttribute("title"));
         assertEquals("id,title,hidden", page.eval("d.getAttributeNames().join()"));
@@ -59,8 +65,10 @@ class DomBindingsTest {
 
     @Test
     void classList() {
-        Page page = Page.withScript("<div id=d class='a b'></div>", """
-                const d = document.getElementById('d');
+        Page page = new TestHost().load("""
+                <div id=d class='a b'></div>
+                <script>
+const d = document.getElementById('d');
                 const seen = [];
                 d.classList.add('c', 'd');
                 d.classList.remove('a');
@@ -69,7 +77,7 @@ class DomBindingsTest {
                 d.classList.toggle('c', true);
                 d.classList.replace('d', 'z');
                 d.classList.forEach((c, i) => seen.push(i + c));
-                """);
+                </script>""");
         assertEquals("c z e", page.byId("d").getAttribute("class"));
         assertEquals("3 true false z c z e 0c,1z,2e true", page.eval("[d.classList.length, d.classList.contains('e'), "
                 + "d.classList.contains('a'), d.classList.item(1), d.classList.value, seen.join(), d.classList === d.classList].join(' ')"));
@@ -79,11 +87,13 @@ class DomBindingsTest {
 
     @Test
     void dataset() {
-        Page page = Page.withScript("<div id=d data-item-id=7></div>", """
-                const d = document.getElementById('d');
+        Page page = new TestHost().load("""
+                <div id=d data-item-id=7></div>
+                <script>
+const d = document.getElementById('d');
                 d.dataset.slotCount = 3;
                 delete d.dataset.itemId;
-                """);
+                </script>""");
         Element d = page.byId("d");
         assertEquals("3", d.getAttribute("data-slot-count"));
         assertEquals(null, d.getAttribute("data-item-id"));
@@ -92,12 +102,14 @@ class DomBindingsTest {
 
     @Test
     void textAndMarkup() {
-        Page page = Page.withScript("<div id=d></div><p id=p>x</p>", """
-                const d = document.getElementById('d');
+        Page page = new TestHost().load("""
+                <div id=d></div><p id=p>x</p>
+                <script>
+const d = document.getElementById('d');
                 d.innerHTML = '<b>bold</b> <i>it</i>';
                 d.insertAdjacentHTML('beforeend', '<u>u</u>');
                 document.getElementById('p').outerHTML = '<span id=s>s</span>';
-                """);
+                </script>""");
         assertEquals("<b>bold</b> <i>it</i><u>u</u>", page.byId("d").innerHTML());
         assertEquals("bold itu", page.eval("d.textContent"));
         assertEquals("<span id=\"s\">s</span>", page.eval("document.getElementById('s').outerHTML"));
@@ -108,25 +120,29 @@ class DomBindingsTest {
 
     @Test
     void cloneNode() {
-        Page page = Page.withScript("<div id=d class=k><b>x</b></div>", """
-                const d = document.getElementById('d');
+        Page page = new TestHost().load("""
+                <div id=d class=k><b>x</b></div>
+                <script>
+const d = document.getElementById('d');
                 const shallow = d.cloneNode();
                 const deep = d.cloneNode(true);
                 document.body.append(deep);
-                """);
+                </script>""");
         assertEquals("0 1 k false", page.eval("[shallow.childNodes.length, deep.childNodes.length, deep.className, deep === d].join(' ')"));
         assertEquals(2, page.doc.body().getElementsByTagName("b").size());
     }
 
     @Test
     void childNodeMethodsAcceptStrings() {
-        Page page = Page.withScript("<div id=d><b id=b></b></div>", """
-                const b = document.getElementById('b');
+        Page page = new TestHost().load("""
+                <div id=d><b id=b></b></div>
+                <script>
+const b = document.getElementById('b');
                 b.before('1');
                 b.after('2', document.createElement('i'));
                 b.prepend('in');
                 document.getElementById('d').prepend('0');
-                """);
+                </script>""");
         assertEquals("01<b id=\"b\">in</b>2<i></i>", page.byId("d").innerHTML());
         page.run("b.replaceWith('gone')");
         assertEquals("01gone2<i></i>", page.byId("d").innerHTML());
@@ -134,10 +150,10 @@ class DomBindingsTest {
 
     @Test
     void formState() {
-        Page page = Page.withScript("""
+        Page page = new TestHost().load("""
                 <input id=t value=start><input id=c type=checkbox>
-                <select id=s><option>a</option><option value=bv selected>b</option><option>c</option></select>""",
-                "const t = document.getElementById('t'), c = document.getElementById('c'), s = document.getElementById('s');");
+                <select id=s><option>a</option><option value=bv selected>b</option><option>c</option></select>
+                <script>const t = document.getElementById('t'), c = document.getElementById('c'), s = document.getElementById('s');</script>""");
         assertEquals("start text checkbox false on", page.eval("[t.value, t.type, c.type, c.checked, c.value].join(' ')"));
         page.run("t.value = 'typed'; c.checked = true");
         assertEquals("typed", page.byId("t").value());
@@ -155,7 +171,7 @@ class DomBindingsTest {
 
     @Test
     void documentAndWindow() {
-        Page page = new Page("<title> My  UI </title><body><button id=b autofocus></button></body>");
+        Page page = new TestHost().load("<title> My  UI </title><body><button id=b></button></body>");
         assertEquals("My UI BODY HTML HEAD true", page.eval("[document.title, document.activeElement.tagName, "
                 + "document.documentElement.tagName, document.head.tagName, window === self].join(' ')"));
         page.run("document.title = 'Other'; document.getElementById('b').focus()");
@@ -182,21 +198,26 @@ class DomBindingsTest {
 
     @Test
     void styleObjectIsStableAndRoutesNamedProperties() {
-        Page page = Page.withScript("<div id=d></div>", "const d = document.getElementById('d');");
-        // InlineStyle belongs to the CSS workstream; here we check the object model around it.
+        Page page = new TestHost().load("<div id=d style='color: blue'></div><script>const d = document.getElementById('d');</script>");
         assertEquals("true true string function", page.eval("[d.style === d.style, d.style instanceof CSSStyleDeclaration, "
                 + "typeof d.style.backgroundColor, typeof d.style.setProperty].join(' ')"));
         page.run("d.style.backgroundColor = 'red'; d.style.setProperty('--x', '1'); d.style.removeProperty('color')");
+        assertEquals("background-color: red; --x: 1;", page.byId("d").getAttribute("style"), "written back to the attribute");
+        assertEquals("red 2", page.eval("d.style.backgroundColor + ' ' + d.style.length"));
+        assertEquals("rgb(255, 0, 0) rgb(255, 255, 255) 1", page.eval("[getComputedStyle(d).backgroundColor, "
+                + "getComputedStyle(d).color, getComputedStyle(d).getPropertyValue('--x')].join(' ')"),
+                "computed at once, without waiting for a frame; color falls back to the inherited white");
+        page.frame();
+        assertEquals(0xFFFF0000, page.byId("d").style.backgroundColor);
     }
 
     @Test
     void geometryAndScrollingGoThroughTheElement() {
-        Page page = Page.withScript("""
+        Page page = new TestHost().load("""
                 <div id=s style="overflow: auto; height: 50px; scroll-behavior: auto">
                   <div style="height: 200px; padding-top: 120px"><div id=low style="height: 20px"></div></div>
-                </div>""", "const s = document.getElementById('s'), low = document.getElementById('low');");
-        page.doc.setViewport(320, 240, 1);
-        page.doc.frame(0);
+                </div>
+                <script>const s = document.getElementById('s'), low = document.getElementById('low');</script>""");
         page.run("s.scrollTop = 30");
         assertEquals("30 90", page.eval("[s.scrollTop, low.getBoundingClientRect().top].join(' ')"));
         page.run("low.scrollIntoView()");
@@ -205,7 +226,7 @@ class DomBindingsTest {
         assertEquals("100", page.eval("s.scrollTop"));
         page.run("s.scrollTo({top: 0, behavior: 'smooth'})");
         assertEquals("100", page.eval("s.scrollTop"), "smooth: eased over the next frames");
-        for (int t = 16; t < 600; t += 16) page.doc.frame(t);
+        for (int t = 16; t < 600; t += 16) page.frame(t);
         assertEquals("0", page.eval("s.scrollTop"));
     }
 }

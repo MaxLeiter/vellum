@@ -6,12 +6,12 @@ import dev.vellum.engine.style.Display;
 import dev.vellum.engine.style.Length;
 import dev.vellum.engine.style.Prop;
 import dev.vellum.engine.style.Shadow;
-import dev.vellum.engine.style.TransformFunction;
 import dev.vellum.engine.style.TransformFunction.Interpolated;
 import dev.vellum.engine.style.TransformFunction.Matrix;
 import dev.vellum.engine.style.TransformFunction.Rotate;
 import dev.vellum.engine.style.TransformFunction.Scale;
 import dev.vellum.engine.style.TransformFunction.Translate;
+import dev.vellum.engine.style.TransformFunction;
 import dev.vellum.engine.style.Visibility;
 import org.junit.jupiter.api.Test;
 

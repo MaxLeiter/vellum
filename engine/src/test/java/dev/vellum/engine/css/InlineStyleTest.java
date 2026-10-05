@@ -3,6 +3,7 @@ package dev.vellum.engine.css;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.style.Length;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import static dev.vellum.engine.css.InlineStyle.cssText;
@@ -19,8 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class InlineStyleTest {
     private static Element element(String style) {
-        Document doc = StyleTesting.page("<div id=t" + (style == null ? "" : " style='" + style + "'") + "></div>");
-        return StyleTesting.element(doc, "#t");
+        return new TestHost().load("<div id=t" + (style == null ? "" : " style='" + style + "'") + "></div>").byId("t");
     }
 
     @Test
@@ -82,12 +82,12 @@ class InlineStyleTest {
         setCssText(e, "width: 10px;color: red; nonsense: 1; transition: opacity 1s");
         assertEquals("width: 10px; color: red; transition: opacity 1s;", cssText(e));
         Document doc = e.ownerDocument();
-        doc.styleEngine().restyle();
+        doc.flushStyle();
         assertEquals(Length.px(10), e.baseStyle.width);
         assertEquals(1, e.baseStyle.transitions.size());
         setCssText(e, "");
         assertNull(e.getAttribute("style"));
-        doc.styleEngine().restyle();
+        doc.flushStyle();
         assertEquals(Length.AUTO, e.baseStyle.width);
         assertFalse(e.hasAttribute("style"));
     }

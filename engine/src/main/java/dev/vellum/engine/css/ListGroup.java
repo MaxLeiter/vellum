@@ -76,8 +76,9 @@ enum ListGroup {
                 yield new BackgroundLayer(image, size.keyword(), size.width(), size.height(), (Length) v[1],
                         (Length) v[2], repeat.x(), repeat.y(), (BackgroundLayer.Box) v[5]);
             }
-            // A transition whose combined duration is not positive never runs (CSS Transitions §3).
-            case TRANSITION -> v[0].equals("none") || Math.max((Float) v[1], 0) + (Float) v[3] <= 0 ? null
+            // Entries that never run (a combined duration that is not positive) stay: the last entry naming a
+            // property wins, so "all 1s, opacity 0s" must keep opacity from transitioning (CSS Transitions §2).
+            case TRANSITION -> v[0].equals("none") ? null
                     : new TransitionSpec((String) v[0], (Float) v[1], (Float) v[3], (TimingFunction) v[2]);
             case ANIMATION -> v[0].equals("none") ? null
                     : new AnimationSpec((String) v[0], (Float) v[1], (Float) v[3], (TimingFunction) v[2], (Float) v[4],

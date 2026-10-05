@@ -4,8 +4,7 @@ import dev.vellum.engine.event.Event;
 import dev.vellum.engine.event.Modifiers;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
-import dev.vellum.engine.script.Scripting;
-import dev.vellum.engine.testing.NullCanvas;
+import dev.vellum.engine.testing.RecordingCanvas;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
@@ -50,7 +49,7 @@ class DocumentTest {
 
     @Test
     void formStateAndAttributesRestyleWithoutRelayout() {
-        Document doc = new TestHost().load("<input id=t placeholder=p><input id=c type=checkbox><img id=i><div id=d></div>");
+        Document doc = new TestHost().load("<input id=t placeholder=p><input id=c type=checkbox><img id=i><div id=d></div>").doc;
         Element field = doc.getElementById("t");
         clean(doc);
         field.setValue("a");
@@ -75,7 +74,6 @@ class DocumentTest {
     @Test
     void templateContentsAreInert() {
         TestHost host = new TestHost();
-        host.scripting = Scripting.rhino();
         Document doc = Document.parse(host, "test:x.html",
                 "<template id=t><p id=inner class=k></p><script>console.log('ran')</script></template>");
         assertNull(doc.getElementById("inner"));
@@ -92,7 +90,7 @@ class DocumentTest {
     @Test
     void movingKeepsStateLeavingDisposes() {
         ThingHost host = new ThingHost();
-        Document doc = host.load("<div id=a><thing id=x></thing><input id=f></div><div id=b></div>");
+        Document doc = host.load("<div id=a><thing id=x></thing><input id=f></div><div id=b></div>").doc;
         Element thing = doc.getElementById("x"), field = doc.getElementById("f");
         ReplacedContent content = thing.replaced;
         assertNotNull(content);
@@ -122,7 +120,7 @@ class DocumentTest {
                 return json.equals("bad") ? null : List.of(new TextRun("Gold", "color: gold"), new TextRun("!", ""));
             }
         };
-        Document doc = host.load("<mc-text id=a key=k args='x, y'>fallback</mc-text><mc-text id=b json=bad>kept</mc-text>");
+        Document doc = host.load("<mc-text id=a key=k args='x, y'>fallback</mc-text><mc-text id=b json=bad>kept</mc-text>").doc;
         assertEquals("k(x|y)", doc.getElementById("a").textContent());
         assertEquals("kept", doc.getElementById("b").textContent(), "content stays when the host cannot format it");
         doc.getElementById("a").setAttribute("key", "other");
@@ -134,13 +132,13 @@ class DocumentTest {
 
     @Test
     void framesAreNeededOnlyWhileSomethingChanges() {
-        Document doc = new TestHost().load("<div id=s style='overflow: auto; height: 10px'><p style='height: 50px'></p></div>");
-        doc.paint(new NullCanvas());
+        Document doc = new TestHost().load("<div id=s style='overflow: auto; height: 10px'><p style='height: 50px'></p></div>").doc;
+        doc.paint(new RecordingCanvas());
         assertFalse(doc.needsFrame(16), "idle");
         doc.getElementById("s").scrollTo(0, 5);
         assertTrue(doc.needsFrame(16), "a scroll repaints");
         doc.frame(16);
-        doc.paint(new NullCanvas());
+        doc.paint(new RecordingCanvas());
         doc.scheduler().setTimeout(() -> {}, 100);
         assertFalse(doc.needsFrame(50));
         assertTrue(doc.needsFrame(116), "a due timer");
@@ -148,7 +146,7 @@ class DocumentTest {
 
     @Test
     void selectionIsPerOption() {
-        Document doc = new TestHost().load("<select id=s><option>a<option value=x>first x<option value=x>second x</select>");
+        Document doc = new TestHost().load("<select id=s><option>a<option value=x>first x<option value=x>second x</select>").doc;
         Element select = doc.getElementById("s");
         List<Element> options = select.options();
         assertSame(options.get(0), select.selectedOption(), "the first enabled option by default");
@@ -168,7 +166,7 @@ class DocumentTest {
     @Test
     void checkingARadioUnchecksItsGroup() {
         Document doc = new TestHost().load("<form><input type=radio name=r id=a checked><input type=radio name=r id=b></form>"
-                + "<input type=radio name=r id=other checked>");
+                + "<input type=radio name=r id=other checked>").doc;
         doc.getElementById("b").setChecked(true);
         assertFalse(doc.getElementById("a").checked());
         assertTrue(doc.getElementById("other").checked(), "a radio outside the form is another group");
@@ -177,7 +175,7 @@ class DocumentTest {
     @Test
     void inputTypesFollowHtml() {
         Document doc = new TestHost().load("<input id=a type=' Number '><input id=b type=date><input id=c type=checkbox>"
-                + "<textarea id=d></textarea><input id=e type=submit>");
+                + "<textarea id=d></textarea><input id=e type=submit>").doc;
         assertEquals("number", doc.getElementById("a").inputType());
         assertEquals("text", doc.getElementById("b").inputType(), "unknown types are text");
         assertTrue(doc.getElementById("b").isTextControl());
@@ -191,8 +189,7 @@ class DocumentTest {
     @Test
     void engineFailuresStopTheDocumentOnce() {
         ThingHost host = new ThingHost();
-        host.failOnError = false;
-        Document doc = host.load("<thing id=x></thing>");
+        Document doc = host.recordErrors().load("<thing id=x></thing>").doc;
         host.fail = true;
         doc.frame(16);
         assertNotNull(doc.error());
@@ -215,7 +212,7 @@ class DocumentTest {
 
     @Test
     void dispatchSkipsTypesNobodyHandles() {
-        Document doc = new TestHost().load("<div id=d></div>");
+        Document doc = new TestHost().load("<div id=d></div>").doc;
         Element d = doc.getElementById("d");
         assertFalse(doc.handles("ping"));
         List<String> log = new ArrayList<>();
@@ -236,7 +233,7 @@ class DocumentTest {
 
     @Test
     void animationFramesCanBeCancelledDuringTheirFrame() {
-        Scheduler s = new TestHost().load("").scheduler();
+        Scheduler s = new TestHost().load("").doc.scheduler();
         List<String> log = new ArrayList<>();
         int[] second = new int[1];
         s.requestAnimationFrame(t -> {

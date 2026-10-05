@@ -1,104 +1,79 @@
 package dev.vellum.engine.paint;
 
-import dev.vellum.engine.layout.Box;
-import dev.vellum.engine.style.BackgroundLayer;
-import dev.vellum.engine.style.BackgroundLayer.Repeat;
-import dev.vellum.engine.style.Image;
-import dev.vellum.engine.style.Length;
+import dev.vellum.engine.testing.RecordingCanvas;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 
-import static dev.vellum.engine.paint.TestTree.style;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Backgrounds of a 40x20 box at the top left, from CSS. */
 class BackgroundsTest {
     private static final int RED = 0xFFFF0000, BLUE = 0xFF0000FF;
-    private final TestTree t = new TestTree();
-    private final Box box = t.div(0, 0, 40, 20, 0);
-    private final RecordingCanvas canvas = new RecordingCanvas();
 
-    private RecordingCanvas paint(BackgroundLayer... layers) {
-        style(box).backgroundLayers = List.of(layers);
-        return t.paint(box, canvas);
+    /** Paints a 40x20 div with {@code css}; {@code a.png} is {@code imageWidth}×{@code imageHeight} (0 for unknown). */
+    private static RecordingCanvas paint(String css, float imageWidth, float imageHeight) {
+        return paint(css, imageWidth, imageHeight, new RecordingCanvas());
     }
 
-    private static BackgroundLayer layer(Image image, String keyword, Length w, Length h, Length x, Length y,
-                                         Repeat rx, Repeat ry, BackgroundLayer.Box clip) {
-        return new BackgroundLayer(image, keyword, w, h, x, y, rx, ry, clip);
+    private static RecordingCanvas paint(String css, float imageWidth, float imageHeight, RecordingCanvas canvas) {
+        TestHost host = new TestHost();
+        if (imageWidth > 0) host.imageSizes.put("test:a.png", new float[] {imageWidth, imageHeight});
+        return host.load("<div style='width: 40px; height: 20px; " + css + "'></div>").paint(canvas);
     }
 
-    private static BackgroundLayer sized(Image image, float w, float h, Repeat repeat) {
-        return layer(image, null, Length.px(w), Length.px(h), Length.ZERO, Length.ZERO, repeat, repeat, BackgroundLayer.Box.BORDER_BOX);
+    private static RecordingCanvas paint(String css) {
+        return paint(css, 0, 0);
+    }
+
+    private static float[] image(String css, float imageWidth, float imageHeight) {
+        return paint(css, imageWidth, imageHeight).ops("drawImage").getFirst().args();
     }
 
     @Test
     void colourIsClippedLikeTheBottomLayerAndRounded() {
-        box.borderTop = box.borderRight = box.borderBottom = box.borderLeft = 2;
-        style(box).backgroundColor = RED;
-        style(box).radiusTopLeft = Length.px(6);
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
-                Repeat.REPEAT, Repeat.REPEAT, BackgroundLayer.Box.PADDING_BOX));
+        RecordingCanvas c = paint("border: 2px solid transparent; border-top-left-radius: 6px; background: red url(a.png) padding-box");
         RecordingCanvas.Call fill = c.ops("fillRoundedRect").getFirst();
         assertArrayEquals(new float[] {2, 2, 36, 16, 4, 4, 0, 0, 0, 0, 0, 0}, fill.args(), 1e-4f);
     }
 
     @Test
     void repeatedTexturesAreOneDrawWithWrappingUvs() {
-        t.host.imageSizes.put("a.png", new float[] {16, 16});
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.Url("a.png")));
+        RecordingCanvas c = paint("background: url(a.png)", 16, 16);
         assertEquals(1, c.ops("drawImage").size());
         assertArrayEquals(new float[] {0, 0, 40, 20, 0, 0, 2.5f, 1.25f}, c.ops("drawImage").getFirst().args(), 1e-5f);
     }
 
     @Test
     void positionedRepeatStartsMidTile() {
-        t.host.imageSizes.put("a.png", new float[] {16, 16});
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.px(4), Length.ZERO,
-                Repeat.REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         // Tiles start at 4 - 16: UVs 0.75..3.25, which samples the same as -0.25..2.25 with REPEAT.
-        assertArrayEquals(new float[] {0, 0, 40, 16, 0.75f, 0, 3.25f, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
+        assertArrayEquals(new float[] {0, 0, 40, 16, 0.75f, 0, 3.25f, 1}, image("background: url(a.png) 4px 0 repeat-x", 16, 16), 1e-5f);
     }
 
     @Test
     void noRepeatCentred() {
-        t.host.imageSizes.put("a.png", new float[] {16, 16});
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.PERCENT_50,
-                Length.PERCENT_50, Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
-        assertArrayEquals(new float[] {12, 2, 16, 16, 0, 0, 1, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
+        assertArrayEquals(new float[] {12, 2, 16, 16, 0, 0, 1, 1}, image("background: url(a.png) center no-repeat", 16, 16), 1e-5f);
     }
 
     @Test
     void coverAndContainKeepTheAspectRatio() {
-        t.host.imageSizes.put("a.png", new float[] {32, 8});
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), "contain", Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
-                Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
-        assertArrayEquals(new float[] {0, 0, 40, 10, 0, 0, 1, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
-        c.calls.clear();
-        paint(layer(new Image.Url("a.png"), "cover", Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
-                Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
+        assertArrayEquals(new float[] {0, 0, 40, 10, 0, 0, 1, 1}, image("background: url(a.png) 0 0 / contain no-repeat", 32, 8), 1e-5f);
         // 80×20, cut to the box through the UVs
-        assertArrayEquals(new float[] {0, 0, 40, 20, 0, 0, 0.5f, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
+        assertArrayEquals(new float[] {0, 0, 40, 20, 0, 0, 0.5f, 1}, image("background: url(a.png) 0 0 / cover no-repeat", 32, 8), 1e-5f);
     }
 
     @Test
     void oneAutoSideKeepsTheRatio() {
-        t.host.imageSizes.put("a.png", new float[] {16, 8});
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.px(32), Length.AUTO, Length.ZERO, Length.ZERO,
-                Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
-        assertArrayEquals(new float[] {0, 0, 32, 16, 0, 0, 1, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
+        assertArrayEquals(new float[] {0, 0, 32, 16, 0, 0, 1, 1}, image("background: url(a.png) 0 0 / 32px auto no-repeat", 16, 8), 1e-5f);
     }
 
     @Test
     void spaceSpreadsWholeTiles() {
-        t.host.imageSizes.put("a.png", new float[] {16, 16});
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
-                Repeat.SPACE, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
-        List<RecordingCanvas.Call> draws = c.ops("drawImage");
+        List<RecordingCanvas.Call> draws = paint("background: url(a.png) space no-repeat", 16, 16).ops("drawImage");
         assertEquals(2, draws.size());
         assertEquals(0, draws.get(0).x(), 1e-5);
         assertEquals(24, draws.get(1).x(), 1e-5);
@@ -106,17 +81,13 @@ class BackgroundsTest {
 
     @Test
     void roundRescalesTilesToFit() {
-        t.host.imageSizes.put("a.png", new float[] {16, 16});
-        RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
-                Repeat.ROUND, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         // 40 / 16 = 2.5 rounds to 3 tiles of 13.3px
-        assertEquals(3, c.ops("drawImage").getFirst().args()[6], 1e-5);
+        assertEquals(3, image("background: url(a.png) round no-repeat", 16, 16)[6], 1e-5);
     }
 
     @Test
     void spritesStretchOverThePaintingAreaByDefault() {
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.Sprite("minecraft:widget/button")));
-        RecordingCanvas.Call sprite = c.ops("drawSprite").getFirst();
+        RecordingCanvas.Call sprite = paint("background: sprite(minecraft:widget/button)").ops("drawSprite").getFirst();
         assertEquals("minecraft:widget/button", sprite.text());
         assertArrayEquals(new float[] {0, 0, 40, 20}, sprite.args(), 1e-5f);
         assertNull(sprite.clip());
@@ -124,17 +95,16 @@ class BackgroundsTest {
 
     @Test
     void sizedSpritesTileAndClip() {
-        RecordingCanvas c = paint(sized(new Image.Sprite("x"), 16, 16, Repeat.REPEAT));
-        List<RecordingCanvas.Call> sprites = c.ops("drawSprite");
+        List<RecordingCanvas.Call> sprites = paint("background: sprite(minecraft:x) 0 0 / 16px 16px").ops("drawSprite");
         assertEquals(6, sprites.size());
         for (RecordingCanvas.Call s : sprites) assertArrayEquals(new float[] {0, 0, 40, 20}, s.clip(), 1e-5f);
     }
 
     @Test
     void linearGradientRunsAlongItsAngle() {
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.LinearGradient(90, stops(RED, BLUE), false)));
+        RecordingCanvas c = paint("background: linear-gradient(90deg, red, blue)");
         assertEquals(800, c.quadArea(), 1e-2);
-        forEachVertex(c, (x, y, color) -> {
+        c.forEachVertex((x, y, color) -> {
             if (x == 0) assertEquals(RED, color);
             if (x == 40) assertEquals(BLUE, color);
         });
@@ -142,21 +112,21 @@ class BackgroundsTest {
 
     @Test
     void gradientsFollowTheBorderRadius() {
-        style(box).radiusTopLeft = style(box).radiusBottomRight = Length.px(8);
-        canvas.devicePixel = 0.25f;
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.LinearGradient(180, stops(RED, BLUE), false)));
+        RecordingCanvas fine = new RecordingCanvas();
+        fine.devicePixel = 0.25f;
+        RecordingCanvas c = paint("border-top-left-radius: 8px; border-bottom-right-radius: 8px; "
+                + "background: linear-gradient(red, blue)", 0, 0, fine);
         assertEquals(800 - 2 * (1 - Math.PI / 4) * 64, c.quadArea(), 2);
         float[] radii = {8, 8, 0, 0, 8, 8, 0, 0};
-        forEachVertex(c, (x, y, color) -> assertTrue(Shapes.contains(-0.01f, -0.01f, 40.02f, 20.02f, radii, x, y)
-                || near(x, y, radii), x + "," + y));
+        // Chords of the clip polygon lie inside the arc; allow the clip polygon's own vertices on the arc.
+        c.forEachVertex((x, y, color) -> assertTrue(Shapes.contains(-0.3f, -0.3f, 40.6f, 20.6f, radii, x, y), x + "," + y));
     }
 
     @Test
     void repeatingGradientsTileTheirStops() {
-        List<Image.ColorStop> stops = List.of(new Image.ColorStop(RED, Length.ZERO), new Image.ColorStop(BLUE, Length.px(10)));
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.LinearGradient(90, stops, true)));
+        RecordingCanvas c = paint("background: repeating-linear-gradient(90deg, red 0, blue 10px)");
         assertEquals(800, c.quadArea(), 1e-2);
-        forEachVertex(c, (x, y, color) -> {
+        c.forEachVertex((x, y, color) -> {
             float phase = x % 10;
             if (phase > 0.01f && phase < 9.99f) assertEquals(QuadBatch.lerpArgb(RED, BLUE, phase / 10), color, "at " + x);
         });
@@ -164,45 +134,25 @@ class BackgroundsTest {
 
     @Test
     void radialGradientsAreRingsFromTheCentre() {
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.RadialGradient(true, Length.PERCENT_50, Length.PERCENT_50,
-                stops(RED, BLUE))));
+        RecordingCanvas c = paint("background: radial-gradient(circle at 50% 50%, red, blue)");
         assertEquals(800, c.quadArea(), 1);
-        forEachVertex(c, (x, y, color) -> {
+        c.forEachVertex((x, y, color) -> {
             if (x == 20 && y == 10) assertEquals(RED, color);
         });
     }
 
     @Test
     void sizedGradientsTile() {
-        RecordingCanvas c = paint(sized(new Image.LinearGradient(90, stops(RED, BLUE), false), 10, 10, Repeat.REPEAT));
+        RecordingCanvas c = paint("background: linear-gradient(90deg, red, blue) 0 0 / 10px 10px");
         assertEquals(800, c.quadArea(), 1e-2);
-        forEachVertex(c, (x, y, color) -> {
+        c.forEachVertex((x, y, color) -> {
             if (x == 10 || x == 30) assertTrue(color == RED || color == BLUE);
         });
     }
 
     @Test
     void fadingToTransparentKeepsTheColour() {
-        RecordingCanvas c = paint(BackgroundLayer.simple(new Image.LinearGradient(90, stops(RED, 0), false)));
-        forEachVertex(c, (x, y, color) -> assertEquals(0xFF0000, color & 0xFFFFFF));
-    }
-
-    private static boolean near(float x, float y, float[] radii) {
-        // Chords of the clip polygon lie inside the arc; allow the clip polygon's own vertices on the arc.
-        return Shapes.contains(-0.3f, -0.3f, 40.6f, 20.6f, Arrays.copyOf(radii, 8), x, y);
-    }
-
-    private static List<Image.ColorStop> stops(int... colors) {
-        return Arrays.stream(colors).mapToObj(c -> new Image.ColorStop(c, null)).toList();
-    }
-
-    interface VertexCheck {
-        void check(float x, float y, int color);
-    }
-
-    static void forEachVertex(RecordingCanvas c, VertexCheck check) {
-        for (RecordingCanvas.Call call : c.ops("fillQuads")) {
-            for (int v = 0; v < call.quadColors().length; v++) check.check(call.quads()[2 * v], call.quads()[2 * v + 1], call.quadColors()[v]);
-        }
+        paint("background: linear-gradient(90deg, red, transparent)")
+                .forEachVertex((x, y, color) -> assertEquals(0xFF0000, color & 0xFFFFFF));
     }
 }

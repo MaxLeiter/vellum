@@ -1,5 +1,7 @@
 package dev.vellum.engine.script;
 
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -11,24 +13,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class VellumApiTest {
     @Test
     void sendSerialisesJson() {
-        Page page = new Page("<script>vellum.send('buy', {item: 'minecraft:apple', count: 2})</script>");
+        Page page = new TestHost().load("<script>vellum.send('buy', {item: 'minecraft:apple', count: 2})</script>");
         assertArrayEquals(new String[] {"buy", "{\"item\":\"minecraft:apple\",\"count\":2}"}, page.host.sent.getFirst());
     }
 
     @Test
     void sendIsRateLimited() {
-        Page page = new Page("<script>var results = []; for (let i = 0; i < 25; i++) results.push(vellum.send('spam', i));</script>");
+        Page page = new TestHost().load("<script>var results = []; for (let i = 0; i < 25; i++) results.push(vellum.send('spam', i));</script>");
         assertEquals(VellumApi.SEND_RATE, page.host.sent.size());
         assertEquals("false", page.eval("results[24]"));
         assertEquals(1, page.host.logs.stream().filter(l -> l.startsWith("WARN: vellum.send")).count());
-        page.advance(500); // half a second refills half the bucket
+        page.frame(500); // half a second refills half the bucket
         page.run("for (let i = 0; i < 25; i++) vellum.send('spam', i)");
         assertEquals(VellumApi.SEND_RATE + VellumApi.SEND_RATE / 2, page.host.sent.size());
     }
 
     @Test
     void receivedDataReplacesVellumDataAndNotifiesListeners() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <script>
                 const log = [];
                 vellum.on('data', d => log.push('data ' + d.hp));
@@ -44,14 +46,14 @@ class VellumApiTest {
 
     @Test
     void badJsonIsReported() {
-        Page page = new Page("", false);
+        Page page = new TestHost().recordErrors().load("");
         page.doc.receive("data", "{nope");
         assertTrue(page.errors().contains("Error in message 'data': SyntaxError"), page.errors());
     }
 
     @Test
     void hostCalls() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <script>
                 vellum.playSound('minecraft:ui.button.click', 0.5, 2);
                 var label = vellum.t('gui.done', 'x');

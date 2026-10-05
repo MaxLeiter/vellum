@@ -74,7 +74,7 @@ public class Box {
      */
     public Box containingBlock;
 
-    public Box(Kind kind, Element element, ComputedStyle style) {
+    Box(Kind kind, Element element, ComputedStyle style) {
         this.kind = kind;
         this.element = element;
         this.style = style;

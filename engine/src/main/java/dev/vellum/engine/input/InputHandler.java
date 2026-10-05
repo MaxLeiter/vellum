@@ -31,17 +31,10 @@ public final class InputHandler {
     /** Wheel distance of one notch in GUI px (about three lines of 8 px text); hosts scale wheel notches by it. */
     public static final float WHEEL_NOTCH = 24;
 
-    /** Finds the element under a viewport point; {@link dev.vellum.engine.paint.Painter#hitTest} by default. */
-    @FunctionalInterface
-    public interface HitTester {
-        HitResult hitTest(float x, float y);
-    }
-
     private final Document document;
     private final Pointer pointer;
     private final Scroller scroller;
     private final FocusNavigator focus;
-    private HitTester hitTester;
     private SelectPopup popup;
     /** Set when a keydown for a character was cancelled, so its charTyped is dropped (as browsers skip the input). */
     private boolean suppressChar;
@@ -53,12 +46,6 @@ public final class InputHandler {
         this.pointer = new Pointer(document);
         this.scroller = new Scroller();
         this.focus = new FocusNavigator(document);
-        this.hitTester = (x, y) -> document.painter().hitTest(x, y);
-    }
-
-    /** Replaces hit testing (tests, or hosts with their own picking). */
-    public void setHitTester(HitTester hitTester) {
-        this.hitTester = hitTester;
     }
 
     // ---- Pointer ----
@@ -177,7 +164,7 @@ public final class InputHandler {
     /** Hit tests a point, except while a drag holds the pointer or the open dropdown covers it (null then). */
     private HitResult hitTest(float x, float y) {
         if (pointer.captured() != null || popup != null && popup.contains(x, y)) return null;
-        return hitTester.hitTest(x, y);
+        return document.painter().hitTest(x, y);
     }
 
     /** Where pointer events at a point go: the capturing element during drags, the select under its open list, else the hit. */

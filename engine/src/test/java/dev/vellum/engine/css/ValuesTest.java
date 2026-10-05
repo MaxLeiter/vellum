@@ -32,11 +32,12 @@ import dev.vellum.engine.style.VerticalAlign;
 import dev.vellum.engine.style.Visibility;
 import dev.vellum.engine.style.WhiteSpace;
 import dev.vellum.engine.style.WordBreak;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static dev.vellum.engine.css.StyleTesting.styleOf;
+import static dev.vellum.engine.testing.Page.styleOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -228,7 +229,9 @@ class ValuesTest {
         assertEquals(List.of(new TransitionSpec("all", 300, 0, TimingFunction.EASE)),
                 styleOf("transition-duration: .3s").transitions, "transition-property defaults to all");
         assertTrue(styleOf("transition: none").transitions.isEmpty());
-        assertTrue(styleOf("transition: opacity 0s").transitions.isEmpty(), "zero combined duration never runs");
+        assertEquals(List.of(new TransitionSpec("all", 1000, 0, TimingFunction.EASE), new TransitionSpec("opacity", 0, 0,
+                TimingFunction.EASE)), styleOf("transition: all 1s, opacity 0s").transitions,
+                "an entry that never runs stays, to keep its property from the earlier 'all'");
     }
 
     @Test
@@ -411,8 +414,7 @@ class ValuesTest {
     }
 
     private static ComputedStyle style(String tag, String css) {
-        var doc = StyleTesting.page("<div style='display: block'><" + tag + " id=t style='" + css + "'></" + tag + "></div>");
-        return StyleTesting.style(doc, "#t");
+        return new TestHost().load("<div><" + tag + " id=t style='" + css + "'></" + tag + "></div>").style("#t");
     }
 
     @Test

@@ -1,8 +1,7 @@
 package dev.vellum.engine.layout;
 
-import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
@@ -25,16 +24,16 @@ class DetailsTest {
 
     @Test
     void closedDetailsHideAllButTheSummary() {
-        Document doc = new TestHost().load("<details id=d><summary id=s>S</summary>loose<button id=b>x</button></details>");
-        Element d = doc.getElementById("d"), b = doc.getElementById("b");
+        Page page = new TestHost().load("<details id=d><summary id=s>S</summary>loose<button id=b>x</button></details>");
+        Element d = page.byId("d"), b = page.byId("b");
         assertNull(b.box);
         assertEquals(List.of("▶ ", "S"), texts(d.box));
-        doc.input().keyDown("Tab", "Tab", Modifiers.NONE);
-        doc.input().keyDown("Tab", "Tab", Modifiers.NONE);
-        assertSame(doc.getElementById("s"), doc.focusedElement(), "the hidden button is not a tab stop");
+        page.key("Tab");
+        page.key("Tab");
+        assertSame(page.byId("s"), page.doc.focusedElement(), "the hidden button is not a tab stop");
 
         d.setAttribute("open", "");
-        doc.frame(16);
+        page.frame();
         assertNotNull(b.box);
         assertEquals(List.of("▼ ", "S", "loose", "x"), texts(d.box));
     }

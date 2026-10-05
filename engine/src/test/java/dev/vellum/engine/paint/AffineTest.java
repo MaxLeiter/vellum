@@ -1,11 +1,11 @@
 package dev.vellum.engine.paint;
 
 import dev.vellum.engine.style.Length;
-import dev.vellum.engine.style.TransformFunction;
 import dev.vellum.engine.style.TransformFunction.Interpolated;
 import dev.vellum.engine.style.TransformFunction.Rotate;
 import dev.vellum.engine.style.TransformFunction.Scale;
 import dev.vellum.engine.style.TransformFunction.Translate;
+import dev.vellum.engine.style.TransformFunction;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

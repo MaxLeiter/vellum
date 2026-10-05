@@ -1,5 +1,6 @@
 package dev.vellum.engine.paint;
 
+import dev.vellum.engine.testing.RecordingCanvas;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

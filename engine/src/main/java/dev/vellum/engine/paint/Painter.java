@@ -39,7 +39,7 @@ public final class Painter {
     }
 
     /** Paints the box tree under {@code root} (no overlays), leaving the canvas as it was found. */
-    public void paint(Canvas canvas, Box root) {
+    private void paint(Canvas canvas, Box root) {
         if (boxPainter == null) boxPainter = new BoxPainter(this);
         int saves = canvas.saveCount();
         layers.validate(root, document.stackingVersion());
@@ -59,7 +59,7 @@ public final class Painter {
     }
 
     /** The topmost hit at a point in {@code root}'s coordinate space, or null. */
-    public HitResult hitTest(Box root, float x, float y) {
+    private HitResult hitTest(Box root, float x, float y) {
         if (hitTester == null) hitTester = new HitTester(this, document.layoutEngine().textMeasure());
         layers.validate(root, document.stackingVersion());
         hitTester.begin(x, y);

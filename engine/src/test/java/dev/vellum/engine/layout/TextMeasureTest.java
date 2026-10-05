@@ -42,11 +42,13 @@ class TextMeasureTest {
         };
         StringBuilder html = new StringBuilder("<body>");
         for (int i = 0; i < 50; i++) html.append("<p>The quick brown fox jumps over the lazy dog ").append(i).append("</p>");
-        Document doc = host.load(html.append("</body>").toString());
+        Document doc = host.load(html.append("</body>").toString()).doc;
         int first = fonts.widths;
         assertTrue(first > 0);
-        doc.layoutEngine().layout();
-        doc.layoutEngine().layout();
+        for (int i = 0; i < 2; i++) {
+            doc.invalidateLayout();
+            doc.flushLayout();
+        }
         assertEquals(first, fonts.widths, "every word was measured once");
     }
 

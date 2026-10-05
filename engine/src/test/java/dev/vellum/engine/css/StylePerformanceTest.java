@@ -2,6 +2,7 @@ package dev.vellum.engine.css;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.lang.management.ManagementFactory;
@@ -44,7 +45,7 @@ class StylePerformanceTest {
 
     @Test
     void restyleIsFast() {
-        Document doc = StyleTesting.page("<style>" + stylesheet() + "</style>" + body());
+        Document doc = new TestHost().load("<style>" + stylesheet() + "</style>" + body()).doc;
         List<Element> all = doc.querySelectorAll("*");
         assertTrue(all.size() >= ELEMENTS, "elements: " + all.size());
         Element root = doc.documentElement();
@@ -56,7 +57,7 @@ class StylePerformanceTest {
         long full = time(20, i -> fullRestyle(doc, root, i));
         long hover = time(20, i -> {
             doc.setHovered(hovered, i % 2 == 0);
-            doc.styleEngine().restyle();
+            doc.flushStyle();
         });
         System.out.printf("restyle of %d elements x %d rules: full %.2f ms, hover %.2f ms%n", all.size(), RULES,
                 full / 1e6, hover / 1e6);
@@ -78,7 +79,7 @@ class StylePerformanceTest {
                   .card:hover { background-color: #444 }
                 </style><div class=list>""");
         for (int i = 0; i < ELEMENTS; i++) html.append("<div class=card><span>item ").append(i).append("</span></div>");
-        Document doc = StyleTesting.page(html.append("</div>").toString());
+        Document doc = new TestHost().load(html.append("</div>").toString()).doc;
         Element list = doc.querySelector(".list");
         for (int i = 0; i < 200; i++) hover(doc, list, i);
         long time = time(20, i -> hover(doc, list, i));
@@ -91,7 +92,7 @@ class StylePerformanceTest {
 
     private static void hover(Document doc, Element element, int i) {
         doc.setHovered(element, i % 2 == 0);
-        doc.styleEngine().restyle();
+        doc.flushStyle();
         doc.animations().tick(0);
     }
 
@@ -105,7 +106,7 @@ class StylePerformanceTest {
 
     private static void fullRestyle(Document doc, Element root, int i) {
         root.setAttribute("style", "font-size: " + (8 + i % 2) + "px");
-        doc.styleEngine().restyle();
+        doc.flushStyle();
     }
 
     /** The best time of {@code runs} runs, in ns: the code's cost, without noise from a busy machine. */

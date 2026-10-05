@@ -3,6 +3,8 @@ package dev.vellum.engine.script;
 import dev.vellum.engine.event.Event;
 import dev.vellum.engine.event.KeyboardEvent;
 import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,10 +15,11 @@ class EventsTest {
     private static final String TREE = "<div id=outer><button id=b>go</button></div>";
 
     private static Page page(String script) {
-        return Page.withScript(TREE, """
+        return new TestHost().load(TREE + """
+                <script>
                 const outer = document.getElementById('outer'), b = document.getElementById('b');
                 const log = [];
-                """ + script);
+                """ + script + "</script>");
     }
 
     @Test
@@ -81,7 +84,7 @@ class EventsTest {
 
     @Test
     void inlineHandlersSeeThisAndEventAndCanCancel() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <body><a id=a href=x onclick="window.seen = this.id + ' ' + event.type; return false">x</a></body>""");
         Event click = new Event("click", true, true);
         assertFalse(page.byId("a").dispatchEvent(click), "return false cancels");

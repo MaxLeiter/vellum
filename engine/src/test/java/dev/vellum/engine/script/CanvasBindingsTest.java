@@ -2,6 +2,8 @@ package dev.vellum.engine.script;
 
 import dev.vellum.engine.host.ArraySurface;
 import dev.vellum.engine.replaced.CanvasContent;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,14 +19,16 @@ class CanvasBindingsTest {
 
     @Test
     void fillsComposeAndClear() {
-        Page page = Page.withScript("<canvas id=c width=4 height=2></canvas>", """
-                const ctx = document.getElementById('c').getContext('2d');
+        Page page = new TestHost().load("""
+                <canvas id=c width=4 height=2></canvas>
+                <script>
+const ctx = document.getElementById('c').getContext('2d');
                 ctx.fillStyle = 'mc-gold';
                 ctx.fillRect(0, 0, 4, 2);
                 ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
                 ctx.fillRect(1.4, 0, 1, 1);
                 ctx.clearRect(3, 1, 5, 5);
-                """);
+                </script>""");
         assertEquals(0xFFFFAA00, pixel(page, "c", 0, 0));
         assertEquals(0xFF7F5480, pixel(page, "c", 1, 0), "half blue over gold");
         assertEquals(0, pixel(page, "c", 3, 1));
@@ -36,13 +40,15 @@ class CanvasBindingsTest {
 
     @Test
     void imageDataRoundTrips() {
-        Page page = Page.withScript("<canvas id=c width=3 height=3></canvas>", """
-                const ctx = document.getElementById('c').getContext('2d');
+        Page page = new TestHost().load("""
+                <canvas id=c width=3 height=3></canvas>
+                <script>
+const ctx = document.getElementById('c').getContext('2d');
                 const image = ctx.createImageData(2, 1);
                 image.data.set([255, 0, 0, 255, 0, 255, 0, 128]);
                 ctx.putImageData(image, 1, 2);
                 const read = ctx.getImageData(0, 2, 3, 1);
-                """);
+                </script>""");
         assertEquals(0xFFFF0000, pixel(page, "c", 1, 2));
         assertEquals(0x8000FF00, pixel(page, "c", 2, 2));
         assertEquals("0,0,0,0,255,0,0,255,0,255,0,128 Uint8ClampedArray",
@@ -51,8 +57,10 @@ class CanvasBindingsTest {
 
     @Test
     void canvasesDrawnBeforeInsertionKeepTheirPixels() {
-        Page page = Page.withScript("<div id=box></div>", """
-                const c = document.createElement('canvas');
+        Page page = new TestHost().load("""
+                <div id=box></div>
+                <script>
+const c = document.createElement('canvas');
                 c.id = 'late';
                 c.width = 2;
                 c.height = 2;
@@ -64,7 +72,7 @@ class CanvasBindingsTest {
                 copy.id = 'copy';
                 document.body.appendChild(copy);
                 copy.getContext('2d').drawImage(c, 0, 0, 4, 4);
-                """);
+                </script>""");
         assertSame(page.byId("late").replaced, page.doc.replacedContent(page.byId("late")));
         assertEquals(0xFF000000, pixel(page, "late", 0, 0));
         assertEquals(0xFF000000, pixel(page, "copy", 1, 1), "drawImage scales");

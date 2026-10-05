@@ -3,6 +3,8 @@ package dev.vellum.engine.script;
 import dev.vellum.engine.anim.Timing;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.TimingFunction;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import dev.vellum.shadow.rhino.EcmaError;
 import dev.vellum.shadow.rhino.Scriptable;
 import org.junit.jupiter.api.Test;
@@ -14,7 +16,7 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** The keyframe and option parsing behind {@code element.animate()} (the animation engine itself is another module). */
+/** {@code element.animate()}: keyframe and option parsing, and animations running on the document's animation engine. */
 class AnimationBindingsTest {
     /** Evaluates {@code js} in a bare sandboxed scope and applies {@code parse} to the result. */
     private static <T> T parse(String js, Function<Object, T> parse) {
@@ -84,10 +86,42 @@ class AnimationBindingsTest {
     }
 
     @Test
-    void animateReachesTheAnimationEngine() {
-        Page page = Page.withScript("<div id=d></div>", "");
-        // Until the animation engine lands its stub throws, which must still arrive as a catchable script error.
-        assertEquals("true", page.eval("(function () { try { return document.getElementById('d').animate([{opacity: 0}, "
-                + "{opacity: 1}], 100) instanceof Animation } catch (e) { return e.name === 'Error' } })()"));
+    void animateRunsOnTheAnimationEngine() {
+        Page page = new TestHost().load("""
+                <div id=d style="opacity: 0.5"></div>
+                <script>
+                const log = [];
+                const d = document.getElementById('d');
+                const a = d.animate([{opacity: 0}, {opacity: 1}], {duration: 100, fill: 'forwards'});
+                a.onfinish = e => log.push('onfinish ' + e.type);
+                a.finished.then(x => log.push('finished ' + (x === a)));
+                </script>""");
+        // Started by the load's first frame, at t = 0.
+        assertEquals("true running", page.eval("(a instanceof Animation) + ' ' + a.playState"));
+        assertEquals(0, page.byId("d").style.opacity, 1e-4);
+        page.frame(50);
+        assertEquals(0.5, page.byId("d").style.opacity, 1e-4);
+        assertEquals("0.5 50", page.eval("getComputedStyle(d).opacity + ' ' + a.currentTime"));
+        page.frame(100);
+        assertEquals(1, page.byId("d").style.opacity, 1e-4, "fills forwards");
+        assertEquals("finished onfinish finish,finished true", page.eval("a.playState + ' ' + log.join()"));
+    }
+
+    @Test
+    void cancellingRejectsFinishedAndRemovesTheEffect() {
+        Page page = new TestHost().load("""
+                <div id=d style="opacity: 0.5"></div>
+                <script>
+                const log = [];
+                const a = document.getElementById('d').animate({opacity: [0, 1]}, 100);
+                a.oncancel = () => log.push('oncancel');
+                a.finished.catch(e => log.push(e.name));
+                </script>""");
+        page.frame(0);
+        page.frame(50);
+        page.run("a.cancel()");
+        page.frame(60);
+        assertEquals(0.5, page.byId("d").style.opacity, 1e-4);
+        assertEquals("idle oncancel,AbortError", page.eval("a.playState + ' ' + log.join()"));
     }
 }

@@ -1,19 +1,18 @@
 package dev.vellum.engine.css;
 
-import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.Length;
 import dev.vellum.engine.style.Prop;
 import dev.vellum.engine.style.TimingFunction;
 import dev.vellum.engine.style.TransformFunction;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
 
-import static dev.vellum.engine.css.StyleTesting.element;
-import static dev.vellum.engine.css.StyleTesting.page;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -37,9 +36,9 @@ class KeyframesTest {
 
     @Test
     void resolvesKeyframesForTheElement() {
-        Document doc = page(PAGE.replace("@keyframes grow { 50% { opacity: 1 } }", ""));
-        Element a = element(doc, "#a");
-        List<ResolvedKeyframe> frames = doc.styleEngine().resolveKeyframes(a, "grow", a.baseStyle);
+        Page page = new TestHost().load(PAGE.replace("@keyframes grow { 50% { opacity: 1 } }", ""));
+        Element a = page.query("#a");
+        List<ResolvedKeyframe> frames = page.doc.styleEngine().resolveKeyframes(a, "grow", a.baseStyle);
         assertEquals(List.of(0f, 0.5f, 0.75f, 1f), frames.stream().map(ResolvedKeyframe::offset).toList());
 
         ResolvedKeyframe first = frames.get(0);
@@ -65,26 +64,26 @@ class KeyframesTest {
 
     @Test
     void laterRuleWithTheSameNameWins() {
-        Document doc = page(PAGE);
-        Element a = element(doc, "#a");
-        List<ResolvedKeyframe> frames = doc.styleEngine().resolveKeyframes(a, "grow", a.baseStyle);
+        Page page = new TestHost().load(PAGE);
+        Element a = page.query("#a");
+        List<ResolvedKeyframe> frames = page.doc.styleEngine().resolveKeyframes(a, "grow", a.baseStyle);
         assertEquals(1, frames.size());
         assertEquals(0.5f, frames.get(0).offset());
     }
 
     @Test
     void unknownOrInactiveRulesGiveNothing() {
-        Document doc = page(PAGE);
-        Element a = element(doc, "#a");
-        assertTrue(doc.styleEngine().resolveKeyframes(a, "nope", a.baseStyle).isEmpty());
-        assertTrue(doc.styleEngine().resolveKeyframes(a, "hidden", a.baseStyle).isEmpty(), "@media does not match");
+        Page page = new TestHost().load(PAGE);
+        Element a = page.query("#a");
+        assertTrue(page.doc.styleEngine().resolveKeyframes(a, "nope", a.baseStyle).isEmpty());
+        assertTrue(page.doc.styleEngine().resolveKeyframes(a, "hidden", a.baseStyle).isEmpty(), "@media does not match");
     }
 
     @Test
     void computesScriptDeclarations() {
-        Document doc = page(PAGE);
-        Element a = element(doc, "#a");
-        ResolvedKeyframe k = doc.styleEngine().computeDeclarations(a,
+        Page page = new TestHost().load(PAGE);
+        Element a = page.query("#a");
+        ResolvedKeyframe k = page.doc.styleEngine().computeDeclarations(a,
                 "opacity: 0; transform: scale(2); padding: 1em; bogus: 1", a.baseStyle);
         assertEquals(0, k.offset());
         assertEquals(0f, k.style().opacity);
@@ -98,9 +97,9 @@ class KeyframesTest {
 
     @Test
     void lineHeightFactorFollowsKeyframeFontSize() {
-        Document doc = page("<div id=a style='font-size: 10px; line-height: 2'></div>");
-        Element a = element(doc, "#a");
-        ResolvedKeyframe k = doc.styleEngine().computeDeclarations(a, "font-size: 20px", a.baseStyle);
+        Page page = new TestHost().load("<div id=a style='font-size: 10px; line-height: 2'></div>");
+        Element a = page.query("#a");
+        ResolvedKeyframe k = page.doc.styleEngine().computeDeclarations(a, "font-size: 20px", a.baseStyle);
         assertEquals(40, k.style().lineHeight);
     }
 }

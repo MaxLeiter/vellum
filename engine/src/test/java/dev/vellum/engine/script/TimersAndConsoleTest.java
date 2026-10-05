@@ -1,5 +1,7 @@
 package dev.vellum.engine.script;
 
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -10,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TimersAndConsoleTest {
     @Test
     void timeoutsRunInOrderWithArguments() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <script>
                 const log = [];
                 setTimeout((a, b) => log.push('late ' + a + b), 50, 'x', 'y');
@@ -19,49 +21,47 @@ class TimersAndConsoleTest {
                 clearTimeout(cancelled);
                 setTimeout("log.push('code')", 30);
                 </script>""");
-        page.advance(5);
+        page.frame(5);
         assertEquals("", page.eval("log.join()"));
-        page.advance(100);
+        page.frame(100);
         assertEquals("early,code,late xy", page.eval("log.join()"));
     }
 
     @Test
     void intervalsRepeatUntilCleared() {
-        Page page = new Page("<script>let n = 0; const id = setInterval(() => { if (++n === 3) clearInterval(id) }, 10);</script>");
-        for (int t = 10; t <= 100; t += 10) page.advance(t);
+        Page page = new TestHost().load("<script>let n = 0; const id = setInterval(() => { if (++n === 3) clearInterval(id) }, 10);</script>");
+        for (int t = 10; t <= 100; t += 10) page.frame(t);
         assertEquals("3", page.eval("n"));
     }
 
     @Test
     void animationFramesGetTheFrameTimeAndRunAfterTimers() {
-        Page page = new Page("""
-                <script>
-                const log = [];
+        Page page = new TestHost().load("<script>const log = []</script>");
+        page.run("""
                 requestAnimationFrame(t => log.push('frame ' + t + ' ' + performance.now()));
                 setTimeout(() => log.push('timer'), 0);
-                cancelAnimationFrame(requestAnimationFrame(() => log.push('cancelled')));
-                </script>""");
-        page.advance(16);
+                cancelAnimationFrame(requestAnimationFrame(() => log.push('cancelled')));""");
+        page.frame(16);
         assertEquals("timer,frame 16 16", page.eval("log.join()"));
-        page.advance(32);
+        page.frame(32);
         assertEquals("timer,frame 16 16", page.eval("log.join()"), "frame callbacks run once");
     }
 
     @Test
     void microtasksRunAfterEachTimerCallback() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <script>
                 const log = [];
                 setTimeout(() => { Promise.resolve().then(() => log.push('micro')); log.push('a') }, 0);
                 setTimeout(() => log.push('b'), 0);
                 </script>""");
-        page.advance(1);
+        page.frame(1);
         assertEquals("a,micro,b", page.eval("log.join()"));
     }
 
     @Test
     void consoleFormatsLikeBrowsers() {
-        Page page = new Page("");
+        Page page = new TestHost().load("");
         page.run("""
                 console.log('plain', 1, true, null, undefined);
                 console.log({a: [1, 'x']}, [1, 2]);
@@ -85,7 +85,7 @@ class TimersAndConsoleTest {
 
     @Test
     void storage() {
-        Page page = new Page("""
+        Page page = new TestHost().load("""
                 <script>
                 localStorage.setItem('a', 1);
                 localStorage.setItem('b', 'two');
@@ -102,7 +102,7 @@ class TimersAndConsoleTest {
 
     @Test
     void structuredCloneCopiesData() {
-        Page page = new Page("<script>const original = {a: [1, {b: 2}]}; const copy = structuredClone(original);</script>");
+        Page page = new TestHost().load("<script>const original = {a: [1, {b: 2}]}; const copy = structuredClone(original);</script>");
         assertEquals("false 2", page.eval("[copy.a === original.a, copy.a[1].b].join(' ')"));
     }
 }

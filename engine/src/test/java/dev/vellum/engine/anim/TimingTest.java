@@ -2,10 +2,10 @@ package dev.vellum.engine.anim;
 
 import dev.vellum.engine.style.AnimationSpec.Direction;
 import dev.vellum.engine.style.AnimationSpec.FillMode;
-import dev.vellum.engine.style.TimingFunction;
 import dev.vellum.engine.style.TimingFunction.CubicBezier;
-import dev.vellum.engine.style.TimingFunction.Steps;
 import dev.vellum.engine.style.TimingFunction.Steps.Jump;
+import dev.vellum.engine.style.TimingFunction.Steps;
+import dev.vellum.engine.style.TimingFunction;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

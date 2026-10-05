@@ -12,7 +12,7 @@ public final class LineBox {
     /** Fragments in visual (left-to-right) order. */
     public final List<Fragment> fragments = new ArrayList<>();
 
-    public LineBox(float x, float y, float width, float height, float baseline) {
+    LineBox(float x, float y, float width, float height, float baseline) {
         this.x = x;
         this.y = y;
         this.width = width;

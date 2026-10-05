@@ -2,46 +2,52 @@ package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.InputEvent;
-import dev.vellum.engine.layout.Box;
-import dev.vellum.engine.style.Overflow;
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static dev.vellum.engine.input.Fixture.ALT;
-import static dev.vellum.engine.input.Fixture.NONE;
-import static dev.vellum.engine.input.Fixture.SHIFT;
-import static dev.vellum.engine.input.Fixture.SHORTCUT;
-import static dev.vellum.engine.input.Fixture.SHORTCUT_SHIFT;
+import static dev.vellum.engine.testing.Page.ALT;
+import static dev.vellum.engine.testing.Page.NONE;
+import static dev.vellum.engine.testing.Page.SHIFT;
+import static dev.vellum.engine.testing.Page.SHORTCUT;
+import static dev.vellum.engine.testing.Page.SHORTCUT_SHIFT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TextFieldTest {
-    private final Fixture fx = new Fixture("""
+    private final Page page = new TestHost().load("""
             <input id=t value=hi><input id=pw type=password value=secret><input id=ro value=abc readonly>
             <input id=num type=number><input id=max maxlength=3><input id=cb type=checkbox>
             <textarea id=ta>aaa bbb ccc</textarea>""");
-    private final Element t = fx.el("t");
+    private final Element t = page.byId("t");
 
     private TextEditor editor(Element e) {
         return TextField.of(e).editor;
     }
 
+    /** Lays {@code e} out alone at the top left of the page, styled by {@code css}. */
+    private void place(Element e, String css) {
+        e.setAttribute("style", "position: absolute; left: 0; top: 0; scroll-behavior: auto; " + css);
+        page.frame();
+    }
+
     @Test
     void typingFiresBeforeinputThenInput() {
-        fx.listen(t, "beforeinput", "input", "change");
+        page.listen(t, "beforeinput", "input", "change");
         t.focus();
-        fx.type("ab");
+        page.type("ab");
         assertEquals("hiab", t.value());
-        assertEquals(List.of("beforeinput:t=a", "input:t=a", "beforeinput:t=b", "input:t=b"), fx.log);
+        assertEquals(List.of("beforeinput:t=a", "input:t=a", "beforeinput:t=b", "input:t=b"), page.log);
     }
 
     @Test
     void cancelledBeforeinputSkipsTheEdit() {
         t.addEventListener("beforeinput", e -> { if ("x".equals(((InputEvent) e).data)) e.preventDefault(); });
         t.focus();
-        fx.type("axb");
+        page.type("axb");
         assertEquals("hiab", t.value());
     }
 
@@ -49,70 +55,70 @@ class TextFieldTest {
     void cancelledKeydownDropsItsCharacter() {
         t.addEventListener("keydown", e -> e.preventDefault());
         t.focus();
-        assertTrue(fx.input.keyDown("a", "KeyA", NONE));
-        assertTrue(fx.input.charTyped("a"));
+        assertTrue(page.input.keyDown("a", "KeyA", NONE));
+        assertTrue(page.input.charTyped("a"));
         assertEquals("hi", t.value());
-        assertTrue(fx.input.charTyped("é"), "a character without a keydown (IME) still goes in");
+        assertTrue(page.input.charTyped("é"), "a character without a keydown (IME) still goes in");
         assertEquals("hié", t.value());
     }
 
     @Test
     void changeFiresOnEnterAndOnBlurOnlyWhenTheValueChanged() {
-        fx.listen(t, "change");
+        page.listen(t, "change");
         t.focus();
         t.blur();
-        assertEquals(List.of(), fx.log);
+        assertEquals(List.of(), page.log);
         t.focus();
-        fx.type("!");
-        assertTrue(fx.key("Enter"));
-        assertEquals(List.of("change:t"), fx.log);
+        page.type("!");
+        assertTrue(page.key("Enter"));
+        assertEquals(List.of("change:t"), page.log);
         t.blur();
-        assertEquals(List.of("change:t"), fx.log, "already committed by Enter");
+        assertEquals(List.of("change:t"), page.log, "already committed by Enter");
         t.focus();
-        fx.type("?");
+        page.type("?");
         t.blur();
-        assertEquals(List.of("change:t", "change:t"), fx.log);
+        assertEquals(List.of("change:t", "change:t"), page.log);
     }
 
     @Test
     void editingKeys() {
         t.focus();
-        fx.type(" there world");
+        page.type(" there world");
         assertEquals("hi there world", t.value());
-        fx.key("Backspace", ALT);
+        page.key("Backspace", ALT);
         assertEquals("hi there ", t.value());
-        fx.key("Home");
-        fx.key("Delete");
+        page.key("Home");
+        page.key("Delete");
         assertEquals("i there ", t.value());
-        fx.key("ArrowRight", ALT);
-        fx.key("End", SHIFT);
+        page.key("ArrowRight", ALT);
+        page.key("End", SHIFT);
         assertEquals(" there ", editor(t).selectedText());
-        fx.key("Backspace");
+        page.key("Backspace");
         assertEquals("i", t.value());
-        assertFalse(fx.key("Escape"), "Escape goes to the host");
+        assertFalse(page.key("Escape"), "Escape goes to the host");
     }
 
     @Test
     void clipboardShortcuts() {
         t.focus();
-        fx.key("a", SHORTCUT);
-        fx.key("c", SHORTCUT);
-        assertEquals("hi", fx.host.clipboard);
-        fx.key("x", SHORTCUT);
+        page.key("a", SHORTCUT);
+        page.key("c", SHORTCUT);
+        assertEquals("hi", page.host.clipboard);
+        page.key("x", SHORTCUT);
         assertEquals("", t.value());
-        fx.key("v", SHORTCUT);
-        fx.key("v", SHORTCUT);
+        page.key("v", SHORTCUT);
+        page.key("v", SHORTCUT);
         assertEquals("hihi", t.value());
     }
 
     @Test
     void passwordsAreMaskedAndNeverCopied() {
-        Element pw = fx.el("pw");
+        Element pw = page.byId("pw");
         pw.focus();
-        fx.key("a", SHORTCUT);
-        fx.key("c", SHORTCUT);
-        fx.key("x", SHORTCUT);
-        assertEquals("", fx.host.clipboard);
+        page.key("a", SHORTCUT);
+        page.key("c", SHORTCUT);
+        page.key("x", SHORTCUT);
+        assertEquals("", page.host.clipboard);
         assertEquals("secret", pw.value(), "cut does nothing either");
         assertEquals("••••••", TextField.of(pw).layout().line(0).display());
     }
@@ -120,67 +126,66 @@ class TextFieldTest {
     @Test
     void undoAndRedoShortcuts() {
         t.focus();
-        fx.type("ab cd");
-        fx.key("z", SHORTCUT);
+        page.type("ab cd");
+        page.key("z", SHORTCUT);
         assertEquals("hiab", t.value());
-        fx.key("z", SHORTCUT);
+        page.key("z", SHORTCUT);
         assertEquals("hi", t.value());
-        fx.key("z", SHORTCUT_SHIFT);
+        page.key("z", SHORTCUT_SHIFT);
         assertEquals("hiab", t.value());
-        fx.key("y", SHORTCUT);
+        page.key("y", SHORTCUT);
         assertEquals("hiab cd", t.value());
     }
 
     @Test
     void scriptValueChangesResetTheModel() {
         t.focus();
-        fx.type("x");
+        page.type("x");
         t.setValue("new");
-        fx.type("!");
+        page.type("!");
         assertEquals("new!", t.value());
-        fx.key("z", SHORTCUT);
-        fx.key("z", SHORTCUT);
+        page.key("z", SHORTCUT);
+        page.key("z", SHORTCUT);
         assertEquals("new", t.value(), "history before the script's value is gone");
     }
 
     @Test
     void readonlyAllowsSelectionAndCopyButNoEdits() {
-        Element ro = fx.el("ro");
+        Element ro = page.byId("ro");
         ro.focus();
-        fx.type("x");
-        fx.key("Backspace");
+        page.type("x");
+        page.key("Backspace");
         assertEquals("abc", ro.value());
-        fx.key("a", SHORTCUT);
-        fx.key("c", SHORTCUT);
-        assertEquals("abc", fx.host.clipboard);
-        assertFalse(fx.input.wantsKeyboard());
+        page.key("a", SHORTCUT);
+        page.key("c", SHORTCUT);
+        assertEquals("abc", page.host.clipboard);
+        assertFalse(page.input.wantsKeyboard());
     }
 
     @Test
     void numberAndMaxlengthFilters() {
-        fx.el("num").focus();
-        fx.type("1a2.5e");
-        assertEquals("12.5e", fx.el("num").value());
-        fx.el("max").focus();
-        fx.type("abcdef");
-        assertEquals("abc", fx.el("max").value());
+        page.byId("num").focus();
+        page.type("1a2.5e");
+        assertEquals("12.5e", page.byId("num").value());
+        page.byId("max").focus();
+        page.type("abcdef");
+        assertEquals("abc", page.byId("max").value());
     }
 
     @Test
     void wantsKeyboardOnlyForEditableTextFields() {
-        assertFalse(fx.input.wantsKeyboard());
+        assertFalse(page.input.wantsKeyboard());
         t.focus();
-        assertTrue(fx.input.wantsKeyboard());
-        fx.el("cb").focus();
-        assertFalse(fx.input.wantsKeyboard());
-        fx.el("ta").focus();
-        assertTrue(fx.input.wantsKeyboard());
+        assertTrue(page.input.wantsKeyboard());
+        page.byId("cb").focus();
+        assertFalse(page.input.wantsKeyboard());
+        page.byId("ta").focus();
+        assertTrue(page.input.wantsKeyboard());
     }
 
     @Test
     void tabIntoAnInputSelectsItsText() {
-        fx.box(t, null, 0, 0, 50, 12);
-        fx.key("Tab");
+        page.key("Tab");
         assertTrue(t.isFocused());
         assertEquals("hi", editor(t).selectedText());
     }
@@ -190,81 +195,73 @@ class TextFieldTest {
     /** "hello" at content x 13: caret positions 13, 19, 25, 28, 31, 37. */
     private Element hello() {
         t.setValue("hello");
-        Box b = fx.box(t, null, 10, 10, 100, 20);
-        b.borderLeft = 1;
-        b.paddingLeft = 2;
+        place(t, "left: 10px; top: 10px; width: 100px; height: 20px; border-left: 1px solid; padding: 0 0 0 2px");
         return t;
     }
 
     @Test
     void clickFocusesAndPlacesTheCaret() {
         hello();
-        fx.click(26, 15);
+        page.click(26, 15);
         assertTrue(t.isFocused());
         assertEquals(2, editor(t).caret(), "26 is nearer 25 than 28");
-        fx.time(1000); // not a double-click
-        fx.click(29, 15);
+        page.frame(1000); // not a double-click
+        page.click(29, 15);
         assertEquals(3, editor(t).caret());
-        fx.click(200, 15);
+        page.click(200, 15);
         assertEquals(3, editor(t).caret(), "outside the box: nothing hit");
-        fx.click(100, 15);
+        page.click(100, 15);
         assertEquals(5, editor(t).caret(), "past the text: the end");
-        assertFalse(fx.input.focusVisible());
+        assertFalse(page.input.focusVisible());
     }
 
     @Test
     void doubleClickSelectsAWordAndTripleClickEverything() {
         t.setValue("hello world");
-        fx.box(t, null, 0, 0, 200, 20);
-        fx.click(5, 5);
-        fx.down(5, 5);
+        place(t, "width: 200px; padding: 0");
+        page.click(5, 5);
+        page.down(5, 5);
         assertEquals("hello", editor(t).selectedText());
-        fx.input.tick(16);
+        page.frame();
         assertEquals("hello", editor(t).selectedText(), "the drag re-sent at rest does not shrink the selection");
-        fx.up(5, 5);
-        fx.click(5, 5);
+        page.up(5, 5);
+        page.click(5, 5);
         assertEquals("hello world", editor(t).selectedText());
     }
 
     @Test
     void dragAndShiftClickSelect() {
         hello();
-        fx.down(13, 15);
-        fx.move(33, 15);
-        fx.up(33, 15);
+        page.down(13, 15);
+        page.move(33, 15);
+        page.up(33, 15);
         assertEquals("hell", editor(t).selectedText());
-        fx.click(19, 15);
-        fx.input.mouseDown(31, 15, 0, SHIFT);
-        fx.input.mouseUp(31, 15, 0, SHIFT);
+        page.click(19, 15);
+        page.input.mouseDown(31, 15, 0, SHIFT);
+        page.input.mouseUp(31, 15, 0, SHIFT);
         assertEquals("ell", editor(t).selectedText());
     }
 
     @Test
     void caretStaysVisibleByScrollingHorizontally() {
         t.setValue("");
-        scrolls(fx.box(t, null, 0, 0, 20, 12), Overflow.HIDDEN);
+        place(t, "width: 20px; height: 12px; padding: 0");
         t.focus();
-        fx.type("aaaaaaaa");
+        page.type("aaaaaaaa");
         assertEquals(48 + 1 - 20, t.scrollLeft(), "caret at 48 shown at the right edge");
-        fx.key("Home");
+        page.key("Home");
         assertEquals(0, t.scrollLeft());
         t.blur();
-        fx.key("End");
+        page.key("End");
         assertEquals(0, t.scrollLeft(), "unfocused fields rest at the start");
     }
 
     // ---- Textarea ----
 
-    /** Gives a field's box the overflow the UA stylesheet gives it: its text scrolls by the element's offsets. */
-    private static void scrolls(Box box, Overflow overflow) {
-        box.style.overflowX = box.style.overflowY = overflow;
-        box.style.scrollSmooth = false;
-    }
-
     @Test
     void textareaWrapsAndMovesByVisualLines() {
-        Element ta = fx.el("ta");
-        scrolls(fx.box(ta, null, 0, 0, 30, 18), Overflow.AUTO);
+        Element ta = page.byId("ta");
+        place(ta, "width: 30px; height: 18px; padding: 0");
         ta.focus();
         TextField field = TextField.of(ta);
         TextLayout layout = field.layout();
@@ -273,49 +270,47 @@ class TextFieldTest {
         assertEquals("bbb ", layout.line(1).display());
         assertEquals("ccc", layout.line(2).display());
         assertEquals(11, field.editor.caret());
-        fx.key("ArrowUp");
+        page.key("ArrowUp");
         assertEquals(7, field.editor.caret(), "x 18 on 'bbb ' is before its hanging space");
-        fx.key("ArrowUp");
+        page.key("ArrowUp");
         assertEquals(3, field.editor.caret());
-        fx.key("ArrowDown");
+        page.key("ArrowDown");
         assertEquals(7, field.editor.caret(), "the goal x survives consecutive vertical moves");
-        fx.key("Home");
+        page.key("Home");
         assertEquals(4, field.editor.caret());
-        fx.key("Enter");
+        page.key("Enter");
         assertEquals("aaa \nbbb ccc", ta.value());
         assertEquals(0, ta.scrollTop());
-        fx.key("End", SHORTCUT);
+        page.key("End", SHORTCUT);
         assertEquals(9, ta.scrollTop(), "3 lines of 9px in 18px: scrolled to show the caret's line");
     }
 
     @Test
     void textareaScrollsWithTheWheelThenChains() {
-        Element ta = fx.el("ta");
-        scrolls(fx.box(ta, null, 0, 0, 30, 18), Overflow.AUTO);
-        TextField.of(ta).extend(); // as layout does
-        assertTrue(fx.input.wheel(5, 5, 0, 5, NONE));
+        Element ta = page.byId("ta");
+        place(ta, "width: 30px; height: 18px; padding: 0");
+        assertTrue(page.input.wheel(5, 5, 0, 5, NONE));
         assertEquals(5, ta.scrollTop());
-        assertTrue(fx.input.wheel(5, 5, 0, 20, NONE));
+        assertTrue(page.input.wheel(5, 5, 0, 20, NONE));
         assertEquals(9, ta.scrollTop());
-        assertFalse(fx.input.wheel(5, 5, 0, 5, NONE), "at the bottom and nothing outside scrolls");
+        assertFalse(page.input.wheel(5, 5, 0, 5, NONE), "at the bottom and nothing outside scrolls");
     }
 
     @Test
     void caretBlinks() {
         t.focus();
         TextField field = TextField.of(t);
-        fx.input.tick(100);
+        page.frame(100);
         assertTrue(field.caretOn());
-        fx.input.tick(600);
+        page.frame(600);
         assertFalse(field.caretOn());
-        fx.input.tick(1100);
+        page.frame(1100);
         assertTrue(field.caretOn());
-        fx.time(1700);
-        fx.input.tick(1700);
+        page.frame(1700);
         assertFalse(field.caretOn());
-        fx.type("x");
+        page.type("x");
         assertTrue(field.caretOn(), "typing restarts the blink");
-        fx.input.tick(1800);
+        page.frame(1800);
         assertTrue(field.caretOn());
     }
 }

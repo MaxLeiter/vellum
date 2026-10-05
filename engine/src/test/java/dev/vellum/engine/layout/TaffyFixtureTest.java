@@ -3,16 +3,17 @@ package dev.vellum.engine.layout;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import org.w3c.dom.Node;
 
-import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -24,13 +25,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * content keywords, named grid lines, flex-wrap: balance, safe/unsafe alignment, baseline alignment in grid) are
  * left out, as are six known gaps: re-running column sizing for aspect-ratio items whose percentage heights depend
  * on the rows, grid placement of absolutely positioned descendants that are not direct children, and a percentage
- * width against Taffy's max-content viewport. As in Taffy's Chrome harness, every div defaults to
- * {@code display: flex}, text uses the Ahem font (every glyph 10px square, zero-width spaces as break
- * opportunities). The test root is a child of the body (usually absolutely positioned), or, when the fixture gives
- * a sized viewport, a child of an absolutely positioned "viewport" flex container ({@code align-items: start}) of
- * that size. Offsets are compared from each node's offsetParent, as Chrome reports them.
+ * width against Taffy's max-content viewport.
+ *
+ * <p>Each fixture becomes an HTML page, styled and laid out by the engine like any other: a div per node with the
+ * node's properties as its style attribute (borders solid, as Chrome drew them). Taffy's Chrome setup is a
+ * stylesheet ({@link #STYLESHEET}: every div defaults to {@code display: flex}, 10px text with line-height 1) and
+ * the Ahem font as the host's metrics (every glyph an em square, zero-width spaces as break opportunities). The
+ * test root is a child of the body (usually absolutely positioned), or, when the fixture gives a sized viewport, a
+ * child of an absolutely positioned "viewport" flex container ({@code align-items: start}) of that size. Offsets
+ * are compared from each node's offsetParent, as Chrome reports them.
  */
 class TaffyFixtureTest {
+    /** Taffy's Chrome setup: divs are flex containers unless a fixture says otherwise; Ahem at 10px, line-height 1. */
+    private static final String STYLESHEET = "<style>div { display: flex } body { font-size: 10px; line-height: 1 }</style>";
+
     @TestFactory
     Stream<DynamicTest> block() throws Exception {
         return fixtures("block");
@@ -61,30 +69,35 @@ class TaffyFixtureTest {
         org.w3c.dom.Element input = children(child(test, "input")).get(0);
         org.w3c.dom.Element expected = children(child(test, "expectations")).get(0);
 
-        TestDoc t = new TestDoc(new AhemHost());
-        Element parent = t.body;
+        StringBuilder html = new StringBuilder(STYLESHEET);
         String width = viewport.getAttribute("width"), height = viewport.getAttribute("height");
-        if (!width.equals("max-content") || !height.equals("max-content")) {
-            parent = t.div(t.body, "display: flex; position: absolute; align-items: start; justify-content: start; "
-                    + "width: " + width + "; height: " + height);
+        boolean sized = !width.equals("max-content") || !height.equals("max-content");
+        if (sized) {
+            html.append("<div style='position: absolute; align-items: start; justify-content: start; width: ")
+                    .append(width).append("; height: ").append(height).append("'>");
         }
-        Element rootElement = build(t, parent, input, true);
-        t.layout(100_000, 100_000);
-        compare(rootElement, expected, rounding, "root");
+        append(html, input, true);
+        if (sized) html.append("</div>");
+        Page page = new AhemHost().load(html.toString(), 100_000, 100_000);
+        compare(page.byId("root"), expected, rounding, "root");
     }
 
-    private static Element build(TestDoc t, Element parent, org.w3c.dom.Element node, boolean root) {
-        StringBuilder css = new StringBuilder("display: flex; ");
-        if (root) css.append("font-size: 10px; line-height: 1; ");
+    /** A fixture node as a div whose style attribute holds the node's properties (and its text, for text nodes). */
+    private static void append(StringBuilder html, org.w3c.dom.Element node, boolean root) {
+        html.append(root ? "<div id=root style='" : "<div style='");
         var attrs = node.getAttributes();
         for (int i = 0; i < attrs.getLength(); i++) {
             Node a = attrs.item(i);
-            css.append(a.getNodeName()).append(": ").append(a.getNodeValue()).append("; ");
+            String name = a.getNodeName(), value = a.getNodeValue();
+            if (name.equals("direction")) continue; // always ltr
+            // The fixtures give border widths; Chrome drew them solid.
+            if (name.startsWith("border-")) value += " solid";
+            html.append(name).append(": ").append(value.replace("&", "&amp;").replace("'", "&#39;")).append("; ");
         }
-        Element e = t.div(parent, css.toString());
-        if (node.getTagName().equals("text")) t.text(e, node.getTextContent());
-        for (org.w3c.dom.Element c : children(node)) build(t, e, c, false);
-        return e;
+        html.append("'>");
+        if (node.getTagName().equals("text")) html.append(node.getTextContent().replace("&", "&amp;").replace("<", "&lt;"));
+        for (org.w3c.dom.Element c : children(node)) append(html, c, false);
+        html.append("</div>");
     }
 
     private static void compare(Element e, org.w3c.dom.Element expected, boolean rounding, String path) {

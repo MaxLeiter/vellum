@@ -1,5 +1,7 @@
 package dev.vellum.engine.script;
 
+import dev.vellum.engine.testing.Page;
+import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -11,7 +13,7 @@ class TemplatePerformanceTest {
 
     @Test
     void longListsDigestInLinearTime() {
-        Page page = new Page("<ul id=l><li v-for=\"item in s.items\" :key=\"item\">{{ item }}</li></ul><script>"
+        Page page = new TestHost().load("<ul id=l><li v-for=\"item in s.items\" :key=\"item\">{{ item }}</li></ul><script>"
                 + "const s = vellum.state({items: Array.from({length: " + ITEMS + "}, (_, i) => i)})</script>");
         for (int i = 0; i < 30; i++) rotate(page);
         long best = Long.MAX_VALUE;
@@ -28,6 +30,6 @@ class TemplatePerformanceTest {
     /** Moves the first item to the end, then renders. */
     private static void rotate(Page page) {
         page.run("s.items.push(s.items.shift())");
-        page.render();
+        page.frame();
     }
 }
