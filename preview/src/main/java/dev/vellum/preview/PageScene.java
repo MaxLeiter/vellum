@@ -3,15 +3,17 @@ package dev.vellum.preview;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.input.InputHandler;
+import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.preview.host.PreviewHost;
 
 import java.util.function.Consumer;
 
 /**
- * A page being previewed: loaded through the {@link PreviewHost}, then driven, painted and given input every
- * frame. When the engine fails the document stops ({@link Document#error()}), and the failure is shown in its place
- * until the next reload, so the previewer keeps running while the page or the engine is broken.
+ * A page being previewed: loaded through the {@link PreviewHost}, then driven, painted (with its {@code title}
+ * tooltips) and given input every frame. When the engine fails the document stops ({@link Document#error()}), and
+ * the failure is shown in its place until the next reload, so the previewer keeps running while the page or the
+ * engine is broken.
  */
 final class PageScene implements Scene {
     private final PreviewHost host;
@@ -63,9 +65,13 @@ final class PageScene implements Scene {
         document.frame(nowMs);
     }
 
+    /** The page, then its {@code title} tooltip if one is up (drawn as in game). */
     @Override
     public void paint(Canvas canvas) {
-        if (document != null) document.paint(canvas);
+        if (document == null) return;
+        document.paint(canvas);
+        Tooltip tooltip = document.error() == null ? document.input().tooltip() : null;
+        if (tooltip != null) TooltipPainter.paint(canvas, host, tooltip, document.viewportWidth(), document.viewportHeight());
     }
 
     @Override

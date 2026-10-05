@@ -1,5 +1,6 @@
 package dev.vellum.preview;
 
+import dev.vellum.engine.event.Modifiers;
 import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -56,6 +58,27 @@ class PreviewSnapshotTest {
             assertNull(scene.error(), () -> page + " failed: " + scene.error());
             String name = page.getFileName().toString().replaceFirst("\\.html$", "");
             Snapshots.assertMatches("page-" + name, image);
+        }
+    }
+
+    /** A {@code title-json} tooltip: hovered, then drawn half a second later, wrapped and coloured as in game. */
+    @Test
+    void titleTooltipMatchesGolden() throws IOException, URISyntaxException {
+        assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
+        Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/tooltip.html").toURI());
+        try (MinecraftAssets assets = MinecraftAssets.open(List.of(), JAR)) {
+            MinecraftFont font = new MinecraftFont(assets);
+            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null);
+            FrameRenderer renderer = new FrameRenderer(assets, font);
+            renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 0, null);
+            float[] at = scene.document().getElementById("rich").getBoundingClientRect();
+            scene.input(in -> in.mouseMove(at[0] + 10, at[1] + 5, Modifiers.NONE));
+            renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 400, null);
+            assertNull(scene.document().input().tooltip(), "not before the delay");
+            assertTrue(scene.needsFrame(520), "the delay ending needs a frame");
+            BufferedImage image = renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 520, null);
+            assertNull(scene.error(), () -> "failed: " + scene.error());
+            Snapshots.assertMatches("tooltip", image);
         }
     }
 
