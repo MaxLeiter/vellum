@@ -49,7 +49,7 @@ class BackgroundsTest {
 
     @Test
     void repeatedTexturesAreOneDrawWithWrappingUvs() {
-        canvas.imageSizes.put("a.png", new float[] {16, 16});
+        t.host.imageSizes.put("a.png", new float[] {16, 16});
         RecordingCanvas c = paint(BackgroundLayer.simple(new Image.Url("a.png")));
         assertEquals(1, c.ops("drawImage").size());
         assertArrayEquals(new float[] {0, 0, 40, 20, 0, 0, 2.5f, 1.25f}, c.ops("drawImage").getFirst().args(), 1e-5f);
@@ -57,7 +57,7 @@ class BackgroundsTest {
 
     @Test
     void positionedRepeatStartsMidTile() {
-        canvas.imageSizes.put("a.png", new float[] {16, 16});
+        t.host.imageSizes.put("a.png", new float[] {16, 16});
         RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.px(4), Length.ZERO,
                 Repeat.REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         // Tiles start at 4 - 16: UVs 0.75..3.25, which samples the same as -0.25..2.25 with REPEAT.
@@ -66,7 +66,7 @@ class BackgroundsTest {
 
     @Test
     void noRepeatCentred() {
-        canvas.imageSizes.put("a.png", new float[] {16, 16});
+        t.host.imageSizes.put("a.png", new float[] {16, 16});
         RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.PERCENT_50,
                 Length.PERCENT_50, Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         assertArrayEquals(new float[] {12, 2, 16, 16, 0, 0, 1, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
@@ -74,7 +74,7 @@ class BackgroundsTest {
 
     @Test
     void coverAndContainKeepTheAspectRatio() {
-        canvas.imageSizes.put("a.png", new float[] {32, 8});
+        t.host.imageSizes.put("a.png", new float[] {32, 8});
         RecordingCanvas c = paint(layer(new Image.Url("a.png"), "contain", Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
                 Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         assertArrayEquals(new float[] {0, 0, 40, 10, 0, 0, 1, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
@@ -87,7 +87,7 @@ class BackgroundsTest {
 
     @Test
     void oneAutoSideKeepsTheRatio() {
-        canvas.imageSizes.put("a.png", new float[] {16, 8});
+        t.host.imageSizes.put("a.png", new float[] {16, 8});
         RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.px(32), Length.AUTO, Length.ZERO, Length.ZERO,
                 Repeat.NO_REPEAT, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         assertArrayEquals(new float[] {0, 0, 32, 16, 0, 0, 1, 1}, c.ops("drawImage").getFirst().args(), 1e-5f);
@@ -95,7 +95,7 @@ class BackgroundsTest {
 
     @Test
     void spaceSpreadsWholeTiles() {
-        canvas.imageSizes.put("a.png", new float[] {16, 16});
+        t.host.imageSizes.put("a.png", new float[] {16, 16});
         RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
                 Repeat.SPACE, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         List<RecordingCanvas.Call> draws = c.ops("drawImage");
@@ -106,7 +106,7 @@ class BackgroundsTest {
 
     @Test
     void roundRescalesTilesToFit() {
-        canvas.imageSizes.put("a.png", new float[] {16, 16});
+        t.host.imageSizes.put("a.png", new float[] {16, 16});
         RecordingCanvas c = paint(layer(new Image.Url("a.png"), null, Length.AUTO, Length.AUTO, Length.ZERO, Length.ZERO,
                 Repeat.ROUND, Repeat.NO_REPEAT, BackgroundLayer.Box.BORDER_BOX));
         // 40 / 16 = 2.5 rounds to 3 tiles of 13.3px

@@ -14,8 +14,11 @@ import dev.vellum.engine.layout.LayoutEngine;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.paint.Painter;
+import dev.vellum.engine.replaced.ReplacedElements;
 import dev.vellum.engine.script.ScriptRuntime;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +51,9 @@ public final class Document extends Node {
     private final AnimationEngine animationEngine;
     private final Painter painter;
     private final InputHandler input;
+    private final ReplacedElements replacedElements;
+    /** The content of every replaced element in the document (and of canvases drawn on before insertion). */
+    private final List<ReplacedContent> replaced = new ArrayList<>();
     private ScriptRuntime scripts;
     private String readyState = "loading";
     private boolean closed;
@@ -56,9 +62,10 @@ public final class Document extends Node {
     private float viewportWidth = 320, viewportHeight = 240;
     private float devicePixelRatio = 1;
     boolean styleDirty = true, layoutDirty = true;
+    /** Something that is painted changed without needing a restyle or relayout (a scroll offset, canvas pixels). */
+    private boolean repaint = true;
     /** A layout ran (perhaps in a script's flush) whose follow-up work waits for the next frame. */
     private boolean laidOut;
-    private int version;
     /** Listeners plus inline {@code on*} handlers in this document, by lower-case event type. */
     private final Map<String, int[]> handlers = new HashMap<>();
     private int domVersion;
@@ -75,6 +82,7 @@ public final class Document extends Node {
         this.animationEngine = new AnimationEngine(this);
         this.painter = new Painter(this);
         this.input = new InputHandler(this);
+        this.replacedElements = new ReplacedElements(host);
     }
 
     /** Creates an empty document with {@code <html><head></head><body></body></html>}, without loading it. */
@@ -174,9 +182,13 @@ public final class Document extends Node {
 
     // ---- Loading ----
 
-    /** Scripts run after parsing in document order (like {@code defer}), then templates bind, then the events. */
+    /**
+     * After parsing, {@code <mc-text>} elements are expanded, then scripts run in document order (like {@code defer}),
+     * then templates bind, then the events.
+     */
     private void load() {
         readyState = "interactive";
+        for (Element e : getElementsByTagName(MinecraftText.TAG)) MinecraftText.expand(this, e);
         scripts = host.createScriptRuntime(this);
         if (scripts != null && initialData != null) scripts.receive("data", initialData);
         for (Element script : getElementsByTagName("script")) runScript(script);
@@ -270,30 +282,42 @@ public final class Document extends Node {
         if (!layoutDirty) return;
         layoutDirty = false;
         layoutEngine.layout();
-        version++;
         laidOut = true;
     }
 
+    /** Lets replaced content catch up (canvas uploads, images that resized); true if a natural size changed. */
     private boolean updateReplaced() {
-        boolean[] changed = {false};
-        forEachElement(e -> {
-            if (e.replaced != null && e.replaced.update()) changed[0] = true;
-        });
-        return changed[0];
+        boolean changed = false;
+        for (int i = 0; i < replaced.size(); i++) changed |= replaced.get(i).update();
+        return changed;
     }
 
     /** Paints the current layout. Call after {@link #frame}. */
     public void paint(Canvas canvas) {
+        repaint = false;
         run(() -> painter.paint(canvas));
+    }
+
+    /**
+     * Whether a frame at {@code nowMs} would change what is painted: a pending restyle, relayout or repaint, due
+     * timers or animation-frame callbacks, running animations, smooth scrolls or drags, a blinking caret, or template
+     * updates. Hosts that can idle (the previewer) skip frames otherwise, and render after their own input.
+     */
+    public boolean needsFrame(double nowMs) {
+        if (error != null || closed) return false;
+        return styleDirty || layoutDirty || laidOut || repaint || scheduler.hasWork(nowMs)
+                || animationEngine.isAnimating() || input.isActive() || scripts != null && scripts.needsFrame();
+    }
+
+    /** Something painted changed that restyle and relayout do not track (a scroll offset, canvas pixels). */
+    public void invalidatePaint() {
+        repaint = true;
     }
 
     /** The topmost element (and box) at a viewport point, as painted; null when nothing is there. */
     public HitResult hitTest(float x, float y) {
         return guarded(() -> painter.hitTest(x, y), null);
     }
-
-    /** Incremented on every relayout; hosts use it to know when to reposition things (e.g. container slots). */
-    public int layoutVersion() { return version; }
 
     /**
      * Incremented on every change to the tree, attributes, text or form state; not on hover, active or focus
@@ -356,9 +380,46 @@ public final class Document extends Node {
     /** {@code child} was inserted into this connected document; {@code arrived} unless it only moved within it. */
     void inserted(Node child, boolean arrived) {
         invalidate(true);
-        if (!arrived || scripts == null || readyState.equals("loading") || child.isInert()) return;
+        if (!arrived || child.isInert()) return;
+        boolean loaded = !readyState.equals("loading");
+        connect(child, loaded);
+        if (!loaded || scripts == null) return;
         if (child instanceof Element e) runScript(e);
         for (Element script : child.getElementsByTagName("script")) runScript(script);
+    }
+
+    /**
+     * What arriving in the document brings an element: replaced elements get their content, and once the page has
+     * loaded (the parser's are expanded by {@link #load}) {@code <mc-text>} is expanded.
+     */
+    private void connect(Node node, boolean loaded) {
+        if (node instanceof Element e) {
+            if (e.replaced == null) addReplaced(e);
+            // An expanded mc-text's new children were connected as they were inserted.
+            if (loaded && e.tagName().equals(MinecraftText.TAG) && MinecraftText.expand(this, e)) return;
+            if (e.hasInertContent()) return;
+        }
+        for (int i = 0; i < node.children.size(); i++) connect(node.children.get(i), loaded);
+    }
+
+    private void addReplaced(Element e) {
+        e.replaced = replacedElements.create(e);
+        if (e.replaced != null) replaced.add(e.replaced);
+    }
+
+    /**
+     * The element's replaced content, created now if it has none: a canvas that a script draws on before inserting
+     * it. Content made for an element outside the document lives until the document closes. Null for elements that
+     * are not replaced.
+     */
+    public ReplacedContent replacedContent(Element element) {
+        if (element.replaced == null && element.ownerDocument() == this && !closed) addReplaced(element);
+        return element.replaced;
+    }
+
+    /** The content of the replaced elements, for lookups such as {@code canvas:id} images. */
+    public List<ReplacedContent> replacedContents() {
+        return Collections.unmodifiableList(replaced);
     }
 
     /** {@code node} is about to leave the document (not just move within it). */
@@ -368,18 +429,28 @@ public final class Document extends Node {
         disposeReplaced(node);
     }
 
-    /** Disposes the replaced content in a subtree; a failing dispose is reported and the rest still disposed. */
+    /** Disposes the replaced content in a subtree. */
     private void disposeReplaced(Node node) {
         if (node instanceof Element e && e.replaced != null) {
-            ReplacedContent content = e.replaced;
-            e.replaced = null;
-            try {
-                content.dispose();
-            } catch (RuntimeException ex) {
-                reportError("Error disposing <" + e.tagName() + ">", ex);
+            for (int i = 0; i < replaced.size(); i++) {
+                if (replaced.get(i) == e.replaced) { // by identity: contents may be equal records
+                    replaced.remove(i);
+                    break;
+                }
             }
+            dispose(e.replaced, e);
+            e.replaced = null;
         }
         for (Node c : node.children) disposeReplaced(c);
+    }
+
+    /** A failing dispose is reported, and the rest still disposed. */
+    private void dispose(ReplacedContent content, Object owner) {
+        try {
+            content.dispose();
+        } catch (RuntimeException ex) {
+            reportError("Error disposing " + owner, ex);
+        }
     }
 
     /**
@@ -387,14 +458,15 @@ public final class Document extends Node {
      * source of replaced elements and an input's type; other layout changes come from the restyle.
      */
     void attributeChanged(Element element, String name) {
+        if (element.replaced != null) element.replaced.attributeChanged(name); // also a canvas outside the document
         if (!element.isConnected()) return;
         boolean layout = switch (name) {
-            case "width", "height", "src" -> host.isReplacedTag(element.tagName());
+            case "width", "height", "src" -> element.replaced != null;
             case "type" -> element.tagName().equals("input");
             default -> false;
         };
         invalidate(layout);
-        if (element.replaced != null) element.replaced.attributeChanged(name);
+        if (MinecraftText.expandsOn(element, name) && !readyState.equals("loading")) MinecraftText.expand(this, element);
     }
 
     /**
@@ -415,6 +487,7 @@ public final class Document extends Node {
     }
 
     void scrolled(Element element) {
+        repaint = true;
         element.dispatchEvent(new Event("scroll", false, false));
     }
 
@@ -496,6 +569,8 @@ public final class Document extends Node {
         closed = true;
         scheduler.clear();
         if (scripts != null) scripts.dispose();
-        disposeReplaced(this);
+        for (ReplacedContent content : replaced) dispose(content, "replaced content");
+        replaced.clear();
+        forEachElement(e -> e.replaced = null);
     }
 }

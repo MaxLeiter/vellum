@@ -2,7 +2,7 @@ package dev.vellum.mod.client;
 
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McFontMetrics;
-import dev.vellum.mod.client.replaced.McReplaced;
+import dev.vellum.mod.client.render.McImages;
 import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.DataPayload;
 import dev.vellum.mod.net.OpenPayload;
@@ -61,7 +61,7 @@ public final class VellumClient {
     /** Resources reloaded (F3+T, resource packs): fonts and images may have changed, so reload every open page. */
     public static void onResourceReload() {
         McFontMetrics.INSTANCE.clearCache();
-        McReplaced.clearCaches();
+        McImages.clearCaches();
         DocumentDriver.reloadAll();
     }
 

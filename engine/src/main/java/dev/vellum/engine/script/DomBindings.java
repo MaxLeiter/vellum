@@ -57,6 +57,11 @@ final class DomBindings {
         fragment = new HostClass<>(rt, "DocumentFragment", DocumentFragment.class, node, null).expose("DocumentFragment");
     }
 
+    /** The member table of the Element prototype, for bindings that add element members (canvas). */
+    Members<Element> elementMembers() {
+        return element.members();
+    }
+
     /** The node's wrapper, created once. */
     HostObject wrap(Node n) {
         if (n.scriptWrapper instanceof HostObject w) return w;

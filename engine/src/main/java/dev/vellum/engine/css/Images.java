@@ -20,7 +20,7 @@ final class Images {
         int m = r.mark();
         ComponentValue v = r.next();
         Image image = null;
-        if (v instanceof Token t && t.is(Type.URL)) image = new Image.Url(ctx.resolveUrl(t.value));
+        if (v instanceof Token t && t.is(Type.URL)) image = Image.ofUrl(t.value, ctx::resolveUrl);
         else if (v instanceof Func f) image = function(f, ctx);
         if (image == null) r.reset(m);
         return image;
@@ -29,7 +29,7 @@ final class Images {
     private static Image function(Func f, ValueContext ctx) {
         return switch (f.name()) {
             case "url" -> f.args().size() == 1 && f.args().get(0) instanceof Token s && s.is(Type.STRING)
-                    ? new Image.Url(ctx.resolveUrl(s.value)) : null;
+                    ? Image.ofUrl(s.value, ctx::resolveUrl) : null;
             case "sprite" -> sprite(f.args());
             case "linear-gradient" -> linear(f, ctx, false);
             case "repeating-linear-gradient" -> linear(f, ctx, true);
@@ -210,6 +210,7 @@ final class Images {
         return switch (image) {
             case Image.Url u -> "url(" + CssText.string(u.url()) + ")";
             case Image.Sprite s -> "sprite(" + CssText.string(s.id()) + ")";
+            case Image.Canvas c -> "url(" + CssText.string(Image.CANVAS_SCHEME + c.id()) + ")";
             case Image.LinearGradient g -> (g.repeating() ? "repeating-" : "") + "linear-gradient("
                     + CssText.deg(g.angleDeg()) + ", " + stops(g.stops()) + ")";
             case Image.RadialGradient g -> "radial-gradient(" + (g.circle() ? "circle" : "ellipse") + " at "

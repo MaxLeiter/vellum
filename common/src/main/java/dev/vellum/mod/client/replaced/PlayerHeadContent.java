@@ -39,7 +39,7 @@ final class PlayerHeadContent extends McReplaced {
     }
 
     @Override
-    public void draw(McCanvas canvas, Element element, float x, float y, float width, float height) {
+    protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Identifier skin = Minecraft.getInstance().playerSkinRenderCache().getOrDefault(profile).playerSkin().body().texturePath();
         float size = Math.min(width, height);
         x += (width - size) / 2;

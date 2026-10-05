@@ -1,16 +1,12 @@
 package dev.vellum.engine.paint;
 
-import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontSpec;
-import dev.vellum.engine.host.ReplacedContent;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,7 +33,6 @@ final class RecordingCanvas implements Canvas {
     final List<Call> calls = new ArrayList<>();
     float devicePixel = 1;
     boolean tessellate;
-    final Map<String, float[]> imageSizes = new HashMap<>();
 
     private Affine matrix = new Affine();
     private float alpha = 1;
@@ -83,13 +78,9 @@ final class RecordingCanvas implements Canvas {
         return ops("fillQuads").stream().mapToInt(c -> c.quads.length / 8).sum();
     }
 
+    /** The signed area of a quad (not twice it). */
     static double signedArea(float[] q) {
-        double s = 0;
-        for (int i = 0; i < 4; i++) {
-            int j = (i + 1) % 4;
-            s += (double) q[2 * i] * q[2 * j + 1] - (double) q[2 * j] * q[2 * i + 1];
-        }
-        return s / 2;
+        return Shapes.signedArea(q, 0, 4) / 2.0;
     }
 
     // ---- State ----
@@ -198,20 +189,9 @@ final class RecordingCanvas implements Canvas {
     }
 
     @Override
-    public float[] imageSize(String url) {
-        return imageSizes.get(url);
-    }
-
-    @Override
     public void drawSprite(String spriteId, float x, float y, float width, float height, int tint) {
         record("drawSprite", bounds(x, y, width, height), new float[] {x, y, width, height}, tint, spriteId, null, null,
                 null, 0, false);
-    }
-
-    @Override
-    public void drawReplaced(ReplacedContent content, Element element, float x, float y, float width, float height) {
-        record("drawReplaced", bounds(x, y, width, height), new float[] {x, y, width, height}, 0, element.tagName(),
-                null, null, null, 0, false);
     }
 
     @Override

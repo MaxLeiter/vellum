@@ -1,9 +1,13 @@
 package dev.vellum.engine.host;
 
+import dev.vellum.engine.paint.Canvas;
+
 /**
- * Content of a replaced element, supplied by the host: images, Minecraft items, container slots, entities, canvases.
- * The engine lays it out like an {@code <img>} (intrinsic size, object-fit) and asks the canvas to draw it via
- * {@link dev.vellum.engine.paint.Canvas#drawReplaced}, where the host backend recognises its own implementation.
+ * The content of a replaced element: an image, a canvas, or a Minecraft item, slot, entity or head. The engine
+ * creates it when the element enters the document (from its own {@code img}, {@code sprite} and {@code canvas} or
+ * the {@link Host#replacedElements host's elements}), keeps it while the element moves within the document, and
+ * disposes it when the element leaves. Layout sizes it like an image (natural size, CSS size, object-fit); the
+ * painter calls {@link #paint} with the box it fitted.
  */
 public interface ReplacedContent {
     /** Intrinsic width in px, or NaN if none. */
@@ -11,6 +15,13 @@ public interface ReplacedContent {
 
     /** Intrinsic height in px, or NaN if none. */
     float intrinsicHeight();
+
+    /**
+     * Paints into the box {@code (x, y, width, height)}, in GUI px in the canvas's current transform. Content that
+     * needs more than {@link Canvas} offers (a Minecraft item) may expect its host's canvas: a document is painted
+     * on the canvas of the host that made its content.
+     */
+    void paint(Canvas canvas, float x, float y, float width, float height);
 
     /** Called when an attribute of the element changes, so the content can reload (e.g. a new src or item id). */
     default void attributeChanged(String name) {}

@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -197,6 +198,39 @@ public final class MinecraftAssets implements AutoCloseable {
     /** A GUI sprite by id: {@code ns:path} is {@code ns:textures/gui/sprites/path.png}, with its scaling metadata. */
     public Optional<Texture> sprite(String id) {
         return texture(assetUrl(id, "textures/gui/sprites/", ".png"));
+    }
+
+    /** Makes {@code texture} the image at {@code url} until {@link #release}, as Minecraft registers dynamic textures. */
+    public void register(String url, Texture texture) {
+        textures.put(url, Optional.of(texture));
+    }
+
+    public void release(String url) {
+        textures.remove(url);
+    }
+
+    /**
+     * The language file {@code lang/<language>.json} of every namespace on the stack, merged; earlier roots win, as
+     * resource packs do.
+     */
+    public Map<String, String> translations(String language) {
+        Map<String, String> merged = new HashMap<>();
+        for (Path root : roots.reversed()) {
+            Path assets = root.resolve("assets");
+            if (!Files.isDirectory(assets)) continue;
+            try (Stream<Path> namespaces = Files.list(assets)) {
+                for (Path namespace : namespaces.toList()) {
+                    Path file = namespace.resolve("lang").resolve(language + ".json");
+                    if (!Files.isRegularFile(file)) continue;
+                    JsonParser.parseString(Files.readString(file)).getAsJsonObject().entrySet().forEach(e -> {
+                        if (e.getValue().isJsonPrimitive()) merged.put(e.getKey(), e.getValue().getAsString());
+                    });
+                }
+            } catch (IOException | RuntimeException e) {
+                warn("Cannot read the " + language + " language files in " + root + ": " + e.getMessage());
+            }
+        }
+        return merged;
     }
 
     private Optional<Texture> loadTexture(String url) {

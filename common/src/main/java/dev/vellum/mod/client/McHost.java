@@ -4,12 +4,15 @@ import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.Host;
+import dev.vellum.engine.host.PixelSurface;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McFontMetrics;
+import dev.vellum.mod.client.render.McImages;
+import dev.vellum.mod.client.render.McSurface;
 import dev.vellum.mod.client.replaced.McReplaced;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.I18n;
@@ -20,11 +23,14 @@ import net.minecraft.sounds.SoundEvent;
 import org.jspecify.annotations.Nullable;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
- * The engine's {@link Host} in Minecraft, one per document: resources, fonts, Minecraft elements, sounds, clipboard
- * and translations here; closing, navigation, messages and the cursor go to the document's {@link DocumentDriver}.
+ * The engine's {@link Host} in Minecraft, one per document: resources, fonts, image sizes, canvas textures, Minecraft
+ * elements and text, sounds, clipboard and translations here; closing, navigation, messages and the cursor go to the document's {@link DocumentDriver}.
  */
 final class McHost implements Host {
     private final DocumentDriver driver;
@@ -45,13 +51,28 @@ final class McHost implements Host {
     }
 
     @Override
-    public @Nullable ReplacedContent createReplaced(Element element) {
-        return McReplaced.create(element);
+    public Map<String, Function<Element, ReplacedContent>> replacedElements() {
+        return McReplaced.ELEMENTS;
     }
 
     @Override
-    public boolean isReplacedTag(String tag) {
-        return McReplaced.TAGS.contains(tag);
+    public float @Nullable [] imageSize(String url) {
+        return McImages.textureSize(url);
+    }
+
+    @Override
+    public float @Nullable [] spriteSize(String id) {
+        return McImages.spriteSize(id);
+    }
+
+    @Override
+    public PixelSurface createSurface(int width, int height) {
+        return new McSurface(width, height);
+    }
+
+    @Override
+    public @Nullable List<TextRun> formatText(String json) {
+        return McText.runs(json);
     }
 
     @Override

@@ -5,6 +5,10 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.style.Cursor;
 
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
  * Everything the engine needs from its environment. Minecraft, the test harness and the standalone previewer each
  * provide one. Only {@link #fonts()} and {@link #loadText} are required; the rest have no-op defaults.
@@ -24,16 +28,32 @@ public interface Host {
     }
 
     /**
-     * Creates replaced content for an element, or null if the host does not handle this element. Called for
-     * {@code img}, {@code canvas}, and any tag the host claims (Minecraft adds {@code item}, {@code slot},
-     * {@code entity}, {@code player-head}...).
+     * The host's own replaced elements, by tag, each with the factory of its content (Minecraft: {@code item},
+     * {@code slot}, {@code entity}, {@code player-head}). The engine provides {@code img}, {@code sprite} and
+     * {@code canvas} itself; these tags cannot be overridden. Asked once per document.
      */
-    default ReplacedContent createReplaced(Element element) { return null; }
+    default Map<String, Function<Element, ReplacedContent>> replacedElements() { return Map.of(); }
 
-    /** Tags whose elements are replaced (and therefore never lay out their children). */
-    default boolean isReplacedTag(String tag) {
-        return tag.equals("img") || tag.equals("canvas");
-    }
+    /**
+     * The natural size {width, height} in px of the texture at {@code url} (already resolved), or null when unknown.
+     * Images use it, and {@code background-size}. The array may be shared: do not modify it.
+     */
+    default float[] imageSize(String url) { return null; }
+
+    /** The natural size {width, height} in px of a GUI sprite, or null when unknown. As {@link #imageSize}. */
+    default float[] spriteSize(String id) { return null; }
+
+    /** The pixels for a {@code <canvas>} of this size (1 to 2048 px a side). By default kept in memory, undrawn. */
+    default PixelSurface createSurface(int width, int height) { return new ArraySurface(width, height); }
+
+    /**
+     * Minecraft text for {@code <mc-text json>}: a chat component (JSON) as runs of text, each with the CSS that
+     * styles it (empty for none), or null when the host cannot read it (the element then keeps its content).
+     */
+    default List<TextRun> formatText(String json) { return null; }
+
+    /** A run of formatted text: its text, and CSS declarations for its style ("" for none). */
+    record TextRun(String text, String css) {}
 
     /** Creates the script runtime for a document, or null to disable scripting. */
     default ScriptRuntime createScriptRuntime(Document document) { return null; }

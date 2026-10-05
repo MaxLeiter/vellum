@@ -23,6 +23,8 @@ public class TestHost implements Host {
     public final List<String> sounds = new ArrayList<>();
     public final List<String[]> sent = new ArrayList<>();
     public final List<String> navigations = new ArrayList<>();
+    /** Natural sizes of textures by URL, for {@link #imageSize}. */
+    public final Map<String, float[]> imageSizes = new HashMap<>();
     public String clipboard = "";
     public boolean failOnError = true;
     public boolean closed;
@@ -52,6 +54,9 @@ public class TestHost implements Host {
 
     @Override
     public String loadText(String url) { return resources.get(url); }
+
+    @Override
+    public float[] imageSize(String url) { return imageSizes.get(url); }
 
     @Override
     public ScriptRuntime createScriptRuntime(Document document) {

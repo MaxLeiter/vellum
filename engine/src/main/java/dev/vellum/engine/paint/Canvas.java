@@ -1,8 +1,6 @@
 package dev.vellum.engine.paint;
 
-import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontSpec;
-import dev.vellum.engine.host.ReplacedContent;
 
 /**
  * The drawing backend. The {@link Painter} turns the box tree into calls on this interface each frame; Minecraft
@@ -77,7 +75,8 @@ public interface Canvas {
 
     /**
      * Draws (part of) an image. UVs are normalised 0..1. {@code tint} is multiplied in (white for none).
-     * Hosts resolve {@code url} to a texture; unknown images draw nothing (or a placeholder).
+     * {@code url} is a texture URL (the engine handles {@code sprite:} and {@code canvas:} images itself; a canvas is
+     * drawn through its surface's URL). Unknown images draw nothing (or a placeholder).
      */
     void drawImage(String url, float x, float y, float width, float height,
                    float u0, float v0, float u1, float v1, int tint, boolean smooth);
@@ -87,16 +86,6 @@ public interface Canvas {
      * sprites may treat the id as an image URL.
      */
     void drawSprite(String spriteId, float x, float y, float width, float height, int tint);
-
-    /**
-     * The intrinsic size {width, height} in px of the image {@link #drawImage} would draw for {@code url}, or null
-     * when unknown (not loaded yet, or a host without the information). Used for {@code background-size}; images of
-     * unknown size fill the background positioning area. The array may be reused by the backend.
-     */
-    default float[] imageSize(String url) { return null; }
-
-    /** Draws host-provided replaced content (items, entities, slots...) into the given content box. */
-    void drawReplaced(ReplacedContent content, Element element, float x, float y, float width, float height);
 
     // ---- Shapes with default tessellation ----
 

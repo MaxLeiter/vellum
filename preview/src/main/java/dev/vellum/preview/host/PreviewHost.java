@@ -3,10 +3,13 @@ package dev.vellum.preview.host;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.Host;
+import dev.vellum.engine.host.PixelSurface;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
+import dev.vellum.preview.render.PreviewSurface;
+import dev.vellum.preview.render.Texture;
 
 import java.awt.HeadlessException;
 import java.awt.Toolkit;
@@ -17,19 +20,29 @@ import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.IllegalFormatException;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * The previewer's {@link Host}. Text and images come from the {@link MinecraftAssets} stack. A page that lives under
  * {@code <root>/assets/<ns>/} is addressed as {@code ns:path} with {@code <root>} on the stack, so its {@code ns:}
  * references resolve as in game; other pages are addressed by file path and resolve relative paths on disk.
+ * Translations are the stack's {@code en_us} language files; canvases are images registered with the assets.
  */
 public final class PreviewHost implements Host {
+    private static final float[] UNKNOWN = new float[0];
+
     private final MinecraftAssets assets;
     private final MinecraftFont fonts;
+    private final Map<String, Function<Element, ReplacedContent>> replacedElements;
+    private final Map<String, float[]> imageSizes = new ConcurrentHashMap<>(), spriteSizes = new ConcurrentHashMap<>();
+    private Map<String, String> translations;
     private final Set<Path> loadedFiles = ConcurrentHashMap.newKeySet();
     private Consumer<String> navigator = url -> {};
     /** The clipboard when there is no system clipboard (headless). */
@@ -38,6 +51,7 @@ public final class PreviewHost implements Host {
     public PreviewHost(MinecraftAssets assets, MinecraftFont fonts) {
         this.assets = assets;
         this.fonts = fonts;
+        this.replacedElements = ReplacedElements.of(assets, fonts);
     }
 
     public MinecraftAssets assets() { return assets; }
@@ -106,13 +120,44 @@ public final class PreviewHost implements Host {
     }
 
     @Override
-    public ReplacedContent createReplaced(Element element) {
-        return ReplacedElements.create(element, assets, fonts);
+    public Map<String, Function<Element, ReplacedContent>> replacedElements() {
+        return replacedElements;
     }
 
     @Override
-    public boolean isReplacedTag(String tag) {
-        return ReplacedElements.TAGS.contains(tag);
+    public float[] imageSize(String url) {
+        return known(imageSizes.computeIfAbsent(url, u -> size(assets.texture(u))));
+    }
+
+    @Override
+    public float[] spriteSize(String id) {
+        return known(spriteSizes.computeIfAbsent(id, i -> size(assets.sprite(i))));
+    }
+
+    private static float[] size(Optional<Texture> texture) {
+        return texture.map(t -> new float[] {t.naturalWidth(), t.naturalHeight()}).orElse(UNKNOWN);
+    }
+
+    private static float[] known(float[] size) {
+        return size == UNKNOWN ? null : size;
+    }
+
+    @Override
+    public PixelSurface createSurface(int width, int height) {
+        return new PreviewSurface(assets, width, height);
+    }
+
+    /** {@code en_us} from every namespace on the stack, with Minecraft's {@code %s} / {@code %1$s} arguments. */
+    @Override
+    public String translate(String key, String... args) {
+        if (translations == null) translations = assets.translations("en_us");
+        String text = translations.get(key);
+        if (text == null) return key;
+        try {
+            return String.format(Locale.ROOT, text, (Object[]) args);
+        } catch (IllegalFormatException e) {
+            return text;
+        }
     }
 
     @Override

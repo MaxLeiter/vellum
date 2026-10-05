@@ -28,7 +28,7 @@ public final class LayoutEngine {
     /** Lays out the whole document against the current viewport. */
     public void layout() {
         Element html = document.documentElement();
-        LayoutBox box = html == null ? null : new BoxTreeBuilder(document.host()).build(html);
+        LayoutBox box = html == null ? null : new BoxTreeBuilder().build(html);
         root = box;
         if (box == null) return;
 
