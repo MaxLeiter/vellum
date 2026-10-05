@@ -1,0 +1,465 @@
+<!doctype html>
+<html>
+<head>
+  <title>Vellum showcase</title>
+  <style>
+    /* The showcase gallery: one card per demo, each with a tiny CSS sketch of the screen it opens. */
+    :root {
+      --wall: #121018;
+      --card: #1c1a26;
+      --line: rgba(255, 255, 255, 0.1);
+      --ink: #ece6d6;
+      --muted: #8d88a0;
+      --gold: #ffd36b;
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 10px;
+      color: var(--ink);
+      background: radial-gradient(ellipse at 50% 0, #2a2340, rgba(0, 0, 0, 0) 70%), var(--wall);
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      flex: none;
+      animation: rise 500ms ease-out both;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--ink);
+      text-shadow: 1px 1px 0 #6a5a8a, 2px 2px 0 #2a2040;
+    }
+
+    header span {
+      flex: 1;
+      padding-bottom: 1px;
+      color: var(--muted);
+    }
+
+    header kbd {
+      padding-bottom: 1px;
+      color: var(--muted);
+      font-family: minecraft:default;
+    }
+
+    .grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      /* minmax(0, 1fr): plain 1fr tracks would grow to fit the longest unbreakable caption. */
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    /* A card: sketch on top, caption below. Hover lifts it and lights the frame in the card's accent. */
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 3px 3px 4px;
+      color: var(--ink);
+      text-decoration: none;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      transition: transform 160ms ease-out, border-color 160ms, box-shadow 200ms;
+      animation: rise 450ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+    }
+
+    .card:nth-child(1) { animation-delay: 80ms; --accent: #ff9a52; }
+    .card:nth-child(2) { animation-delay: 140ms; --accent: #d38cff; }
+    .card:nth-child(3) { animation-delay: 200ms; --accent: #ffaa00; }
+    .card:nth-child(4) { animation-delay: 260ms; --accent: #ff5555; }
+    .card:nth-child(5) { animation-delay: 320ms; --accent: #c8955a; }
+    .card:nth-child(6) { animation-delay: 380ms; --accent: #55ff55; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+    }
+
+    .card:hover, .card:focus-visible {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+
+    .card:hover .sketch item {
+      animation: hop 500ms ease-in-out infinite;
+    }
+
+    @keyframes hop {
+      50% { transform: translateY(-2px); }
+    }
+
+    .caption {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 1px;
+    }
+
+    .caption b {
+      font-weight: 400;
+      color: var(--accent);
+    }
+
+    .card small {
+      padding: 0 1px;
+      color: var(--muted);
+      font-size: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ---------- The sketches ---------- */
+
+    .sketch {
+      position: relative;
+      flex: 1;
+      min-height: 30px;
+      overflow: hidden;
+      border-radius: 2px;
+    }
+
+    .sketch > * {
+      position: absolute;
+      display: block;
+    }
+
+    /* Title screen: dusk sky, a square sun, two rotated-square peaks, a tiny logo. */
+    .s-title {
+      background: linear-gradient(#1c1645, #6a2f78 50%, #ee7a4c 85%, #ffc56e);
+    }
+
+    .s-title .sun {
+      right: 26%;
+      bottom: 30%;
+      width: 8px;
+      height: 8px;
+      background: #fff2b8;
+      box-shadow: 0 0 0 2px rgba(255, 214, 120, 0.4), 0 0 8px 4px rgba(255, 150, 70, 0.4);
+    }
+
+    .s-title .peak {
+      bottom: -20px;
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(225deg, rgba(20, 0, 40, 0.28) 50%, rgba(0, 0, 0, 0) 50%), #7a4f8f;
+      transform: rotate(45deg);
+    }
+
+    .s-title .ground {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 8px;
+      background: #24162f;
+    }
+
+    .s-title .logo {
+      left: 6px;
+      top: 6px;
+      color: var(--ink);
+      text-shadow: 1px 1px 0 #66518f;
+    }
+
+    .s-title .splash {
+      left: 44px;
+      top: 14px;
+      color: mc-yellow;
+      transform: rotate(-20deg) scale(0.75);
+      animation: pulse 900ms ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      50% { transform: rotate(-20deg) scale(0.85); }
+    }
+
+    /* HUD kit: the End, a boss bar and a toast. */
+    .s-hud {
+      background: linear-gradient(rgba(6, 2, 12, 0.85), rgba(40, 14, 60, 0.7)), url(minecraft:textures/environment/end_sky.png);
+      background-size: auto, 32px 32px;
+    }
+
+    .s-hud .bar {
+      left: 20%;
+      right: 20%;
+      top: 6px;
+      height: 3px;
+      background: repeating-linear-gradient(90deg, #8b2fd6 0, #e05cff 12px, #8b2fd6 24px);
+      box-shadow: 0 0 0 1px #1a0628;
+      animation: flow 1.2s linear infinite;
+    }
+
+    @keyframes flow {
+      50% { opacity: 0.75; }
+    }
+
+    .s-hud .pillar {
+      bottom: 0;
+      width: 8px;
+      background: #140a1e;
+    }
+
+    .s-hud .toast {
+      right: 4px;
+      bottom: 6px;
+      width: 46px;
+      height: 14px;
+      background: #212121;
+      border: 1px solid #555;
+      border-radius: 1px;
+    }
+
+    .s-hud .toast item {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 8px;
+      height: 8px;
+    }
+
+    .s-hud .toast i {
+      position: absolute;
+      left: 13px;
+      top: 3px;
+      width: 26px;
+      height: 2px;
+      background: mc-yellow;
+      box-shadow: 0 4px 0 #ddd;
+    }
+
+    /* Market: the striped awning and three little cards. */
+    .s-shop {
+      background: linear-gradient(#1b2347, #10152e);
+    }
+
+    .s-shop .awning {
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 5px;
+      background: repeating-linear-gradient(90deg, #2f4fa8 0 6px, #e9dcb4 6px 12px);
+    }
+
+    .s-shop .ware {
+      top: 11px;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8, 10, 26, 0.6);
+      border: 1px solid var(--c);
+      border-radius: 2px;
+      box-shadow: 0 0 4px var(--c);
+    }
+
+    .s-shop .ware item {
+      position: static;
+    }
+
+    /* Mobdex: a red handheld with a green screen. */
+    .s-mob {
+      background: linear-gradient(#2a3a2a, #18241a);
+    }
+
+    .s-mob .device {
+      left: 50%;
+      top: 4px;
+      bottom: -6px;
+      width: 52px;
+      margin-left: -26px;
+      background: #c8302c;
+      border: 1px solid #ff6a5a;
+      border-bottom-color: #7a1410;
+      border-radius: 4px;
+    }
+
+    .s-mob .screen {
+      left: 50%;
+      top: 15px;
+      width: 38px;
+      height: 20px;
+      margin-left: -19px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #9bbc0f;
+      border: 2px solid #3a0a08;
+    }
+
+    .s-mob .screen item {
+      position: static;
+    }
+
+    .s-mob .lens {
+      left: calc(50% - 22px);
+      top: 6px;
+      width: 8px;
+      height: 8px;
+      background: radial-gradient(circle at 35% 35%, #bfe8ff, #2a7ac8 60%);
+      border: 1px solid #fff;
+      border-radius: 4px;
+      animation: blink 1.6s steps(1) infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.4; }
+    }
+
+    /* Journal: leather, two cream pages, a ribbon. */
+    .s-book {
+      background: #2a1c12;
+    }
+
+    .s-book .cover {
+      left: 10%;
+      right: 10%;
+      top: 4px;
+      bottom: 4px;
+      background: #6b3f22;
+      border-radius: 2px;
+    }
+
+    .s-book .page {
+      top: 6px;
+      bottom: 6px;
+      width: 38%;
+      background: repeating-linear-gradient(#efe2c0 0 4px, #d8c79c 4px 5px);
+    }
+
+    .s-book .page.l { left: 12%; }
+    .s-book .page.r { right: 12%; }
+
+    .s-book .ribbon {
+      right: 24%;
+      top: 4px;
+      width: 3px;
+      height: 70%;
+      background: #b8202a;
+    }
+
+    /* Console: a terminal with typed lines and a blinking cursor. */
+    .s-console {
+      background: #0a0e0a;
+      border: 1px solid #1f3a1f;
+      padding: 4px;
+      font-family: minecraft:uniform;
+      color: #55ff55;
+    }
+
+    .s-console > span {
+      position: static;
+      white-space: nowrap;
+    }
+
+    .s-console .dim {
+      color: #3a8a3a;
+    }
+
+    .s-console .cursor {
+      display: inline-block;
+      width: 4px;
+      height: 7px;
+      background: #55ff55;
+      animation: blink 1s steps(1) infinite;
+    }
+
+    footer {
+      flex: none;
+      color: var(--muted);
+      text-align: center;
+      animation: rise 500ms ease-out 500ms both;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vellum showcase</h1>
+    <span>HTML and CSS, painted by Minecraft</span>
+  </header>
+
+  <nav class="grid">
+    <a class="card" href="title.html">
+      <div class="sketch s-title">
+        <i class="peak" style="left: 30%"></i>
+        <i class="peak" style="left: 62%; bottom: -14px"></i>
+        <i class="sun"></i>
+        <i class="ground"></i>
+        <span class="logo">VELLUM</span>
+        <span class="splash">CSS!</span>
+      </div>
+      <div class="caption"><item id="minecraft:spyglass"></item><b>Title screen</b></div>
+      <small>A parallax dusk</small>
+    </a>
+
+    <a class="card" href="hud.html">
+      <div class="sketch s-hud">
+        <i class="pillar" style="left: 10%; height: 60%"></i>
+        <i class="pillar" style="left: 26%; height: 40%"></i>
+        <i class="bar"></i>
+        <i class="toast"><item id="minecraft:ender_eye"></item><i></i></i>
+      </div>
+      <div class="caption"><item id="minecraft:end_crystal"></item><b>HUD kit</b></div>
+      <small>Boss bar and toasts</small>
+    </a>
+
+    <a class="card" href="shop.html">
+      <div class="sketch s-shop">
+        <i class="awning"></i>
+        <i class="ware" style="left: 12%; --c: #ffaa00"><item id="minecraft:nether_star"></item></i>
+        <i class="ware" style="left: 40%; --c: #ff55ff"><item id="minecraft:totem_of_undying"></item></i>
+        <i class="ware" style="left: 68%; --c: #55ffff"><item id="minecraft:diamond"></item></i>
+      </div>
+      <div class="caption"><item id="minecraft:emerald"></item><b>Trader's market</b></div>
+      <small>Rarity cards, a cart</small>
+    </a>
+
+    <a class="card" href="mobdex.html">
+      <div class="sketch s-mob">
+        <i class="device"></i>
+        <i class="lens"></i>
+        <i class="screen"><item id="minecraft:zombie_spawn_egg"></item></i>
+      </div>
+      <div class="caption"><item id="minecraft:bone"></item><b>Mobdex</b></div>
+      <small>A handheld bestiary</small>
+    </a>
+
+    <a class="card" href="journal.html">
+      <div class="sketch s-book">
+        <i class="cover"></i>
+        <i class="page l"></i>
+        <i class="page r"></i>
+        <i class="ribbon"></i>
+      </div>
+      <div class="caption"><item id="minecraft:writable_book"></item><b>Journal</b></div>
+      <small>A two-page spread</small>
+    </a>
+
+    <a class="card" href="console.html">
+      <div class="sketch s-console">
+        <span class="dim">&gt; follow me</span>
+        <span>ok, on my way</span>
+        <span class="dim">&gt; <i class="cursor"></i></span>
+      </div>
+      <div class="caption"><item id="minecraft:comparator"></item><b>Companion console</b></div>
+      <small>Chat with your robot</small>
+    </a>
+  </nav>
+
+  <footer>Click a card to open it. Esc closes.</footer>
+</body>
+</html>

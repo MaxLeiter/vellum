@@ -1,0 +1,1028 @@
+<!doctype html>
+<html>
+<head>
+  <title>Vellum HUD kit</title>
+  <style>
+    /*
+     * A HUD kit for a dragon fight, built to sit over the game: nothing here takes input and the page has no
+     * background. A small script plays a fake fight so every widget has something to do: the boss takes hits, the
+     * combo climbs, quest counters tick up and toasts come and go. The vanilla-style hearts and hotbar at the bottom
+     * are only drawn when the page is opened as a screen (vellum.data.overlay is not set); as an overlay the game
+     * draws its own.
+     */
+    :root {
+      --panel: rgba(0, 0, 0, 0.5);
+      --line: rgba(255, 255, 255, 0.14);
+      --end: #d38cff;
+      --end-deep: #8b2fd6;
+      --gold: #ffcf4a;
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      pointer-events: none;
+      text-shadow: minecraft;
+    }
+
+    /* ---------- The End, behind the HUD (screen mode only) ---------- */
+
+    /* The vanilla end sky texture, tiled and darkened by a gradient layered over it. */
+    .end {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(6, 2, 12, 0.88), rgba(24, 8, 40, 0.72) 70%, rgba(60, 20, 80, 0.6)),
+        url(minecraft:textures/environment/end_sky.png);
+      background-size: auto, 64px 64px;
+    }
+
+    /* Obsidian pillars, textured with the real block texture. Far ones use a smaller tile and more shade. */
+    .pillar {
+      position: absolute;
+      bottom: 28px;
+      background: linear-gradient(rgba(40, 10, 60, 0.15), rgba(8, 2, 16, 0.75)), url(minecraft:textures/block/obsidian.png);
+      background-size: auto, 16px 16px;
+    }
+
+    .pillar.far {
+      bottom: 34px;
+      background: linear-gradient(rgba(60, 30, 90, 0.5), rgba(20, 6, 34, 0.85)), url(minecraft:textures/block/obsidian.png);
+      background-size: auto, 8px 8px;
+    }
+
+    /* Each crystal bobs over its pillar inside a soft pink glow. */
+    .pillar item {
+      position: absolute;
+      left: 50%;
+      top: -22px;
+      margin-left: -8px;
+      animation: bob 2.4s ease-in-out infinite;
+    }
+
+    .pillar.far item {
+      width: 8px;
+      height: 8px;
+      top: -12px;
+      margin-left: -4px;
+    }
+
+    .pillar .halo {
+      position: absolute;
+      left: 50%;
+      top: -34px;
+      width: 40px;
+      height: 40px;
+      margin-left: -20px;
+      background: radial-gradient(circle, rgba(255, 120, 220, 0.4), rgba(255, 120, 220, 0) 70%);
+    }
+
+    .pillar.far .halo {
+      top: -22px;
+      width: 24px;
+      height: 24px;
+      margin-left: -12px;
+    }
+
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    /* The main island: end stone, with a darkening gradient towards the bottom of the screen. */
+    .island {
+      position: absolute;
+      left: -8px;
+      right: -8px;
+      bottom: 0;
+      height: 36px;
+      background: linear-gradient(rgba(40, 20, 50, 0.35), rgba(10, 4, 16, 0.85)), url(minecraft:textures/block/end_stone.png);
+      background-size: auto, 16px 16px;
+      border-top: 1px solid #f5f3c2;
+    }
+
+    /* Every widget slides into place once when the HUD appears. */
+    @keyframes drop-in {
+      from { opacity: 0; transform: translateY(-10px); }
+    }
+
+    @keyframes left-in {
+      from { opacity: 0; transform: translateX(-16px); }
+    }
+
+    @keyframes right-in {
+      from { opacity: 0; transform: translateX(16px); }
+    }
+
+    @keyframes up-in {
+      from { opacity: 0; transform: translateY(12px); }
+    }
+
+    /* ---------- Compass ---------- */
+
+    /* A window onto a long dial. The script slides the dial (one turn = 360px) and fades labels near the ends. */
+    .compass {
+      position: absolute;
+      top: 2px;
+      left: 50%;
+      width: 168px;
+      height: 15px;
+      margin-left: -84px;
+      overflow: hidden;
+      background: linear-gradient(to right, rgba(0, 0, 0, 0), var(--panel) 25%, var(--panel) 75%, rgba(0, 0, 0, 0));
+      border-bottom: 1px solid;
+      border-color: rgba(255, 255, 255, 0.25);
+      animation: drop-in 500ms ease-out both;
+    }
+
+    .dial {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+    }
+
+    .dial > * {
+      position: absolute;
+      display: block;
+      font-style: normal;
+    }
+
+    .dial .tick {
+      bottom: 0;
+      width: 1px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    .dial .tick.major {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Labels are centred on their bearing with a negative margin. */
+    .dial .label {
+      top: 2px;
+      width: 16px;
+      margin-left: -8px;
+      text-align: center;
+      color: #e8e8e8;
+    }
+
+    .dial .label.north {
+      color: mc-red;
+    }
+
+    .dial .label.minor {
+      color: mc-gray;
+    }
+
+    /* Waypoints: little diamonds on the dial, each with a ping ring. */
+    .dial .waypoint {
+      top: 10px;
+      width: 4px;
+      height: 4px;
+      margin-left: -2px;
+      background: var(--c);
+      transform: rotate(45deg);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+    }
+
+    .needle {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      width: 1px;
+      height: 15px;
+      margin-left: 0;
+      background: linear-gradient(rgba(255, 207, 74, 0), var(--gold));
+    }
+
+    /* ---------- Boss bar ---------- */
+
+    .boss {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      width: 182px;
+      margin-left: -91px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      animation: drop-in 500ms ease-out 150ms both;
+    }
+
+    .boss-name {
+      color: #f2d9ff;
+    }
+
+    /* The vanilla purple track, with our own fill inside its 1px frame. */
+    .boss-bar {
+      position: relative;
+      width: 182px;
+      height: 5px;
+      background: sprite(minecraft:boss_bar/purple_background);
+    }
+
+    .boss-bar > div {
+      position: absolute;
+      top: 1px;
+      bottom: 1px;
+      left: 1px;
+      max-width: 180px;
+    }
+
+    /* The lag bar trails the fill: it waits, then catches up, so each hit leaves a pale chunk that drains. */
+    .boss-bar .lag {
+      background: #ffd6f2;
+      transition: width 500ms ease-in 450ms;
+    }
+
+    /* The fill clips a wide repeating gradient that scrolls sideways forever: an animated gradient fill. */
+    .boss-bar .fill {
+      overflow: hidden;
+      transition: width 120ms ease-out;
+    }
+
+    .flow {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 364px;
+      height: 100%;
+      background: repeating-linear-gradient(90deg, var(--end-deep) 0, #e05cff 30px, #ff9cf0 45px, #e05cff 60px, var(--end-deep) 91px);
+      animation: flow 1.6s linear infinite;
+    }
+
+    @keyframes flow {
+      to { transform: translateX(-91px); }
+    }
+
+    .boss-bar .shine {
+      height: 1px;
+      bottom: auto;
+      width: 180px;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .boss-bar .notches {
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 182px;
+      max-width: none;
+      background: sprite(minecraft:boss_bar/notched_10_progress);
+    }
+
+    /* The damage flash: a white overlay the script fades out with element.animate(). */
+    .boss-bar .flash {
+      top: -1px;
+      left: -1px;
+      bottom: -1px;
+      width: 184px;
+      max-width: none;
+      background: #fff;
+      opacity: 0;
+    }
+
+    /* Damage numbers float up from the end of the fill and fade. */
+    .dmg {
+      position: absolute;
+      top: 7px;
+      color: #ff7de9;
+      animation: dmg 800ms ease-out forwards;
+    }
+
+    .dmg.crit {
+      color: mc-yellow;
+    }
+
+    @keyframes dmg {
+      0% { opacity: 0; transform: translateY(-4px) scale(0.6); }
+      15% { opacity: 1; transform: translateY(0) scale(1.25); }
+      30% { transform: translateY(1px) scale(1); }
+      100% { opacity: 0; transform: translateY(8px) scale(1); }
+    }
+
+    /* ---------- Quest tracker ---------- */
+
+    .quest {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 112px;
+      padding: 4px 5px 5px;
+      background: var(--panel);
+      border-left: 2px solid var(--gold);
+      animation: left-in 500ms ease-out 250ms both;
+    }
+
+    .quest header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 3px;
+      color: var(--gold);
+    }
+
+    .quest ul {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin: 0;
+      padding: 0;
+    }
+
+    .quest li::before {
+      content: none;
+    }
+
+    /* A grid per objective: [mark | text] on the first row, [ | bar | count] on the second. */
+    .quest li {
+      display: grid;
+      grid-template-columns: 8px 1fr auto;
+      grid-template-areas: "mark text text" ". bar count";
+      column-gap: 3px;
+      row-gap: 2px;
+      align-items: center;
+      color: #e0e0e0;
+    }
+
+    .quest li.done {
+      color: mc-gray;
+    }
+
+    .quest li.done .text {
+      text-decoration: line-through;
+    }
+
+    .quest .mark { grid-area: mark; }
+    .quest .text { grid-area: text; }
+
+    .quest .count {
+      grid-area: count;
+      color: mc-yellow;
+    }
+
+    .quest li.done .count {
+      color: mc-green;
+    }
+
+    /* Status marks: a check sprite when done, a pulsing diamond with a ping ring for the active objective,
+       a hollow diamond for the rest. */
+    .mark {
+      position: relative;
+      width: 8px;
+      height: 8px;
+    }
+
+    li.done .mark {
+      background: sprite(minecraft:icon/checkmark);
+      background-size: 8px 7px;
+      background-repeat: no-repeat;
+    }
+
+    .diamond {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 4px;
+      height: 4px;
+      transform: rotate(45deg);
+      border: 1px solid #b0b0b0;
+    }
+
+    li.active .diamond {
+      background: var(--gold);
+      border-color: var(--gold);
+      animation: beat 1s ease-in-out infinite;
+    }
+
+    li.active .ping {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 4px;
+      height: 4px;
+      border: 1px solid var(--gold);
+      transform: rotate(45deg);
+      animation: ping 1s ease-out infinite;
+    }
+
+    @keyframes beat {
+      0%, 100% { transform: rotate(45deg) scale(1); }
+      50% { transform: rotate(45deg) scale(1.35); }
+    }
+
+    @keyframes ping {
+      from { opacity: 0.9; transform: rotate(45deg) scale(1); }
+      to { opacity: 0; transform: rotate(45deg) scale(3); }
+    }
+
+    /* Thin progress bars under counted objectives, with a sheen that sweeps across. */
+    .progress {
+      grid-area: bar;
+      position: relative;
+      height: 3px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .progress > div {
+      height: 100%;
+      background: linear-gradient(to right, #c98a12, var(--gold));
+      transition: width 400ms ease-out;
+    }
+
+    li.done .progress > div {
+      background: linear-gradient(to right, #3a9a2a, #7ddc6a);
+    }
+
+    /* The sheen is a real element: pseudo-elements do not take animations in Vellum yet. */
+    .progress .sheen {
+      position: absolute;
+      top: 0;
+      left: -12px;
+      width: 12px;
+      height: 3px;
+      background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+      animation: sheen 2.4s ease-in-out infinite;
+    }
+
+    @keyframes sheen {
+      0% { transform: translateX(0); }
+      60%, 100% { transform: translateX(120px); }
+    }
+
+    /* ---------- Toasts ---------- */
+
+    .toasts {
+      position: absolute;
+      top: 52px;
+      right: 0;
+      width: 164px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* The vanilla advancement toast sprite; icon and text sit where vanilla puts them. */
+    .toast {
+      position: relative;
+      flex: none;
+      width: 160px;
+      height: 32px;
+      background: sprite(minecraft:toast/advancement);
+      animation: toast-in 450ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+    }
+
+    .toast item {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+    }
+
+    .toast .t-title {
+      position: absolute;
+      left: 30px;
+      top: 7px;
+      white-space: nowrap;
+    }
+
+    .toast .t-text {
+      position: absolute;
+      left: 30px;
+      top: 18px;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    /* Leaving: slide out, then fold the height away so the toasts below move up smoothly. */
+    .toast.out {
+      animation: toast-out 500ms ease-in forwards;
+    }
+
+    @keyframes toast-in {
+      from { transform: translateX(170px); }
+      to { transform: translateX(0); }
+    }
+
+    @keyframes toast-out {
+      0% { transform: translateX(0); height: 32px; opacity: 1; }
+      60% { transform: translateX(170px); height: 32px; opacity: 0; }
+      100% { transform: translateX(170px); height: 0; opacity: 0; }
+    }
+
+    /* ---------- Combo ---------- */
+
+    .combo {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+      transition: opacity 300ms;
+    }
+
+    .combo.idle {
+      opacity: 0;
+    }
+
+    .combo-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    /* 24px is the font at 3x. The extra shadows give the number a chunky drop. */
+    .combo-n {
+      font-size: 24px;
+      color: #fff;
+      text-shadow: 1px 1px 0 #3a3a3a, 2px 2px 0 #1a1a1a;
+      transform-origin: 100% 100%;
+      transition: color 200ms;
+    }
+
+    .combo-x {
+      margin-bottom: 3px;
+      font-size: 16px;
+      color: mc-gray;
+    }
+
+    .combo-label {
+      color: mc-gray;
+      letter-spacing: 1px;
+    }
+
+    .combo.t2 .combo-n { color: mc-yellow; }
+    .combo.t3 .combo-n { color: mc-gold; }
+    .combo.t4 .combo-n { color: #ff6bd5; text-shadow: 1px 1px 0 #6a1a5a, 2px 2px 0 #2a0a24; }
+    .combo.t4 .combo-label { color: var(--end); }
+
+    .combo-timer {
+      width: 56px;
+      height: 2px;
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .combo-timer > div {
+      width: 100%;
+      height: 100%;
+      background: #fff;
+    }
+
+    .combo.t3 .combo-timer > div, .combo.t4 .combo-timer > div { background: var(--end); }
+
+    /* ---------- Status effects ---------- */
+
+    .effects {
+      position: absolute;
+      left: 4px;
+      bottom: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      animation: left-in 500ms ease-out 400ms both;
+    }
+
+    .effect {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding-right: 6px;
+      background: linear-gradient(to right, var(--panel), rgba(0, 0, 0, 0));
+      animation: left-in 300ms ease-out both;
+    }
+
+    .effect .icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: sprite(minecraft:hud/effect_background);
+    }
+
+    .effect img {
+      width: 18px;
+      height: 18px;
+    }
+
+    .effect .e-time {
+      color: mc-gray;
+    }
+
+    /* Under ten seconds the icon blinks, like vanilla. */
+    .effect.ending .icon {
+      animation: blink 500ms steps(1) infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.35; }
+    }
+
+    /* ---------- Vanilla-style vitals and hotbar (screen only) ---------- */
+
+    .vanilla {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      width: 182px;
+      margin-left: -91px;
+      animation: up-in 500ms ease-out 300ms both;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 0 1px 1px;
+    }
+
+    .hearts, .food, .armor {
+      display: flex;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    /* Each icon is 8px apart and 9px wide, overlapping by 1px, as in vanilla. Two background layers: the
+       full or half heart sprite over the empty container. */
+    .hearts i, .food i, .armor i {
+      display: block;
+      width: 9px;
+      height: 9px;
+      margin-right: -1px;
+    }
+
+    .hearts i {
+      background: sprite(minecraft:hud/heart/container);
+      animation: lubdub 1.4s ease-in-out infinite;
+    }
+
+    .hearts i.full { background: sprite(minecraft:hud/heart/full), sprite(minecraft:hud/heart/container); }
+    .hearts i.half { background: sprite(minecraft:hud/heart/half), sprite(minecraft:hud/heart/container); }
+
+    /* Heartbeat: a lub-dub scale pulse that ripples along the row (each heart starts 50ms later). */
+    @keyframes lubdub {
+      0%, 30%, 100% { transform: scale(1); }
+      8% { transform: scale(1.3); }
+      18% { transform: scale(1.12); }
+    }
+
+    .armor i { background: sprite(minecraft:hud/armor_full); }
+    .armor i.half { background: sprite(minecraft:hud/armor_half); }
+    .armor i.empty { background: sprite(minecraft:hud/armor_empty); }
+    .food { flex-direction: row-reverse; }
+    .food i { background: sprite(minecraft:hud/food_full); }
+    .food i.half { background: sprite(minecraft:hud/food_half); }
+
+    .xp {
+      position: relative;
+      height: 5px;
+      margin-bottom: 2px;
+      background: sprite(minecraft:hud/experience_bar_background);
+    }
+
+    /* The progress sprite is drawn at full width inside a clipping box, so it is revealed rather than squashed. */
+    .xp > div {
+      height: 5px;
+      overflow: hidden;
+      transition: width 600ms ease-out;
+    }
+
+    .xp > div > i {
+      display: block;
+      width: 182px;
+      height: 5px;
+      background: sprite(minecraft:hud/experience_bar_progress);
+    }
+
+    /* The level number: vanilla green with a 1px black outline (four shadows). */
+    .level {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -8px;
+      text-align: center;
+      color: #80ff20;
+      text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+    }
+
+    .hotbar {
+      position: relative;
+      width: 182px;
+      height: 22px;
+      background: sprite(minecraft:hud/hotbar);
+    }
+
+    .hotbar item {
+      position: absolute;
+      top: 3px;
+    }
+
+    .selection {
+      position: absolute;
+      top: -1px;
+      width: 24px;
+      height: 23px;
+      background: sprite(minecraft:hud/hotbar_selection);
+      transition: left 120ms ease-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .flow, .hearts i, li.active .diamond, li.active .ping { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="end" v-if="!overlay">
+    <div class="pillar far" style="left: 15%; width: 8px; height: 56px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar far" style="left: 58%; width: 8px; height: 72px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar far" style="left: 88%; width: 8px; height: 48px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar" style="left: 6%; width: 24px; height: 104px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar" style="left: 27%; width: 16px; height: 76px"><i class="halo"></i><item id="minecraft:end_crystal" style="animation-delay: -0.8s"></item></div>
+    <div class="pillar" style="left: 71%; width: 16px; height: 90px"><i class="halo"></i><item id="minecraft:end_crystal" style="animation-delay: -1.6s"></item></div>
+    <div class="pillar" style="left: 90%; width: 24px; height: 120px"><i class="halo"></i><item id="minecraft:end_crystal" style="animation-delay: -0.4s"></item></div>
+    <div class="island"></div>
+  </div>
+
+  <div class="compass">
+    <div class="dial" id="dial"></div>
+    <div class="needle"></div>
+  </div>
+
+  <div class="boss">
+    <div class="boss-name">Ender Dragon</div>
+    <div class="boss-bar" id="bossBar">
+      <div class="lag" :style="{ width: lag / maxHp * 180 + 'px' }"></div>
+      <div class="fill" :style="{ width: hp / maxHp * 180 + 'px' }"><div class="flow"></div></div>
+      <div class="shine"></div>
+      <div class="notches"></div>
+      <div class="flash" id="flash"></div>
+    </div>
+  </div>
+
+  <section class="quest">
+    <header><span>⚔</span><span>Free the End</span></header>
+    <ul>
+      <li v-for="o in objectives" :key="o.id" :class="{ done: o.n >= o.max, active: o.id === activeId() }">
+        <span class="mark"><i class="ping"></i><i class="diamond" v-if="o.n < o.max"></i></span>
+        <span class="text">{{ o.text }}</span>
+        <span class="count" v-if="o.max > 1">{{ o.n }}/{{ o.max }}</span>
+        <div class="progress" v-if="o.max > 1"><div :style="{ width: o.n / o.max * 100 + '%' }"></div><i class="sheen"></i></div>
+      </li>
+    </ul>
+  </section>
+
+  <div class="toasts">
+    <div class="toast" v-for="t in toasts" :key="t.id" :class="{ out: t.out }">
+      <item :id="t.icon"></item>
+      <div class="t-title" :style="{ color: t.color }">{{ t.title }}</div>
+      <div class="t-text">{{ t.text }}</div>
+    </div>
+  </div>
+
+  <div class="combo" :class="comboClass()">
+    <div class="combo-row">
+      <span class="combo-x">x</span>
+      <span class="combo-n" id="comboN">{{ combo }}</span>
+    </div>
+    <div class="combo-label">HIT COMBO</div>
+    <div class="combo-timer"><div id="comboTimer"></div></div>
+  </div>
+
+  <div class="effects">
+    <div class="effect" v-for="e in effects" :key="e.id" :class="{ ending: e.t <= 10 }">
+      <span class="icon"><img :src="'minecraft:textures/mob_effect/' + e.id + '.png'"></span>
+      <div>
+        <div :style="{ color: e.color }">{{ e.name }}</div>
+        <div class="e-time">{{ clock(e.t) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="vanilla" v-if="!overlay">
+    <div class="stats">
+      <div class="stack">
+        <div class="armor"><i v-for="a in armor" :class="a"></i></div>
+        <div class="hearts"><i v-for="(h, i) in hearts" :class="h" :style="{ animationDelay: i * 50 + 'ms' }"></i></div>
+      </div>
+      <div class="food"><i v-for="f in food" :class="f"></i></div>
+    </div>
+    <div class="xp">
+      <div :style="{ width: xp * 182 + 'px' }"><i></i></div>
+      <span class="level">{{ level }}</span>
+    </div>
+    <div class="hotbar">
+      <item v-for="(it, i) in hotbar" :id="it.id" :count="it.count" :style="{ left: 3 + i * 20 + 'px' }"></item>
+      <div class="selection" :style="{ left: -1 + selected * 20 + 'px' }"></div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- State the templates read ----------
+
+    const hud = vellum.state({
+      overlay: !!vellum.data.overlay,
+      maxHp: 200, hp: 200, lag: 200,
+      combo: 0,
+      objectives: [
+        { id: 'enter', text: 'Enter the End', n: 1, max: 1 },
+        { id: 'crystals', text: 'Smash crystals', n: 6, max: 10 },
+        { id: 'dragon', text: 'Slay the dragon', n: 0, max: 1 }
+      ],
+      toasts: [],
+      effects: [
+        { id: 'strength', name: 'Strength II', t: 94, color: '#ff8a5c' },
+        { id: 'slow_falling', name: 'Slow Falling', t: 45, color: '#f7f2d6' },
+        { id: 'regeneration', name: 'Regeneration', t: 12, color: '#ff8ad8' }
+      ],
+      hearts: ['full', 'full', 'full', 'full', 'full', 'full', 'full', 'half', '', ''],
+      armor: ['full', 'full', 'full', 'full', 'full', 'full', 'full', 'full', 'half', 'empty'],
+      food: ['full', 'full', 'full', 'full', 'full', 'full', 'full', 'full', 'full', 'half'],
+      xp: 0.62, level: 30,
+      selected: 0,
+      hotbar: [
+        { id: 'minecraft:netherite_sword', count: 1 }, { id: 'minecraft:bow', count: 1 },
+        { id: 'minecraft:arrow', count: 64 }, { id: 'minecraft:ender_pearl', count: 16 },
+        { id: 'minecraft:golden_apple', count: 8 }, { id: 'minecraft:cooked_beef', count: 32 },
+        { id: 'minecraft:water_bucket', count: 1 }, { id: 'minecraft:firework_rocket', count: 48 },
+        { id: 'minecraft:diamond_pickaxe', count: 1 }
+      ],
+
+      // The first unfinished objective is the active one.
+      activeId() {
+        const o = this.objectives.find(x => x.n < x.max);
+        return o ? o.id : null;
+      },
+      comboClass() {
+        const c = this.combo;
+        return c < 2 ? 'idle' : c < 5 ? 't1' : c < 10 ? 't2' : c < 20 ? 't3' : 't4';
+      },
+      clock(t) {
+        return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+      }
+    });
+
+    // ---------- Compass ----------
+
+    // Build three turns of dial (-360..720 degrees) so the window never runs off the end.
+    const PX_PER_DEG = 1, WINDOW = 168;
+    const dial = document.getElementById('dial');
+    const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const labels = [];
+    function put(cls, deg, text) {
+      const el = document.createElement('i');
+      el.className = cls;
+      el.style.left = ((deg + 360) * PX_PER_DEG) + 'px';
+      if (text) el.textContent = text;
+      dial.appendChild(el);
+      return el;
+    }
+    for (let deg = -360; deg < 720; deg += 15) {
+      if (deg % 45 === 0) {
+        let name = names[((deg / 45) % 8 + 8) % 8];
+        let label = put('label' + (name === 'N' ? ' north' : name.length > 1 ? ' minor' : ''), deg, name);
+        label.deg = deg;
+        labels.push(label);
+        put('tick major', deg);
+      } else {
+        put('tick', deg);
+      }
+    }
+    // Waypoints: [bearing, colour].
+    [[35, '#ffcf4a'], [140, '#d38cff'], [262, '#5cf0ff']].forEach(w => {
+      [w[0] - 360, w[0], w[0] + 360].forEach(deg => {
+        put('waypoint', deg).style.setProperty('--c', w[1]);
+      });
+    });
+
+    // The heading wanders like a player looking around. Each frame: slide the dial, fade labels by distance.
+    function steer(now) {
+      const t = now / 1000;
+      const heading = ((40 + 70 * Math.sin(t / 3.1) + 25 * Math.sin(t / 1.3 + 1)) % 360 + 360) % 360;
+      const offset = WINDOW / 2 - (heading + 360) * PX_PER_DEG;
+      dial.style.transform = 'translateX(' + offset.toFixed(1) + 'px)';
+      labels.forEach(label => {
+        const d = Math.abs(label.deg - heading) * PX_PER_DEG;
+        label.style.opacity = d > 84 ? 0 : (1 - Math.max(0, d - 40) / 44).toFixed(2);
+      });
+      requestAnimationFrame(steer);
+    }
+    requestAnimationFrame(steer);
+
+    // ---------- Boss fight ----------
+
+    const bossBar = document.getElementById('bossBar');
+    const flash = document.getElementById('flash');
+    const comboN = document.getElementById('comboN');
+    const comboTimer = document.getElementById('comboTimer');
+    let comboAnim = null;
+
+    function hit() {
+      const crit = Math.random() < 0.25;
+      const dmg = Math.round((crit ? 16 : 6) + Math.random() * 8);
+      hud.hp = Math.max(0, hud.hp - dmg);
+      hud.lag = hud.hp;   // the lag bar's transition delay makes it trail behind
+
+      // Flash the bar white and shake it a little.
+      flash.animate([{ opacity: 0.7 }, { opacity: 0 }], { duration: 260, easing: 'ease-out' });
+      bossBar.animate([{ transform: 'translateX(-2px)' }, { transform: 'translateX(2px)' }, { transform: 'translateX(-1px)' },
+        { transform: 'none' }], { duration: 200 });
+
+      // A floating damage number at the end of the fill; removed when its CSS animation ends.
+      const num = document.createElement('span');
+      num.className = crit ? 'dmg crit' : 'dmg';
+      num.textContent = (crit ? '✦' : '') + '-' + dmg;
+      num.style.left = (hud.hp / hud.maxHp * 180 - 4) + 'px';
+      num.addEventListener('animationend', () => num.remove());
+      bossBar.appendChild(num);
+
+      // Combo: count up, pop the number, restart the window timer.
+      hud.combo++;
+      comboN.animate([{ transform: 'scale(1.7) rotate(-8deg)' }, { transform: 'scale(0.9)' }, { transform: 'none' }],
+        { duration: 260, easing: 'ease-out' });
+      if (comboAnim) comboAnim.cancel();
+      comboAnim = comboTimer.animate([{ width: '100%' }, { width: '0%' }], { duration: 2400, fill: 'forwards' });
+      comboAnim.onfinish = () => { hud.combo = 0; };
+
+      if (hud.hp === 0) win();
+    }
+
+    function win() {
+      hud.objectives[2].n = 1;
+      toast('minecraft:dragon_breath', 'Challenge Complete!', 'Free the End', '#ff55ff');
+      setTimeout(reset, 5000);
+    }
+
+    function reset() {
+      hud.hp = hud.lag = hud.maxHp;
+      hud.objectives[1].n = 6;
+      hud.objectives[2].n = 0;
+    }
+
+    // The fight: flurries of hits with pauses between them (long enough to break the combo now and then).
+    function fight() {
+      if (hud.hp > 0) hit();
+      const pause = Math.random() < 0.12 ? 2800 : 450 + Math.random() * 700;
+      setTimeout(fight, pause);
+    }
+    setTimeout(fight, 900);
+
+    // A crystal shatters every few seconds; the quest counter ticks and the hotbar selection moves.
+    setInterval(() => {
+      const crystals = hud.objectives[1];
+      if (hud.hp > 0 && crystals.n < crystals.max) crystals.n++;
+      hud.selected = (hud.selected + 1) % 3;
+      hud.xp = (hud.xp + 0.07) % 1;
+    }, 3300);
+
+    // ---------- Toasts ----------
+
+    let nextToast = 1;
+    function toast(icon, title, text, color) {
+      const t = { id: nextToast++, icon: icon, title: title, text: text, color: color || '#ffff55', out: false };
+      hud.toasts.push(t);
+      // Vanilla toasts stay about five seconds. Mark it leaving (the CSS exit animation), then drop it.
+      setTimeout(() => { t.out = true; }, 4600);
+      setTimeout(() => { hud.toasts = hud.toasts.filter(x => x !== t); }, 5100);
+    }
+
+    const feed = [
+      ['minecraft:ender_eye', 'Advancement Made!', 'The End?'],
+      ['minecraft:end_crystal', 'Goal Reached!', 'Crystal Breaker'],
+      ['minecraft:totem_of_undying', 'Challenge Complete!', 'Postmortal', '#ff55ff'],
+      ['minecraft:elytra', 'Goal Reached!', 'Sky\'s the Limit'],
+      ['minecraft:dragon_breath', 'Advancement Made!', 'You Need a Mint'],
+      ['minecraft:golden_apple', 'Recipe Unlocked!', 'Golden Apple', '#7fd4ff']
+    ];
+    let feedIndex = 0;
+    function nextFeed() {
+      const f = feed[feedIndex++ % feed.length];
+      toast(f[0], f[1], f[2], f[3]);
+    }
+    setTimeout(nextFeed, 600);
+    setTimeout(nextFeed, 2200);
+    setInterval(nextFeed, 3000);
+
+    // ---------- Effects ----------
+
+    const potions = hud.effects.slice();
+    setInterval(() => {
+      hud.effects.forEach(e => { e.t--; });
+      hud.effects = hud.effects.filter(e => e.t > 0);
+      // Drink another potion when one wears off, so the list keeps moving.
+      if (hud.effects.length < 3) {
+        const missing = potions.find(p => !hud.effects.some(e => e.id === p.id));
+        if (missing) hud.effects.push({ id: missing.id, name: missing.name, t: 30 + Math.floor(Math.random() * 60), color: missing.color });
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
