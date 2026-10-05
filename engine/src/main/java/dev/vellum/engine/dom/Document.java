@@ -208,6 +208,7 @@ public final class Document extends Node {
         if (closed) return;
         scheduler.run(nowMs);
         input.tick(nowMs);
+        if (scripts != null) scripts.beforeRestyle();
         if (styleDirty) {
             styleDirty = false;
             styleEngine.restyle();

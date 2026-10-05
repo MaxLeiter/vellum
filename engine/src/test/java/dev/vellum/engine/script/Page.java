@@ -7,7 +7,7 @@ import dev.vellum.engine.testing.TestHost;
 /**
  * A scripted test page: parses HTML with the Rhino runtime (running its scripts and DOMContentLoaded), and reads
  * script values back through {@code console.log}. Time is driven with {@link #advance}; frames (restyle, layout)
- * are never run.
+ * are never run, so template updates, which a frame applies, wait for {@link #render}.
  */
 final class Page {
     final TestHost host = new TestHost();
@@ -48,6 +48,11 @@ final class Page {
 
     Element byId(String id) {
         return doc.getElementById(id);
+    }
+
+    /** Applies pending template updates, as the next frame does before restyling. */
+    void render() {
+        doc.scripts().beforeRestyle();
     }
 
     /** Runs timers and animation frames due at {@code ms}. */

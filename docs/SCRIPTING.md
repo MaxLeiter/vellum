@@ -210,6 +210,7 @@ anim.finished.then(() => console.log('shown'));
 | `vellum.playSound(id, volume = 1, pitch = 1)` | Plays a sound event such as `'minecraft:ui.button.click'`. |
 | `vellum.t(key, ...args)` | Translates a language key, e.g. `vellum.t('gui.done')`. |
 | `vellum.open(url)` | Opens another Vellum page (relative to this one). |
+| `vellum.nextTick(fn)` | Calls `fn` once [templates](#updates) have rendered the current state (at the next frame). |
 
 A message also reaches the page as a `message` event on the document whose `detail` is `[channel, json]`.
 
@@ -257,11 +258,14 @@ Text interpolation shows strings as they are, `null` and `undefined` as nothing,
 
 ### Updates
 
-After every entry (an event handler, a timer, an animation frame, a message, a `v-model` input...) Vellum
-re-evaluates every binding and changes the DOM only where a value changed. It repeats until nothing changes, at
-most 10 times; if a template still changes after that (an expression that modifies state when evaluated, such as
-`{{ n++ }}`), it logs a warning and stops. There is nothing to call: change your state, and the page catches up when
-your code returns.
+Templates render when the page loads. After any entry (an event handler, a timer, an animation frame, a message, a
+`v-model` input...) Vellum re-evaluates every binding once, at the start of the next frame, and changes the DOM only
+where a value changed. It repeats until nothing changes, at most 10 times; if a template still changes after that
+(an expression that modifies state when evaluated, such as `{{ n++ }}`), it logs a warning and stops. There is
+nothing to call: change your state, and the page catches up by the next frame.
+
+As in Vue, the DOM does not change while your code runs: a handler that sets `count` and then reads the button's
+text sees the old text. To read the DOM after it updates, pass a callback to `vellum.nextTick(fn)`.
 
 Templates are compiled once. Markup added later (by `innerHTML` or `v-html`) is not compiled.
 

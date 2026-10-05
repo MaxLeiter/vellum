@@ -73,6 +73,7 @@ host: input.mouseMove/mouseDown/...  on input  → DOM events, hover/active/focu
 host: frame(nowMs)                   every frame:
         scheduler.run      timers, requestAnimationFrame
         input.tick         smooth scroll, caret blink
+        scripts.beforeRestyle  template bindings re-render if any script entry ran since the last frame
         styleEngine.restyle    if style dirty: cascade → element.baseStyle; animations.styleChanged → element.style
         animations.tick    advance transitions/animations → element.style; invalidates layout if needed
         layoutEngine.layout    if layout dirty: box tree → element.box
@@ -81,6 +82,9 @@ host: paint(canvas)                  every frame: painter walks boxes → canvas
 
 Dirty tracking is document-wide (any DOM, attribute, state or text change marks style and layout dirty). Full
 restyle and relayout of a few hundred elements is cheap; per-subtree invalidation can come later without API changes.
+Restyles are incremental in effect: elements whose inputs are unchanged keep their style objects, and when only
+hover/active/focus changed (`Document.domVersion` is unchanged) elements whose selector matching did not read that
+state skip matching.
 
 Per-element results live on `Element`: `baseStyle` (cascade), `style` (after animations, used by layout and paint),
 `beforeStyle`/`afterStyle`, `box`, `replaced`, scroll offsets, and opaque slots for subsystem state
@@ -331,13 +335,15 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   - `vellum.send(channel, value)`: message to the server/mod (JSON-serialised).
   - `vellum.on(channel, fn)` / `vellum.off`: messages from the server/mod.
   - `vellum.close()`, `vellum.playSound(id, volume, pitch)`, `vellum.t(key, ...args)` (translation),
-    `vellum.open(url, data)` (open another UI).
+    `vellum.open(url, data)` (open another UI), `vellum.nextTick(fn)` (runs `fn` once templates have rendered).
 - **Templates** (no build step, AngularJS-style dirty checking): `{{ expr }}` in text and attributes,
   `v-if="expr"`, `v-for="item in expr"` (with `v-key`), `v-show`, `v-bind:attr` / `:attr`, `v-class`, `v-style`,
   `v-on:event` / `@event`, `v-model` (two-way for inputs). Expressions are JS evaluated with the scope chain
   `loop variables → vellum.data → state → globals`, where `state` is a reactive object created with
-  `vellum.state({...})`. After every event handler, timer, rAF callback and data update, bindings are re-evaluated;
-  the DOM is touched only when a value changed. This makes server-driven UIs a template plus JSON.
+  `vellum.state({...})`. Templates render when the document loads; after that, any event handler, timer, rAF
+  callback or data update marks them dirty and bindings are re-evaluated once per frame, before restyle; the DOM is
+  touched only when a value changed. So, as in Vue, a handler that changes state sees the old DOM until the next
+  frame (`vellum.nextTick(fn)` runs after the update). This makes server-driven UIs a template plus JSON.
 
 ## 11. Minecraft integration (`common/`)
 

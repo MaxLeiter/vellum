@@ -68,7 +68,7 @@ Numbered decisions with the reasons and the alternatives considered. Newest last
 **Why.** UI documents are small (hundreds of elements), and a full pass costs well under a millisecond. The API leaves room for subtree invalidation later.
 
 ## D-009 Templates by dirty checking
-**Choice.** We provide `{{ }}` interpolation and `v-if`/`v-for`/`:attr`/`@event`/`v-model` directives. Bindings are re-evaluated after every handler, timer and data update, and the DOM is touched only when a value changed.
+**Choice.** We provide `{{ }}` interpolation and `v-if`/`v-for`/`:attr`/`@event`/`v-model` directives. Any handler, timer or data update marks the bindings dirty; they are re-evaluated once per frame, before restyle, and the DOM is touched only when a value changed.
 **Why.** Server-driven UIs become a template plus JSON, with no build step and no virtual DOM. Dirty checking is simple, predictable and fast enough at this scale.
 
 ## D-010 Server-deliverable UIs are sandboxed by construction

@@ -24,6 +24,13 @@ public interface ScriptRuntime {
      */
     default void receive(String channel, String json) {}
 
+    /**
+     * Called by {@link dev.vellum.engine.dom.Document#frame} once per frame, after timers, animation frames and
+     * input and before restyle: applies the DOM updates the runtime deferred (template bindings re-render here, at
+     * most once per frame however many entries ran).
+     */
+    default void beforeRestyle() {}
+
     /** Releases resources. The runtime is unusable afterwards. */
     void dispose();
 }

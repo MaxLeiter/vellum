@@ -25,7 +25,9 @@ import java.util.function.Supplier;
  * <p>Every call from Java into scripts is an <em>entry</em> ({@link #enter}): scripts, inline handlers, listeners,
  * timers, animation frames, host messages and template events. An entry runs inside the {@link Sandbox} budget,
  * reports errors to the document instead of throwing them, and when the outermost entry finishes it drains
- * microtasks (promise jobs, {@code queueMicrotask}) and re-renders templates.
+ * microtasks (promise jobs, {@code queueMicrotask}). Each outermost entry marks the templates for re-rendering,
+ * which happens once per frame in {@link #beforeRestyle}: the DOM reflects state changes at the next frame, as with
+ * Vue's {@code nextTick} ({@code vellum.nextTick(fn)} runs {@code fn} after that update).
  */
 final class RhinoScriptRuntime implements ScriptRuntime {
     private static final int INLINE_HANDLER_CACHE = 256;
@@ -66,7 +68,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         WindowBindings.install(this);
         // Templates bind once scripts have run (so vellum.state() calls are in), before the page's own listeners.
         document.addEventListener("DOMContentLoaded", e -> enter("Error in templates", c -> {
-            templates.install();
+            templates.install(c);
             return null;
         }), false, true);
     }
@@ -105,6 +107,11 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     }
 
     @Override
+    public void beforeRestyle() {
+        if (templates.needsDigest()) enter("Error in templates", templates::digest);
+    }
+
+    @Override
     public void dispose() {
         disposed = true;
     }
@@ -126,6 +133,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         return Sandbox.run(cx -> {
             if (depth > 0) return attempt(what, cx, action);
             depth++;
+            templates.invalidate(); // any entry may change what templates show
             try {
                 Object result = attempt(what, cx, action);
                 attempt(what, cx, this::settle);
@@ -148,10 +156,8 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         }
     }
 
-    /** The end of an outermost entry: microtasks, then templates, then unhandled promise rejections. */
+    /** The end of an outermost entry: microtasks, then unhandled promise rejections. */
     private Object settle(Context cx) {
-        cx.processMicrotasks();
-        templates.digest(cx);
         cx.processMicrotasks();
         cx.getUnhandledPromiseTracker().process(reason ->
                 report("Uncaught (in promise)", new JavaScriptException(reason, null, 0)));
