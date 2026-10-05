@@ -1,11 +1,13 @@
 package dev.vellum.mod.client.render;
 
 import com.mojang.blaze3d.platform.GlConst;
+import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -47,6 +49,9 @@ import java.util.Map;
  * hides behind it.
  */
 public final class McGui {
+    /** How far in front of the canvas a scene's middle is drawn, so its near half is not clipped. */
+    private static final float SCENE_DEPTH = 500;
+
     private final GuiGraphics g;
     /** Where vanilla's pose had z when the canvas began: the canvas draws at that depth. */
     private float z;
@@ -171,8 +176,31 @@ public final class McGui {
         clearDepth();
     }
 
-    /** A 3D scene in a screen box: none on this version (McClient.SCENES is false), so nothing is drawn. */
-    void scene(Scene scene, int color, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissor) {}
+    /**
+     * A 3D scene in a screen box, a block {@code scale} GUI px, multiplied by {@code color}: drawn straight into the
+     * GUI (1.21.1 has no picture-in-picture renderers), clipped to the box and the scissor, with a depth buffer of its
+     * own. Models are opaque here, so the colour tints them but its alpha cannot fade them: like items, a scene under
+     * half opacity is not drawn.
+     */
+    void scene(Scene scene, int color, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissor) {
+        if (color >>> 24 < 128) return;
+        g.flush();
+        clearDepth();
+        g.enableScissor(x0, y0, x1, y1); // within the scissor already pushed
+        PoseStack pose = g.pose();
+        pose.pushPose();
+        pose.last().pose().translation((x0 + x1) / 2F, (y0 + y1) / 2F, z + SCENE_DEPTH);
+        pose.last().normal().identity();
+        pose.scale(scale, scale, -scale);
+        RenderSystem.setShaderColor((color >> 16 & 0xFF) / 255F, (color >> 8 & 0xFF) / 255F, (color & 0xFF) / 255F, 1);
+        scene.draw(pose, g.bufferSource(), new Scene.Box(x0, y0, x1, y1, scale));
+        g.flush();
+        RenderSystem.setShaderColor(1, 1, 1, 1);
+        Lighting.setupFor3DItems(); // the GUI's lighting, as vanilla leaves it after its models
+        pose.popPose();
+        g.disableScissor();
+        clearDepth();
+    }
 
     /** {@code pose} as a 4×4 matrix at the canvas's depth. */
     private Matrix4f matrix(Matrix3x2fc pose) {

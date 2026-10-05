@@ -14,9 +14,6 @@ import org.jspecify.annotations.Nullable;
  * Every version has a McClient with the same methods ({@code common/versions/<version>/src}).
  */
 public final class McClient {
-    /** Whether {@code <entity>} and {@code <model>} draw in 3D on this version (else they draw a fallback). */
-    public static final boolean SCENES = false;
-
     private McClient() {}
 
     /** The open screen, or null. */

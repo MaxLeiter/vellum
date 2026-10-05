@@ -26,6 +26,9 @@ mutable field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
 #accessible method net/minecraft/client/MouseHandler onScroll (JDD)V
 #accessible method net/minecraft/client/MouseHandler onMove (JDD)V
 #accessible method net/minecraft/client/KeyboardHandler charTyped (JII)V
+
+## EntityPortrait sets an entity's walk to the pose's for the draw.
+#accessible field net/minecraft/world/entity/WalkAnimationState position F
 #?}
 
 # VellumContainerScreen moves menu slots to where layout put their <slot> elements.

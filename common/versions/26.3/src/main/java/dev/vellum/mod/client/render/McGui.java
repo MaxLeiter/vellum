@@ -137,9 +137,19 @@ public final class McGui {
         if (decorations) g.itemDecorations(Minecraft.getInstance().font, stack, 0, 0);
     }
 
-    /** A 3D scene in a screen box, a block {@code scale} GUI px, multiplied by {@code color} (premultiplied). */
+    /**
+     * A 3D scene in a screen box, a block {@code scale} GUI px, multiplied by {@code color}: a picture, blitted with the
+     * colour premultiplied as the picture is, so fading scales every channel.
+     */
     void scene(Scene scene, int color, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissor) {
-        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, color, x0, y0, x1, y1, scale, scissor));
+        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, premultiplied(color), x0, y0, x1, y1, scale, scissor));
+    }
+
+    /** {@code argb} with its colour channels multiplied by its alpha. */
+    private static int premultiplied(int argb) {
+        float a = (argb >>> 24) / 255f;
+        return argb & 0xFF000000 | (int) ((argb >> 16 & 0xFF) * a) << 16 | (int) ((argb >> 8 & 0xFF) * a) << 8
+                | (int) ((argb & 0xFF) * a);
     }
 
     // ---- Panels, tooltips, the cursor ----

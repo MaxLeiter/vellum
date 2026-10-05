@@ -270,8 +270,7 @@ public final class McCanvas implements Canvas {
         float scale = pixelsPerBlock * lengthScale();
         if (scale <= 0 || !sceneVisible(tint, x, y, width, height)) return;
         int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
-        // The picture is premultiplied, so fading scales every channel.
-        gui.scene(scene, premultiplied(color(tint)), x0, y0, x1, y1, scale, gui.scissor());
+        gui.scene(scene, color(tint), x0, y0, x1, y1, scale, gui.scissor());
     }
 
     /**
@@ -305,12 +304,6 @@ public final class McCanvas implements Canvas {
         return argb >>> 24;
     }
 
-    /** {@code argb} with its colour channels multiplied by its alpha. */
-    private static int premultiplied(int argb) {
-        float a = alpha(argb) / 255f;
-        return argb & 0xFF000000 | (int) ((argb >> 16 & 0xFF) * a) << 16 | (int) ((argb >> 8 & 0xFF) * a) << 8
-                | (int) ((argb & 0xFF) * a);
-    }
 
     /** The current transform for a render state, which keeps it: shared until the transform changes. */
     private Matrix3x2f pose() {
