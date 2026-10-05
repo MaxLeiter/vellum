@@ -296,6 +296,13 @@ final class Properties {
         add(List.of(Prop.MODEL_YAW, Prop.MODEL_PITCH), Numeric::angle, v -> CssText.deg((Float) v));
         add(Prop.MODEL_SCALE, Properties::nonNegativeNumber, NUMBER);
         add(Prop.ENTITY_FOCUS, Keywords.parser(EntityFocus.class), KEYWORD);
+        add(Prop.GAZE_REACH, (r, ctx) -> Numeric.px(r, ctx, false), PX);
+        // -mc-gaze-limit's parts: magnitudes, or none (NaN, so it flips rather than interpolates).
+        add(List.of(Prop.GAZE_LIMIT_YAW, Prop.GAZE_LIMIT_UP, Prop.GAZE_LIMIT_DOWN), or(Map.of("none", Float.NaN),
+                (r, ctx) -> {
+                    Float a = Numeric.angle(r, ctx);
+                    return a == null || a < 0 ? null : a;
+                }), v -> Float.isNaN((Float) v) ? "none" : CssText.deg((Float) v));
         add(Prop.SCROLL_BEHAVIOR, Keywords.parser(Map.of("auto", false, "smooth", true)),
                 v -> (Boolean) v ? "smooth" : "auto");
         add(Prop.SCROLLBAR_WIDTH, Keywords.parser(Map.of("auto", 2, "thin", 1, "none", 0)),

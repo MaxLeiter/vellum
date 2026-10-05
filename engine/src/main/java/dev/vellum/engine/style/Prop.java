@@ -132,6 +132,11 @@ public enum Prop {
     MODEL_PITCH("-mc-pitch", false, false, Interp.FLOAT, s -> s.modelPitch, (s, v) -> s.modelPitch = (Float) v),
     MODEL_SCALE("-mc-model-scale", false, false, Interp.FLOAT, s -> s.modelScale, (s, v) -> s.modelScale = (Float) v),
     ENTITY_FOCUS("-mc-entity-focus", false, false, Interp.DISCRETE, s -> s.entityFocus, (s, v) -> s.entityFocus = (EntityFocus) v),
+    GAZE_REACH("-mc-gaze-reach", false, false, Interp.FLOAT, s -> s.gazeReach, (s, v) -> s.gazeReach = (Float) v),
+    /** {@code -mc-gaze-limit}'s parts (NaN for none). */
+    GAZE_LIMIT_YAW("-vellum-gaze-limit-yaw", false, false, Interp.FLOAT, s -> s.gazeLimitYaw, (s, v) -> s.gazeLimitYaw = (Float) v),
+    GAZE_LIMIT_UP("-vellum-gaze-limit-up", false, false, Interp.FLOAT, s -> s.gazeLimitUp, (s, v) -> s.gazeLimitUp = (Float) v),
+    GAZE_LIMIT_DOWN("-vellum-gaze-limit-down", false, false, Interp.FLOAT, s -> s.gazeLimitDown, (s, v) -> s.gazeLimitDown = (Float) v),
 
     SCROLL_BEHAVIOR("scroll-behavior", false, false, Interp.DISCRETE, s -> s.scrollSmooth, (s, v) -> s.scrollSmooth = (Boolean) v),
     SCROLLBAR_WIDTH("scrollbar-width", false, true, Interp.DISCRETE, s -> s.scrollbarWidth, (s, v) -> s.scrollbarWidth = (Integer) v),
@@ -207,6 +212,7 @@ public enum Prop {
             case "background" -> set.add(BACKGROUND_COLOR);
             case "transform-origin" -> set.addAll(List.of(TRANSFORM_ORIGIN_X, TRANSFORM_ORIGIN_Y));
             case "object-position" -> set.addAll(List.of(OBJECT_POSITION_X, OBJECT_POSITION_Y));
+            case "-mc-gaze-limit" -> set.addAll(List.of(GAZE_LIMIT_YAW, GAZE_LIMIT_UP, GAZE_LIMIT_DOWN));
             case "outline" -> set.addAll(List.of(OUTLINE_WIDTH, OUTLINE_COLOR, OUTLINE_OFFSET));
             case "gap" -> set.addAll(List.of(ROW_GAP, COLUMN_GAP));
             case "flex" -> set.addAll(List.of(FLEX_GROW, FLEX_SHRINK, FLEX_BASIS));

@@ -147,6 +147,13 @@ public final class ComputedStyle implements Cloneable {
     public float modelScale = 1f;
     /** {@code -mc-entity-focus}: an entity's whole body fits its box, or its head and shoulders fill it. */
     public EntityFocus entityFocus = EntityFocus.BODY;
+    /**
+     * How a {@code follow-mouse} entity's head turns toward the pointer ({@link #gazeYaw}, {@link #gazePitch}):
+     * {@code -mc-gaze-reach}, in px, is the falloff distance; {@code -mc-gaze-limit} caps the turn to either side,
+     * the tilt up and the tilt down, in degrees (NaN for none).
+     */
+    public float gazeReach = 40f;
+    public float gazeLimitYaw = Float.NaN, gazeLimitUp = Float.NaN, gazeLimitDown = Float.NaN;
 
     // ---- Scrolling ----
     public boolean scrollSmooth = true;
@@ -296,7 +303,9 @@ public final class ComputedStyle implements Cloneable {
                 && same(outlineOffset, o.outlineOffset) && transform.equals(o.transform)
                 && transformOriginX.equals(o.transformOriginX) && transformOriginY.equals(o.transformOriginY)
                 && tint == o.tint && same(modelYaw, o.modelYaw) && same(modelPitch, o.modelPitch)
-                && same(modelScale, o.modelScale) && entityFocus == o.entityFocus && scrollSmooth == o.scrollSmooth
+                && same(modelScale, o.modelScale) && entityFocus == o.entityFocus && same(gazeReach, o.gazeReach)
+                && same(gazeLimitYaw, o.gazeLimitYaw) && same(gazeLimitUp, o.gazeLimitUp)
+                && same(gazeLimitDown, o.gazeLimitDown) && scrollSmooth == o.scrollSmooth
                 && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
@@ -339,6 +348,27 @@ public final class ComputedStyle implements Cloneable {
     /** As {@link #objectX}, down from the top edge. */
     public float objectY(float free) {
         return objectPositionY.resolve(free, free / 2);
+    }
+
+    /**
+     * How far a {@code follow-mouse} entity's head turns toward a pointer {@code dx} px right of its eyes, in degrees
+     * (positive to the right): {@code 40° × atan(dx / reach)}, as vanilla's inventory turns the player's head (the
+     * body takes half), so at most about 63°, then capped by the yaw limit.
+     */
+    public float gazeYaw(float dx) {
+        return gaze(dx, gazeLimitYaw, gazeLimitYaw);
+    }
+
+    /** As {@link #gazeYaw}, for a pointer {@code dy} px above the eyes: positive tilts the head up. */
+    public float gazePitch(float dy) {
+        return gaze(dy, gazeLimitUp, gazeLimitDown);
+    }
+
+    /** The turn toward a pointer {@code d} px away, at most {@code plus} one way and {@code minus} the other. */
+    private float gaze(float d, float plus, float minus) {
+        float turn = (float) (gazeReach > 0 ? Math.atan(d / gazeReach) : Math.signum(d) * Math.PI / 2) * 40f;
+        if (!Float.isNaN(plus)) turn = Math.min(turn, plus);
+        return Float.isNaN(minus) ? turn : Math.max(turn, -minus);
     }
 
     /**
