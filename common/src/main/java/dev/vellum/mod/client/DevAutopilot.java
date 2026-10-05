@@ -142,7 +142,7 @@ public final class DevAutopilot {
         awardKills(mc);
         command(mc, "weather clear 100000");
         if (DevTour.ENABLED) {
-            DevTour.plan(mc, steps, ticks -> wait = ticks);
+            DevTour.plan(mc, steps);
             return;
         }
         guiScale(mc, 2);

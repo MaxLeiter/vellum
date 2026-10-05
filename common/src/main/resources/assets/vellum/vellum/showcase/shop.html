@@ -817,6 +817,7 @@
         confetti(document.getElementById('buy'));
         toast('Trade complete!', 'Paid ' + cost + ' emeralds', '');
         vellum.playSound('minecraft:entity.wandering_trader.yes');
+        vellum.playSound('minecraft:entity.experience_orb.pickup', 0.4, 1.2);
       }
     });
 

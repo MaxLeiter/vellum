@@ -1191,7 +1191,19 @@
       state.sel = id;
       typeEntry();
       vellum.playSound('minecraft:block.note_block.bit', 0.35, 1.8);
+      cry(mob());
       vellum.nextTick(revealSelected);
+    }
+
+    // A picked mob calls out, softly: its ambient sound, or the one it is known by. Only seen vanilla mobs with a
+    // dex entry, whose sounds are known to exist; babies squeak higher. Never on opening, only when you pick one.
+    const CRIES = { creeper: 'entity.creeper.primed', slime: 'entity.slime.squish', allay: 'entity.allay.ambient_without_item',
+      iron_golem: 'entity.iron_golem.repair', bee: 'entity.bee.pollinate', axolotl: 'entity.axolotl.idle_air',
+      turtle: 'entity.turtle.ambient_land', sniffer: 'entity.sniffer.idle' };
+    function cry(m) {
+      const parts = m.id.split(':');
+      if (!m.seen || parts[0] !== 'minecraft' || !FLAVOUR[parts[1]]) return;
+      vellum.playSound('minecraft:' + (CRIES[parts[1]] || 'entity.' + parts[1] + '.ambient'), 0.3, state.baby ? 1.5 : 1);
     }
 
     function setFilter(id) {

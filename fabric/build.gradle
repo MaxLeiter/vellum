@@ -34,11 +34,12 @@ loom {
             if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
                 property('vellum.autopilot', 'true')
             }
-            // `-Ptour [-PtourGo=<file>]`: the scripted showcase tour for demo videos, in a 1280x720 window
-            // (tools/record creates the go-file once it is recording).
+            // `-Ptour [-PtourGo=<file>] [-PtourShots]`: the scripted showcase tour for demo videos, in a 1280x720 window
+            // (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each beat.
             if (project.hasProperty('tour')) {
                 property('vellum.tour', 'true')
                 if (project.hasProperty('tourGo')) property('vellum.tour.go', project.property('tourGo').toString())
+                if (project.hasProperty('tourShots')) property('vellum.tour.shots', 'true')
                 programArgs('--width', '1280', '--height', '720')
             }
         }

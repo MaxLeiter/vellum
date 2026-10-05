@@ -1,0 +1,351 @@
+<!doctype html>
+<html>
+<head>
+  <title>Vellum</title>
+  <style>
+    /*
+     * The dev tour's end card: the title screen's logo over a still dusk, then the tagline and what pages can use,
+     * rising in one after another. The landscape is a smaller cousin of the title screen's (showcase/title.html):
+     * the same sky, square sun and spruce silhouettes, drifting slowly, with no pointer parallax.
+     */
+    :root {
+      --ink: #f4f1ea;
+      --gold: #ffd36b;
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      background: #0d0820;
+      color: var(--ink);
+    }
+
+    /* ---------- The world ---------- */
+
+    .world {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .sky {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(#120f33, #2e1d57 30%, #7a2f6e 58%, #d8664a 80%, #ffb865 94%);
+    }
+
+    .stars {
+      position: absolute;
+      inset: 0 0 45% 0;
+    }
+
+    .stars i {
+      position: absolute;
+      display: block;
+      width: 1px;
+      height: 1px;
+      background: #fff;
+      animation: twinkle 3s ease-in-out infinite alternate;
+    }
+
+    .stars i.big {
+      width: 2px;
+      height: 2px;
+      background: #fff7d8;
+    }
+
+    @keyframes twinkle {
+      from { opacity: 0.9; }
+      to { opacity: 0.1; }
+    }
+
+    .glow {
+      position: absolute;
+      left: 15%;
+      top: 30%;
+      width: 70%;
+      height: 60%;
+      background: radial-gradient(ellipse at center, rgba(255, 180, 100, 0.5), rgba(255, 110, 90, 0.16) 45%, rgba(255, 110, 90, 0) 70%);
+    }
+
+    /* The square sun, sinking behind the far peaks while the card holds. */
+    .sun {
+      position: absolute;
+      left: calc(50% - 12px);
+      top: 62%;
+      width: 20px;
+      height: 20px;
+      background: #ffe6b0;
+      border: 2px solid #ffb062;
+      box-shadow: 0 0 0 4px rgba(255, 170, 90, 0.3), 0 0 18px 10px rgba(255, 120, 60, 0.35);
+      animation: sink 12s linear both;
+    }
+
+    @keyframes sink {
+      to { transform: translateY(14px); }
+    }
+
+    /* Ranges: a strip two tiles wide slides by one tile on repeat, as on the title screen. */
+    .range {
+      position: absolute;
+      inset: 0;
+    }
+
+    .strip {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 200%;
+      height: 100%;
+      animation: drift 200s linear infinite;
+    }
+
+    .tile {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+    }
+
+    .tile + .tile {
+      left: 50%;
+    }
+
+    .tile > i {
+      position: absolute;
+      display: block;
+    }
+
+    @keyframes drift {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    .far .strip { animation-duration: 260s; }
+
+    .far .tile > i {
+      background-color: #5a3a78;
+      background-image: linear-gradient(225deg, rgba(20, 0, 40, 0.3) 50%, rgba(0, 0, 0, 0) 50%);
+      transform: rotate(45deg);
+    }
+
+    .far .tile > .base {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 24%;
+      transform: none;
+      background-image: none;
+    }
+
+    .near .strip { animation-duration: 110s; }
+
+    .near .tile > i {
+      background: #24163a;
+    }
+
+    .near .tile > .base {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 14%;
+    }
+
+    /* Spruces as on the title screen: each tier a box-shadow, wider and lower than the one above. */
+    .tree {
+      width: 2px;
+      height: 3px;
+      transform-origin: 1px 27px;
+      box-shadow: 0 3px 0 1px #24163a, 0 6px 0 2px #24163a, 0 9px 0 3px #24163a, 0 12px 0 4px #24163a,
+        0 15px 0 5px #24163a, 0 18px 0 6px #24163a;
+    }
+
+    /* Darker in the middle, behind the words, and at the edges. */
+    .scrim {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 42%, rgba(8, 4, 20, 0.55), rgba(8, 4, 20, 0.2) 55%, rgba(0, 0, 0, 0.5));
+    }
+
+    .fade {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      pointer-events: none;
+      animation: fade-out 700ms ease-out both;
+    }
+
+    @keyframes fade-out {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    /* ---------- The card ---------- */
+
+    main {
+      position: absolute;
+      inset: 0 0 14% 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    /* The title screen's logo: the font at 4x with a four-step extrusion, and a shimmer that sweeps the letters. */
+    h1 {
+      margin: 0 0 4px;
+      font-size: 40px;
+      font-weight: 400;
+      letter-spacing: 5px;
+      color: var(--ink);
+      text-shadow: 1px 1px 0 #c3b2df, 2px 2px 0 #9580bb, 3px 3px 0 #66518f, 4px 4px 0 #2f2152, 5px 5px 0 #1a1030;
+      animation: logo-in 900ms cubic-bezier(0.2, 0.9, 0.3, 1.2) 250ms both;
+    }
+
+    @keyframes logo-in {
+      from { opacity: 0; transform: translateY(-14px) scale(1.2); }
+      to { opacity: 1; transform: none; }
+    }
+
+    h1 span {
+      display: inline-block;
+      animation: shimmer 3.2s ease-in-out 1.3s infinite;
+    }
+
+    h1 span:nth-child(2) { animation-delay: 1.38s; }
+    h1 span:nth-child(3) { animation-delay: 1.46s; }
+    h1 span:nth-child(4) { animation-delay: 1.54s; }
+    h1 span:nth-child(5) { animation-delay: 1.62s; }
+    h1 span:nth-child(6) { animation-delay: 1.7s; }
+
+    @keyframes shimmer {
+      0%, 16%, 100% { color: var(--ink); transform: translateY(0); }
+      6% { color: #fff6c0; transform: translateY(-2px); }
+      11% { color: var(--gold); }
+    }
+
+    /* A gold rule that grows out from the middle. */
+    .rule {
+      width: 150px;
+      height: 1px;
+      background: linear-gradient(to right, rgba(255, 211, 107, 0), var(--gold), rgba(255, 211, 107, 0));
+      animation: grow 700ms ease-out 750ms both;
+    }
+
+    @keyframes grow {
+      from { transform: scaleX(0); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    .tagline {
+      font-size: 16px;
+      text-shadow: minecraft;
+      animation: rise 600ms ease-out 950ms both;
+    }
+
+    .features {
+      display: flex;
+      gap: 5px;
+      color: var(--gold);
+      text-shadow: minecraft;
+    }
+
+    .features span {
+      animation: rise 500ms ease-out backwards;
+    }
+
+    .features .dot {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    /* Each word after the one before it; the dots between come in with the word they precede. */
+    .features :nth-child(1) { animation-delay: 1.35s; }
+    .features :nth-child(2), .features :nth-child(3) { animation-delay: 1.47s; }
+    .features :nth-child(4), .features :nth-child(5) { animation-delay: 1.59s; }
+    .features :nth-child(6), .features :nth-child(7) { animation-delay: 1.71s; }
+    .features :nth-child(8), .features :nth-child(9) { animation-delay: 1.83s; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .strip, .stars i, h1 span, .sun { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="world">
+    <div class="sky"></div>
+    <div class="stars" id="stars"></div>
+    <div class="glow"></div>
+    <div class="sun"></div>
+    <div class="range far"><div class="strip"><div class="tile" id="far"></div></div></div>
+    <div class="range near"><div class="strip"><div class="tile" id="near"></div></div></div>
+    <div class="scrim"></div>
+  </div>
+
+  <main>
+    <h1><span>V</span><span>E</span><span>L</span><span>L</span><span>U</span><span>M</span></h1>
+    <div class="rule"></div>
+    <div class="tagline">Minecraft GUIs in HTML, CSS and JS</div>
+    <div class="features">
+      <span>flexbox</span><span class="dot">·</span><span>grid</span><span class="dot">·</span><span>animations</span>
+      <span class="dot">·</span><span>3D models</span><span class="dot">·</span><span>scripting</span>
+    </div>
+  </main>
+
+  <div class="fade"></div>
+
+  <script>
+    // let in loop bodies, not const: Rhino initialises a const in a loop body only once.
+    function seeded(seed) {
+      return function () {
+        seed = (seed * 1664525 + 1013904223) % 4294967296;
+        return seed / 4294967296;
+      };
+    }
+
+    function shape(parent, cls, css) {
+      const el = document.createElement('i');
+      if (cls) el.className = cls;
+      el.style.cssText = css;
+      parent.appendChild(el);
+      return el;
+    }
+
+    // Fills a tile, then copies it beside itself so the strip loops without a seam.
+    function tile(id, seed, build) {
+      const first = document.getElementById(id);
+      build(first, seeded(seed));
+      first.parentNode.appendChild(first.cloneNode(true));
+    }
+
+    tile('far', 11, (t, r) => {
+      shape(t, 'base', '');
+      // Two peaks either side of the middle, so the sun sets in the gap between them.
+      [[-6, 70], [9, 52], [20, 84], [33, 56], [59, 60], [70, 90], [84, 54], [95, 72]].forEach(p => {
+        shape(t, '', 'left:' + p[0] + '%; bottom:calc(24% - ' + p[1] / 2 + 'px); width:' + p[1] + 'px; height:' + p[1] + 'px;');
+      });
+    });
+
+    tile('near', 5, (t, r) => {
+      shape(t, 'base', '');
+      for (let x = 0; x < 100; x += 1 + r() * 2.4) {
+        let k = (0.6 + r() * 0.7).toFixed(2);
+        shape(t, 'tree', 'left:' + x + '%; bottom:calc(14% + ' + (24 - Math.round(r() * 4)) + 'px); transform: scale(' + k + ');');
+      }
+    });
+
+    const random = seeded(42);
+    const stars = document.getElementById('stars');
+    for (let i = 0; i < 46; i++) {
+      let s = shape(stars, random() < 0.2 ? 'big' : '', 'left:' + (random() * 100).toFixed(1) + '%; top:' + (random() * 100).toFixed(1) + '%;');
+      s.style.animationDuration = (1.5 + random() * 3).toFixed(2) + 's';
+      s.style.animationDelay = (-random() * 4).toFixed(2) + 's';
+    }
+  </script>
+</body>
+</html>
