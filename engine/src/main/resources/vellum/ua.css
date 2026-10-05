@@ -127,10 +127,11 @@ progress, meter { width: 150px; height: 8px; background-color: #202020; border: 
 
 /* ---- Utility classes ---- */
 
-/* The vanilla container panel (inventories, furnaces...). */
+/* The vanilla container panel (inventories, furnaces...): its raised bevel, and the black line around it, which is
+   an outline so it takes no room. */
 .mc-panel {
     padding: 7px; background-color: #c6c6c6; color: #404040;
-    border: 2px solid; border-color: #ffffff #555555 #555555 #ffffff;
+    border: 2px solid; border-color: #ffffff #555555 #555555 #ffffff; outline: 1px solid #000;
 }
 /* A sunken bevel, as around slots. */
 .mc-inset { border: 1px solid; border-color: #373737 #ffffff #ffffff #373737; }

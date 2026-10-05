@@ -19,7 +19,7 @@ import net.minecraft.world.item.Items;
  * elements are real slots), and a live session that exercises the server API both ways.
  */
 public final class VellumDemos {
-    public static final String CHEST_PAGE = "vellum:vellum/demo/inventory.html";
+    public static final String CHEST_PAGE = "vellum:vellum/demo/chest.html";
     public static final String LIVE_PAGE = "vellum:vellum/demo/templates.html";
 
     /** A plain 9×3 chest menu with its own type, so the client can give it a Vellum screen without touching chests. */
