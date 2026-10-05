@@ -176,6 +176,15 @@ public final class StyleEngine {
         return old.sameAs(fresh) ? old : fresh;
     }
 
+    /**
+     * Whether a change to attribute {@code name} (lower case) can change a style: {@code style}, the attributes the
+     * current rules' selectors read (by name, as a class or id, or through pseudo-classes such as {@code :checked}),
+     * and those {@code attr()} has read. Every attribute can until the first restyle, which reads the stylesheets.
+     */
+    public boolean readsAttribute(String name) {
+        return index == null || name.equals("style") || index.attributes.contains(name) || cascade.hasReadAttribute(name);
+    }
+
     // ---- Used styles ----
 
     /**

@@ -37,6 +37,8 @@ final class RuleIndex {
     private final Map<String, List<Entry>> byId = new HashMap<>(), byClass = new HashMap<>(), byTag = new HashMap<>();
     private final List<Entry> universal = new ArrayList<>();
     final Map<String, KeyframesRule> keyframes = new HashMap<>();
+    /** The attributes the rules' selectors read: changes to others cannot change which rules match. */
+    final Set<String> attributes = new HashSet<>();
     private final MediaQuery.Environment env;
     private final Function<String, Stylesheet> imports;
     private int order;
@@ -72,6 +74,7 @@ final class RuleIndex {
                     for (Selector s : r.selectors()) {
                         long key = (userAgent ? 0L : 1L) << 61 | (long) s.specificity << 31 | position;
                         bucket(s).add(new Entry(s, r.decls(), userAgent, key));
+                        s.attributesRead(attributes);
                     }
                 }
                 case MediaRule m -> {

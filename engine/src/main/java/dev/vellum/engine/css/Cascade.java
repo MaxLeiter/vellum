@@ -82,6 +82,11 @@ final class Cascade {
         return ctx.attributeRead;
     }
 
+    /** Whether any computation so far read attribute {@code name} through {@code attr()}. */
+    boolean hasReadAttribute(String name) {
+        return ctx.attributesRead.contains(name);
+    }
+
     /**
      * Whether the last computation copied a non-inherited property from the parent ({@code inherit}), so it depends
      * on more of the parent's style than its inherited properties.

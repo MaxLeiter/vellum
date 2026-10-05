@@ -486,7 +486,9 @@ public final class Document extends Node {
             case "open" -> element.tagName().equals("details");
             default -> false;
         };
-        invalidate(layout);
+        // Restyle only for attributes a style can read; repaint for any (replaced content and controls draw them).
+        invalidate(styleEngine.readsAttribute(name), layout);
+        repaint = true;
         if (MinecraftText.expandsOn(element, name) && !readyState.equals("loading")) MinecraftText.expand(this, element);
     }
 

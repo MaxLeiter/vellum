@@ -104,9 +104,11 @@ painter restores the canvas to the save count it found, also when it throws. Err
 reported and do not stop anything.
 
 Dirty tracking is document-wide (D-008): there is one style flag and one layout flag, and a pass restyles or
-relayouts everything, but a change sets only the flags it can affect. Attribute and form or interaction state
-changes (`:checked`, `:hover`, `:placeholder-shown`...) restyle; the restyle invalidates layout when a
-layout-affecting property changed. Layout is invalidated directly only by what layout reads without styles: tree
+relayouts everything, but a change sets only the flags it can affect. Form and interaction state changes
+(`:checked`, `:hover`, `:placeholder-shown`...) restyle, and so do attribute changes a style can read
+(`StyleEngine.readsAttribute`: `style`, the attributes the current rules' selectors read by name, as a class or id
+or through a pseudo-class, and those `attr()` has read); any attribute change repaints. The restyle invalidates
+layout when a layout-affecting property changed. Layout is invalidated directly only by what layout reads without styles: tree
 and text changes, and the `width`/`height`/`src` of replaced elements and an input's `type`. Typing in a field
 restyles only when its emptiness flips. Changes to detached nodes invalidate nothing. Moving a node within the
 document (`insertBefore` of a connected node) keeps its state (focus, hover, replaced content such as canvases);

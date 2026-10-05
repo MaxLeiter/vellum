@@ -12,6 +12,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A complex selector (Selectors 4): compound selectors joined by combinators, with its specificity and optional
@@ -41,6 +42,15 @@ final class Selector {
     /** The rightmost compound, which the rule index keys on. */
     Compound subject() {
         return compounds[compounds.length - 1];
+    }
+
+    /** Adds the names of the attributes matching this selector reads to {@code out}. */
+    void attributesRead(Set<String> out) {
+        for (Compound c : compounds) for (Simple simple : c.simples()) simple.attributesRead(out);
+    }
+
+    private static void attributesRead(List<Selector> selectors, Set<String> out) {
+        for (Selector s : selectors) s.attributesRead(out);
     }
 
     /** Whether {@code element} matches, ignoring the pseudo-element (the caller decides what that applies to). */
@@ -160,20 +170,30 @@ final class Selector {
         boolean matches(Element e, MatchContext ctx);
 
         int specificity();
+
+        /** Adds the names of the attributes matching reads to {@code out}. */
+        default void attributesRead(Set<String> out) {}
     }
 
     record IdSelector(String id) implements Simple {
         @Override public boolean matches(Element e, MatchContext ctx) { return id.equals(e.getAttribute("id")); }
         @Override public int specificity() { return ID; }
+        @Override public void attributesRead(Set<String> out) { out.add("id"); }
     }
 
     record ClassSelector(String name) implements Simple {
         @Override public boolean matches(Element e, MatchContext ctx) { return e.hasClass(name); }
         @Override public int specificity() { return CLASS; }
+        @Override public void attributesRead(Set<String> out) { out.add("class"); }
     }
 
     /** {@code [name]}, {@code [name op value]} with op one of = ~= |= ^= $= *=, and the {@code i} flag. */
     record AttributeSelector(String name, char op, String value, boolean ignoreCase) implements Simple {
+        @Override
+        public void attributesRead(Set<String> out) {
+            out.add(name);
+        }
+
         @Override
         public boolean matches(Element e, MatchContext ctx) {
             String actual = e.getAttribute(name);
@@ -225,19 +245,29 @@ final class Selector {
 
     /** Pseudo-classes without arguments. */
     enum PseudoClass implements Simple {
-        HOVER(true), ACTIVE(true), FOCUS(true), FOCUS_VISIBLE(true), FOCUS_WITHIN(true), CHECKED, DISABLED, ENABLED,
-        EMPTY, ROOT, FIRST_CHILD, LAST_CHILD, ONLY_CHILD, FIRST_OF_TYPE, LAST_OF_TYPE, ONLY_OF_TYPE,
-        PLACEHOLDER_SHOWN, OPEN, SCOPE, ANY_LINK;
+        HOVER(true), ACTIVE(true), FOCUS(true), FOCUS_VISIBLE(true, "type"), FOCUS_WITHIN(true),
+        CHECKED(false, "checked", "selected", "disabled", "type"), DISABLED(false, "disabled"),
+        ENABLED(false, "disabled"), EMPTY, ROOT, FIRST_CHILD, LAST_CHILD, ONLY_CHILD, FIRST_OF_TYPE, LAST_OF_TYPE,
+        ONLY_OF_TYPE, PLACEHOLDER_SHOWN(false, "placeholder", "value", "type"), OPEN(false, "open"), SCOPE,
+        ANY_LINK(false, "href");
 
         /** Reads interaction state (hover, active, focus), which changes without the DOM changing. */
         private final boolean interaction;
+        /** The attributes its state depends on (form state also has live values, which restyle by themselves). */
+        private final List<String> attributes;
 
         PseudoClass() {
             this(false);
         }
 
-        PseudoClass(boolean interaction) {
+        PseudoClass(boolean interaction, String... attributes) {
             this.interaction = interaction;
+            this.attributes = List.of(attributes);
+        }
+
+        @Override
+        public void attributesRead(Set<String> out) {
+            out.addAll(attributes);
         }
 
         @Override
@@ -294,6 +324,11 @@ final class Selector {
      */
     record Nth(int a, int b, boolean last, boolean ofType, List<Selector> of) implements Simple {
         @Override
+        public void attributesRead(Set<String> out) {
+            if (of != null) Selector.attributesRead(of, out);
+        }
+
+        @Override
         public boolean matches(Element e, MatchContext ctx) {
             if (of != null && !SelectorParser.matchesAny(of, e, ctx)) return false;
             int pos = position(e, last, ofType, of, ctx);
@@ -326,6 +361,11 @@ final class Selector {
     /** {@code :not()}, {@code :is()} and {@code :where()} (which contributes no specificity). */
     record Logical(boolean negate, boolean zeroSpecificity, List<Selector> selectors) implements Simple {
         @Override
+        public void attributesRead(Set<String> out) {
+            Selector.attributesRead(selectors, out);
+        }
+
+        @Override
         public boolean matches(Element e, MatchContext ctx) {
             return SelectorParser.matchesAny(selectors, e, ctx) != negate;
         }
@@ -342,6 +382,11 @@ final class Selector {
      */
     record Has(List<Selector> relative) implements Simple {
         static final Compound ANCHOR = new Compound(null, null, null, new Simple[] {Anchor.INSTANCE});
+
+        @Override
+        public void attributesRead(Set<String> out) {
+            Selector.attributesRead(relative, out);
+        }
 
         @Override
         public boolean matches(Element e, MatchContext ctx) {
