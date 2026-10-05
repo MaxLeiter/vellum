@@ -7,6 +7,16 @@ plugins {
 def obfuscated = stonecutter.current.parsed < '26'
 apply plugin: obfuscated ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
 
+if (obfuscated) {
+    // java.withSourcesJar() (multiloader-common) ran before Loom was applied, so the plain sources jar is still in the
+    // published variant beside Loom's remapped one, which Loom only swaps in for jars added after it: keep the remapped.
+    afterEvaluate {
+        configurations.named('sourcesElements') {
+            outgoing.artifacts.removeIf { it.buildDependencies.getDependencies(null).contains(tasks.sourcesJar) }
+        }
+    }
+}
+
 dependencies {
     minecraft("com.mojang:minecraft:${minecraft_version}")
     if (obfuscated) {
