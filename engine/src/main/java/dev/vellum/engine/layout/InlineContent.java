@@ -23,7 +23,10 @@ final class InlineContent {
         final Element element;
         final ComputedStyle style;
         final Span parent;
-        /** The element's {@link Box.Kind#INLINE} box, or null for the root span and pseudo-elements. */
+        /**
+         * The span's box: an inline element's {@link Box.Kind#INLINE} box, an inline pseudo-element's
+         * {@link Box.Kind#PSEUDO} box; null for the root span.
+         */
         final Box box;
         /** Font metrics and baseline shift, computed once per pass by {@link InlineLayout}. */
         InlineLayout.Metrics metrics;
@@ -50,8 +53,9 @@ final class InlineContent {
      * (length {@code text.length() + 1}); null for generated content.
      */
     record TextItem(Span span, Text node, String text, int[] sourceIndex) implements Item {
-        int source(int i) {
-            return sourceIndex == null ? i : sourceIndex[i];
+        /** The source indices of chars {@code [start, end]} (the end included), or null for generated content. */
+        int[] sourceSlice(int start, int end) {
+            return sourceIndex == null ? null : Arrays.copyOfRange(sourceIndex, start, end + 1);
         }
     }
 

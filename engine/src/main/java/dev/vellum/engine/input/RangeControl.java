@@ -9,24 +9,45 @@ import java.math.RoundingMode;
 
 /**
  * {@code <input type=range>}: the value constrained by {@code min}, {@code max} and {@code step}, keyboard stepping,
- * and dragging the thumb. The thumb geometry is shared with {@link Controls#paint}.
+ * and dragging the thumb. One instance per element, kept in {@code element.controlState} and re-read from the
+ * attributes when they change. The thumb geometry is shared with {@link Controls#paint}.
  */
 final class RangeControl {
     /** Width of the vanilla slider handle sprite. */
     static final float THUMB_WIDTH = 8;
 
     private final Element element;
-    private final double min, max;
+    private int domVersion = -1;
+    private double min, max;
     /** The step, or NaN for {@code step="any"}. */
-    private final double step;
+    private double step;
+    /** The value string {@link #text} last formatted, and the result. */
+    private String formattedFrom;
+    private String formatted;
+    /** {@link #caption}'s inputs and result. */
+    private String captionLabel, captionText, caption;
+    /** The caption as {@link Controls} draws it. */
+    final Label label = new Label();
 
-    RangeControl(Element element) {
+    private RangeControl(Element element) {
         this.element = element;
-        this.min = Forms.number(element.getAttribute("min"), 0);
-        this.max = Math.max(min, Forms.number(element.getAttribute("max"), 100));
-        String s = element.getAttribute("step");
-        double st = Forms.number(s, 1);
-        this.step = "any".equalsIgnoreCase(s) ? Double.NaN : st > 0 ? st : 1;
+    }
+
+    /** The control of a range input, created on first use; it re-reads min, max and step when the DOM changed. */
+    static RangeControl of(Element element) {
+        RangeControl range = element.controlState instanceof RangeControl r ? r : new RangeControl(element);
+        element.controlState = range;
+        int version = element.ownerDocument().domVersion();
+        if (range.domVersion != version) {
+            range.domVersion = version;
+            range.min = Forms.number(element.getAttribute("min"), 0);
+            range.max = Math.max(range.min, Forms.number(element.getAttribute("max"), 100));
+            String s = element.getAttribute("step");
+            double st = Forms.number(s, 1);
+            range.step = "any".equalsIgnoreCase(s) ? Double.NaN : st > 0 ? st : 1;
+            range.formattedFrom = null;
+        }
+        return range;
     }
 
     /** The current value: the element's value parsed and constrained, or the midpoint when missing or invalid. */
@@ -41,7 +62,23 @@ final class RangeControl {
 
     /** The value as the element's value string. */
     String text() {
-        return format(value());
+        String value = element.value();
+        if (value != formattedFrom) {
+            formattedFrom = value;
+            formatted = format(value());
+        }
+        return formatted;
+    }
+
+    /** "label: value", like vanilla sliders' captions. */
+    String caption(String label) {
+        String text = text();
+        if (!label.equals(captionLabel) || text != captionText) {
+            captionLabel = label;
+            captionText = text;
+            caption = label + ": " + text;
+        }
+        return caption;
     }
 
     /** Arrow keys step, PageUp/PageDown move a tenth of the range, Home/End jump to the ends; fires input and change. */
@@ -62,14 +99,17 @@ final class RangeControl {
         return true;
     }
 
-    /** Mousedown: jumps the thumb under the pointer and drags it, firing input while moving and change on release. */
-    Drag press(float x) {
+    /**
+     * Mousedown at {@code localX} (border-box coordinates): jumps the thumb under the pointer and drags it, firing
+     * input while moving and change on release.
+     */
+    Drag press(float localX) {
         String start = text();
-        moveThumb(x);
+        moveThumb(localX);
         return new Drag() {
             @Override
             public void move(float px, float py) {
-                moveThumb(px);
+                if (element.box != null) moveThumb(Dom.local(element.box, px, py)[0]);
             }
 
             @Override
@@ -79,9 +119,9 @@ final class RangeControl {
         };
     }
 
-    private void moveThumb(float x) {
+    private void moveThumb(float localX) {
         Box box = element.box;
-        if (box != null && set(min + fractionAt(box, x - box.absoluteX()) * (max - min))) {
+        if (box != null && !Float.isNaN(localX) && set(min + fractionAt(box, localX) * (max - min))) {
             element.dispatchEvent(new InputEvent("input", null, null));
         }
     }

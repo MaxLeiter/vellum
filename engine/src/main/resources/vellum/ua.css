@@ -13,6 +13,7 @@ body { display: block; margin: 0; }
 
 head, script, style, template, link, meta, title, base, datalist, option, optgroup, noscript,
 input[type=hidden i], [hidden], dialog:not([open]) { display: none; }
+details:not([open]) > :not(summary:first-of-type) { display: none; }
 /* Template system: hidden by v-show, and until the template is compiled. */
 [v-hidden], [v-cloak] { display: none !important; }
 
@@ -110,9 +111,10 @@ input[type=radio i]:checked:hover, input[type=radio i]:checked:focus-visible {
     background-image: sprite(minecraft:widget/checkbox_selected_highlighted);
 }
 
-/* The thumb (widget/slider_handle) is drawn by the control. */
+/* The thumb (widget/slider_handle) and the "label: value" caption are drawn by the control. */
 input[type=range i] {
     width: 150px; height: 20px; padding: 0; background: sprite(minecraft:widget/slider); cursor: pointer;
+    color: #fff; text-shadow: minecraft;
 }
 input[type=range i]:focus-visible { background-image: sprite(minecraft:widget/slider_highlighted); }
 

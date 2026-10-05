@@ -11,12 +11,13 @@ import java.util.List;
  * positions).
  *
  * <p><b>Coordinates.</b> {@link #x}/{@link #y} are the border-box origin relative to the parent box's border-box
- * origin, ignoring the parent's scroll offset and transforms. To reach viewport coordinates, walk up adding each
- * ancestor's x/y and subtracting the scroll offsets of scroll-container ancestors ({@link #clientRect()} does this,
- * ignoring transforms). Line fragments use the same space as children: relative to this box's border-box origin.
+ * origin, ignoring the parent's scroll offset and transforms. Line fragments use the same space as children: relative
+ * to this box's border-box origin. Where a box is on screen (scroll offsets, transforms) is
+ * {@code paint.Coordinates}' business: it is the one mapping to and from viewport coordinates.
  *
  * <p>Absolutely and fixed positioned boxes stay children of their DOM parent's box (so paint order follows the
- * tree), with x/y converted into that parent's space.
+ * tree), with x/y converted into that parent's space; {@link #containingBlock} records what they are placed against,
+ * and {@link #contentParent()} which scroll offsets and clips apply to them.
  */
 public class Box {
     public enum Kind {
@@ -26,13 +27,16 @@ public class Box {
         ANONYMOUS,
         /** A replaced element (img, item, slot, canvas, entity...). */
         REPLACED,
-        /** A ::before or ::after pseudo-element box. */
+        /**
+         * A ::before or ::after pseudo-element box: block-level or atomic ones are in their parent's
+         * {@link #children}; inline ones, like {@link #INLINE} boxes, only own line fragments.
+         */
         PSEUDO,
         /**
          * An inline element (span, a, b...). It is the element's {@code element.box} but is NOT in its parent's
          * {@link #children}: its content is painted from the parent's line fragments ({@link Fragment.InlineBox} and
          * text runs). Its parent is the box that owns those lines and its geometry is the bounding box of its
-         * fragments, so {@link #clientRect()} works for scripts, focus rings and hosts.
+         * fragments, so it maps to the viewport like any box for scripts, focus rings and hosts.
          */
         INLINE
     }
@@ -63,6 +67,12 @@ public class Box {
     public boolean atomicInline;
     /** Laid out by the absolute/fixed positioning pass. */
     public boolean outOfFlow;
+    /**
+     * For absolutely and fixed positioned boxes, the box they are placed against: the box of the nearest positioned
+     * (for absolute) or transformed ancestor element, which is an {@link Kind#INLINE} box when that element is
+     * inline; null for the viewport. Set by layout; null for in-flow boxes.
+     */
+    public Box containingBlock;
 
     public Box(Kind kind, Element element, ComputedStyle style) {
         this.kind = kind;
@@ -86,30 +96,31 @@ public class Box {
     public float marginBoxWidth() { return width + marginLeft + marginRight; }
     public float marginBoxHeight() { return height + marginTop + marginBottom; }
 
+    /**
+     * Whether this is its element's scroll container: an element's block or replaced box whose overflow is not
+     * visible. The element holds the scroll offsets; anonymous, pseudo-element and inline boxes never scroll.
+     */
     public boolean isScrollContainer() {
-        return element != null && kind != Kind.ANONYMOUS && style.isScrollContainer();
+        return (kind == Kind.BLOCK || kind == Kind.REPLACED) && style.isScrollContainer();
     }
 
     /** Scroll offset applied to this box's children (zero unless it is a scroll container). */
-    public float scrollLeft() { return isScrollContainer() ? element.scrollLeft : 0; }
-    public float scrollTop() { return isScrollContainer() ? element.scrollTop : 0; }
+    public float scrollLeft() { return isScrollContainer() ? element.scrollLeft() : 0; }
+    public float scrollTop() { return isScrollContainer() ? element.scrollTop() : 0; }
 
-    /** Border-box origin in viewport coordinates, accounting for ancestor scroll offsets (not transforms). */
-    public float absoluteX() {
-        float ax = x;
-        for (Box p = parent; p != null; p = p.parent) ax += p.x - p.scrollLeft();
-        return ax;
-    }
+    /** The largest scroll offsets the content allows: how far the scrollable overflow extends past the padding box. */
+    public float maxScrollLeft() { return Math.max(0, scrollWidth - paddingBoxWidth()); }
+    public float maxScrollTop() { return Math.max(0, scrollHeight - paddingBoxHeight()); }
 
-    public float absoluteY() {
-        float ay = y;
-        for (Box p = parent; p != null; p = p.parent) ay += p.y - p.scrollTop();
-        return ay;
-    }
-
-    /** {x, y, width, height} of the border box in viewport coordinates. */
-    public float[] clientRect() {
-        return new float[] {absoluteX(), absoluteY(), width, height};
+    /**
+     * The box whose content this box is placed in: its parent, except that an absolutely or fixed positioned box
+     * belongs to its containing block's content (the block whose lines hold an inline containing block), or to the
+     * viewport (null). The scroll offsets and clips of the ancestors it skips do not apply to it.
+     */
+    public Box contentParent() {
+        if (!outOfFlow) return parent;
+        Box cb = containingBlock;
+        return cb != null && cb.kind == Kind.INLINE ? cb.parent : cb;
     }
 
     @Override

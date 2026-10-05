@@ -46,6 +46,7 @@ public final class Document extends Node {
     /** JSON delivered to scripts as {@code vellum.data} before any script runs, or null. */
     private final String initialData;
     private final Scheduler scheduler = new Scheduler(this);
+    private final Scrolling scrolling = new Scrolling();
     private final StyleEngine styleEngine;
     private final LayoutEngine layoutEngine;
     private final AnimationEngine animationEngine;
@@ -66,6 +67,7 @@ public final class Document extends Node {
     private boolean repaint = true;
     /** A layout ran (perhaps in a script's flush) whose follow-up work waits for the next frame. */
     private boolean laidOut;
+    private int stackingVersion;
     /** Listeners plus inline {@code on*} handlers in this document, by lower-case event type. */
     private final Map<String, int[]> handlers = new HashMap<>();
     private int domVersion;
@@ -119,6 +121,7 @@ public final class Document extends Node {
     public Host host() { return host; }
     public String url() { return url; }
     public Scheduler scheduler() { return scheduler; }
+    public Scrolling scrolling() { return scrolling; }
     public StyleEngine styleEngine() { return styleEngine; }
     public LayoutEngine layoutEngine() { return layoutEngine; }
     public AnimationEngine animations() { return animationEngine; }
@@ -300,13 +303,15 @@ public final class Document extends Node {
 
     /**
      * Whether a frame at {@code nowMs} would change what is painted: a pending restyle, relayout or repaint, due
-     * timers or animation-frame callbacks, running animations, smooth scrolls or drags, a blinking caret, or template
-     * updates. Hosts that can idle (the previewer) skip frames otherwise, and render after their own input.
+     * timers or animation-frame callbacks, running animations, smooth scrolls or scroll events, drags, a blinking
+     * caret, or template updates. Hosts that can idle (the previewer) skip frames otherwise, and render after their
+     * own input.
      */
     public boolean needsFrame(double nowMs) {
         if (error != null || closed) return false;
         return styleDirty || layoutDirty || laidOut || repaint || scheduler.hasWork(nowMs)
-                || animationEngine.isAnimating() || input.isActive() || scripts != null && scripts.needsFrame();
+                || animationEngine.isAnimating() || scrolling.isActive() || input.isActive()
+                || scripts != null && scripts.needsFrame();
     }
 
     /** Something painted changed that restyle and relayout do not track (a scroll offset, canvas pixels). */
@@ -320,6 +325,12 @@ public final class Document extends Node {
     }
 
     /**
+     * Incremented when an element's style changes paint order without a relayout (z-index, or opacity starting or
+     * ending a stacking context); the painter keeps its stacking-context lists until this or the layout changes.
+     */
+    public int stackingVersion() { return stackingVersion; }
+
+    /**
      * Incremented on every change to the tree, attributes, text or form state; not on hover, active or focus
      * changes. Lets subsystems skip work when only interaction state changed (or nothing did).
      */
@@ -327,6 +338,7 @@ public final class Document extends Node {
 
     public void invalidateStyle() { styleDirty = true; }
     public void invalidateLayout() { layoutDirty = true; }
+    public void invalidateStacking() { stackingVersion++; }
     public boolean needsLayout() { return layoutDirty; }
 
     /** Marks style dirty, and layout too when {@code layout}. */
@@ -425,6 +437,7 @@ public final class Document extends Node {
     /** {@code node} is about to leave the document (not just move within it). */
     void nodeRemoving(Node node) {
         if (focused != null && node.contains(focused)) setFocus(null);
+        scrolling.forget(node);
         input.nodeRemoving(node);
         disposeReplaced(node);
     }
@@ -455,7 +468,8 @@ public final class Document extends Node {
 
     /**
      * Restyles for any attribute (selectors read them). Relayouts only for what layout reads directly: the size and
-     * source of replaced elements and an input's type; other layout changes come from the restyle.
+     * source of replaced elements, an input's type and whether a details element is open (its loose text shows only
+     * then); other layout changes come from the restyle.
      */
     void attributeChanged(Element element, String name) {
         if (element.replaced != null) element.replaced.attributeChanged(name); // also a canvas outside the document
@@ -463,6 +477,7 @@ public final class Document extends Node {
         boolean layout = switch (name) {
             case "width", "height", "src" -> element.replaced != null;
             case "type" -> element.tagName().equals("input");
+            case "open" -> element.tagName().equals("details");
             default -> false;
         };
         invalidate(layout);
@@ -484,11 +499,6 @@ public final class Document extends Node {
         if (!element.isConnected()) return;
         domVersion++;
         styleDirty = true;
-    }
-
-    void scrolled(Element element) {
-        repaint = true;
-        element.dispatchEvent(new Event("scroll", false, false));
     }
 
     /** Adds {@code delta} to the count of handlers (listeners or inline attributes) for an event type. */

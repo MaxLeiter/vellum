@@ -24,15 +24,16 @@ final class Geometry {
     }
 
     /**
-     * An inline box fragment, whose rectangle is taken to be its border box. The start and end edges (left and
-     * right border, padding and corners) only exist on the lines where the element starts and ends.
+     * An inline box fragment, whose rectangle is taken to be its border box, with the edges layout resolved for its
+     * box. The start and end edges (left and right border, padding and corners) only exist on the lines where the
+     * element starts and ends.
      */
     Geometry fragment(Fragment.InlineBox f, ComputedStyle s, float x, float y, float devicePixel) {
+        Box b = f.box();
         boolean first = f.first(), last = f.last();
         set(x + f.x(), y + f.y(), f.width(), f.height(),
-                s.borderTopWidth, last ? s.borderRightWidth : 0, s.borderBottomWidth, first ? s.borderLeftWidth : 0,
-                s.paddingTop.resolve(0), last ? s.paddingRight.resolve(0) : 0, s.paddingBottom.resolve(0),
-                first ? s.paddingLeft.resolve(0) : 0, s, devicePixel);
+                b.borderTop, last ? b.borderRight : 0, b.borderBottom, first ? b.borderLeft : 0,
+                b.paddingTop, last ? b.paddingRight : 0, b.paddingBottom, first ? b.paddingLeft : 0, s, devicePixel);
         if (!first) radii[0] = radii[1] = radii[6] = radii[7] = 0;
         if (!last) radii[2] = radii[3] = radii[4] = radii[5] = 0;
         rounded = Shapes.isRounded(radii);
@@ -66,6 +67,12 @@ final class Geometry {
 
     static float snap(float v, float devicePixel) {
         return Math.round(v / devicePixel) * devicePixel;
+    }
+
+    /** The canvas's device pixel in GUI px, or 1 when the transform makes it meaningless. */
+    static float devicePixel(Canvas canvas) {
+        float dp = canvas.devicePixel();
+        return dp > 0 && Float.isFinite(dp) ? dp : 1;
     }
 
     /** Writes the {x, y, width, height} and radii of the border, padding or content box. */

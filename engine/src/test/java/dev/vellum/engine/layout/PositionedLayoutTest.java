@@ -1,6 +1,8 @@
 package dev.vellum.engine.layout;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.paint.Coordinates;
+import dev.vellum.engine.style.Length;
 import org.junit.jupiter.api.Test;
 
 import static dev.vellum.engine.layout.BlockLayoutTest.assertRect;
@@ -102,15 +104,19 @@ class PositionedLayoutTest {
         TestDoc t = new TestDoc();
         Element scroller = t.div(t.body, "overflow: auto; width: 100px; height: 50px; padding: 5px; border: 1px");
         Element child = t.div(scroller, "height: 200px; width: 150px");
-        scroller.scrollTop = 500;
         t.layout();
         // Content extent from the padding box origin, plus the end padding.
         assertEquals(160, scroller.box.scrollWidth, 0.01);
         assertEquals(210, scroller.box.scrollHeight, 0.01);
-        assertEquals(162, scroller.scrollTop, 0.01);
-        // Children are positioned ignoring the scroll offset; absoluteY subtracts it.
+        scroller.scrollTo(0, 500);
+        assertEquals(162, scroller.scrollTop(), 0.01);
+        // Children are positioned ignoring the scroll offset; on screen it applies.
         assertEquals(6, child.box.y, 0.01);
-        assertEquals(6 - 162, child.box.absoluteY(), 0.01);
+        assertEquals(6 - 162, Coordinates.boundingRect(child.box)[1], 0.01);
+        // Less content: the relayout clamps the offset.
+        child.style.height = Length.px(100);
+        t.layout();
+        assertEquals(110 - 48, scroller.scrollTop(), 0.01);
         // A box that does not overflow reports its padding box.
         assertEquals(320, t.body.box.scrollWidth, 0.01);
     }

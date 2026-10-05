@@ -1,6 +1,5 @@
 package dev.vellum.engine.layout;
 
-import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Length;
 
@@ -15,7 +14,7 @@ import dev.vellum.engine.style.Length;
  * {@link #layout} per pass, after all measurements of it, so measurements never need to be undone.
  */
 final class LayoutPass {
-    final FontMetrics fonts;
+    final TextMeasure text;
     final float viewportWidth, viewportHeight;
     final InlineLayout inline = new InlineLayout(this);
     private final BlockLayout block = new BlockLayout(this);
@@ -23,8 +22,8 @@ final class LayoutPass {
     private final GridLayout grid = new GridLayout(this);
     private final LeafLayout leaf = new LeafLayout(this);
 
-    LayoutPass(FontMetrics fonts, float viewportWidth, float viewportHeight) {
-        this.fonts = fonts;
+    LayoutPass(TextMeasure text, float viewportWidth, float viewportHeight) {
+        this.text = text;
         this.viewportWidth = viewportWidth;
         this.viewportHeight = viewportHeight;
     }

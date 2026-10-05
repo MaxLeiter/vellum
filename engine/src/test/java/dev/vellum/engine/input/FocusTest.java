@@ -1,7 +1,6 @@
 package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Overflow;
 import dev.vellum.engine.style.Visibility;
 import org.junit.jupiter.api.Test;
@@ -30,7 +29,7 @@ class FocusTest {
     }
 
     private static List<String> order(Fixture fx) {
-        return ids(new FocusNavigator(fx.doc, new Scroller(fx.doc)).order());
+        return ids(new FocusNavigator(fx.doc).order());
     }
 
     @Test
@@ -41,11 +40,11 @@ class FocusTest {
                 <input id=h type=hidden><button id=i>no box</button><button id=j>hidden</button>
                 <details id=k><summary id=l>s</summary><button id=m>inside</button></details>
                 <fieldset disabled><input id=o></fieldset><span id=n tabindex=0>inline</span>""");
-        boxAll(fx, "i", "n");
+        boxAll(fx, "i", "m"); // m: hidden in the closed details, so layout gave it no box
         fx.el("j").style.visibility = Visibility.HIDDEN;
-        fx.el("n").style = new ComputedStyle(); // inline: styled but boxless, inside the boxed body
         assertEquals(List.of("d", "b", "a", "c", "f", "l", "n"), order(fx));
         fx.el("k").setAttribute("open", "");
+        fx.box("m", null, 0, 0, 10, 10);
         assertEquals(List.of("d", "b", "a", "c", "f", "l", "m", "n"), order(fx));
     }
 
@@ -126,23 +125,23 @@ class FocusTest {
     void keyboardFocusScrollsIntoView() {
         Fixture fx = scrolling();
         fx.key("Tab");
-        assertEquals(0, fx.el("s").scrollTop);
+        assertEquals(0, fx.el("s").scrollTop());
         fx.key("Tab");
-        assertEquals(90, fx.el("s").scrollTop, "bottom edge aligned");
+        assertEquals(90, fx.el("s").scrollTop(), "bottom edge aligned");
         fx.key("Tab");
-        assertEquals(0, fx.el("s").scrollTop, "top edge aligned");
+        assertEquals(0, fx.el("s").scrollTop(), "top edge aligned");
     }
 
     @Test
     void scriptFocusScrollsIntoViewButPointerFocusDoesNot() {
         Fixture fx = scrolling();
         fx.el("low").focus();
-        assertEquals(90, fx.el("s").scrollTop);
+        assertEquals(90, fx.el("s").scrollTop());
         fx.el("top").focus();
-        assertEquals(0, fx.el("s").scrollTop);
+        assertEquals(0, fx.el("s").scrollTop());
         fx.forcedHit = fx.el("low");
         fx.click(0, 0);
         assertTrue(fx.el("low").isFocused());
-        assertEquals(0, fx.el("s").scrollTop);
+        assertEquals(0, fx.el("s").scrollTop());
     }
 }

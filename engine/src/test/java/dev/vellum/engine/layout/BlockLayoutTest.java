@@ -1,6 +1,7 @@
 package dev.vellum.engine.layout;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.paint.Coordinates;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,10 +15,12 @@ class BlockLayoutTest {
         assertRect(e.box, x, y, w, h);
     }
 
+    /** The box's border box in viewport coordinates (as painted, no transforms here) and size. */
     static void assertRect(Box b, float x, float y, float w, float h) {
         String msg = "box " + b;
-        assertEquals(x, b.absoluteX(), 0.01, msg + " x");
-        assertEquals(y, b.absoluteY(), 0.01, msg + " y");
+        float[] r = Coordinates.boundingRect(b);
+        assertEquals(x, r[0], 0.01, msg + " x");
+        assertEquals(y, r[1], 0.01, msg + " y");
         assertEquals(w, b.width, 0.01, msg + " width");
         assertEquals(h, b.height, 0.01, msg + " height");
     }

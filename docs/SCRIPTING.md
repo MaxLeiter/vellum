@@ -143,9 +143,12 @@ which are snapshots: they do not update when the document changes.
   unless it has a `value` attribute. Checking a radio unchecks the others of its group. Setting a select's `value`
   (or `selectedIndex`) to something no option has leaves nothing selected (`selectedIndex` is then -1).
 - Geometry (layout is brought up to date first): `getBoundingClientRect()` (`x`, `y`, `width`, `height`, `top`,
-  `right`, `bottom`, `left` in GUI pixels), `offsetLeft/Top/Width/Height` (relative to the viewport;
-  `offsetParent` is always null), `clientWidth/Height`, `scrollWidth/Height`, `scrollLeft/Top` (settable),
-  `scrollTo(x, y)` or `scrollTo({left, top})`, `scrollBy(...)`, `scrollIntoView()`.
+  `right`, `bottom`, `left` in GUI pixels: the box as painted, so after scrolling and transforms),
+  `offsetLeft/Top/Width/Height` (relative to the viewport; `offsetParent` is always null), `clientWidth/Height`,
+  `scrollWidth/Height`, `scrollLeft/Top` (settable), `scrollTo(x, y)` or `scrollTo({left, top, behavior})`,
+  `scrollBy(...)`, `scrollIntoView()` (`true`/`false`, or `{block, inline, behavior}`). Scrolls without a
+  `behavior` (also setting `scrollTop`) follow the element's `scroll-behavior`, which is `smooth` by default in
+  Vellum: the position then eases there over the next frames. `scroll` events fire once per frame.
 - `focus()`, `blur()`, `click()`, `animate(keyframes, options)`.
 - Canvases: `width`/`height` (settable; a new size clears the canvas) and `getContext('2d')`, which returns the
   canvas's one 2D context (null for other types and other elements). The context supports `fillStyle` and

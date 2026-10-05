@@ -3,9 +3,11 @@ package dev.vellum.engine.paint;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Text;
+import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.layout.Fragment;
 import dev.vellum.engine.layout.LineBox;
+import dev.vellum.engine.layout.TextMeasure;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Display;
 import dev.vellum.engine.style.Overflow;
@@ -57,8 +59,10 @@ final class TestTree {
         return b.element.style;
     }
 
+    /** Positions a box; absolute and fixed ones are placed against the viewport, as layout would record. */
     static Box position(Box b, Position position) {
         style(b).position = position;
+        b.outOfFlow = position.isOutOfFlow();
         return b;
     }
 
@@ -73,23 +77,39 @@ final class TestTree {
     static Box scroller(Box b, Overflow overflow, float scrollLeft, float scrollTop, float scrollWidth, float scrollHeight) {
         style(b).overflowX = overflow;
         style(b).overflowY = overflow;
-        b.element.scrollLeft = scrollLeft;
-        b.element.scrollTop = scrollTop;
         b.scrollWidth = scrollWidth;
         b.scrollHeight = scrollHeight;
+        b.element.scrollTo(scrollLeft, scrollTop);
         return b;
     }
 
-    /** A text node under {@code parent} and a run for it at (x, y), sized with the test font. */
+    /** A text node under {@code parent} and a run for it at (x, y), measured as layout measures it. */
     Fragment.TextRun text(Element parent, String data, float x, float y) {
         Text node = parent.appendChild(doc.createTextNode(data));
-        float w = doc.host().fonts().width(data, dev.vellum.engine.host.FontSpec.of(parent.style));
-        return new Fragment.TextRun(node, parent, parent.style, data, 0, data.length(), x, y, w, 9);
+        TextMeasure measure = doc.layoutEngine().textMeasure();
+        FontSpec font = FontSpec.of(parent.style);
+        return new Fragment.TextRun(node, parent, parent.style, data, null, measure.spaced(data, font, parent.style),
+                x, y, measure.width(data, font, parent.style), 9);
+    }
+
+    /**
+     * The fragment of inline element {@code e} on a line, wrapping the line's fragments up to index {@code end}; it
+     * gets an inline box with the fragment's bounds, as layout gives it.
+     */
+    static Fragment.InlineBox inline(Element e, float x, float y, float w, float h, int end) {
+        Box box = new Box(Box.Kind.INLINE, e, e.style);
+        box.x = x;
+        box.y = y;
+        box.width = w;
+        box.height = h;
+        e.box = box;
+        return new Fragment.InlineBox(box, x, y, w, h, true, true, end);
     }
 
     static LineBox line(Box block, float x, float y, float w, float h, Fragment... fragments) {
         LineBox line = new LineBox(x, y, w, h, y + 7);
         line.fragments.addAll(java.util.List.of(fragments));
+        for (Fragment f : fragments) if (f instanceof Fragment.InlineBox ib) ib.box().parent = block;
         block.lines.add(line);
         return line;
     }

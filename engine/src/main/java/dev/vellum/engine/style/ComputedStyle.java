@@ -218,9 +218,14 @@ public final class ComputedStyle implements Cloneable {
                 && customProperties.equals(o.customProperties);
     }
 
-    /** Whether the properties that affect layout ({@link Prop#affectsLayout}) equal {@code o}'s. */
+    /**
+     * Whether the properties that affect layout ({@link Prop#affectsLayout}) equal {@code o}'s, and both have a
+     * transform or neither does: a transform's value only moves paint, but having one makes the box the containing
+     * block of its positioned descendants.
+     */
     public boolean sameLayout(ComputedStyle o) {
-        return this == o || display == o.display && position == o.position && boxSizing == o.boxSizing
+        return this == o || hasTransform() == o.hasTransform()
+                && display == o.display && position == o.position && boxSizing == o.boxSizing
                 && width.equals(o.width) && height.equals(o.height) && minWidth.equals(o.minWidth)
                 && minHeight.equals(o.minHeight) && maxWidth.equals(o.maxWidth) && maxHeight.equals(o.maxHeight)
                 && top.equals(o.top) && right.equals(o.right) && bottom.equals(o.bottom) && left.equals(o.left)
@@ -274,6 +279,16 @@ public final class ComputedStyle implements Cloneable {
                 && tint == o.tint && scrollSmooth == o.scrollSmooth && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
+                && isFlexOrGridItemHint == o.isFlexOrGridItemHint;
+    }
+
+    /**
+     * Whether paint order is the same under {@code o}: the same positioning and z-index, and opacity and transforms
+     * starting a stacking context alike.
+     */
+    public boolean sameStacking(ComputedStyle o) {
+        return this == o || position == o.position && zIndexAuto == o.zIndexAuto && (zIndexAuto || zIndex == o.zIndex)
+                && (opacity < 1f) == (o.opacity < 1f) && hasTransform() == o.hasTransform()
                 && isFlexOrGridItemHint == o.isFlexOrGridItemHint;
     }
 

@@ -3,10 +3,11 @@ package dev.vellum.engine.input;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.InputEvent;
 import dev.vellum.engine.event.Modifiers;
-import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.layout.TextMeasure;
+import dev.vellum.engine.style.ComputedStyle;
 
 import java.util.Locale;
 import java.util.function.IntPredicate;
@@ -16,6 +17,10 @@ import java.util.function.IntPredicate;
  * and selection by mouse, the {@code beforeinput}/{@code input}/{@code change} events, caret blink, and scrolling to
  * keep the caret visible. One instance per element, kept in {@code element.controlState}. The text model is a
  * {@link TextEditor}; the visual lines are a {@link TextLayout} (soft-wrapped for textareas).
+ *
+ * <p>The text scrolls by the element's own scroll offsets: the box's scrollable overflow is the text's extent
+ * ({@link #extend}), so the wheel, scrollbars, {@code scrollTop} and {@code scroll} events work as for any scroll
+ * container (the UA stylesheet makes inputs {@code overflow: hidden} and textareas {@code overflow: auto}).
  */
 final class TextField {
     private static final double BLINK_MS = 530;
@@ -26,12 +31,13 @@ final class TextField {
     final TextEditor editor;
     final boolean multiline;
     private String valueAtFocus;
-    private float scrollX, scrollY;
     private boolean caretOn = true;
     private double blinkStart;
     /** Caret x kept across consecutive Up/Down moves, or NaN. */
     private float goalX = Float.NaN;
-    private TextLayout layout;
+    private TextLayout layout, placeholderLayout;
+    /** The document and value versions {@link #sync} last read the element at. */
+    private int domVersion = -1, valueVersion = -1;
 
     private TextField(Element element) {
         this.element = element;
@@ -39,19 +45,29 @@ final class TextField {
         this.editor = new TextEditor(multiline);
     }
 
-    /** The field of a text control, created on first use and synced with the element's value and attributes. */
+    /**
+     * The field of a text control, created on first use. It reads the element's value and attributes again only
+     * when they may have changed: after a DOM change or a new value.
+     */
     static TextField of(Element element) {
         TextField field = element.controlState instanceof TextField f ? f : new TextField(element);
         element.controlState = field;
-        return field.sync();
+        if (field.domVersion != element.ownerDocument().domVersion() || field.valueVersion != element.valueVersion()) {
+            field.sync();
+        }
+        return field;
     }
 
-    private TextField sync() {
+    private void sync() {
+        domVersion = element.ownerDocument().domVersion();
+        valueVersion = element.valueVersion();
         String value = element.value();
-        if (!value.equals(editor.text())) editor.reset(value);
+        if (!value.equals(editor.text())) {
+            editor.reset(value);
+            extend(); // a new value (set by a script, say) is a new scroll extent
+        }
         editor.setMaxLength((int) Forms.number(element.getAttribute("maxlength"), -1));
         editor.setFilter(element.inputType().equals("number") ? NUMBER_CHARS : null);
-        return this;
     }
 
     // ---- Geometry (shared with Controls.paint) ----
@@ -64,62 +80,84 @@ final class TextField {
         return FontSpec.of(Forms.style(element));
     }
 
-    FontMetrics fonts() {
-        return host().fonts();
+    TextMeasure measure() {
+        return Controls.measure(element);
     }
 
-    /** Lines of {@code text} laid out like this field's value: wrapped to the content width in a textarea. */
-    TextLayout layout(String text, boolean masked) {
-        float wrap = multiline && element.box != null ? element.box.contentWidth() : Float.POSITIVE_INFINITY;
-        FontSpec font = font();
-        if (layout != null && layout.matches(text, masked, wrap, font)) return layout;
-        return new TextLayout(text, masked, wrap, fonts(), font);
-    }
-
-    /** The current value's lines (cached until the text, font or width changes). */
+    /**
+     * The current value's lines (rebuilt when the text, font, spacing or width changes, which also updates the
+     * box's scroll extent).
+     */
     TextLayout layout() {
-        return layout = layout(editor.text(), masked());
+        TextLayout l = lines(layout, editor.text(), masked());
+        if (l != layout) {
+            layout = l;
+            extend();
+        }
+        return l;
+    }
+
+    /** The placeholder's lines, laid out like the value. */
+    TextLayout placeholderLayout(String placeholder) {
+        return placeholderLayout = lines(placeholderLayout, placeholder, false);
+    }
+
+    /** {@code cached} if it lays out {@code text} as this field would now, else a new layout: wrapped in a textarea. */
+    private TextLayout lines(TextLayout cached, String text, boolean masked) {
+        float wrap = multiline && element.box != null ? element.box.contentWidth() : Float.POSITIVE_INFINITY;
+        ComputedStyle s = Forms.style(element);
+        FontSpec font = FontSpec.of(s);
+        if (cached != null && cached.matches(text, masked, wrap, font, s)) return cached;
+        return new TextLayout(text, masked, wrap, measure(), font, s);
+    }
+
+    /**
+     * Makes the box's scrollable overflow the value's text (with room for the caret after it), so the element's
+     * scroll offsets move the text: down a textarea's lines, along an input's line. Runs after layout
+     * ({@link Controls#overflow}) and whenever the text changes, and keeps the offsets in the new range.
+     */
+    void extend() {
+        Box box = element.box;
+        TextLayout l = layout();
+        if (box == null) return;
+        if (multiline) {
+            box.scrollHeight = Math.max(box.paddingBoxHeight(),
+                    box.paddingTop + l.lineCount() * lineHeight() + box.paddingBottom);
+        } else {
+            box.scrollWidth = Math.max(box.paddingBoxWidth(), box.paddingLeft + l.width() + 1 + box.paddingRight);
+        }
+        element.clampScroll();
+    }
+
+    /** Whether text laid out as {@code l} can show outside the content box, so painting must clip it. */
+    boolean overflows(TextLayout l) {
+        Box box = element.box;
+        return element.scrollLeft() > 0 || element.scrollTop() > 0 || l.width() + 1 > box.contentWidth()
+                || l.lineCount() * lineHeight() > box.contentHeight() || glyphHeight() > lineHeight();
     }
 
     /** Height of a visual line: the line height in a textarea; the content height in an input (text is centred in it). */
     float lineHeight() {
-        if (multiline) return Forms.style(element).usedLineHeight();
-        return element.box != null ? element.box.contentHeight() : glyphHeight();
+        return element.box == null ? glyphHeight()
+                : Controls.lineHeight(element, Forms.style(element), element.box.contentHeight());
     }
 
     float glyphHeight() {
-        return fonts().glyphHeight(font());
+        return measure().glyphHeight(font());
     }
 
     /** Left edge of the text in border-box coordinates: the content box, scrolled. Requires a box. */
     float textX() {
-        return element.box.contentX() - scrollX();
+        return element.box.contentX() - element.scrollLeft();
     }
 
     /** Top of line {@code i}'s glyph box in border-box coordinates (centred in its line height). Requires a box. */
     float glyphY(int line) {
-        return element.box.contentY() - scrollY() + line * lineHeight() + (lineHeight() - glyphHeight()) / 2;
-    }
-
-    float scrollX() {
-        return clamp(scrollX, 0, maxScrollX());
-    }
-
-    float scrollY() {
-        return clamp(scrollY, 0, maxScrollY());
+        return Controls.glyphTop(element.box.contentY() - element.scrollTop(), lineHeight(), glyphHeight(), line);
     }
 
     boolean caretOn() {
         return caretOn;
-    }
-
-    private float maxScrollX() {
-        return element.box == null ? 0 : Math.max(0, layout().width() + 1 - element.box.contentWidth());
-    }
-
-    private float maxScrollY() {
-        return !multiline || element.box == null ? 0
-                : Math.max(0, layout().lineCount() * lineHeight() - element.box.contentHeight());
     }
 
     // ---- Focus and time ----
@@ -132,7 +170,7 @@ final class TextField {
     void blurred() {
         commitChange();
         valueAtFocus = null;
-        scrollX = 0;
+        if (!multiline) element.scrollTo(0, 0);
     }
 
     void blink(double now) {
@@ -240,8 +278,9 @@ final class TextField {
     // ---- Mouse ----
 
     /**
-     * Mousedown at a viewport point: places the caret (shift extends the selection), selects a word on double-click
-     * and the line (textarea) or everything on triple-click. Returns the drag that extends the selection.
+     * Mousedown at a point in the box's border-box coordinates: places the caret (shift extends the selection),
+     * selects a word on double-click and the line (textarea) or everything on triple-click. Returns the drag that
+     * extends the selection.
      */
     Drag press(float x, float y, int clicks, boolean extend) {
         int offset = offsetAt(x, y);
@@ -255,7 +294,9 @@ final class TextField {
         caretMoved();
         boolean[] moved = {false};
         return (px, py) -> {
-            int o = offsetAt(px, py);
+            if (element.box == null) return;
+            float[] local = Dom.local(element.box, px, py);
+            int o = offsetAt(local[0], local[1]);
             // Ignore the pointer resting where it was pressed, so a double-click's word selection survives.
             if (!moved[0] && o == offset) return;
             moved[0] = true;
@@ -263,19 +304,12 @@ final class TextField {
         };
     }
 
-    /** Scrolls a textarea by a wheel delta. False when it cannot move that way, so the wheel chains outward. */
-    boolean wheel(float dy) {
-        float before = scrollY();
-        scrollY = clamp(before + dy, 0, maxScrollY());
-        return scrollY != before;
-    }
-
-    /** The caret offset nearest a viewport point. */
+    /** The caret offset nearest a point in border-box coordinates. */
     private int offsetAt(float x, float y) {
         Box box = element.box;
-        if (box == null) return editor.text().length();
-        float ly = y - box.absoluteY() - box.contentY() + scrollY();
-        return layout().offsetAt(multiline ? (int) Math.floor(ly / lineHeight()) : 0, x - box.absoluteX() - textX());
+        if (box == null || Float.isNaN(x)) return editor.text().length();
+        float ly = y - box.contentY() + element.scrollTop();
+        return layout().offsetAt(multiline ? (int) Math.floor(ly / lineHeight()) : 0, x - textX());
     }
 
     // ---- Editing ----
@@ -317,19 +351,21 @@ final class TextField {
         caretOn = true;
     }
 
-    /** Scrolls the least amount that shows the caret (with room for its 1px width); also re-clamps after relayout. */
+    /** Scrolls the least amount that shows the caret (with room for its 1px width). */
     void scrollToCaret() {
         Box box = element.box;
         if (box == null) return;
         TextLayout l = layout();
         int caret = editor.caret();
+        float left = element.scrollLeft(), top = element.scrollTop();
         if (multiline) {
-            float h = lineHeight(), top = l.lineOf(caret) * h;
-            scrollY = clamp(clamp(scrollY, top + h - box.contentHeight(), top), 0, maxScrollY());
+            float h = lineHeight(), lineTop = l.lineOf(caret) * h;
+            top = clamp(top, lineTop + h - box.contentHeight(), lineTop);
         } else {
             float x = l.x(caret);
-            scrollX = clamp(clamp(scrollX, x + 1 - box.contentWidth(), x), 0, maxScrollX());
+            left = clamp(left, x + 1 - box.contentWidth(), x);
         }
+        element.scrollTo(left, top);
     }
 
     private Host host() {

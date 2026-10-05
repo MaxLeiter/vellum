@@ -59,6 +59,13 @@ final class LayoutBox extends Box {
     /** Content-based border-box widths (ignoring the box's own width and min/max), NaN until measured. */
     float minContent = Float.NaN, maxContent = Float.NaN;
 
+    /**
+     * The right and bottom edges of the scrollable overflow in this box's border-box space, accumulated by the
+     * overflow pass ({@link LayoutEngine}): first the content's (negative infinity for none), then what the box
+     * contributes to its parent.
+     */
+    float overflowRight = Float.NEGATIVE_INFINITY, overflowBottom = Float.NEGATIVE_INFINITY;
+
     private static final int CACHE_SIZE = 4, KEY = 5;
     private float[] cacheKeys;
     private LayoutResult[] cacheValues;
@@ -102,4 +109,9 @@ final class LayoutBox extends Box {
     }
 
     boolean isReplaced() { return kind == Kind.REPLACED; }
+
+    void extendOverflow(float right, float bottom) {
+        overflowRight = Math.max(overflowRight, right);
+        overflowBottom = Math.max(overflowBottom, bottom);
+    }
 }

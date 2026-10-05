@@ -5,9 +5,9 @@ import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Overflow;
 
 /**
- * Geometry of the overlay scrollbars of a scroll container, shared by the painter (drawing) and the input handler
- * (hover, drag, track clicks). Rectangles are {x, y, width, height} in the box's border-box coordinates, or null when
- * that axis does not scroll.
+ * Geometry of the overlay scrollbars of a scroll container, shared by the painter (drawing and hit testing) and the
+ * input handler (thumb drags, track clicks). Rectangles are {x, y, width, height} in the box's border-box
+ * coordinates.
  *
  * <p>An axis has a scrollbar when its overflow is {@code scroll} or {@code auto}, its content overflows, and
  * {@code scrollbar-width} is not {@code none}. The vertical track runs down the right edge of the padding box, the
@@ -15,25 +15,21 @@ import dev.vellum.engine.style.Overflow;
  * {@value #HOVER_WIDTH}px while the container is hovered ({@code thin}: {@value #THIN_WIDTH}/{@value
  * #THIN_HOVER_WIDTH}px). The thumb's length is proportional to the visible fraction, at least {@value #MIN_THUMB}px.
  *
- * <p>The {@code out} overloads write into a caller array and return false instead of null, for per-frame use.
+ * <p>The {@code out} methods write into a caller array and return false when that axis does not scroll, for
+ * per-frame use; {@link #thumb(Box, boolean, boolean)} allocates (null instead), for a press.
  */
 public final class Scrollbars {
     public static final float WIDTH = 2, HOVER_WIDTH = 4, THIN_WIDTH = 1, THIN_HOVER_WIDTH = 2, MIN_THUMB = 8;
 
     private Scrollbars() {}
 
-    /** The track along the right (vertical) or bottom (horizontal) edge of the padding box. */
-    public static float[] track(Box box, boolean vertical, boolean hovered) {
-        float[] r = new float[4];
-        return track(box, vertical, hovered, r) ? r : null;
-    }
-
-    /** The thumb within the track for the current scroll offset. */
+    /** The thumb within the track for the current scroll offset, or null. */
     public static float[] thumb(Box box, boolean vertical, boolean hovered) {
         float[] r = new float[4];
         return thumb(box, vertical, hovered, r) ? r : null;
     }
 
+    /** The track along the right (vertical) or bottom (horizontal) edge of the padding box. */
     public static boolean track(Box box, boolean vertical, boolean hovered, float[] out) {
         ComputedStyle s = StackingOrder.styleOf(box);
         if (!hasBar(box, s, vertical)) return false;
@@ -88,7 +84,7 @@ public final class Scrollbars {
     }
 
     private static float maxScroll(Box box, boolean vertical) {
-        return vertical ? box.scrollHeight - box.paddingBoxHeight() : box.scrollWidth - box.paddingBoxWidth();
+        return vertical ? box.maxScrollTop() : box.maxScrollLeft();
     }
 
     private static float thumbLength(Box box, boolean vertical, float trackLength) {

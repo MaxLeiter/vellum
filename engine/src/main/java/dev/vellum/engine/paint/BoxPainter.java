@@ -1,8 +1,6 @@
 package dev.vellum.engine.paint;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.host.FontMetrics;
-import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.input.Controls;
 import dev.vellum.engine.layout.Box;
@@ -24,7 +22,6 @@ import java.util.List;
  */
 final class BoxPainter implements StackingOrder.Visitor {
     private final Painter painter;
-    private final FontMetrics fonts;
     private final QuadBatch batch = new QuadBatch();
     private final Geometry geometry = new Geometry();
     private final Backgrounds backgrounds;
@@ -40,31 +37,20 @@ final class BoxPainter implements StackingOrder.Visitor {
     private final float[] rect = new float[4], radii = new float[8], widths = new float[4];
     private final BorderStyle[] styles = new BorderStyle[4];
     private final int[] colors = new int[4];
-    /** The font of the last text run, rebuilt only when the style changes. */
-    private ComputedStyle fontStyle;
-    private FontSpec font;
 
-    BoxPainter(Painter painter, FontMetrics fonts) {
+    BoxPainter(Painter painter) {
         this.painter = painter;
-        this.fonts = fonts;
         this.backgrounds = new Backgrounds(painter.document());
     }
 
     void begin(Canvas canvas) {
         this.canvas = canvas;
-        dp = devicePixel(canvas);
+        dp = Geometry.devicePixel(canvas);
         depth = 0;
     }
 
     void end() {
         canvas = null;
-        fontStyle = null;
-        font = null;
-    }
-
-    private static float devicePixel(Canvas canvas) {
-        float dp = canvas.devicePixel();
-        return dp > 0 && Float.isFinite(dp) ? dp : 1;
     }
 
     private float snap(float v) {
@@ -84,7 +70,7 @@ final class BoxPainter implements StackingOrder.Visitor {
         if (transform != null) {
             canvas.translate(x, y);
             canvas.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
-            dp = devicePixel(canvas);
+            dp = Geometry.devicePixel(canvas);
         }
         if (opacity < 1) canvas.multiplyAlpha(opacity);
         return true;
@@ -121,15 +107,14 @@ final class BoxPainter implements StackingOrder.Visitor {
         if (Controls.isControl(element.tagName())) {
             canvas.save();
             canvas.translate(x, y);
-            Controls.paint(canvas, box);
+            Controls.paint(canvas, box, s);
             canvas.restore();
         }
         if (box.kind == Box.Kind.REPLACED && element.replaced != null) replaced(box, s, element.replaced, x, y);
     }
 
     @Override
-    public void inlineBox(Box block, Fragment.InlineBox fragment, float x, float y) {
-        ComputedStyle s = StackingOrder.styleOf(fragment);
+    public void inlineBox(Box block, Fragment.InlineBox fragment, ComputedStyle s, float x, float y) {
         if (s.visibility != Visibility.VISIBLE) return;
         decorations(s, geometry.fragment(fragment, s, x, y, dp));
     }
@@ -189,38 +174,7 @@ final class BoxPainter implements StackingOrder.Visitor {
     public void textRun(Box block, Fragment.TextRun run, float x, float y) {
         ComputedStyle s = StackingOrder.styleOf(run);
         if (s.visibility != Visibility.VISIBLE || run.text().isEmpty()) return;
-        if (s != fontStyle) {
-            fontStyle = s;
-            font = FontSpec.of(s);
-        }
-        int decorations = (s.underline ? Canvas.UNDERLINE : 0) | (s.lineThrough ? Canvas.STRIKETHROUGH : 0);
-        float tx = x + run.x(), ty = y + run.y();
-        // CSS paints the first shadow on top; the native shadow is drawn by the host with the text itself.
-        boolean nativeShadow = false;
-        for (int i = s.textShadow.size() - 1; i >= 0; i--) {
-            Shadow shadow = s.textShadow.get(i);
-            if (shadow.isNative()) nativeShadow = true;
-            else if (!Colors.isTransparent(shadow.color())) {
-                text(run.text(), tx + shadow.offsetX(), ty + shadow.offsetY(), shadow.color(), decorations, false, s.letterSpacing);
-            }
-        }
-        if (!Colors.isTransparent(s.color)) text(run.text(), tx, ty, s.color, decorations, nativeShadow, s.letterSpacing);
-    }
-
-    /** Draws one line; with letter-spacing, glyph by glyph advancing by the host's widths plus the spacing. */
-    private void text(String text, float x, float y, int argb, int decorations, boolean shadow, float letterSpacing) {
-        if (letterSpacing == 0) {
-            canvas.drawText(text, snap(x), snap(y), font, argb, decorations, shadow);
-            return;
-        }
-        float cx = x, ty = snap(y);
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            int next = i + Character.charCount(cp);
-            canvas.drawText(text.substring(i, next), snap(cx), ty, font, argb, decorations, shadow);
-            cx += fonts.charWidth(cp, font) + letterSpacing;
-            i = next;
-        }
+        TextPainter.draw(canvas, run.text(), run.spaced(), x + run.x(), y + run.y(), s.font(), s, s.color, dp);
     }
 
     // ---- After the content ----
@@ -232,7 +186,12 @@ final class BoxPainter implements StackingOrder.Visitor {
             scrollbar(box, s, x, y, true);
             scrollbar(box, s, x, y, false);
         }
-        if (s.outlineStyle.isVisible() && s.outlineWidth > 0 && !Colors.isTransparent(s.outlineColor)) outline(box, s, x, y);
+        if (StackingOrder.hasOutline(s)) outline(s, x, y, box.width, box.height);
+    }
+
+    @Override
+    public void inlineOutline(Fragment.InlineBox fragment, ComputedStyle s, float x, float y) {
+        if (s.visibility == Visibility.VISIBLE) outline(s, x + fragment.x(), y + fragment.y(), fragment.width(), fragment.height());
     }
 
     private void scrollbar(Box box, ComputedStyle s, float x, float y, boolean vertical) {
@@ -243,16 +202,16 @@ final class BoxPainter implements StackingOrder.Visitor {
         fill(x + rect[0], y + rect[1], rect[2], rect[3], s.scrollbarThumbColor);
     }
 
-    /** The outline around the border box, outline-offset away, following the border radius. */
-    private void outline(Box box, ComputedStyle s, float x, float y) {
+    /** The outline around a border box at (x, y), outline-offset away, following the border radius. */
+    private void outline(ComputedStyle s, float x, float y, float width, float height) {
         float out = s.outlineOffset + s.outlineWidth;
         float x0 = snap(x - out), y0 = snap(y - out);
         rect[0] = x0;
         rect[1] = y0;
-        rect[2] = snap(x + box.width + out) - x0;
-        rect[3] = snap(y + box.height + out) - y0;
+        rect[2] = snap(x + width + out) - x0;
+        rect[3] = snap(y + height + out) - y0;
         if (rect[2] <= 0 || rect[3] <= 0) return;
-        Shapes.radii(s, box.width, box.height, radii);
+        Shapes.radii(s, width, height, radii);
         Shapes.insetRadii(radii, -out, -out, -out, -out, radii);
         Arrays.fill(widths, Math.max(dp, snap(s.outlineWidth)));
         Arrays.fill(styles, s.outlineStyle);

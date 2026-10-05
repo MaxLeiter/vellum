@@ -14,20 +14,31 @@ public sealed interface Fragment {
     float height();
 
     /**
-     * A run of text in one style. {@code (x, y)} is the top-left of the glyph box; text is drawn there.
-     * {@code start}/{@code end} index into the source text node's data (after whitespace processing they may not
-     * map exactly; they are used for caret placement and selection). {@code node} is null for generated content.
+     * A run of text in one style. {@code (x, y)} is the top-left of the glyph box; text is drawn there, in the parts
+     * of {@code spaced} when letter- or word-spacing apply (null otherwise). {@code text} is after white-space
+     * processing and {@code text-transform}; {@code source} maps it back to the text node's data: {@code source[i]} is
+     * where char {@code i} came from, and its last entry the end of the run (null when there is no node: generated
+     * content).
      */
-    record TextRun(Text node, Element styleSource, ComputedStyle style, String text, int start, int end,
-                   float x, float y, float width, float height) implements Fragment {}
+    record TextRun(Text node, Element styleSource, ComputedStyle style, String text, int[] source, SpacedText spaced,
+                   float x, float y, float width, float height) implements Fragment {
+        /**
+         * The offset in the node's data of the caret before char {@code i} of the text ({@code text.length()} for the
+         * end); chars that came from no data (an ellipsis) map to the run's end. {@code i} itself without a map.
+         */
+        public int sourceIndex(int i) {
+            return source == null ? i : source[Math.min(i, source.length - 1)];
+        }
+    }
 
     /**
-     * The part of an inline element (span, a, b...) on one line, for painting its background, border and padding.
-     * {@code first}/{@code last} say whether the start/end edges (left/right border and padding) are on this line.
-     * Painted before the text it contains.
+     * The part of an inline element (span, a, b...) or inline ::before/::after on one line: its {@code box}'s
+     * background, border and padding (edges as layout resolved them), painted before the content it wraps, which runs
+     * to index {@code end} (exclusive) of the line's fragments. {@code first}/{@code last} say whether the start/end
+     * edges (left/right border and padding) are on this line.
      */
-    record InlineBox(Element element, ComputedStyle style, float x, float y, float width, float height,
-                     boolean first, boolean last) implements Fragment {}
+    record InlineBox(Box box, float x, float y, float width, float height, boolean first, boolean last, int end)
+            implements Fragment {}
 
     /**
      * An atomic inline (inline-block, inline-flex, inline-grid, replaced inline). The box is also in the block's

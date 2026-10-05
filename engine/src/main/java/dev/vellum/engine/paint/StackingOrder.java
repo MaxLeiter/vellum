@@ -4,12 +4,10 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.layout.Fragment;
 import dev.vellum.engine.layout.LineBox;
+import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.ComputedStyle;
-import dev.vellum.engine.style.Position;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -26,10 +24,12 @@ import java.util.List;
  *
  * <p>Coordinates passed to the visitor are in its current space: the viewport until a transformed context is
  * entered, then that box's border box with its origin at 0,0. Descendants painted out of tree order (the z-index
- * lists) get the clips and scroll offsets of the ancestors between them and their stacking context, except those
- * an absolutely or fixed positioned box escapes (ancestors below its containing block).
+ * lists, kept in {@link Layers}) are placed by {@link Coordinates} and get the clips of the ancestors between them
+ * and their stacking context whose content they are in ({@link Box#contentParent()}): an absolutely or fixed
+ * positioned box escapes the clips and scroll offsets of the ancestors below its containing block. (Clips above the
+ * stacking context still apply to it: painting cannot undo a clip.)
  *
- * <p>Instances keep reusable scratch lists and are not reentrant: use one per visitor.
+ * <p>Instances keep scratch state and are not reentrant: use one per visitor.
  */
 final class StackingOrder {
     /** Receives the walk. Every {@code pushClip} or {@code enterContext} returning true is matched by a pop. */
@@ -52,49 +52,51 @@ final class StackingOrder {
         void box(Box box, ComputedStyle style, float x, float y);
 
         /** An inline box fragment of {@code block}; ({@code x}, {@code y}) is the origin of the fragments' space. */
-        void inlineBox(Box block, Fragment.InlineBox fragment, float x, float y);
+        void inlineBox(Box block, Fragment.InlineBox fragment, ComputedStyle style, float x, float y);
 
         /** A text run of {@code block}; ({@code x}, {@code y}) is the origin of the fragments' space. */
         void textRun(Box block, Fragment.TextRun run, float x, float y);
 
         /** After the box and everything inside it: scrollbars and outline. */
         void after(Box box, ComputedStyle style, float x, float y);
+
+        /** After all of {@code block}'s lines, for each inline box fragment that has an outline. */
+        void inlineOutline(Fragment.InlineBox fragment, ComputedStyle style, float x, float y);
     }
 
-    /** Stable sort by z-index: negatives first, then auto and 0 in tree order, then positives. */
-    private static final Comparator<Box> Z_ORDER = Comparator.comparingInt(StackingOrder::zIndex);
-
-    private final Affine transform = new Affine();
-    /** One z-ordered list per stacking-context nesting level, reused across walks. */
-    private final List<ArrayList<Box>> lists = new ArrayList<>();
-    private int depth;
+    private final Layers layers;
+    private final Affine transform = new Affine(), offset = new Affine();
+    /** The transformed box whose border box is the current space, or null for the viewport. */
+    private Box space;
     private Box[] chain = new Box[16];
+    /** The fragment index each open inline opacity group ends at, innermost last (a stack across nested lines). */
+    private int[] groupEnds = new int[4];
+    private int groups;
+
+    StackingOrder(Layers layers) {
+        this.layers = layers;
+    }
 
     /** Walks the tree rooted at {@code root}, which is a stacking context whatever its style. */
     void walk(Box root, Visitor visitor) {
-        depth = 0;
+        space = null;
+        groups = 0;
         layer(root, styleOf(root), root.x, root.y, true, visitor);
     }
 
     // ---- Styles ----
 
     /**
-     * The style to paint a box with. Element boxes use the element's live style, so paint-only animations
-     * (opacity, transform, colours) show without a relayout; anonymous and pseudo boxes keep their layout style.
+     * The style to paint a box with. Element boxes (block, replaced, inline) use the element's live style, so
+     * paint-only animations (opacity, transform, colours) show without a relayout; anonymous and pseudo-element
+     * boxes keep their layout style.
      */
     static ComputedStyle styleOf(Box box) {
-        if (box.kind == Box.Kind.BLOCK || box.kind == Box.Kind.REPLACED) {
+        if (box.kind == Box.Kind.BLOCK || box.kind == Box.Kind.REPLACED || box.kind == Box.Kind.INLINE) {
             ComputedStyle live = box.element == null ? null : box.element.style;
             if (live != null) return live;
         }
         return box.style;
-    }
-
-    /** The live style of an inline box fragment (a pseudo-element's fragment keeps its own). */
-    static ComputedStyle styleOf(Fragment.InlineBox f) {
-        Element e = f.element();
-        if (e == null || e.style == null || f.style() == e.beforeStyle || f.style() == e.afterStyle) return f.style();
-        return e.style;
     }
 
     /** The live style of a text run (generated content keeps its own). */
@@ -104,11 +106,11 @@ final class StackingOrder {
     }
 
     /** Positioned boxes and stacking contexts are painted from their stacking context's z-ordered list. */
-    private static boolean isLayer(ComputedStyle s) {
+    static boolean isLayer(ComputedStyle s) {
         return s.position.isPositioned() || s.createsStackingContext();
     }
 
-    private static int zIndex(Box box) {
+    static int zIndex(Box box) {
         ComputedStyle s = styleOf(box);
         boolean applies = !s.zIndexAuto && (s.position.isPositioned() || s.isFlexOrGridItemHint);
         return applies ? s.zIndex : 0;
@@ -122,45 +124,31 @@ final class StackingOrder {
 
     /** Paints a box whole: a stacking context, or a positioned box or atomic inline treated like one. */
     private void layer(Box box, ComputedStyle s, float x, float y, boolean context, Visitor v) {
-        boolean effects = s.opacity < 1 || s.hasTransform();
-        if (effects) {
-            Affine m = s.hasTransform() ? resolveTransform(box, s) : null;
-            if (!v.enterContext(box, s, x, y, m)) return;
-            if (m != null) {
+        Box outerSpace = space;
+        boolean transformed = Coordinates.transform(box, s, transform);
+        if (s.opacity < 1 || transformed) {
+            if (!v.enterContext(box, s, x, y, transformed ? transform : null)) return;
+            if (transformed) {
+                space = box;
                 x = 0;
                 y = 0;
             }
         }
         v.box(box, s, x, y);
         if (context) {
-            ArrayList<Box> items = acquireList();
-            collect(box, items);
-            items.sort(Z_ORDER);
-            int i = 0, n = items.size();
-            for (; i < n && zIndex(items.get(i)) < 0; i++) item(box, items.get(i), x, y, v);
+            Box[] items = layers.of(box);
+            int i = 0;
+            for (; i < items.length && zIndex(items[i]) < 0; i++) item(box, items[i], v);
             blocks(box, x, y, v);
             inlines(box, x, y, v);
-            for (; i < n; i++) item(box, items.get(i), x, y, v);
-            items.clear();
-            depth--;
+            for (; i < items.length; i++) item(box, items[i], v);
         } else {
             blocks(box, x, y, v);
             inlines(box, x, y, v);
         }
         v.after(box, s, x, y);
-        if (effects) v.exitContext();
-    }
-
-    /** The context's positioned and stacking-context descendants, not crossing nested contexts, in tree order. */
-    private static void collect(Box parent, List<Box> out) {
-        for (Box child : parent.children) {
-            ComputedStyle s = styleOf(child);
-            if (isLayer(s)) {
-                out.add(child);
-                if (s.createsStackingContext()) continue;
-            }
-            collect(child, out);
-        }
+        if (s.opacity < 1 || transformed) v.exitContext();
+        space = outerSpace;
     }
 
     private static boolean inFlow(Box box) {
@@ -183,16 +171,14 @@ final class StackingOrder {
     private void inlines(Box box, float x, float y, Visitor v) {
         if ((box.children.isEmpty() && box.lines.isEmpty()) || !enterContent(box, x, y, v)) return;
         float cx = x - box.scrollLeft(), cy = y - box.scrollTop();
-        for (LineBox line : box.lines) {
-            for (Fragment f : line.fragments) {
-                switch (f) {
-                    case Fragment.InlineBox ib -> v.inlineBox(box, ib, cx, cy);
-                    case Fragment.TextRun run -> v.textRun(box, run, cx, cy);
-                    case Fragment.Atomic atomic -> {
-                        Box b = atomic.box();
-                        ComputedStyle s = styleOf(b);
-                        if (!isLayer(s)) layer(b, s, cx + b.x, cy + b.y, false, v);
-                    }
+        boolean outlines = false;
+        for (LineBox line : box.lines) outlines |= line(box, line, cx, cy, v);
+        if (outlines) {
+            for (LineBox line : box.lines) {
+                for (Fragment f : line.fragments) {
+                    if (!(f instanceof Fragment.InlineBox ib)) continue;
+                    ComputedStyle s = styleOf(ib.box());
+                    if (hasOutline(s)) v.inlineOutline(ib, s, cx, cy);
                 }
             }
         }
@@ -202,6 +188,50 @@ final class StackingOrder {
             v.after(child, styleOf(child), cx + child.x, cy + child.y);
         }
         exitContent(box, v);
+    }
+
+    /**
+     * One line's fragments in order. An inline element's fragment comes before the content it wraps, up to its
+     * {@code end}: when the element is translucent, that range is one group with the opacity applied (skipped at
+     * opacity 0, like any translucent box). Returns whether an inline box on the line has an outline.
+     */
+    private boolean line(Box block, LineBox line, float cx, float cy, Visitor v) {
+        List<Fragment> fragments = line.fragments;
+        int outer = groups;
+        boolean outlines = false;
+        for (int i = 0; i < fragments.size(); i++) {
+            while (groups > outer && groupEnds[groups - 1] == i) {
+                v.exitContext();
+                groups--;
+            }
+            switch (fragments.get(i)) {
+                case Fragment.InlineBox ib -> {
+                    ComputedStyle s = styleOf(ib.box());
+                    outlines |= hasOutline(s);
+                    if (s.opacity < 1) {
+                        if (!v.enterContext(ib.box(), s, cx, cy, null)) {
+                            i = ib.end() - 1;
+                            continue;
+                        }
+                        if (groups == groupEnds.length) groupEnds = Arrays.copyOf(groupEnds, groups * 2);
+                        groupEnds[groups++] = ib.end();
+                    }
+                    v.inlineBox(block, ib, s, cx, cy);
+                }
+                case Fragment.TextRun run -> v.textRun(block, run, cx, cy);
+                case Fragment.Atomic atomic -> {
+                    Box b = atomic.box();
+                    ComputedStyle s = styleOf(b);
+                    if (!isLayer(s)) layer(b, s, cx + b.x, cy + b.y, false, v);
+                }
+            }
+        }
+        for (; groups > outer; groups--) v.exitContext();
+        return outlines;
+    }
+
+    static boolean hasOutline(ComputedStyle s) {
+        return s.outlineStyle.isVisible() && s.outlineWidth > 0 && !Colors.isTransparent(s.outlineColor);
     }
 
     /** Clips to the padding box when {@code box} clips its content; false when the content can be skipped. */
@@ -218,66 +248,39 @@ final class StackingOrder {
     }
 
     /**
-     * Paints {@code item}, a descendant of the context {@code root} (at x, y), from the context's z-ordered list:
-     * applies the clips and scroll offsets of the ancestors in between, then paints it whole.
+     * Paints {@code item}, a descendant of the context {@code root}, from the context's z-ordered list: inside the
+     * clips of the ancestors up to the root whose content holds it, then whole at its place in the current space.
      */
-    private void item(Box root, Box item, float x, float y, Visitor v) {
+    private void item(Box root, Box item, Visitor v) {
         int n = 0;
-        for (Box p = item.parent; p != root; p = p.parent) {
+        for (Box p = item.parent; p != null; p = p.parent) {
             if (n == chain.length) chain = Arrays.copyOf(chain, n * 2);
             chain[n++] = p;
+            if (p == root) break;
         }
-        // Path from the root down: root, chain[n-1], ..., chain[0]. Clips and scrolling apply down to `last`.
-        ComputedStyle s = styleOf(item);
-        int last = n;
-        if (s.position.isOutOfFlow()) {
-            Box cb = containingBlock(item, s);
-            last = -1;
-            if (cb == root) last = 0;
-            for (int i = 0; i < n; i++) if (chain[i] == cb) last = n - i;
+        // Keep the ancestors whose content holds the item, innermost first: content parents come up the tree in
+        // order, and one an out-of-flow box escapes to above the root is never met.
+        int holders = 0;
+        Box next = item.contentParent();
+        for (int i = 0; i < n && next != null; i++) {
+            if (chain[i] != next) continue;
+            chain[holders++] = next;
+            next = next.contentParent();
         }
         int pushed = 0;
         boolean visible = true;
-        for (int i = 0; i <= n; i++) {
-            Box a = i == 0 ? root : chain[n - i];
-            if (i <= last) {
-                if (clips(a, styleOf(a))) {
-                    if (!clipToPaddingBox(a, x, y, v)) {
-                        visible = false;
-                        break;
-                    }
-                    pushed++;
-                }
-                x -= a.scrollLeft();
-                y -= a.scrollTop();
-            }
-            Box next = i == n ? item : chain[n - i - 1];
-            x += next.x;
-            y += next.y;
+        for (int i = holders - 1; i >= 0 && visible; i--) {
+            Box a = chain[i];
+            if (!clips(a, styleOf(a))) continue;
+            Coordinates.offset(a, space, offset);
+            visible = a == space ? clipToPaddingBox(a, 0, 0, v) : clipToPaddingBox(a, offset.e, offset.f, v);
+            if (visible) pushed++;
         }
-        if (visible) layer(item, s, x, y, s.createsStackingContext(), v);
+        if (visible) {
+            ComputedStyle s = styleOf(item);
+            Coordinates.offset(item, space, offset);
+            layer(item, s, offset.e, offset.f, s.createsStackingContext(), v);
+        }
         for (; pushed > 0; pushed--) v.popClip();
-    }
-
-    /** The box an absolutely or fixed positioned box is placed against, or null for the viewport. */
-    private static Box containingBlock(Box item, ComputedStyle s) {
-        for (Box a = item.parent; a != null; a = a.parent) {
-            ComputedStyle as = styleOf(a);
-            if (as.hasTransform() || (s.position == Position.ABSOLUTE && as.position.isPositioned())) return a;
-        }
-        return null;
-    }
-
-    private ArrayList<Box> acquireList() {
-        if (depth == lists.size()) lists.add(new ArrayList<>());
-        ArrayList<Box> list = lists.get(depth++);
-        list.clear(); // in case an earlier walk was interrupted by an exception
-        return list;
-    }
-
-    /** {@code translate(origin) · transform · translate(-origin)}, percentages against the border box. */
-    private Affine resolveTransform(Box box, ComputedStyle s) {
-        float ox = s.transformOriginX.resolve(box.width), oy = s.transformOriginY.resolve(box.height);
-        return transform.identity().translate(ox, oy).concat(s.transform, box.width, box.height).translate(-ox, -oy);
     }
 }

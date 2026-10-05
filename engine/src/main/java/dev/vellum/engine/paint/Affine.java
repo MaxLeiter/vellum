@@ -50,6 +50,20 @@ public final class Affine {
         return multiply(m.a, m.b, m.c, m.d, m.e, m.f);
     }
 
+    /** {@code this = m · this}: {@code m} applies after this matrix. */
+    public Affine preMultiply(Affine m) {
+        return set(m.a * a + m.c * b, m.b * a + m.d * b,
+                m.a * c + m.c * d, m.b * c + m.d * d,
+                m.a * e + m.c * f + m.e, m.b * e + m.d * f + m.f);
+    }
+
+    /** {@code this = translate(tx, ty) · this}: the translation applies after this matrix. */
+    public Affine preTranslate(float tx, float ty) {
+        e += tx;
+        f += ty;
+        return this;
+    }
+
     public Affine translate(float tx, float ty) {
         e += a * tx + c * ty;
         f += b * tx + d * ty;
@@ -94,6 +108,18 @@ public final class Affine {
 
     public float mapY(float x, float y) {
         return b * x + d * y + f;
+    }
+
+    /** Writes the bounding box {x, y, width, height} of the rectangle {@code (x, y, w, h)} mapped by this matrix. */
+    public float[] mapBounds(float x, float y, float w, float h, float[] out) {
+        float x0 = mapX(x, y), y0 = mapY(x, y), x1 = mapX(x + w, y), y1 = mapY(x + w, y);
+        float x2 = mapX(x, y + h), y2 = mapY(x, y + h), x3 = mapX(x + w, y + h), y3 = mapY(x + w, y + h);
+        float left = Math.min(Math.min(x0, x1), Math.min(x2, x3)), top = Math.min(Math.min(y0, y1), Math.min(y2, y3));
+        out[0] = left;
+        out[1] = top;
+        out[2] = Math.max(Math.max(x0, x1), Math.max(x2, x3)) - left;
+        out[3] = Math.max(Math.max(y0, y1), Math.max(y2, y3)) - top;
+        return out;
     }
 
     // ---- CSS transform lists ----
