@@ -20,10 +20,9 @@ fabricApi {
 }
 
 loom {
-    def aw = project(':common').file("src/main/resources/${mod_id}.accesswidener")
-    if (aw.exists()) {
-        accessWidenerPath.set(aw)
-    }
+    // Common's access widener, with its Stonecutter comments resolved for this version.
+    accessWidenerPath.set(stonecutter.process(rootProject.file("common/src/main/resources/${mod_id}.accesswidener"),
+            "build/stonecutter-processed/${mod_id}.accesswidener"))
     runs {
         client {
             client()

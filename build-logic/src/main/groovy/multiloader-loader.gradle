@@ -5,30 +5,38 @@ plugins {
 configurations {
     commonJava {
         canBeResolved = true
+        canBeConsumed = false
     }
     commonResources {
         canBeResolved = true
+        canBeConsumed = false
     }
     engineJava {
         canBeResolved = true
+        canBeConsumed = false
     }
     engineResources {
         canBeResolved = true
+        canBeConsumed = false
     }
     rhinoRelocated {
         canBeResolved = true
+        canBeConsumed = false
     }
 }
 
+// The common subproject for the same Minecraft version.
+def common = ":common:${project.name}"
+
 dependencies {
-    compileOnly(project(':common')) {
+    compileOnly(project(common)) {
         def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
         attributes {
             attribute(loaderAttribute, 'common')
         }
     }
-    commonJava(project(path: ':common', configuration: 'commonJava'))
-    commonResources(project(path: ':common', configuration: 'commonResources'))
+    commonJava(project(path: common, configuration: 'commonJava'))
+    commonResources(project(path: common, configuration: 'commonResources'))
     engineJava(project(path: ':engine', configuration: 'engineJava'))
     engineResources(project(path: ':engine', configuration: 'engineResources'))
     rhinoRelocated(project(path: ':rhino', configuration: 'relocated'))

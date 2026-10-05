@@ -5,11 +5,9 @@ plugins {
 
 neoForge {
     neoFormVersion = neo_form_version
-    // Automatically enable AccessTransformers if the file exists
-    def at = file('src/main/resources/META-INF/accesstransformer.cfg')
-    if (at.exists()) {
-        accessTransformers.from(at.absolutePath)
-    }
+    // The access transformer, with its Stonecutter comments resolved for this version.
+    accessTransformers.from(stonecutter.process(parent.file('src/main/resources/META-INF/accesstransformer.cfg'),
+            'build/stonecutter-processed/accesstransformer.cfg'))
 }
 
 dependencies {
@@ -36,9 +34,16 @@ configurations {
     }
 }
 
+// The loaders compile common's sources and copy its resources themselves. Stonecutter sets the source directories:
+// the shared src/ for the active version, a generated copy for the others, and versions/<version>/src for files of one
+// version only.
 artifacts {
-    commonJava sourceSets.main.java.sourceDirectories.singleFile
-    commonResources sourceSets.main.resources.sourceDirectories.singleFile
+    sourceSets.main.java.srcDirs.each { dir ->
+        commonJava(dir) { builtBy(sourceSets.main.java.sourceDirectories) }
+    }
+    sourceSets.main.resources.srcDirs.each { dir ->
+        commonResources(dir) { builtBy(sourceSets.main.resources.sourceDirectories) }
+    }
 }
 
 // Implement mcgradleconventions loader attribute
