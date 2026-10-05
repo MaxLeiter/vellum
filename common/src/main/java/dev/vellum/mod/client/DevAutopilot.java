@@ -11,7 +11,9 @@ import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
+import net.minecraft.client.renderer.entity.state.ArmorStandRenderState;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.core.Rotations;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.Difficulty;
@@ -35,7 +37,9 @@ import java.util.UUID;
  * {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas test and the 3D pages also at 3),
  * logs the frame rate of each (and of benchmark pages of 3D content), hovers the title screen's first button for a
  * burst of screenshots a tick apart (hover effects and animations), drives the templates demo with
- * {@link VellumAutomation} (clicks, typing, Enter) and checks its state, and quits.
+ * {@link VellumAutomation} (clicks, typing, Enter) and checks its state, and quits. Armour stands in pages get a
+ * render state of the autopilot's ({@link VellumEntities}: arms, one raised, and no base plate), shown on a page of
+ * portraits.
  */
 public final class DevAutopilot {
     public static final boolean ENABLED = Boolean.getBoolean("vellum.autopilot");
@@ -45,6 +49,8 @@ public final class DevAutopilot {
     private static boolean started, loaded, finished;
     private static final Deque<Runnable> steps = new ArrayDeque<>();
     private static int wait;
+    /** How many render states the autopilot's armour stand function made. */
+    private static int standStates;
 
     private DevAutopilot() {}
 
@@ -95,6 +101,15 @@ public final class DevAutopilot {
     }
 
     private static void plan(Minecraft mc) {
+        VellumEntities.registerPortraitState(EntityTypes.ARMOR_STAND, (stand, partialTick) -> {
+            if (!(mc.getEntityRenderDispatcher().getRenderer(stand).createRenderState(stand, partialTick)
+                    instanceof ArmorStandRenderState state)) return null;
+            standStates++;
+            state.showArms = true;
+            state.showBasePlate = false;
+            state.rightArmPose = new Rotations(-150, 0, 15);
+            return state;
+        });
         command(mc, "gamerule send_command_feedback false");
         command(mc, "time set 6000");
         awardKills(mc);
@@ -127,6 +142,25 @@ public final class DevAutopilot {
         steps.add(() -> wait = SETTLE);
         drag(mc, "model[rotatable]", 60, 20);
         shoot(mc, "showcase_models_dragged", () -> mc.gui.screen().mouseMoved(10, 10));
+        // Portraits: whole bodies and head-and-shoulders crops at a few sizes, and armour stands drawn from the
+        // autopilot's render state (arms, one raised, no base plate). At GUI scale 3 too, where they are sharper.
+        shoot(mc, "portraits", () -> VellumScreens.openInline(PORTRAITS, null));
+        // The Turntable's portraits watching the pointer over the stage's caption, at both scales.
+        steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
+        steps.add(() -> wait = SETTLE);
+        hover(".stage p");
+        grab(mc, "showcase_models_portraits", 5);
+        steps.add(() -> {
+            if (standStates > 0) Constants.LOG.info("Vellum autopilot: armour stands drawn from the registered render state");
+            else Constants.LOG.error("Vellum autopilot: the registered armour stand render state was never used");
+        });
+        guiScale(mc, 3);
+        shoot(mc, "portraits_gui3", () -> VellumScreens.openInline(PORTRAITS, null));
+        steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
+        steps.add(() -> wait = SETTLE);
+        hover(".stage p");
+        grab(mc, "showcase_models_portraits_gui3", 5);
+        guiScale(mc, 2);
         // What 3D content costs: the logged fps of 48 spinning entities, models and items (2D, for comparison).
         for (String bench : List.of("entity type='minecraft:zombie'", "model block='minecraft:chest'", "item id='minecraft:chest'")) {
             String tag = bench.split(" ")[0];
@@ -166,6 +200,43 @@ public final class DevAutopilot {
         });
         steps.add(() -> VellumHud.hide(VellumClient.DEMO_HUD));
     }
+
+    /**
+     * Rows of entities fitted whole and with their eyes focused at 48 and 32 px, then boxes of other shapes with
+     * object-position, -mc-pitch and -mc-model-scale.
+     */
+    private static final String PORTRAITS = """
+            <style>
+              html { background: #151a24 }
+              body { margin: 0; padding: 6px; color: #8b96ad; display: flex; flex-direction: column; gap: 6px }
+              .row { display: flex; gap: 4px; align-items: flex-end }
+              .row > span { flex: none; width: 48px }
+              entity { flex: none; background: linear-gradient(#26304a, #10141d); outline: 1px solid #34405a }
+              .s48 entity { width: 48px; height: 48px }
+              .s32 entity { width: 32px; height: 32px }
+              .eyes entity, entity.eyes { -mc-entity-focus: eyes }
+              .tall { width: 32px; height: 64px }
+              .wide { width: 64px; height: 32px }
+            </style>
+            <div class="row s48"><span>body</span>ROW</div>
+            <div class="row s48 eyes"><span>eyes</span>ROW</div>
+            <div class="row s32 eyes"><span>eyes, 32</span>ROW</div>
+            <div class="row"><span>placed</span>
+              <entity player class="tall" style="object-position: top"></entity>
+              <entity type="minecraft:pig" class="tall" style="object-position: top"></entity>
+              <entity type="minecraft:armor_stand" class="tall" style="object-position: center; -mc-pitch: 25deg"></entity>
+              <entity player class="tall eyes" follow-mouse></entity>
+              <entity type="minecraft:villager" class="wide eyes" follow-mouse></entity>
+              <entity type="minecraft:zombie" class="wide eyes" style="object-position: 30% 60%"></entity>
+              <entity type="minecraft:iron_golem" class="tall eyes" style="-mc-model-scale: 0.6"></entity>
+              <entity type="minecraft:armor_stand" class="tall eyes" style="-mc-pitch: 30deg"></entity>
+            </div>
+            """.replace("ROW", """
+            <entity player follow-mouse></entity><entity type="minecraft:zombie" follow-mouse></entity>\
+            <entity type="minecraft:villager" follow-mouse></entity><entity type="minecraft:zombie" baby follow-mouse></entity>\
+            <entity type="minecraft:iron_golem"></entity><entity type="minecraft:pig" style="-mc-yaw: 30deg"></entity>\
+            <entity type="minecraft:fox"></entity><entity type="minecraft:ghast"></entity>\
+            <entity type="minecraft:armor_stand" head="minecraft:golden_helmet"></entity>""");
 
     /** Runs {@code open}, lets it settle, and saves a screenshot named {@code vellum_<name>.png}. */
     private static void shoot(Minecraft mc, String name, Runnable open) {
