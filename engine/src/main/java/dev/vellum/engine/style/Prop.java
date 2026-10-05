@@ -125,6 +125,9 @@ public enum Prop {
     TRANSFORM_ORIGIN_X("-vellum-transform-origin-x", false, false, Interp.LENGTH, s -> s.transformOriginX, (s, v) -> s.transformOriginX = (Length) v),
     TRANSFORM_ORIGIN_Y("-vellum-transform-origin-y", false, false, Interp.LENGTH, s -> s.transformOriginY, (s, v) -> s.transformOriginY = (Length) v),
     TINT("-mc-tint", true, false, Interp.COLOR, s -> s.tint, (s, v) -> s.tint = (Integer) v),
+    MODEL_YAW("-mc-yaw", false, false, Interp.FLOAT, s -> s.modelYaw, (s, v) -> s.modelYaw = (Float) v),
+    MODEL_PITCH("-mc-pitch", false, false, Interp.FLOAT, s -> s.modelPitch, (s, v) -> s.modelPitch = (Float) v),
+    MODEL_SCALE("-mc-model-scale", false, false, Interp.FLOAT, s -> s.modelScale, (s, v) -> s.modelScale = (Float) v),
 
     SCROLL_BEHAVIOR("scroll-behavior", false, false, Interp.DISCRETE, s -> s.scrollSmooth, (s, v) -> s.scrollSmooth = (Boolean) v),
     SCROLLBAR_WIDTH("scrollbar-width", false, true, Interp.DISCRETE, s -> s.scrollbarWidth, (s, v) -> s.scrollbarWidth = (Integer) v),

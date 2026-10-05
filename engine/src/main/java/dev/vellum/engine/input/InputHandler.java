@@ -98,6 +98,7 @@ public final class InputHandler {
         if (target.isTextControl()) drag = TextField.of(target).press(at[0], at[1], clicks, pointer.mods().shift());
         else if (target.inputType().equals("range")) drag = RangeControl.of(target).press(at[0]);
         else if (target.tagName().equals("select")) openPopup(target);
+        else if (target.replaced != null) drag = target.replaced.press(at[0], at[1]);
         if (drag != null) pointer.capture(target, drag);
     }
 
