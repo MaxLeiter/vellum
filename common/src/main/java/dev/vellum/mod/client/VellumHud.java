@@ -112,6 +112,21 @@ public final class VellumHud {
         return o == null || !o.shown ? null : o.driver;
     }
 
+    /**
+     * The open screen when the overlay showing {@code driver}'s page has the pointer over it (it was drawn above the
+     * screen with the pointer last frame), so real pointer input reaches the page; null otherwise.
+     */
+    static @Nullable Screen pointerScreen(DocumentDriver driver) {
+        for (Overlay o : pointerOverlays()) if (o.driver == driver) return openScreen();
+        return null;
+    }
+
+    /** The driver of the overlay a click at a GUI point over the open screen goes to, or null when none takes it. */
+    static @Nullable DocumentDriver pointerDriverAt(double x, double y) {
+        Overlay o = overlayAt(x, y);
+        return o == null ? null : o.driver;
+    }
+
     private static Overlay overlay(Identifier id) {
         Overlay o = OVERLAYS.get(id);
         if (o == null) throw new IllegalArgumentException("No Vellum HUD overlay registered as " + id);
