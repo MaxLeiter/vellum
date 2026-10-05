@@ -233,6 +233,37 @@ class PaintOrderTest {
     }
 
     @Test
+    void replacedContentHonoursObjectPosition() {
+        TestHost host = new TestHost();
+        host.imageSizes.put("test:x.png", new float[] {16, 16});
+        String img = "position: absolute; left: 10px; top: 10px; width: 32px; height: 24px; object-fit: ";
+        Page page = host.load("<img id=i src=x.png style='" + img + "none'>");
+        Element i = page.byId("i");
+        assertArrayEquals(new float[] {18, 14, 16, 16}, page.paint().ops("drawImage").getFirst().bounds(), 1e-4f,
+                "centred until object-position is set");
+
+        String[][] cases = {
+                {"left top", "10, 10"}, {"right bottom", "26, 18"}, {"right 2px bottom 25%", "24, 16"},
+                {"25% 4px", "14, 14"}, {"-4px center", "6, 14"}};
+        for (String[] c : cases) {
+            i.setAttribute("style", img + "none; object-position: " + c[0]);
+            page.frame();
+            float[] at = page.paint().ops("drawImage").getFirst().bounds();
+            assertEquals(c[1], (int) at[0] + ", " + (int) at[1], c[0]);
+        }
+
+        // Content larger than its box moves the other way, and is clipped to the box.
+        i.setAttribute("style", img + "cover; object-position: right bottom");
+        page.frame();
+        RecordingCanvas.Call cover = page.paint().ops("drawImage").getFirst();
+        assertArrayEquals(new float[] {10, 2, 32, 32}, cover.bounds(), 1e-4f);
+        assertArrayEquals(new float[] {10, 10, 32, 24}, cover.clip(), 1e-4f);
+        i.setAttribute("style", img + "cover; object-position: 0 0");
+        page.frame();
+        assertArrayEquals(new float[] {10, 10, 32, 32}, page.paint().ops("drawImage").getFirst().bounds(), 1e-4f);
+    }
+
+    @Test
     void edgesSnapToDevicePixels() {
         Page page = new TestHost().load("<div style='position: absolute; left: 10.3px; top: 0.1px; width: 5.3px; "
                 + "height: 2.2px; background: #00000a'></div>");

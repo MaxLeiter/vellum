@@ -53,6 +53,12 @@ public final class ComputedStyle implements Cloneable {
     /** width / height, or NaN for {@code auto}. */
     public float aspectRatio = Float.NaN;
     public ObjectFit objectFit = ObjectFit.FILL;
+    /**
+     * {@code object-position}, per axis: where replaced content sits in its box ({@link #objectX}). {@link Length#AUTO}
+     * until a rule sets it, which centres most content (CSS's initial {@code 50% 50%}, and what it serialises as)
+     * while an {@code <entity>} keeps its own default.
+     */
+    public Length objectPositionX = Length.AUTO, objectPositionY = Length.AUTO;
 
     // ---- Flexbox and box alignment ----
     public FlexDirection flexDirection = FlexDirection.ROW;
@@ -139,6 +145,8 @@ public final class ComputedStyle implements Cloneable {
     public float modelYaw, modelPitch;
     /** {@code -mc-model-scale}: multiplies the size that fits 3D content into its box. */
     public float modelScale = 1f;
+    /** {@code -mc-entity-focus}: an entity's whole body fits its box, or its head and shoulders fill it. */
+    public EntityFocus entityFocus = EntityFocus.BODY;
 
     // ---- Scrolling ----
     public boolean scrollSmooth = true;
@@ -277,6 +285,7 @@ public final class ComputedStyle implements Cloneable {
                 && radiusBottomRight.equals(o.radiusBottomRight) && radiusBottomLeft.equals(o.radiusBottomLeft)
                 && zIndexAuto == o.zIndexAuto && (zIndexAuto || zIndex == o.zIndex) && same(opacity, o.opacity)
                 && visibility == o.visibility && objectFit == o.objectFit
+                && objectPositionX.equals(o.objectPositionX) && objectPositionY.equals(o.objectPositionY)
                 && color == o.color && same(lineHeightFactor, o.lineHeightFactor) && underline == o.underline
                 && lineThrough == o.lineThrough && textOverflow == o.textOverflow && textShadow.equals(o.textShadow)
                 && cursor == o.cursor && pointerEvents == o.pointerEvents && userSelect == o.userSelect
@@ -287,7 +296,8 @@ public final class ComputedStyle implements Cloneable {
                 && same(outlineOffset, o.outlineOffset) && transform.equals(o.transform)
                 && transformOriginX.equals(o.transformOriginX) && transformOriginY.equals(o.transformOriginY)
                 && tint == o.tint && same(modelYaw, o.modelYaw) && same(modelPitch, o.modelPitch)
-                && same(modelScale, o.modelScale) && scrollSmooth == o.scrollSmooth && scrollbarThumbColor == o.scrollbarThumbColor
+                && same(modelScale, o.modelScale) && entityFocus == o.entityFocus && scrollSmooth == o.scrollSmooth
+                && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
                 && isFlexOrGridItemHint == o.isFlexOrGridItemHint;
@@ -317,6 +327,19 @@ public final class ComputedStyle implements Cloneable {
     }
 
     public boolean isBold() { return fontWeight >= 600; }
+
+    /**
+     * How far right of its box's left edge content {@code free} px narrower than the box starts
+     * ({@code object-position}; negative {@code free} for content wider than the box). Centred when unset.
+     */
+    public float objectX(float free) {
+        return objectPositionX.resolve(free, free / 2);
+    }
+
+    /** As {@link #objectX}, down from the top edge. */
+    public float objectY(float free) {
+        return objectPositionY.resolve(free, free / 2);
+    }
 
     /**
      * The font of this style. Memoized: the spec is kept while the font fields are unchanged, so text runs, form

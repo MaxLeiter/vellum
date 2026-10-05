@@ -192,8 +192,8 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 |---|---|
 | `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
-| `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
-| `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box: at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
+| `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
+| `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box (or placed by `object-position`): at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
 | `<player-head name="..." uuid="...">` | A player's face from their skin. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
 | `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated (`Host.translate`) or component text (`Host.formatText` gives styled runs, which become spans), as a normal inline element. Expanded by the engine when the element is parsed or inserted and when those attributes change, so templates and scripts can use it. |
@@ -243,7 +243,12 @@ corner as a single Length; elliptical radii use the horizontal value), `backgrou
 `background-*` longhands (`-image`, `-size`, `-position`, `-repeat`, `-clip`), `flex`, `flex-flow`, `gap`,
 `place-items`, `place-content`, `place-self`, `grid-template`, `grid-area`, `grid-row`, `grid-column`, `overflow`,
 `font` (simplified), `text-decoration` (line keywords), `transition`, `animation`, `outline`, `transform-origin`,
-`list-style` (ignored except `none`), `-webkit-line-clamp`.
+`object-position`, `list-style` (ignored except `none`), `-webkit-line-clamp`.
+
+`object-position` takes a `<position>` (one to four values: keywords, lengths, percentages) and is stored per axis
+(`-vellum-object-position-x`/`-y`, as `transform-origin` is). An axis no rule set is `Length.AUTO`: it serialises as
+`50%` and centres content like the initial value, but content can tell it apart, so `<entity>` keeps its own default
+(below). It is paint-only and animates, an unset axis as `50%`.
 
 Vellum extensions: `-mc-tint: <color>` (multiply images, sprites, entities and models; items cannot be tinted),
 `text-shadow: minecraft` (the game's native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
@@ -256,6 +261,14 @@ and not inherited:
   so `@keyframes spin { to { -mc-yaw: 360deg } }` is a full turn.
 - `-mc-pitch: <angle>` (initial 0): views it from above (positive) or below.
 - `-mc-model-scale: <number>` (initial 1): multiplies the size that fits the box.
+- `-mc-entity-focus: body | eyes` (initial `body`, `<entity>` only): what fills the box. `body` fits the whole entity
+  with room to turn and `object-position` places that room (unset: `50% 100%`, standing on the bottom edge). `eyes`
+  crops it to its head and shoulders: the box's shorter side spans 0.7 of its eye height (at least 0.4 blocks), and
+  `object-position` places the point at its eye height on its upright axis (unset: `50% 40%`).
+
+```html
+<entity id="…" follow-mouse style="width:32px; height:32px; -mc-entity-focus: eyes; object-position: 50% 40%"></entity>
+```
 
 The `rotatable` attribute lets the pointer turn it as well: dragging sideways turns it, dragging up or down tilts the
 view (up to 60° either way), and a flick keeps spinning and eases out. The engine handles it as a control: a press on
@@ -316,8 +329,8 @@ All layout is in floats (GUI px). Painting snaps to device pixels.
   overlay (they do not take layout space), drawn by the painter, styled by `scrollbar-width` and the scrollbar colour
   properties.
 - Replaced elements: intrinsic size from `ReplacedContent` (or `width`/`height` attributes), `aspect-ratio`,
-  `object-fit` (applied at paint). Form controls are atomic boxes sized by the UA stylesheet; their children
-  (option elements) are not laid out.
+  `object-fit` and `object-position` (applied at paint). Form controls are atomic boxes sized by the UA stylesheet;
+  their children (option elements) are not laid out.
 - Intrinsic sizes: min-content / max-content measurement for every formatting context (needed by flex, grid,
   inline-block shrink-to-fit, and `width: min-content | max-content | fit-content`). Cache per layout pass.
 
@@ -339,8 +352,10 @@ Per box:
 4. Border: `fillBorder` with per-side colours; `inset`/`outset`/`groove`/`ridge` shade the sides (the classic
    Minecraft bevel: `border: 2px outset #c6c6c6`); `dashed`/`dotted` as segments.
 5. Form control painting (`input.Controls.paint`).
-6. Replaced content (`ReplacedContent.paint`), with `object-fit`. Minecraft content draws through the Minecraft
-   canvas, which its paint finds in one documented place (`McReplaced`).
+6. Replaced content (`ReplacedContent.paint`), sized by `object-fit` and placed by `object-position`
+   (`ComputedStyle.objectX/objectY`). Content that fits itself inside that box (items, heads and models in a square,
+   entities) places itself with the same methods. Minecraft content draws through the Minecraft canvas, which its
+   paint finds in one documented place (`McReplaced`).
 7. Children: clip to the padding box if `overflow` is not visible (rectangular clip; rounded clip is not supported),
    translate by `-scroll`, paint children and line fragments.
 8. Scrollbars (overlay), outline (`outline`, `outline-offset`; focus rings), and `::after` order handled by the box
@@ -513,11 +528,21 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   frame). The picture is rendered at the GUI scale into the element's box and blitted with a colour, so 3D content
   is crisp at any size, fades with `opacity` and takes `-mc-tint`. Content asks `McCanvas.sceneVisible` first and
   resolves nothing for a box that is clipped away or transparent. Still models keep their picture between frames.
-  - Entities stand on the bottom of their box, fitted (with a small margin) to the room they need at any turn and
-    at the current pitch. `EntityReach` measures that room by submitting the entity through its renderer into a
-    collector that reads the model cubes of every layer (whatever `order(n)` it is submitted in); never less than
-    the bounding box, measured once per entity type, age and size. Display entities are created client-side, never
+  - Entities are fitted (`EntityPortrait`) with a small margin to the room they need at any turn and at the
+    current pitch, and that room is placed by `object-position`, unset on the bottom edge. `EntityReach` measures
+    the room by submitting the entity through its renderer into a collector that reads the model cubes of every
+    layer (whatever `order(n)` it is submitted in); never less than the bounding box, measured once per entity type,
+    age and size (and apart for states a mod supplied). With `-mc-entity-focus: eyes` the scale comes from the eye
+    height instead (the box's shorter side spans 0.7 of it) and the origin is placed so that the eye point, on the
+    upright axis, lands where `object-position` says; the view tilt (pitch and the gaze lean) turns about the feet,
+    so the origin is moved by the eye's projected height to keep the eyes still. `follow-mouse` aims the gaze from
+    that eye point (a third down the box with the body fit). Display entities are created client-side, never
     added to the world, and play their idle animations on the clock.
+  - The render state comes from the function a mod registered for the type (`VellumEntities.registerPortraitState`,
+    docs/API.md), else from the renderer, at the frame's partial tick. Either way the picture clears the shadow,
+    outline, name tag, score, leashes and passenger offset, is lit full bright, and is posed: body turn, walk
+    animation and scale. The head turns to the gaze; without one it looks ahead on Vellum's own states and keeps
+    the mod's rotation on supplied ones (a slumped head stays slumped).
   - Blocks are resolved with one shared `BlockModelResolver` and drawn in vanilla's `block/block` GUI view (30° from
     above, turned 225°, 0.625 of the box) whatever the block: blocks whose item model uses another view (stairs are
     turned 135°) differ from their inventory icon at yaw 0.
@@ -592,7 +617,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - GameTests (both loaders, headless): networking codecs, server API, container menus.
 - Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each showcase page and demo UI in a real
   client (the 3D pages at GUI scales 2 and 3), screenshots it to `neoforge/runs/client/screenshots/`, and logs each
-  page's frame rate, plus benchmark pages of 48 spinning entities, models and items. It drives pages through `VellumAutomation`
+  page's frame rate, plus benchmark pages of 48 spinning entities, models and items, and a page of entity portraits
+  (body and eyes fits at several sizes, `object-position`) whose armour stands come from a render state the autopilot
+  registers (`VellumEntities`: arms, one raised, no base plate). It drives pages through `VellumAutomation`
   (docs/API.md), the public client API for dev automation: it hovers the showcase title screen's first button for a
   burst of screenshots a tick apart, and fills in the templates demo and checks its state.
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.

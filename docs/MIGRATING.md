@@ -50,7 +50,7 @@ stylesheet linked from every page.
 | fade/slide/typewriter timers | `transition`, `@keyframes`, `el.animate()`, or a small timer in the page script |
 | palette constants | CSS custom properties (`--panel: #1b1b22`) |
 | `EditBox`, `Button`, sliders, cycle buttons | `<input>`, `<button>`, `<input type=range>`, `<select>`, checkboxes (vanilla look by default, restyle freely) |
-| `g.entity(...)` portraits | `<entity type="…" follow-mouse>`, `<entity id="<network id>">`, `<entity player>`; `rotatable`, and CSS `-mc-yaw`/`-mc-pitch`/`-mc-model-scale`; `<model block="…">` or `<model item="…">` for blocks and items |
+| `g.entity(...)` portraits | `<entity type="…" follow-mouse>`, `<entity id="<network id>">`, `<entity player>`; `rotatable`, and CSS `-mc-yaw`/`-mc-pitch`/`-mc-model-scale`; head-and-shoulders crops with `-mc-entity-focus: eyes` and `object-position`; your own render state (no bubbles or labels) with `VellumEntities.registerPortraitState`; `<model block="…">` or `<model item="…">` for blocks and items |
 | `g.item(...)` icons, item tooltips | `<item id="…" count="…" tooltip>` |
 | `NativeImage` + `DynamicTexture` maps and procedural art | register the texture under an `Identifier` and use `<img src="mymod:dynamic/map">` or `background: url(mymod:dynamic/map)`; or draw with `<canvas>` `getContext('2d')` |
 | `blitSprite(...)` nine-slices | `background: sprite(mymod:widget/panel)` (honours the sprite's `.mcmeta` scaling) |

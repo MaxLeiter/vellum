@@ -32,6 +32,8 @@ public final class Interpolate {
         if (t == 0) return from;
         if (t == 1) return to;
         if (!canInterpolate(prop, from, to)) return t < 0.5f ? from : to;
+        from = centred(prop, from);
+        to = centred(prop, to);
         return switch (prop.interpolation) {
             case LENGTH -> Length.lerp((Length) from, (Length) to, t);
             case FLOAT -> lerp((Float) from, (Float) to, t);
@@ -51,6 +53,8 @@ public final class Interpolate {
      */
     @SuppressWarnings("unchecked")
     public static boolean canInterpolate(Prop prop, Object from, Object to) {
+        from = centred(prop, from);
+        to = centred(prop, to);
         return switch (prop.interpolation) {
             case NONE -> false;
             case DISCRETE -> prop == Prop.VISIBILITY && (from == Visibility.VISIBLE || to == Visibility.VISIBLE);
@@ -60,6 +64,11 @@ public final class Interpolate {
             case COLOR, TRANSFORM -> true; // mismatched transform lists blend as matrices at paint time
             case SHADOWS -> shadowsMatch((List<Shadow>) from, (List<Shadow>) to);
         };
+    }
+
+    /** An unset {@code object-position} axis ({@code auto}) animates as the {@code 50%} it centres content at. */
+    private static Object centred(Prop prop, Object v) {
+        return v == Length.AUTO && (prop == Prop.OBJECT_POSITION_X || prop == Prop.OBJECT_POSITION_Y) ? Length.PERCENT_50 : v;
     }
 
     private static float lerp(float a, float b, float t) {

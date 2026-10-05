@@ -143,7 +143,7 @@ final class BoxPainter implements StackingOrder.Visitor {
         borders.paint(canvas, batch, dp, rect, g.radii, g.border, styles, colors);
     }
 
-    /** Replaced content in the content box, sized by object-fit and centred; clipped when it overflows. */
+    /** Replaced content in the content box, sized by object-fit and placed by object-position; clipped when it overflows. */
     private void replaced(Box box, ComputedStyle s, ReplacedContent content, float x, float y) {
         float cx = x + box.contentX(), cy = y + box.contentY(), cw = box.contentWidth(), ch = box.contentHeight();
         float iw = content.intrinsicWidth(), ih = content.intrinsicHeight(), w = cw, h = ch;
@@ -161,8 +161,9 @@ final class BoxPainter implements StackingOrder.Visitor {
             }
         }
         boolean overflows = w > cw + 0.01f || h > ch + 0.01f;
-        float x0 = snap(cx + (cw - w) / 2), y0 = snap(cy + (ch - h) / 2);
-        float width = snap(cx + (cw + w) / 2) - x0, height = snap(cy + (ch + h) / 2) - y0;
+        float ox = cx + s.objectX(cw - w), oy = cy + s.objectY(ch - h);
+        float x0 = snap(ox), y0 = snap(oy);
+        float width = snap(ox + w) - x0, height = snap(oy + h) - y0;
         if (width <= 0 || height <= 0 || overflows && !pushClip(cx, cy, cw, ch)) return;
         content.paint(canvas, x0, y0, width, height);
         if (overflows) popClip();

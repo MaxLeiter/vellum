@@ -13,6 +13,7 @@ import dev.vellum.engine.style.BoxSizing;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.engine.style.Display;
+import dev.vellum.engine.style.EntityFocus;
 import dev.vellum.engine.style.FlexDirection;
 import dev.vellum.engine.style.FlexWrap;
 import dev.vellum.engine.style.GridAutoFlow;
@@ -210,6 +211,10 @@ final class Properties {
         add(Prop.VERTICAL_ALIGN, Keywords.parser(VerticalAlign.class), KEYWORD);
         add(Prop.ASPECT_RATIO, Properties::aspectRatio, v -> Float.isNaN((Float) v) ? "auto" : CssText.number((Float) v));
         add(Prop.OBJECT_FIT, Keywords.parser(ObjectFit.class), KEYWORD);
+        // Unset (auto) serialises as CSS's initial value; only the content tells the two apart.
+        Function<Object, String> objectPosition = v -> ((Length) v).isAuto() ? "50%" : v.toString();
+        add(Prop.OBJECT_POSITION_X, (r, ctx) -> Images.axis(r, ctx, "left", "right"), objectPosition);
+        add(Prop.OBJECT_POSITION_Y, (r, ctx) -> Images.axis(r, ctx, "top", "bottom"), objectPosition);
     }
 
     private static void registerFlexAndGrid() {
@@ -290,6 +295,7 @@ final class Properties {
         add(Prop.TINT, CssColors::read, COLOR);
         add(List.of(Prop.MODEL_YAW, Prop.MODEL_PITCH), Numeric::angle, v -> CssText.deg((Float) v));
         add(Prop.MODEL_SCALE, Properties::nonNegativeNumber, NUMBER);
+        add(Prop.ENTITY_FOCUS, Keywords.parser(EntityFocus.class), KEYWORD);
         add(Prop.SCROLL_BEHAVIOR, Keywords.parser(Map.of("auto", false, "smooth", true)),
                 v -> (Boolean) v ? "smooth" : "auto");
         add(Prop.SCROLLBAR_WIDTH, Keywords.parser(Map.of("auto", 2, "thin", 1, "none", 0)),

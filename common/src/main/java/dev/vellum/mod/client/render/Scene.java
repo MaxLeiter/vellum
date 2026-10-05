@@ -47,13 +47,14 @@ public final class Scene {
     }
 
     /**
-     * An entity standing on the bottom edge of the picture, centred, with its origin {@code lift} blocks above it;
-     * {@code rotation} turns it, and the camera looks along {@code cameraTilt} (for billboards such as name tags).
+     * An entity with its origin {@code dx} blocks right of the middle of the picture's bottom edge and {@code up}
+     * blocks above it; {@code rotation} turns it, and the camera looks along {@code cameraTilt} (for billboards such
+     * as name tags).
      */
-    public static Scene entity(EntityRenderState state, float lift, Quaternionfc rotation, @Nullable Quaternionfc cameraTilt) {
+    public static Scene entity(EntityRenderState state, float dx, float up, Quaternionfc rotation, @Nullable Quaternionfc cameraTilt) {
         return new Scene(null, null, Lighting.Entry.ENTITY_IN_UI, (pose, out, picture) -> {
-            // As vanilla's GuiEntityRenderer, with the origin moved from the middle down to the bottom edge.
-            pose.translate(0, (picture.y1() - picture.y0()) / 2F / picture.scale() - lift, 0);
+            // As vanilla's GuiEntityRenderer, with the origin moved from the middle to the bottom edge, then placed.
+            pose.translate(dx, (picture.y1() - picture.y0()) / 2F / picture.scale() - up, 0);
             pose.rotate(rotation);
             CameraRenderState camera = new CameraRenderState();
             if (cameraTilt != null) camera.orientation = cameraTilt.conjugate(new Quaternionf()).rotateY((float) Math.PI);
@@ -64,11 +65,13 @@ public final class Scene {
     /**
      * A block model, as resolved by {@code BlockModelResolver}, as the inventory shows blocks (vanilla's
      * {@code block/block} GUI transform: 30° from above, turned 225°, 0.625 a box), turned by {@code yaw} about its
-     * upright axis and seen from {@code pitch} degrees further above. {@code identity} changes when its model does
-     * (the model manager's block model); {@code owner} draws it at most once a frame.
+     * upright axis and seen from {@code pitch} degrees further above, its centre {@code dx} blocks right of the
+     * picture's middle and {@code dy} below. {@code identity} changes when its model does (the model manager's block
+     * model); {@code owner} draws it at most once a frame.
      */
-    public static Scene block(Object owner, BlockModelRenderState state, Object identity, float yaw, float pitch) {
-        return new Scene(owner, new ModelKey(identity, yaw, pitch), Lighting.Entry.ITEMS_3D, (pose, out, picture) -> {
+    public static Scene block(Object owner, BlockModelRenderState state, Object identity, float yaw, float pitch, float dx, float dy) {
+        return new Scene(owner, new ModelKey(identity, yaw, pitch, dx, dy), Lighting.Entry.ITEMS_3D, (pose, out, picture) -> {
+            pose.translate(dx, dy, 0);
             turn(pose, BLOCK_TILT, yaw, pitch);
             pose.rotateDegrees(Axis.YP, BLOCK_YAW);
             pose.scale(BLOCK_SCALE, BLOCK_SCALE, BLOCK_SCALE);
@@ -79,21 +82,23 @@ public final class Scene {
 
     /**
      * An item model resolved for the GUI, so at yaw and pitch 0 it is the inventory icon, turned by {@code yaw} about
-     * its upright axis and seen from {@code pitch} degrees further above. Block-like items are tilted 30° toward the
-     * viewer in the inventory, flat ones not, so that is the axis they turn about.
+     * its upright axis and seen from {@code pitch} degrees further above, its centre {@code dx} blocks right of the
+     * picture's middle and {@code dy} below. Block-like items are tilted 30° toward the viewer in the inventory, flat
+     * ones not, so that is the axis they turn about.
      */
-    public static Scene item(Object owner, TrackingItemStackRenderState state, float yaw, float pitch) {
-        Object key = state.isAnimated() ? null : new ModelKey(state.getModelIdentity(), yaw, pitch);
+    public static Scene item(Object owner, TrackingItemStackRenderState state, float yaw, float pitch, float dx, float dy) {
+        Object key = state.isAnimated() ? null : new ModelKey(state.getModelIdentity(), yaw, pitch, dx, dy);
         boolean blockLike = state.usesBlockLight();
         float tilt = blockLike ? BLOCK_TILT : 0;
         return new Scene(owner, key, blockLike ? Lighting.Entry.ITEMS_3D : Lighting.Entry.ITEMS_FLAT, (pose, out, picture) -> {
+            pose.translate(dx, dy, 0);
             turn(pose, tilt, yaw, pitch);
             pose.rotateDegrees(Axis.XP, -tilt); // the item's GUI transform tilts it again
             state.submit(pose, out, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
         });
     }
 
-    private record ModelKey(Object model, float yaw, float pitch) {}
+    private record ModelKey(Object model, float yaw, float pitch, float dx, float dy) {}
 
     /** Faces a GUI model to the viewer, y up, tilted {@code tilt + pitch} degrees from above, turned by yaw. */
     private static void turn(PoseStack pose, float tilt, float yaw, float pitch) {

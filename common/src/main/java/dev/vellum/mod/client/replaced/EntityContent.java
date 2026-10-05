@@ -1,6 +1,7 @@
 package dev.vellum.mod.client.replaced;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponentMap;
@@ -20,8 +21,8 @@ import org.jspecify.annotations.Nullable;
 import java.util.Set;
 
 /**
- * {@code <entity>}: a live entity render, standing on the bottom of the content box and fitted to it
- * ({@link EntityPortrait}).
+ * {@code <entity>}: a live entity render, fitted to the content box ({@link EntityPortrait}): standing on its bottom,
+ * or with {@code -mc-entity-focus: eyes} its head and shoulders filling it, either placed by {@code object-position}.
  * <ul>
  *   <li>{@code <entity player>}: the local player;</li>
  *   <li>{@code <entity type="minecraft:pig">}: a client-side entity of that type, created once per world;</li>
@@ -78,7 +79,10 @@ final class EntityContent extends TurnableContent {
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Entity entity = entity();
-        if (entity != null) EntityPortrait.draw(canvas, entity, pose(canvas, x, y, width, height), tint(), x, y, width, height);
+        if (entity == null) return;
+        ComputedStyle style = style();
+        EntityPortrait.Framing framing = new EntityPortrait.Framing(style.entityFocus, style.objectPositionX, style.objectPositionY);
+        EntityPortrait.draw(canvas, entity, pose(canvas, framing, x, y, width, height), framing, tint(), x, y, width, height);
     }
 
     private void load() {
@@ -91,14 +95,19 @@ final class EntityContent extends TurnableContent {
     }
 
     /** The pose from the element's style and attributes and the pointer: the one place that decides how it stands. */
-    private EntityPortrait.Pose pose(McCanvas canvas, float x, float y, float width, float height) {
-        float gazeYaw = 0, gazePitch = 0;
-        if (followMouse && canvas.mouseX() >= 0) {
-            // As vanilla's inventory: up to about ±30° toward a pointer 40 px away from the eyes.
-            gazeYaw = (float) Math.atan((canvas.mouseX() - x - width / 2) / 40.0F) * 20.0F;
-            gazePitch = (float) Math.atan((y + height / 3 - canvas.mouseY()) / 40.0F) * 20.0F;
+    private EntityPortrait.Pose pose(McCanvas canvas, EntityPortrait.Framing framing, float x, float y, float width, float height) {
+        EntityPortrait.Gaze gaze = null;
+        if (followMouse) {
+            float gazeYaw = 0, gazePitch = 0;
+            if (canvas.mouseX() >= 0) {
+                // As vanilla's inventory: up to about ±30° toward a pointer 40 px away from the eyes.
+                float[] eyes = EntityPortrait.gazeOrigin(framing, x, y, width, height);
+                gazeYaw = (float) Math.atan((canvas.mouseX() - eyes[0]) / 40.0F) * 20.0F;
+                gazePitch = (float) Math.atan((eyes[1] - canvas.mouseY()) / 40.0F) * 20.0F;
+            }
+            gaze = new EntityPortrait.Gaze(gazeYaw, gazePitch);
         }
-        return new EntityPortrait.Pose(yaw(), pitch(), gazeYaw, gazePitch, modelScale(), walk);
+        return new EntityPortrait.Pose(yaw(), pitch(), gaze, modelScale(), walk);
     }
 
     private @Nullable Entity entity() {
