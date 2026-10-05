@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -28,6 +30,14 @@ public final class VellumFabricClient implements ClientModInitializer {
         VellumClient.init(ClientPlayNetworking::send);
         for (VellumNetwork.Clientbound<?> c : VellumNetwork.CLIENTBOUND) register(c);
         HudElementRegistry.attachElementAfter(VanillaHudElements.TITLE_AND_SUBTITLE, Constants.id("hud"), VellumHud::extract);
+        // Interactive HUD overlays: drawn above every screen and given its pointer input first (per-screen events).
+        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            ScreenEvents.afterExtract(screen).register((s, g, mouseX, mouseY, a) -> VellumHud.extractAboveScreen(g, a));
+            ScreenMouseEvents.allowMouseClick(screen).register((s, e) -> !VellumHud.mouseClicked(e));
+            ScreenMouseEvents.allowMouseRelease(screen).register((s, e) -> !VellumHud.mouseReleased(e));
+            ScreenMouseEvents.allowMouseDrag(screen).register((s, e, dx, dy) -> !VellumHud.mouseDragged(e));
+            ScreenMouseEvents.allowMouseScroll(screen).register((s, x, y, dx, dy) -> !VellumHud.mouseScrolled(x, y, dx, dy));
+        });
         // After every mod's client entrypoint has had the chance to call VellumScreens.registerContainer.
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
             for (VellumScreens.ContainerBinding<?> b : VellumScreens.takeContainers()) registerMenuScreen(b);

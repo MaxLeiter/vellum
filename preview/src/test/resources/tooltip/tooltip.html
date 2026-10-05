@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<head>
+  <style>
+    body { padding: 20px; display: flex; gap: 4px; align-items: start; }
+    button { width: 60px; }
+  </style>
+</head>
+<body>
+  <button id=plain title="Just this once">Allow</button>
+  <button id=rich title="fallback"
+          title-json='["",{"text":"Allow every ","color":"gray"},{"text":"cobblestone","color":"gold","bold":true},{"text":" request\nfrom Rivet until you log out, which is a long time from now","color":"gray"}]'>Always</button>
+</body>
+</html>

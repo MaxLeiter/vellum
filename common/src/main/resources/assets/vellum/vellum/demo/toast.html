@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+  <title>Ask first</title>
+  <style>
+    /*
+     * An interactive HUD overlay (VellumHud.Input.WHEN_CURSOR_FREE): it sits in the corner of the HUD, and while a
+     * screen frees the cursor (press T for chat) its buttons hover, show their title tooltips and take clicks.
+     * Clicks anywhere else fall through to the screen: the body is only background.
+     */
+    .toast {
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      width: 190px;
+      padding: 6px;
+      background: #121720;
+      border: 1px solid #2c3540;
+      border-radius: 3px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+      animation: slide 300ms ease-out both;
+    }
+
+    @keyframes slide {
+      from { opacity: 0; transform: translateX(12px); }
+    }
+
+    .ask {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      color: #d8dde6;
+      line-height: 10px;
+    }
+
+    .ask b {
+      color: #f4e3b5;
+    }
+
+    .stack {
+      color: mc-gray;
+      text-decoration: underline;
+      white-space: nowrap;
+    }
+
+    .actions {
+      display: flex;
+      gap: 3px;
+      margin-top: 6px;
+    }
+
+    .actions button {
+      flex: 1;
+      height: 16px;
+    }
+
+    .hint {
+      margin-top: 4px;
+      color: #6b7686;
+    }
+  </style>
+</head>
+<body>
+  <div class="toast">
+    <div class="ask">
+      <item id="minecraft:cobblestone" tooltip></item>
+      <span><b>Rivet</b> wants to take <span class="stack" title="From the chest at 12, 64, -30&#10;(it holds 40)">12 cobblestone</span>.</span>
+    </div>
+    <div class="actions">
+      <button title="Just this once" onclick="answer('once')">Allow</button>
+      <button title-json='["",{"text":"Allow every ","color":"gray"},{"text":"cobblestone","color":"gold"},{"text":" request\nfrom Rivet until you log out","color":"gray"}]'
+              onclick="answer('always')">Always</button>
+      <button title="Rivet will look elsewhere" onclick="answer('deny')">Deny</button>
+    </div>
+    <div class="hint">Press T to answer with the mouse.</div>
+  </div>
+
+  <script>
+    function answer(choice) {
+      vellum.send('answer', choice);
+      vellum.close();
+    }
+  </script>
+</body>
+</html>

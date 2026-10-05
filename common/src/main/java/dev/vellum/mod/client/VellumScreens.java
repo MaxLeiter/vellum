@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.net.OpenPayload;
 import net.minecraft.client.Minecraft;
@@ -13,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -24,14 +26,25 @@ import java.util.function.Supplier;
  *
  * // In client setup, for your own menu type (a MenuType or a registry holder):
  * VellumScreens.registerContainer(MyMenus.FORGE, "mymod:vellum/forge.html");
+ * // With fields of your own in vellum.data, next to title, inventory and slots:
+ * VellumScreens.registerContainer(MyMenus.BOT, "mymod:vellum/bot.html", menu -> {
+ *     JsonObject data = new JsonObject();
+ *     data.addProperty("tier", menu.tier());
+ *     return data;
+ * });
  * }</pre>
  * Render thread only.
  */
 public final class VellumScreens {
-    /** A menu type whose screen is a Vellum page. */
-    public record ContainerBinding<M extends AbstractContainerMenu>(Supplier<? extends MenuType<M>> type, String url) {
+    /** A menu type whose screen is a Vellum page, with the mod's extra {@code vellum.data} fields (or null). */
+    public record ContainerBinding<M extends AbstractContainerMenu>(Supplier<? extends MenuType<M>> type, String url,
+                                                                    @Nullable Function<? super M, ? extends JsonObject> data) {
+        public ContainerBinding(Supplier<? extends MenuType<M>> type, String url) {
+            this(type, url, null);
+        }
+
         public VellumContainerScreen<M> create(M menu, Inventory inventory, Component title) {
-            return new VellumContainerScreen<>(menu, inventory, title, url);
+            return new VellumContainerScreen<>(menu, inventory, title, url, data);
         }
     }
 
@@ -65,8 +78,26 @@ public final class VellumScreens {
 
     /** As {@link #registerContainer(MenuType, String)}, for a type that is registered later (a registry holder). */
     public static <M extends AbstractContainerMenu> void registerContainer(Supplier<? extends MenuType<M>> type, String url) {
+        registerContainer(type, url, null);
+    }
+
+    /**
+     * As {@link #registerContainer(MenuType, String)}, with fields of the mod's own in the page's {@code vellum.data}
+     * (an entity id, a tier...). {@code data} gets the screen's menu and returns the fields to add next to
+     * {@code title}, {@code inventory} and {@code slots} (a field with one of those names replaces it), or null for
+     * none. It is called when the screen opens and every client tick after; the page gets new data (and its
+     * {@code vellum.on('data')} listeners run) whenever the fields or the slots changed.
+     */
+    public static <M extends AbstractContainerMenu> void registerContainer(MenuType<M> type, String url,
+                                                                           @Nullable Function<? super M, ? extends JsonObject> data) {
+        registerContainer(() -> type, url, data);
+    }
+
+    /** As {@link #registerContainer(MenuType, String, Function)}, for a type that is registered later. */
+    public static <M extends AbstractContainerMenu> void registerContainer(Supplier<? extends MenuType<M>> type, String url,
+                                                                           @Nullable Function<? super M, ? extends JsonObject> data) {
         if (containersRegistered) Constants.LOG.error("Vellum: registerContainer({}) called after menu screens were registered", url);
-        CONTAINERS.add(new ContainerBinding<>(type, url));
+        CONTAINERS.add(new ContainerBinding<>(type, url, data));
     }
 
     /** Loader hook: the bindings to register as menu screens, once. */

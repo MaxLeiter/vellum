@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 
 import java.util.List;
@@ -30,6 +31,7 @@ public final class VellumClientCommands {
     public static <S> LiteralArgumentBuilder<S> create() {
         LiteralArgumentBuilder<S> demo = LiteralArgumentBuilder.<S>literal("demo").executes(c -> later(() -> demo("gallery")));
         for (String name : DEMOS) demo.then(LiteralArgumentBuilder.<S>literal(name).executes(c -> later(() -> demo(name))));
+        demo.then(LiteralArgumentBuilder.<S>literal("toast").executes(c -> later(VellumClientCommands::toast)));
         for (String name : SERVER_DEMOS) demo.then(LiteralArgumentBuilder.<S>literal(name).executes(c -> askServer("vellum demo " + name)));
         LiteralArgumentBuilder<S> showcase = LiteralArgumentBuilder.<S>literal("showcase")
                 .executes(c -> later(() -> VellumScreens.open(showcaseUrl("index"))));
@@ -58,6 +60,20 @@ public final class VellumClientCommands {
         data.addProperty("source", "client");
         data.addProperty("player", Minecraft.getInstance().getUser().getName());
         VellumScreens.open(demoUrl(name), data);
+    }
+
+    /**
+     * Toggles the interactive toast overlay (a HUD overlay with buttons: press T and click them). The answer comes
+     * back as a message and is echoed in chat.
+     */
+    public static void toast() {
+        if (VellumHud.isShown(VellumClient.DEMO_TOAST)) {
+            VellumHud.hide(VellumClient.DEMO_TOAST);
+            return;
+        }
+        VellumHud.show(VellumClient.DEMO_TOAST)
+                .onMessage("answer", value -> Minecraft.getInstance().gui.hud.getChat()
+                        .addClientSystemMessage(Component.literal("Rivet's request: " + value.getAsString())));
     }
 
     public static String demoUrl(String name) {

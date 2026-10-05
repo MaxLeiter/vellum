@@ -67,6 +67,10 @@ for (let x of [1, 2]) handlers.push(() => x);        // both return 2
 Scripts run after the document is parsed, in document order (like `defer`). Then `DOMContentLoaded` and `load`
 fire. A `<script>` inserted later by a script runs when it is connected.
 
+When the page goes away (its screen closes, its HUD overlay is hidden, a link or `location.href` loads another page,
+or it is reloaded), `pagehide` and then `unload` fire at `window` (`addEventListener('unload', fn)`). Scripts still
+run then, so a page can save state or `vellum.send` a last message; timers it starts never fire.
+
 Everything runs on one thread: the game's render thread. Each time the engine calls into scripts (running a
 `<script>`, an event listener, an inline handler, a timer, an animation frame, a message from the server) is an
 **entry**. When an entry finishes, Vellum
@@ -195,6 +199,13 @@ scope; returning `false` cancels the event, and so does returning `false` from a
 Unlike browsers, inline handlers do not see the element's properties as variables: write `this.value`, not `value`.
 
 Pressing Escape closes the screen unless a `keydown` listener calls `preventDefault()`.
+
+The `title` attribute shows a tooltip, as in browsers but drawn like Minecraft's: when the pointer has rested on an
+element for half a second, the nearest `title` from the hovered element up shows at the pointer. A newline in the
+value breaks the line (`&#10;` in HTML, `'\n'` in a script string); long lines wrap. `title-json` takes a chat
+component instead, for coloured text (`title-json='{"text":"Rare","color":"gold"}'`), read like `<mc-text json>`.
+An empty `title` hides an ancestor's. Pressing a button or key hides the tooltip until the pointer moves to another
+element with one. Changing the attribute from a script changes the tooltip while it shows.
 
 ## Animations
 

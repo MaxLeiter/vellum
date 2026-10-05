@@ -51,6 +51,20 @@ final class Pointer {
     int buttons() { return buttons; }
     int clicks() { return clicks; }
     boolean known() { return !Float.isNaN(x); }
+    Element hoverTarget() { return hoverTarget; }
+
+    /**
+     * The pointer left the document (the host stopped tracking it): its position becomes unknown, buttons are up and
+     * nothing is hovered or active. The caller ends any drag first.
+     */
+    void leave() {
+        x = y = Float.NaN;
+        buttons = 0;
+        pressed = null;
+        setActive(List.of());
+        hover(null);
+        updateCursor(null, false);
+    }
 
     // ---- Hover ----
 

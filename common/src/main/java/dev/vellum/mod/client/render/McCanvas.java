@@ -60,6 +60,7 @@ public final class McCanvas implements Canvas {
     private float alpha = 1;
     /** Scissors pushed since the last {@link #save}; popped by the matching {@link #restore}. */
     private int scissors;
+    private boolean tooltip;
 
     private Matrix3x2f[] savedMatrices = new Matrix3x2f[16];
     private float[] savedAlpha = new float[16];
@@ -260,7 +261,14 @@ public final class McCanvas implements Canvas {
 
     /** Shows the vanilla tooltip for {@code stack} at the pointer; vanilla draws it on top at the end of the frame. */
     public void itemTooltip(ItemStack stack) {
-        if (mouseX >= 0 && !stack.isEmpty()) g.setTooltipForNextFrame(mc.font, stack, (int) mouseX, (int) mouseY);
+        if (mouseX < 0 || stack.isEmpty()) return;
+        g.setTooltipForNextFrame(mc.font, stack, (int) mouseX, (int) mouseY);
+        tooltip = true;
+    }
+
+    /** Whether content asked for a tooltip while painting ({@link #itemTooltip}). */
+    public boolean requestedTooltip() {
+        return tooltip;
     }
 
     /**

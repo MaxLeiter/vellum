@@ -63,4 +63,20 @@ class VellumApiTest {
         assertEquals("gui.done", page.eval("label"));
         assertTrue(page.host.closed);
     }
+
+    @Test
+    void closingFiresPagehideThenUnloadWhileScriptsStillRun() {
+        Page page = new TestHost().load("""
+                <script>
+                addEventListener('pagehide', () => vellum.send('bye', 'pagehide'));
+                window.addEventListener('unload', () => {
+                  vellum.send('bye', 'unload');
+                  setTimeout(() => vellum.send('bye', 'too late'), 0);
+                });
+                </script>""");
+        page.doc.close();
+        assertEquals(List.of("pagehide", "unload"), page.host.sent.stream().map(m -> m[1].replace("\"", "")).toList());
+        page.doc.frame(100);
+        assertEquals(2, page.host.sent.size(), "timers die with the document");
+    }
 }
