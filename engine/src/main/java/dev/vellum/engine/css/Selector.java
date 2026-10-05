@@ -184,14 +184,11 @@ final class Selector {
             return switch (op) {
                 case 0 -> true;
                 case '=' -> n == len && actual.regionMatches(ignoreCase, 0, v, 0, len);
-                case '~' -> len > 0 && indexOfWhitespace(v) < 0 && hasToken(actual, v, ignoreCase);
+                case '~' -> len > 0 && indexOfWhitespace(v, 0) < 0 && hasToken(actual, v, ignoreCase);
                 case '|' -> (n == len || n > len && actual.charAt(len) == '-') && actual.regionMatches(ignoreCase, 0, v, 0, len);
                 case '^' -> len > 0 && actual.regionMatches(ignoreCase, 0, v, 0, len);
                 case '$' -> len > 0 && n >= len && actual.regionMatches(ignoreCase, n - len, v, 0, len);
-                case '*' -> {
-                    for (int i = 0; len > 0 && i + len <= n; i++) if (actual.regionMatches(ignoreCase, i, v, 0, len)) yield true;
-                    yield false;
-                }
+                case '*' -> len > 0 && (ignoreCase ? containsIgnoringCase(actual, v) : actual.contains(v));
                 default -> false;
             };
         }
@@ -211,8 +208,11 @@ final class Selector {
         return false;
     }
 
-    private static int indexOfWhitespace(String s) {
-        return indexOfWhitespace(s, 0);
+    private static boolean containsIgnoringCase(String s, String part) {
+        for (int i = 0, last = s.length() - part.length(); i <= last; i++) {
+            if (s.regionMatches(true, i, part, 0, part.length())) return true;
+        }
+        return false;
     }
 
     /** The index of the first CSS whitespace character at or after {@code from}, or -1. */

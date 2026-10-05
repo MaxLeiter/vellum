@@ -68,7 +68,7 @@ final class Templates {
         return state;
     }
 
-    Object digest(Context cx) {
+    void digest(Context cx) {
         dirty = false;
         if (installed) {
             int passes = 1;
@@ -88,6 +88,5 @@ final class Templates {
             for (Callable fn : callbacks) rt.call("Error in vellum.nextTick callback", fn, rt.global);
             dirty = true; // what the callbacks changed shows at the next frame
         }
-        return null;
     }
 }

@@ -108,7 +108,11 @@ final class RhinoScriptRuntime implements ScriptRuntime {
 
     @Override
     public void beforeRestyle() {
-        if (templates.needsDigest()) enter("Error in templates", templates::digest);
+        if (!templates.needsDigest()) return;
+        enter("Error in templates", cx -> {
+            templates.digest(cx);
+            return null;
+        });
     }
 
     @Override

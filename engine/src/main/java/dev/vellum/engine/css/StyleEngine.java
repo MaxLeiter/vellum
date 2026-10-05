@@ -50,8 +50,8 @@ public final class StyleEngine {
     private final List<Entry> matched = new ArrayList<>();
     private RuleIndex index;
     private List<Source> sources;
-    /** The {@link Document#domVersion} {@link #sources} were collected at, and the last restyle ran at. */
-    private int sourcesVersion, styledVersion;
+    /** The {@link Document#domVersion} the last restyle ran at (and {@link #sources} were collected at). */
+    private int styledVersion;
     /** This pass only follows hover, active and focus changes: the DOM and the rules are as last time. */
     private boolean interactionOnly;
     private MediaQuery.Environment environment;
@@ -79,16 +79,16 @@ public final class StyleEngine {
         if (root == null) return;
         MediaQuery.Environment env = new MediaQuery.Environment(document.viewportWidth(), document.viewportHeight(),
                 document.devicePixelRatio(), host.prefersReducedMotion());
-        int domVersion = document.domVersion();
+        boolean domChanged = sources == null || document.domVersion() != styledVersion;
+        styledVersion = document.domVersion();
         List<Source> found = sources;
-        if (found == null || domVersion != sourcesVersion) {
+        if (domChanged) {
             found = new ArrayList<>();
             Map<String, Stylesheet> usedStyles = new HashMap<>();
             collectSheets(document, found, usedStyles);
             styleSheets = usedStyles;
-            sourcesVersion = domVersion;
         }
-        interactionOnly = index != null && domVersion == styledVersion;
+        interactionOnly = !domChanged;
         if (index == null || !env.equals(environment) || !found.equals(sources)) {
             index = RuleIndex.build(USER_AGENT, found, env, this::loadSheet);
             environment = env;
@@ -97,7 +97,6 @@ public final class StyleEngine {
             cascade.environment(host, env.width(), env.height(), env.guiScale());
         }
         sources = found;
-        styledVersion = domVersion;
         cascade.newPass();
         restyle(root, null, null, new MatchContext(root));
     }

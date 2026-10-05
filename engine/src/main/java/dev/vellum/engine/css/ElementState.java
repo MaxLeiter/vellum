@@ -32,7 +32,7 @@ final class ElementState {
 
     ElementState(String inlineText, List<InlineStyle.Entry> inlineEntries) {
         this.inlineText = inlineText;
-        this.inlineEntries = inlineEntries;
+        this.inlineEntries = List.copyOf(inlineEntries);
         List<Decl> decls = new ArrayList<>();
         for (InlineStyle.Entry e : inlineEntries) decls.addAll(e.decls());
         this.inline = decls.isEmpty() ? null : decls;

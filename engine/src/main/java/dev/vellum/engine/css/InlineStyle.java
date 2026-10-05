@@ -199,14 +199,13 @@ public final class InlineStyle {
         List<Entry> out = new ArrayList<>();
         Document doc = element.ownerDocument();
         for (CssParser.Declaration d : CssParser.parseDeclarations(css)) {
-            String name = normalize(d.name());
-            List<Decl> decls = Decl.expand(new CssParser.Declaration(name, d.value(), d.important(), 0), doc.url(),
-                    doc.host());
-            if (decls != null) {
-                out.add(new Entry(name, ComponentValue.text(d.value()), d.important(), decls));
+            String value = ComponentValue.text(d.value());
+            Entry e = entry(doc, normalize(d.name()), value, d.value(), d.important());
+            if (e != null) {
+                out.add(e);
             } else {
                 doc.host().log(Host.LogLevel.DEBUG, doc.url() + ": invalid declaration in a style attribute '"
-                        + d.name() + ": " + ComponentValue.text(d.value()) + "'");
+                        + d.name() + ": " + value + "'");
             }
         }
         return out;
@@ -214,9 +213,12 @@ public final class InlineStyle {
 
     /** A declaration of {@code element}'s inline style, or null when the value is invalid. */
     private static Entry entry(Element element, String name, String value, boolean important) {
-        Document doc = element.ownerDocument();
-        List<Decl> decls = Decl.expand(new CssParser.Declaration(name, CssParser.parseComponentValues(value),
-                important, 0), doc.url(), doc.host());
+        return entry(element.ownerDocument(), name, value, CssParser.parseComponentValues(value), important);
+    }
+
+    /** An entry whose value parses to {@code parsed}, or null when that is invalid for the property. */
+    private static Entry entry(Document doc, String name, String value, List<ComponentValue> parsed, boolean important) {
+        List<Decl> decls = Decl.expand(new CssParser.Declaration(name, parsed, important, 0), doc.url(), doc.host());
         return decls == null ? null : new Entry(name, value, important, decls);
     }
 
@@ -234,6 +236,6 @@ public final class InlineStyle {
         String css = serialize(entries);
         if (css.isEmpty()) element.removeAttribute("style");
         else element.setAttribute("style", css);
-        element.parsedInlineStyle = new ElementState(element.getAttribute("style"), List.copyOf(entries));
+        element.parsedInlineStyle = new ElementState(element.getAttribute("style"), entries);
     }
 }
