@@ -7,7 +7,7 @@ import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.EntityFocus;
-import dev.vellum.engine.style.Length;
+import dev.vellum.engine.style.EntityFraming;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
 
@@ -116,32 +116,28 @@ final class ReplacedElements {
     }
 
     /**
-     * A player-shaped silhouette (16×32 model units: head, body, arms, legs) fitted into the box and placed by
-     * object-position (unset, on the bottom edge), or with {@code -mc-entity-focus: eyes} cropped to its head and
-     * shoulders as in game (the box's shorter side spans 0.7 of the eye height, 28 units, and object-position places
-     * the eyes, {@code 50% 40%} unset).
+     * A player-shaped silhouette (16×32 model units, a block being 16: head, body, arms, legs) framed as in game
+     * ({@link EntityFraming}): fitted into the box and placed by object-position (unset, on the bottom edge), or with
+     * {@code -mc-entity-focus: eyes} cropped to its head and shoulders, its eyes 28 units up.
      */
     private static void paintSilhouette(Canvas canvas, ComputedStyle s, float x, float y, float width, float height) {
-        float u, ox, oy;
-        if (s.entityFocus == EntityFocus.EYES) {
-            u = Math.min(width, height) / (0.7f * 28) * s.modelScale;
-            Length ex = s.objectPositionX.isAuto() ? Length.PERCENT_50 : s.objectPositionX;
-            Length ey = s.objectPositionY.isAuto() ? Length.percent(40) : s.objectPositionY;
-            ox = x + ex.resolve(width) - 8 * u;
-            oy = y + ey.resolve(height) - 4 * u;
+        boolean eyes = s.entityFocus == EntityFocus.EYES;
+        EntityFraming frame;
+        if (eyes) {
+            float[] point = EntityFraming.gazeOrigin(s, x, y, width, height);
+            frame = EntityFraming.eyes(point[0], point[1], width, height, 28 / 16f, 0, s.modelScale);
             canvas.save();
             canvas.clipRect(x, y, width, height);
         } else {
-            u = Math.min(width / 16, height / 32) * s.modelScale;
-            ox = x + s.objectX(width - 16 * u);
-            oy = y + s.objectPositionY.resolve(height - 32 * u, height - 32 * u);
+            frame = EntityFraming.body(s, x, y, width, height, Math.min(width, height / 2) * s.modelScale, 1, 2, 0);
         }
+        float u = frame.pixelsPerBlock() / 16, ox = frame.originX() - 8 * u, oy = frame.originY() - 32 * u;
         float[][] parts = {{4, 0, 8, 8}, {4, 8, 8, 12}, {0, 8, 4, 12}, {12, 8, 4, 12}, {4, 20, 4, 12}, {8, 20, 4, 12}};
         int[] colors = {0xC0505050, 0xC0404040, 0xC0363636, 0xC0363636, 0xC0303030, 0xC02A2A2A};
         for (int i = 0; i < parts.length; i++) {
             float[] p = parts[i];
             canvas.fillRect(ox + p[0] * u, oy + p[1] * u, p[2] * u, p[3] * u, colors[i]);
         }
-        if (s.entityFocus == EntityFocus.EYES) canvas.restore();
+        if (eyes) canvas.restore();
     }
 }

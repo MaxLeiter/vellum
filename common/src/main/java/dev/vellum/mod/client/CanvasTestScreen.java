@@ -2,6 +2,7 @@ package dev.vellum.mod.client;
 
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.mod.client.render.McCanvas;
 import dev.vellum.mod.client.replaced.EntityPortrait;
 import net.minecraft.client.Minecraft;
@@ -195,10 +196,10 @@ final class CanvasTestScreen extends Screen {
         if (mc.level == null || mc.player == null) return;
         if (pig == null) pig = EntityPortrait.create(EntityTypes.PIG, mc.level);
         if (pig == null) return;
-        EntityPortrait.Framing body = EntityPortrait.Framing.BODY;
-        EntityPortrait.draw(c, pig, EntityPortrait.Pose.FRONT, body, -1, 0, 0, 30, 40);
-        EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, null, 1, 0), body, -1, 30, 0, 30, 40);
-        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, new EntityPortrait.Gaze(40, 20), 1, 0), body, -1, 62, 0, 30, 56);
+        ComputedStyle style = ComputedStyle.INITIAL; // standing on the bottom edge; the player looks at the pointer
+        EntityPortrait.draw(c, pig, EntityPortrait.Pose.FRONT, style, -1, 0, 0, 30, 40);
+        EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, false, 1, 0), style, -1, 30, 0, 30, 40);
+        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, true, 1, 0), style, -1, 62, 0, 30, 56);
     }
 
     @Override

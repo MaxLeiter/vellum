@@ -566,7 +566,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
     age and size (and apart for states a mod supplied). With `-mc-entity-focus: eyes` the scale comes from the eye
     height instead (the box's shorter side spans 0.7 of it) and the origin is placed so that the eye point, on the
     upright axis, lands where `object-position` says; the view tilt (pitch and the gaze lean) turns about the feet,
-    so the origin is moved by the eye's projected height to keep the eyes still. `follow-mouse` aims the gaze from
+    so the origin is moved by the eye's projected height to keep the eyes still. The engine's `style.EntityFraming`
+    holds these rules (where the room and the eye point go, the eyes scale), so the previewer's stand-in is framed by
+    the same code. `follow-mouse` aims the gaze from
     that eye point (a third down the box with the body fit), turning the head as far as the element's
     `-mc-gaze-reach` and `-mc-gaze-limit` give; the body leans half of that turn and the head turns the rest on top,
     as in vanilla's inventory, so a capped gaze keeps the same split. Display entities are created client-side,
