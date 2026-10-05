@@ -47,8 +47,8 @@ final class Members<T> {
 
     private Members<T> accessor(String name, Getter<T> getter, Setter<T> setter) {
         holder.defineProperty(Context.getCurrentContext(), name,
-                thisObj -> guard(() -> rt.js.toJs(getter.get(self.apply(thisObj)))),
-                setter == null ? null : (thisObj, value) -> guard(() -> {
+                thisObj -> guard(name, () -> rt.js.toJs(getter.get(self.apply(thisObj)))),
+                setter == null ? null : (thisObj, value) -> guard(name, () -> {
                     setter.set(self.apply(thisObj), value);
                     return null;
                 }), ATTRIBUTES);
@@ -58,7 +58,7 @@ final class Members<T> {
     /** A method returning a value. */
     Members<T> method(String name, Method<T> method) {
         holder.defineProperty(name, new LambdaFunction(rt.global, name, 0, (cx, scope, thisObj, args) ->
-                guard(() -> rt.js.toJs(method.call(self.apply(thisObj), new Args(args))))), ATTRIBUTES);
+                guard(name, () -> rt.js.toJs(method.call(self.apply(thisObj), new Args(args))))), ATTRIBUTES);
         return this;
     }
 
@@ -70,14 +70,22 @@ final class Members<T> {
         });
     }
 
-    private static Object guard(Supplier<Object> body) {
+    /**
+     * Runs a binding so that Java failures reach scripts as errors {@code try/catch} can handle. The exceptions
+     * bindings throw on purpose (bad arguments, limits, missing features) carry messages written for scripts. Any
+     * other is a bug in Java code, and its message may name Java classes, so the script only learns that the call
+     * failed and the host log gets the details.
+     */
+    private Object guard(String name, Supplier<Object> body) {
         try {
             return body.get();
         } catch (RhinoException e) {
             throw e;
+        } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException e) {
+            throw Js.error("Error", e.getMessage() != null ? e.getMessage() : name + " failed");
         } catch (RuntimeException e) {
-            // Java failures (bad arguments, missing features) must reach scripts as catchable errors.
-            throw Js.error("Error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            rt.document.host().reportError("Internal error in " + name, e);
+            throw Js.error("Error", "Internal error in " + name);
         }
     }
 }

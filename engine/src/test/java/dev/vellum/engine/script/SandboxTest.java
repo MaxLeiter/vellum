@@ -2,6 +2,7 @@ package dev.vellum.engine.script;
 
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
+import dev.vellum.shadow.rhino.NativeObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,6 +25,22 @@ class SandboxTest {
         assertNull(scripts.evaluateToJson("nope(", "test"));
         assertNull(scripts.evaluateToJson("nope()", "test"));
         assertEquals(2, page.host.errors.size(), "errors are reported");
+    }
+
+    @Test
+    void javaFailuresReachScriptsWithoutJavaNames() {
+        Page page = new TestHost().recordErrors().load("");
+        RhinoScriptRuntime rt = (RhinoScriptRuntime) page.doc.scripts();
+        NativeObject probe = new NativeObject();
+        probe.setParentScope(rt.global);
+        rt.global.put("probe", rt.global, probe);
+        new Members<Object>(rt, probe, self -> "target")
+                .action("bug", (v, a) -> { throw new NullPointerException("Cannot invoke \"String.length()\" because \"s\" is null"); })
+                .method("javaValue", (v, a) -> new Object())
+                .action("badArgument", (v, a) -> { throw new IllegalArgumentException("Bad position: x"); });
+        String calls = "['bug', 'javaValue', 'badArgument'].map(m => { try { probe[m]() } catch (e) { return e.message } }).join('|')";
+        assertEquals("Internal error in bug|Internal error in javaValue|Bad position: x", page.eval(calls));
+        assertEquals(2, page.host.errors.size(), "the host log gets the details: " + page.host.errors);
     }
 
     @Test

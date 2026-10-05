@@ -49,7 +49,7 @@ final class Js {
             case Collection<?> c -> array(c);
             case Object[] a -> array(Arrays.asList(a));
             case Map<?, ?> m -> object(m);
-            default -> throw new IllegalArgumentException("No script value for " + value.getClass().getName());
+            default -> throw new NoScriptValue(value);
         };
     }
 
@@ -163,5 +163,12 @@ final class Js {
 
     static EcmaError typeError(String message) {
         return error("TypeError", message);
+    }
+
+    /** A binding returned a Java value that has no script form: a bug in the binding, not the script's fault. */
+    static final class NoScriptValue extends RuntimeException {
+        NoScriptValue(Object value) {
+            super("No script value for " + value.getClass().getName());
+        }
     }
 }
