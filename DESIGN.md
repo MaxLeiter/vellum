@@ -186,7 +186,8 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 |---|---|
 | `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
-| `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity render, optional `follow-mouse`, `scale`, `rotate`. |
+| `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
+| `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box: at yaw and pitch 0 as in the inventory, turned by the same properties; `rotatable`. |
 | `<player-head name="..." uuid="...">` | A player's face from their skin. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
 | `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated (`Host.translate`) or component text (`Host.formatText` gives styled runs, which become spans), as a normal inline element. Expanded by the engine when the element is parsed or inserted and when those attributes change, so templates and scripts can use it. |
@@ -233,10 +234,22 @@ corner as a single Length — elliptical radii use the horizontal value), `backg
 `font` (simplified), `text-decoration` (line keywords), `transition`, `animation`, `outline`, `transform-origin`,
 `list-style` (ignored except `none`), `-webkit-line-clamp`.
 
-Vellum extensions: `-mc-tint: <color>` (multiply images/sprites/items), `text-shadow: minecraft` (the game's
-native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
+Vellum extensions: `-mc-tint: <color>` (multiply images, sprites, entities and models; items cannot be tinted),
+`text-shadow: minecraft` (the game's native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
 <any font id>` (also the aliases `monospace` → uniform, `sans-serif`/`serif`/`system-ui` → default; names without a
 namespace are `minecraft:` ids). `host.FontFamilies` is the one mapping, used by the style engine and every host.
+
+3D content (`<entity>`, `<model>`) is turned by CSS, so transitions and `@keyframes` animate it. These are paint-only
+and not inherited:
+- `-mc-yaw: <angle>` (initial 0): turns it about the vertical axis; positive turns its front to the right. Unbounded,
+  so `@keyframes spin { to { -mc-yaw: 360deg } }` is a full turn.
+- `-mc-pitch: <angle>` (initial 0): views it from above (positive) or below.
+- `-mc-model-scale: <number>` (initial 1): multiplies the size that fits the box.
+
+The `rotatable` attribute lets the pointer turn it as well: dragging sideways turns it, dragging up or down tilts the
+view (up to 60° either way), and a flick keeps spinning and eases out. The drag adds to the CSS angles
+(`host.Turntable`; replaced content takes presses through `ReplacedContent.press`, after `mousedown` listeners, which
+can cancel it). The UA stylesheet gives rotatable content `cursor: grab` (`grabbing` while held).
 
 ### User-agent stylesheet (`engine/src/main/resources/vellum/ua.css`)
 - `*, ::before, ::after { box-sizing: border-box }` (deliberate deviation: border-box everywhere).
@@ -363,7 +376,8 @@ the scrollbar).
 
 - Pointer: hover chain (`:hover` on target and ancestors), `mouseover/out/enter/leave/move`, `mousedown/up`, `click`
   (same element down and up), `dblclick`, `contextmenu` (right button), `:active` while pressed, pointer capture
-  during drags (range thumb, scrollbar, text selection), and the cursor from `cursor` via `Host.setCursor`.
+  during drags (range thumb, scrollbar, text selection, replaced content that takes the press, such as rotatable 3D
+  content), and the cursor from `cursor` via `Host.setCursor`.
 - Wheel: deltas in GUI px, a notch being `InputHandler.WHEEL_NOTCH` (24 px) in every host; `wheel` event; if not
   cancelled, scrolls the nearest scroll container whose content holds the target that can move in that direction
   (smooth when `scroll-behavior: smooth`, default on), with scroll chaining.
@@ -446,14 +460,29 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   its resolved styles in its host slot; the shared table is keyed by families, bold and italic (not the size).
 - **Host**: resources from the resource manager (`assets/<ns>/...`; UIs conventionally in `assets/<ns>/vellum/`),
   `minecraft:`-style URLs, sounds, clipboard, cursor (`CursorTypes`), logging to the mod logger, translations.
-- **Replaced elements**: `item`, `slot`, `entity`, `player-head` (`McReplaced.ELEMENTS`); canvases are `McSurface`s
-  (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
+- **Replaced elements**: `item`, `slot`, `entity`, `model`, `player-head` (`McReplaced.ELEMENTS`); canvases are
+  `McSurface`s (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
 - **DocumentDriver**: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
   input, messages, reload. After painting it shows the page's title tooltip through `setTooltipForNextFrame` (lines
   from `Font.split` at 170 px, as vanilla widget tooltips; `title-json` parsed like `<mc-text json>`), at the
   engine's pointer; vanilla's first-set-wins rule keeps an `<item tooltip>` (set while painting) on top.
   `onClose(Runnable)` handlers run once when the owner closes the page for good (screen removed, overlay hidden),
   after the page's `unload`; not on navigation, reload or while suspended (link confirmation).
+- **3D content**: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
+  (`GuiSceneRenderState`, `GuiSceneRenderer`, registered by both loaders, which pool renderers so any number draw in a
+  frame). The picture is rendered at the GUI scale into the element's box and blitted with a colour, so 3D content
+  is crisp at any size, fades with `opacity` and takes `-mc-tint`. Still models keep their picture between frames.
+  Entities stand on the bottom of their box, fitted (with a small margin) to the room they need at any turn
+  (`EntityPortrait`: twice their bounding box width, since heads, tails and arms reach past it); display entities
+  are created client-side, never added to the world, and play their idle animations on the clock. Blocks are
+  resolved with `BlockModelResolver` and items in the `NONE` display context; both start from the inventory's view
+  (blocks and block-like items 30° from above, turned 225°; flat items face on), and items whose model reaches past
+  a block are centred on their bounds and scaled to fit.
+- **Page hooks**: `VellumScreens.onPageLoad(url, hook)` runs when a page loads in any screen or overlay (opened,
+  linked to, reloaded), before its scripts, so client-side pages get live data however they are reached. The Mobdex
+  showcase uses it (`showcase.Mobdex`: every living entity type with its attributes and the player's kill
+  statistics, which it asks the server for; a mixin on `ClientPacketListener.handleAwardStats` reports when they
+  arrive).
 - **VellumScreen** (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
@@ -482,7 +511,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - **Resources and hot reload**: documents load through the resource manager and reload with resources (F3+T). In a
   dev environment pages are read from `src/main/resources`, and the files they were read from are polled
   (`FileStamps`) so saving one reloads open documents.
-- **Commands**: `/vellum open <url>` (client), `/vellum demo`, `/vellum inspect` (toggle inspector overlay).
+- **Commands**: `/vellum open <url>` (client), `/vellum demo`, `/vellum showcase [page]`, `/vellum inspect` (toggle
+  inspector overlay).
 - **Inspector**: F12 inside a Vellum screen toggles an overlay that highlights the hovered element's margin, border,
   padding and content boxes and shows its selector and size.
 - **Demo**: `assets/vellum/vellum/demo/` has a gallery: a vanilla-styled settings page, a chest-style inventory made
@@ -505,5 +535,6 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   through the previewer's path (`ImageCanvas`, Java2D) with Minecraft's jar, ten frames 16 ms apart, and compare them
   with goldens in `preview/src/test/snapshots` (`-Dvellum.updateSnapshots=true` rewrites them).
 - GameTests (both loaders, headless): networking codecs, server API, container menus.
-- Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each demo UI in a real client, at GUI scales 2
-  and 3, and screenshots it to `neoforge/runs/client/screenshots/`.
+- Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each showcase page and demo UI in a real
+  client (the 3D pages at GUI scales 2 and 3), screenshots it to `neoforge/runs/client/screenshots/`, and logs each
+  page's frame rate, plus benchmark pages of 48 spinning entities, models and items.

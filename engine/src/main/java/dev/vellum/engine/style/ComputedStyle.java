@@ -130,6 +130,16 @@ public final class ComputedStyle implements Cloneable {
      */
     public int tint = Colors.WHITE;
 
+    // ---- 3D content (entities and models; Vellum extensions) ----
+    /**
+     * How 3D content is turned ({@code -mc-yaw}) and viewed ({@code -mc-pitch}), in degrees: positive yaw turns its
+     * front to the right, positive pitch looks at it from above. Unbounded, so {@code 0} to {@code 360deg} animates a
+     * full turn.
+     */
+    public float modelYaw, modelPitch;
+    /** {@code -mc-model-scale}: multiplies the size that fits 3D content into its box. */
+    public float modelScale = 1f;
+
     // ---- Scrolling ----
     public boolean scrollSmooth = true;
     /** {@code scrollbar-width}: 0 none, 1 thin, 2 auto. */
@@ -276,7 +286,8 @@ public final class ComputedStyle implements Cloneable {
                 && outlineStyle == o.outlineStyle && outlineColor == o.outlineColor
                 && same(outlineOffset, o.outlineOffset) && transform.equals(o.transform)
                 && transformOriginX.equals(o.transformOriginX) && transformOriginY.equals(o.transformOriginY)
-                && tint == o.tint && scrollSmooth == o.scrollSmooth && scrollbarThumbColor == o.scrollbarThumbColor
+                && tint == o.tint && same(modelYaw, o.modelYaw) && same(modelPitch, o.modelPitch)
+                && same(modelScale, o.modelScale) && scrollSmooth == o.scrollSmooth && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
                 && isFlexOrGridItemHint == o.isFlexOrGridItemHint;

@@ -73,3 +73,10 @@ Each decision has its reasons and the alternatives we looked at. Newest last.
 ## D-010 Server-deliverable UIs are sandboxed by construction
 **Choice.** A server can open bundled UIs or send inline HTML, CSS and JS. Scripts get no Java access, no network and no file system. Their CPU time is bounded, and their only channels are `vellum.send` / `vellum.on` to the server that opened them.
 **Why.** Server-side mods and plugins can use Vellum without being trusted with the client.
+
+## D-011 3D content is turned by CSS and drawn as tinted pictures
+**Choice.** `<entity>` and `<model>` read three paint-only properties, `-mc-yaw`, `-mc-pitch` and `-mc-model-scale`, instead of attributes. Dragging (`rotatable`) adds to them through a small engine hook (`ReplacedContent.press` returns a `Drag`, `host.Turntable` does the turning and easing). Entities, blocks and items are all drawn by one picture-in-picture renderer of our own (`GuiSceneRenderer`), which blits its picture with a colour.
+**Why.**
+- CSS gives transitions, `@keyframes`, `:hover` and `animation-play-state` for free, at no script cost. A script turning an attribute every frame restyled the document every frame.
+- Dragging could be done in each page's script with pointer events and the properties. But then every page would repeat the inertia code, and turning would restyle the document every frame. The hook is one method with a default, and it is what a native widget does.
+- Vanilla's entity renderer blits white: entities could not fade or be tinted. With our own renderer, opacity and `-mc-tint` work (the Mobdex shows unseen mobs as silhouettes), one fit and pose model covers entities and models, and still models keep their picture between frames. The cost is one widened field (the picture's texture view) and a dozen lines that mirror vanilla's entity picture.

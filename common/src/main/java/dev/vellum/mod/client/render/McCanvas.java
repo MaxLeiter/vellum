@@ -11,14 +11,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3x2f;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Arrays;
@@ -33,7 +30,8 @@ import java.util.Arrays;
  *   <li><b>Clipping.</b> {@link #clipRect} pushes a vanilla scissor: the transformed rectangle's bounding box,
  *       which vanilla intersects with the enclosing scissor. Rounded clips are not supported.</li>
  *   <li><b>Opacity.</b> There are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
- *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity.</li>
+ *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes are
+ *       pictures blitted with a colour, so they fade (and tint).</li>
  *   <li><b>Geometry.</b> Rectangles and quads are submitted as {@link RectRenderState}s and {@link QuadsRenderState}s,
  *       so fractional positions, rotations and per-vertex colours all work. Consecutive primitives share one copy of
  *       the transform.</li>
@@ -303,15 +301,22 @@ public final class McCanvas implements Canvas {
     }
 
     /**
-     * Draws an entity render state fitted into a local box (a picture-in-picture render: it is axis-aligned on screen,
-     * so rotations only move the box). {@code pixelsPerBlock} is in local px; like items, entities can't be faded.
+     * Draws a 3D scene (an entity, block or item) into a local box, a block being {@code pixelsPerBlock} local px,
+     * multiplied by {@code tint} and the opacity. A picture-in-picture render: axis-aligned on screen, so rotations
+     * of the canvas only move the box.
      */
-    public void drawEntity(EntityRenderState state, float pixelsPerBlock, Vector3f translation, Quaternionf rotation,
-                           @Nullable Quaternionf cameraTilt, float x, float y, float width, float height) {
-        if (clippedAway() || alpha < 0.5f) return;
+    public void drawScene(Scene scene, float pixelsPerBlock, int tint, float x, float y, float width, float height) {
+        if (clippedAway()) return;
+        float a = alpha * ARGB.alphaFloat(tint);
         boundsOf(x, y, x + width, y + height);
-        g.entity(state, pixelsPerBlock * lengthScale(), translation, rotation, cameraTilt,
-                Math.round(bx0), Math.round(by0), Math.round(bx1), Math.round(by1));
+        int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
+        float scale = pixelsPerBlock * lengthScale();
+        ScreenRectangle scissor = g.scissorStack.peek();
+        // Pictures are rendered even where nothing of them shows: skip those scrolled or clipped away.
+        if (a <= 0 || x1 <= x0 || y1 <= y0 || scale <= 0 || clippedBounds(scissor) == null) return;
+        // The picture is premultiplied, so fading scales every channel.
+        int color = ARGB.colorFromFloat(a, a * ARGB.redFloat(tint), a * ARGB.greenFloat(tint), a * ARGB.blueFloat(tint));
+        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, color, x0, y0, x1, y1, scale, scissor));
     }
 
     /**

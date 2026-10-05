@@ -61,6 +61,9 @@ slot {
     border: 1px solid; border-color: #373737 #ffffff #ffffff #373737;
 }
 entity { display: inline-block; width: 32px; height: 48px; }
+model { display: inline-block; width: 32px; height: 32px; }
+entity[rotatable], model[rotatable] { cursor: grab; }
+entity[rotatable]:active, model[rotatable]:active { cursor: grabbing; }
 player-head { display: inline-block; width: 8px; height: 8px; }
 sprite { display: inline-block; }
 mc-text { display: inline; }

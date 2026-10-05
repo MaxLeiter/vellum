@@ -1,10 +1,12 @@
 package dev.vellum.engine.testing;
 
 import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.ArraySurface;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.host.PixelSurface;
+import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.style.Cursor;
@@ -29,6 +31,8 @@ public class TestHost implements Host {
     public final List<Cursor> cursors = new ArrayList<>();
     public final List<String[]> sent = new ArrayList<>();
     public final List<String> navigations = new ArrayList<>();
+    /** The host's replaced elements by tag (none unless a test adds them). */
+    public final Map<String, Function<Element, ReplacedContent>> replaced = new HashMap<>();
     /** Natural sizes of textures by URL, for {@link #imageSize}. */
     public final Map<String, float[]> imageSizes = new HashMap<>();
     public String clipboard = "";
@@ -62,6 +66,9 @@ public class TestHost implements Host {
 
     @Override
     public FontMetrics fonts() { return fonts; }
+
+    @Override
+    public Map<String, Function<Element, ReplacedContent>> replacedElements() { return replaced; }
 
     @Override
     public String loadText(String url) { return resources.get(url); }

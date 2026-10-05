@@ -67,6 +67,7 @@ class PreviewHostTest {
         assertEquals(List.of(16f, 16f), size(document, document.createElement("item")));
         assertEquals(List.of(18f, 18f), size(document, document.createElement("slot")));
         assertEquals(List.of(48f, 48f), size(document, document.createElement("entity")));
+        assertEquals(List.of(32f, 32f), size(document, document.createElement("model")));
         assertEquals(List.of(16f, 16f), size(document, document.createElement("player-head")));
         Element canvas = document.createElement("canvas");
         canvas.setAttribute("width", "64");
@@ -74,7 +75,7 @@ class PreviewHostTest {
         Element img = document.createElement("img");
         img.setAttribute("src", "minecraft:textures/missing.png");
         assertTrue(Float.isNaN(document.replacedContent(img).intrinsicWidth()));
-        assertEquals(Set.of("item", "slot", "entity", "player-head"), host.replacedElements().keySet());
+        assertEquals(Set.of("item", "slot", "entity", "model", "player-head"), host.replacedElements().keySet());
         assertNull(document.replacedContent(document.createElement("div")));
     }
 

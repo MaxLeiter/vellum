@@ -6,12 +6,14 @@ import dev.vellum.mod.client.VellumClient;
 import dev.vellum.mod.client.VellumClientCommands;
 import dev.vellum.mod.client.VellumHud;
 import dev.vellum.mod.client.VellumScreens;
+import dev.vellum.mod.client.render.GuiSceneRenderer;
 import dev.vellum.mod.net.VellumNetwork;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -29,6 +31,7 @@ public final class VellumFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         VellumClient.init(ClientPlayNetworking::send);
         for (VellumNetwork.Clientbound<?> c : VellumNetwork.CLIENTBOUND) register(c);
+        PictureInPictureRendererRegistry.register(context -> new GuiSceneRenderer());
         HudElementRegistry.attachElementAfter(VanillaHudElements.TITLE_AND_SUBTITLE, Constants.id("hud"), VellumHud::extract);
         // Interactive HUD overlays: drawn above every screen and given its pointer input first (per-screen events).
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
