@@ -188,4 +188,24 @@ class DomBindingsTest {
                 + "typeof d.style.backgroundColor, typeof d.style.setProperty].join(' ')"));
         page.run("d.style.backgroundColor = 'red'; d.style.setProperty('--x', '1'); d.style.removeProperty('color')");
     }
+
+    @Test
+    void geometryAndScrollingGoThroughTheElement() {
+        Page page = Page.withScript("""
+                <div id=s style="overflow: auto; height: 50px; scroll-behavior: auto">
+                  <div style="height: 200px; padding-top: 120px"><div id=low style="height: 20px"></div></div>
+                </div>""", "const s = document.getElementById('s'), low = document.getElementById('low');");
+        page.doc.setViewport(320, 240, 1);
+        page.doc.frame(0);
+        page.run("s.scrollTop = 30");
+        assertEquals("30 90", page.eval("[s.scrollTop, low.getBoundingClientRect().top].join(' ')"));
+        page.run("low.scrollIntoView()");
+        assertEquals("120 0", page.eval("[s.scrollTop, low.getBoundingClientRect().top].join(' ')"));
+        page.run("low.scrollIntoView({block: 'nearest'}); s.scrollBy({top: -20})");
+        assertEquals("100", page.eval("s.scrollTop"));
+        page.run("s.scrollTo({top: 0, behavior: 'smooth'})");
+        assertEquals("100", page.eval("s.scrollTop"), "smooth: eased over the next frames");
+        for (int t = 16; t < 600; t += 16) page.doc.frame(t);
+        assertEquals("0", page.eval("s.scrollTop"));
+    }
 }

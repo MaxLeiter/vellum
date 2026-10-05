@@ -2,7 +2,7 @@ package dev.vellum.engine.layout;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.style.Position;
+import dev.vellum.engine.input.Controls;
 
 /**
  * Builds the box tree from computed styles and lays it out: block, inline, flex, grid, absolute and fixed
@@ -14,6 +14,7 @@ import dev.vellum.engine.style.Position;
  */
 public final class LayoutEngine {
     private final Document document;
+    private TextMeasure text;
     private Box root;
 
     public LayoutEngine(Document document) {
@@ -25,6 +26,12 @@ public final class LayoutEngine {
         return root;
     }
 
+    /** The document's text measurement, shared with painting, hit testing and form controls. */
+    public TextMeasure textMeasure() {
+        if (text == null) text = new TextMeasure(document.host().fonts());
+        return text;
+    }
+
     /** Lays out the whole document against the current viewport. */
     public void layout() {
         Element html = document.documentElement();
@@ -33,7 +40,7 @@ public final class LayoutEngine {
         if (box == null) return;
 
         float vw = document.viewportWidth(), vh = document.viewportHeight();
-        LayoutPass pass = new LayoutPass(document.host().fonts(), vw, vh);
+        LayoutPass pass = new LayoutPass(textMeasure(), vw, vh);
         BoxModel.resolveEdges(box, vw);
         float width = pass.usedWidth(box, vw - box.marginLeft - box.marginRight, vw, vh, true);
         BoxModel.resolveAutoMargins(box, Axis.HORIZONTAL, vw - width - box.marginLeft - box.marginRight);
@@ -47,39 +54,38 @@ public final class LayoutEngine {
 
     /**
      * Sets {@code scrollWidth}/{@code scrollHeight} of {@code box} and its descendants: the extent of their border
-     * boxes and line fragments from the padding-box origin, plus the end padding, and at least the padding box.
-     * Clamps scroll containers' scroll offsets to the new range. Returns the box's right and bottom overflow edges in
-     * its parent's space as its contribution to the parent's extent (just its border box when it clips).
+     * boxes and line fragments from the padding-box origin, plus the end padding, and at least the padding box. An
+     * absolutely or fixed positioned box extends its containing block's content ({@link Box#contentParent()}), not
+     * the scrollers it escapes, and nothing for the viewport. Then re-clamps the scroll offsets of scroll containers
+     * to their new range (which fires {@code scroll} if that moves them).
      */
-    private static float[] overflow(Box box) {
-        float right = Float.NEGATIVE_INFINITY, bottom = Float.NEGATIVE_INFINITY;
-        for (Box child : box.children) {
-            float[] edge = overflow(child);
-            // Fixed boxes hang off the viewport, not their parent's content.
-            if (child.style.position == Position.FIXED) continue;
-            right = Math.max(right, edge[0]);
-            bottom = Math.max(bottom, edge[1]);
-        }
-        for (LineBox line : box.lines) {
-            for (Fragment f : line.fragments) {
-                right = Math.max(right, f.x() + f.width());
-                bottom = Math.max(bottom, f.y() + f.height());
+    private static void overflow(LayoutBox box) {
+        for (Box c : box.children) {
+            LayoutBox child = (LayoutBox) c;
+            overflow(child);
+            float right = child.x + child.overflowRight, bottom = child.y + child.overflowBottom;
+            if (!child.outOfFlow) {
+                box.extendOverflow(right, bottom);
+            } else if (child.contentParent() instanceof LayoutBox holder) {
+                // Into the holder's space: it is the parent or a further ancestor.
+                for (Box p = box; p != holder; p = p.parent) {
+                    right += p.x;
+                    bottom += p.y;
+                }
+                holder.extendOverflow(right, bottom);
             }
         }
-        box.scrollWidth = box.paddingBoxWidth();
-        box.scrollHeight = box.paddingBoxHeight();
-        if (right != Float.NEGATIVE_INFINITY) {
-            box.scrollWidth = Math.max(box.scrollWidth, right - box.borderLeft + box.paddingRight);
-            box.scrollHeight = Math.max(box.scrollHeight, bottom - box.borderTop + box.paddingBottom);
+        for (LineBox line : box.lines) {
+            for (Fragment f : line.fragments) box.extendOverflow(f.x() + f.width(), f.y() + f.height());
         }
-        if (box.isScrollContainer()) {
-            Element e = box.element;
-            e.scrollLeft = Math.max(0, Math.min(e.scrollLeft, box.scrollWidth - box.paddingBoxWidth()));
-            e.scrollTop = Math.max(0, Math.min(e.scrollTop, box.scrollHeight - box.paddingBoxHeight()));
-        }
-        boolean clipsX = box.style.overflowX.clips(), clipsY = box.style.overflowY.clips();
-        float ownRight = clipsX || right == Float.NEGATIVE_INFINITY ? box.width : Math.max(box.width, right);
-        float ownBottom = clipsY || bottom == Float.NEGATIVE_INFINITY ? box.height : Math.max(box.height, bottom);
-        return new float[] {box.x + ownRight, box.y + ownBottom};
+        float right = box.overflowRight, bottom = box.overflowBottom;
+        boolean content = right != Float.NEGATIVE_INFINITY;
+        box.scrollWidth = Math.max(box.paddingBoxWidth(), content ? right - box.borderLeft + box.paddingRight : 0);
+        box.scrollHeight = Math.max(box.paddingBoxHeight(), content ? bottom - box.borderTop + box.paddingBottom : 0);
+        if (box.context == LayoutBox.Context.LEAF) Controls.overflow(box);
+        if (box.isScrollContainer()) box.element.clampScroll();
+        // What the box contributes to its parent's extent, in its own space: just its border box when it clips.
+        box.overflowRight = box.style.overflowX.clips() || !content ? box.width : Math.max(box.width, right);
+        box.overflowBottom = box.style.overflowY.clips() || !content ? box.height : Math.max(box.height, bottom);
     }
 }

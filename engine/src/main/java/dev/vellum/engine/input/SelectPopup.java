@@ -2,9 +2,7 @@ package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
-import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.paint.Canvas;
 
 import java.util.ArrayList;
@@ -49,7 +47,7 @@ final class SelectPopup {
             }
         }
         float w = 0;
-        for (Row r : rows) w = Math.max(w, r.indent + fonts().width(r.label, font()));
+        for (Row r : rows) w = Math.max(w, r.indent + Controls.measure(select).width(r.label, font()));
         labelWidth = w;
         Element current = select.selectedOption();
         for (int i = 0; i < rows.size(); i++) if (current != null && rows.get(i).option == current) highlighted = i;
@@ -162,21 +160,19 @@ final class SelectPopup {
         return FontSpec.of(Forms.style(select));
     }
 
-    private FontMetrics fonts() {
-        return select.ownerDocument().host().fonts();
-    }
-
     private float rowHeight() {
-        return fonts().glyphHeight(font()) + 3;
+        return Controls.measure(select).glyphHeight(font()) + 3;
     }
 
-    /** {x, y, width, height} in viewport px: under the select, or above it when only that fits. */
+    /**
+     * {x, y, width, height} in viewport px: under the select as painted (its bounding box, transforms included), or
+     * above it when only that fits.
+     */
     private float[] bounds() {
         Document doc = select.ownerDocument();
-        Box box = select.box;
-        float sx = box == null ? 0 : box.absoluteX(), sy = box == null ? 0 : box.absoluteY();
-        float sh = box == null ? 0 : box.height;
-        float width = Math.max(box == null ? 0 : box.width, labelWidth + 2 * PAD + 2);
+        float[] r = select.getBoundingClientRect();
+        float sx = r[0], sy = r[1], sh = r[3];
+        float width = Math.max(r[2], labelWidth + 2 * PAD + 2);
         float height = Math.min(rows.size(), MAX_ROWS) * rowHeight() + 2;
         float y = sy + sh;
         if (y + height > doc.viewportHeight() && sy - height >= 0) y = sy - height;
@@ -195,7 +191,7 @@ final class SelectPopup {
         canvas.save();
         canvas.clipRect(x + 1, y + 1, w - 2, h - 2);
         FontSpec font = font();
-        float rowHeight = rowHeight(), textOffset = (rowHeight - fonts().glyphHeight(font)) / 2;
+        float rowHeight = rowHeight(), textOffset = (rowHeight - Controls.measure(select).glyphHeight(font)) / 2;
         Element current = select.selectedOption();
         for (int i = top; i < Math.min(rows.size(), top + MAX_ROWS); i++) {
             Row r = rows.get(i);

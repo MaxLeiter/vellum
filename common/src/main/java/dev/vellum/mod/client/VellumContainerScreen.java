@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.paint.Affine;
+import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.mod.client.replaced.SlotContent;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -131,14 +133,18 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         placedVersion = doc == null ? 0 : doc.layoutVersion();
         boolean[] placed = new boolean[menu.slots.size()];
         Element root = doc == null ? null : doc.documentElement();
+        Affine toViewport = new Affine();
         if (root != null) {
             for (Element e : root.getElementsByTagName("slot")) {
                 Box box = e.box;
                 int index = e.replaced instanceof SlotContent slot ? slot.index() : -1;
                 if (box == null || index < 0 || index >= placed.length) continue;
+                // Vanilla draws slots unscaled: centre the 16x16 slot on the content box's centre as painted.
+                Coordinates.toViewport(box, toViewport);
+                float cx = box.contentX() + box.contentWidth() / 2, cy = box.contentY() + box.contentHeight() / 2;
                 Slot slot = menu.slots.get(index);
-                slot.x = Math.round(box.absoluteX() + box.contentX() + (box.contentWidth() - 16) / 2);
-                slot.y = Math.round(box.absoluteY() + box.contentY() + (box.contentHeight() - 16) / 2);
+                slot.x = Math.round(toViewport.mapX(cx, cy) - 8);
+                slot.y = Math.round(toViewport.mapY(cx, cy) - 8);
                 placed[index] = true;
             }
         }

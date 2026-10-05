@@ -6,6 +6,8 @@ import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.event.Modifiers;
 import dev.vellum.engine.event.MouseEvent;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.paint.Affine;
+import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.engine.style.Cursor;
 
 import java.util.List;
@@ -33,6 +35,7 @@ final class Pointer {
     private Element captured;
     private Drag drag;
     private Cursor cursor;
+    private final Affine toBox = new Affine();
 
     Pointer(Document document) {
         this.document = document;
@@ -155,12 +158,12 @@ final class Pointer {
         return dispatch(new MouseEvent(type, !boundary, !boundary, x, y, button, buttons, mods, detail, related), target);
     }
 
-    /** Fills in offsetX/Y (relative to the target's padding box) and dispatches. */
+    /** Fills in offsetX/Y (relative to the target's padding box, as painted) and dispatches. */
     <E extends MouseEvent> E dispatch(E event, Element target) {
-        Box box = Dom.boxOf(target);
-        if (box != null) {
-            event.offsetX = event.clientX - box.absoluteX() - box.borderLeft;
-            event.offsetY = event.clientY - box.absoluteY() - box.borderTop;
+        Box box = target.box;
+        if (box != null && Coordinates.fromViewport(box, toBox)) {
+            event.offsetX = toBox.mapX(event.clientX, event.clientY) - box.borderLeft;
+            event.offsetY = toBox.mapY(event.clientX, event.clientY) - box.borderTop;
         }
         target.dispatchEvent(event);
         return event;

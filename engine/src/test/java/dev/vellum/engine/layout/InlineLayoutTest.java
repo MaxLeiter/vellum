@@ -46,8 +46,8 @@ class InlineLayoutTest {
         LineBox line = p.box.lines.get(0);
         assertEquals(7, line.baseline, 0.01);
         assertEquals(7, p.box.baseline, 0.01);
-        assertEquals(0, runs.get(0).start());
-        assertEquals(11, runs.get(0).end());
+        assertEquals(0, runs.get(0).sourceIndex(0));
+        assertEquals(11, runs.get(0).sourceIndex(runs.get(0).text().length()));
     }
 
     @Test
@@ -63,9 +63,9 @@ class InlineLayoutTest {
         assertRun(runs.get(2), "ccc", 0, 18, 18);
         assertRect(p, 0, 0, 39, 27);
         // Source offsets map back into the text node across collapsed white space.
-        assertEquals(2, runs.get(0).start());
-        assertEquals(8, runs.get(1).start());
-        assertEquals(13, runs.get(2).start());
+        assertEquals(2, runs.get(0).sourceIndex(0));
+        assertEquals(8, runs.get(1).sourceIndex(0));
+        assertEquals(13, runs.get(2).sourceIndex(0));
     }
 
     @Test
@@ -209,7 +209,7 @@ class InlineLayoutTest {
         assertEquals(1, runs.size());
         // "…" is 6 wide: four 6px letters fit before it.
         assertRun(runs.get(0), "aaaa\u2026", 0, 0, 30);
-        assertEquals(4, runs.get(0).end());
+        assertEquals(4, runs.get(0).sourceIndex(runs.get(0).text().length()));
     }
 
     @Test

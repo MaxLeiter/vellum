@@ -2,8 +2,7 @@ package dev.vellum.engine.paint;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Text;
-import dev.vellum.engine.host.FontMetrics;
-import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.layout.TextMeasure;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.layout.Fragment;
 import dev.vellum.engine.style.ComputedStyle;
@@ -20,7 +19,7 @@ import java.util.Arrays;
  */
 final class HitTester implements StackingOrder.Visitor {
     private final Painter painter;
-    private final FontMetrics fonts;
+    private final TextMeasure measure;
     private final Affine inverse = new Affine();
     private final float[] radii = new float[8], bar = new float[4];
     /** The point in the current space, and the points saved by enclosing contexts. */
@@ -31,38 +30,44 @@ final class HitTester implements StackingOrder.Visitor {
     private Box hitBox;
     private Element hitElement;
     private float hitX, hitY;
-    private Text hitText;
-    private int hitOffset;
+    private HitResult.Scrollbar hitBar;
+    private Fragment.TextRun hitRun;
+    private ComputedStyle hitRunStyle;
+    private float hitRunX;
 
-    HitTester(Painter painter, FontMetrics fonts) {
+    HitTester(Painter painter, TextMeasure measure) {
         this.painter = painter;
-        this.fonts = fonts;
+        this.measure = measure;
     }
 
     void begin(float x, float y) {
         px = x;
         py = y;
         depth = 0;
-        hitBox = null;
-        hitElement = null;
-        hitText = null;
+        clear();
     }
 
     HitResult result() {
-        HitResult r = hitBox == null ? null : new HitResult(hitElement, hitBox, hitX, hitY, hitText, hitOffset);
-        hitBox = null;
-        hitElement = null;
-        hitText = null;
+        HitResult r = hitBox == null ? null
+                : new HitResult(hitElement, hitBox, hitX, hitY, hitBar, hitRun, hitRunStyle, hitRunX, measure);
+        clear();
         return r;
     }
 
-    private void hit(Box box, Element element, float localX, float localY, Text text, int offset) {
+    private void clear() {
+        hitBox = null;
+        hitElement = null;
+        hitBar = null;
+        hitRun = null;
+        hitRunStyle = null;
+    }
+
+    private void hit(Box box, Element element, float localX, float localY) {
+        clear();
         hitBox = box;
         hitElement = element;
         hitX = localX;
         hitY = localY;
-        hitText = text;
-        hitOffset = offset;
     }
 
     private static boolean hittable(ComputedStyle s) {
@@ -96,7 +101,7 @@ final class HitTester implements StackingOrder.Visitor {
 
     @Override
     public boolean pushClip(float x, float y, float width, float height) {
-        return px >= x && py >= y && px < x + width && py < y + height;
+        return inside(x, y, width, height);
     }
 
     @Override
@@ -106,45 +111,37 @@ final class HitTester implements StackingOrder.Visitor {
 
     @Override
     public void box(Box box, ComputedStyle s, float x, float y) {
-        if (box.element == null || !hittable(s)) return;
+        if (box.element == null || !hittable(s) || !inside(x, y, box.width, box.height)) return;
         float[] r = Shapes.radii(s, box.width, box.height, radii) ? radii : null;
-        if (Shapes.contains(x, y, box.width, box.height, r, px, py)) hit(box, box.element, px - x, py - y, null, -1);
+        if (r == null || Shapes.contains(x, y, box.width, box.height, r, px, py)) hit(box, box.element, px - x, py - y);
     }
 
     @Override
-    public void inlineBox(Box block, Fragment.InlineBox f, float x, float y) {
-        if (f.element() == null || !hittable(StackingOrder.styleOf(f))) return;
-        if (Shapes.contains(x + f.x(), y + f.y(), f.width(), f.height(), null, px, py)) {
-            hit(block, f.element(), px - x, py - y, null, -1);
-        }
+    public void inlineBox(Box block, Fragment.InlineBox f, ComputedStyle s, float x, float y) {
+        Box box = f.box();
+        if (!hittable(s) || !inside(x + f.x(), y + f.y(), f.width(), f.height())) return;
+        hit(box, box.element, px - x - box.x, py - y - box.y);
     }
 
     @Override
     public void textRun(Box block, Fragment.TextRun run, float x, float y) {
         ComputedStyle s = StackingOrder.styleOf(run);
-        if (!hittable(s) || !Shapes.contains(x + run.x(), y + run.y(), run.width(), run.height(), null, px, py)) return;
+        if (!hittable(s) || !inside(x + run.x(), y + run.y(), run.width(), run.height())) return;
         Text node = run.node();
         Element element = node != null && node.parentElement() != null ? node.parentElement()
                 : run.styleSource() != null ? run.styleSource() : block.element;
         if (element == null) return;
-        int offset = offsetAt(run, s, px - x - run.x());
-        hit(block, element, px - x, py - y, node, node == null ? -1 : Math.min(run.start() + offset, run.end()));
+        // The text belongs to its element's inline box when it has one on these lines, else to the block.
+        Box box = element.box != null && element.box.parent == block && element.box.kind == Box.Kind.INLINE
+                ? element.box : block;
+        hit(box, element, px - x - (box == block ? 0 : box.x), py - y - (box == block ? 0 : box.y));
+        hitRun = run;
+        hitRunStyle = s;
+        hitRunX = px - x - run.x();
     }
 
-    /** The caret position (in chars of the run's text) nearest to {@code localX}, using the host's glyph widths. */
-    private int offsetAt(Fragment.TextRun run, ComputedStyle s, float localX) {
-        FontSpec font = FontSpec.of(s);
-        String text = run.text();
-        float pos = 0;
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            float advance = fonts.charWidth(cp, font) + s.letterSpacing;
-            if (localX < pos + advance / 2) return i;
-            pos += advance;
-            i += Character.charCount(cp);
-        }
-        return text.length();
-    }
+    @Override
+    public void inlineOutline(Fragment.InlineBox fragment, ComputedStyle style, float x, float y) {}
 
     @Override
     public void after(Box box, ComputedStyle s, float x, float y) {
@@ -152,10 +149,16 @@ final class HitTester implements StackingOrder.Visitor {
         for (int axis = 0; axis < 2; axis++) {
             boolean vertical = axis == 0;
             if (Scrollbars.track(box, vertical, painter.scrollbarHovered(box, vertical), bar)
-                    && Shapes.contains(x + bar[0], y + bar[1], bar[2], bar[3], null, px, py)) {
-                hit(box, box.element, px - x, py - y, null, -1);
+                    && inside(x + bar[0], y + bar[1], bar[2], bar[3])) {
+                hit(box, box.element, px - x, py - y);
+                hitBar = new HitResult.Scrollbar(box, vertical);
                 return;
             }
         }
+    }
+
+    /** Whether the point is in the rectangle; the cheap test before anything else. */
+    private boolean inside(float x, float y, float width, float height) {
+        return px >= x && py >= y && px < x + width && py < y + height;
     }
 }

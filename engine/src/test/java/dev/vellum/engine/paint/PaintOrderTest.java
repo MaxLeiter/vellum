@@ -82,7 +82,7 @@ class PaintOrderTest {
         Box inlineBlock = t.div(30, 0, 10, 9, B);
         inlineBlock.atomicInline = true;
         add(root, inlineBlock);
-        line(root, new Fragment.InlineBox(span, span.style, 0, 0, 20, 9, true, true), t.text(span, "x", 2, 0),
+        line(root, TestTree.inline(span, 0, 0, 20, 9, 2), t.text(span, "x", 2, 0),
                 new Fragment.Atomic(inlineBlock), t.text(root.element, "y", 45, 0));
         assertEquals(List.of("fillRect:ff000001", "fillRect:ff00000c", "drawText:x", "fillRect:ff00000b", "drawText:y"),
                 t.paint(root).trace());
@@ -150,12 +150,14 @@ class PaintOrderTest {
     void absoluteBoxesEscapeScrollersBelowTheirContainingBlock() {
         Box root = t.div(0, 0, 100, 100, ROOT);
         Box list = add(root, scroller(t.div(0, 0, 50, 50, A), Overflow.HIDDEN, 0, 20, 50, 200));
-        add(list, position(t.div(0, 60, 10, 10, C), Position.ABSOLUTE));
+        Box abs = add(list, position(t.div(0, 60, 10, 10, C), Position.ABSOLUTE));
         RecordingCanvas.Call escaped = t.paint(root).ops("fillRect").get(2);
         assertNull(escaped.clip());
         assertEquals(60, escaped.y(), 1e-4);
 
-        position(list, Position.RELATIVE); // now the scroller is the containing block
+        position(list, Position.RELATIVE); // now the scroller is the containing block, as layout records
+        abs.containingBlock = list;
+        t.doc.invalidateStacking();
         RecordingCanvas.Call inside = t.paint(root).ops("fillRect").get(2);
         assertArrayEquals(new float[] {0, 0, 50, 50}, inside.clip(), 1e-4f);
         assertEquals(40, inside.y(), 1e-4);
@@ -266,6 +268,26 @@ class PaintOrderTest {
         scroller(root, Overflow.HIDDEN, 0, 0, 100, 100);
         RecordingCanvas c = t.paint(root);
         assertEquals(1, c.calls.size());
+    }
+
+    @Test
+    void zIndexChangesWithoutARelayoutRepaintAndHitInTheNewOrder() {
+        var doc = new dev.vellum.engine.testing.TestHost().load("""
+                <div id=a style="position: absolute; width: 10px; height: 10px; background: #00000a"></div>
+                <div id=b style="position: absolute; width: 10px; height: 10px; background: #00000b"></div>""");
+        RecordingCanvas before = new RecordingCanvas();
+        doc.paint(before);
+        assertEquals(List.of(0xFF00000A, 0xFF00000B), before.fills());
+        assertEquals("b", doc.hitTest(5, 5).element().id());
+        int layouts = doc.layoutVersion();
+        doc.getElementById("a").setAttribute("style",
+                "position: absolute; width: 10px; height: 10px; background: #00000a; z-index: 1");
+        doc.frame(16);
+        assertEquals(layouts, doc.layoutVersion(), "z-index does not affect layout");
+        RecordingCanvas after = new RecordingCanvas();
+        doc.paint(after);
+        assertEquals(List.of(0xFF00000B, 0xFF00000A), after.fills());
+        assertEquals("a", doc.hitTest(5, 5).element().id());
     }
 
     private static void line(Box block, Fragment... fragments) {

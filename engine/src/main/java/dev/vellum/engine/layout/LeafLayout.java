@@ -2,6 +2,7 @@ package dev.vellum.engine.layout;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.input.Controls;
 
 /**
  * Boxes without laid-out content: replaced elements (sized by {@link LayoutPass} from their natural size) and form
@@ -28,18 +29,16 @@ final class LeafLayout implements FormattingContext {
     }
 
     /**
-     * Single-line text controls draw their text centred in the content box, a textarea from its top; their baseline
-     * is that text's. Other leaves have none (they align by their bottom margin edge).
+     * Text controls and selects have their text's baseline, where {@code Controls} draws it: single-line ones
+     * centred in the content box, a textarea's first line from its top. Other leaves have none (they align by their
+     * bottom margin edge).
      */
     private float controlBaseline(LayoutBox box, float contentHeight) {
         if (box.isReplaced()) return Float.NaN;
         Element e = box.element;
-        boolean multiline = e.tagName().equals("textarea");
-        boolean singleLine = e.tagName().equals("select") || e.isTextControl() && !multiline;
-        if (!singleLine && !multiline) return Float.NaN;
+        if (!e.tagName().equals("select") && !e.isTextControl()) return Float.NaN;
         FontSpec font = FontSpec.of(box.style);
-        float glyph = pass.fonts.glyphHeight(font);
-        float space = singleLine ? contentHeight : box.style.usedLineHeight();
-        return box.contentY() + (space - glyph) / 2 + pass.fonts.ascent(font);
+        float lineHeight = Controls.lineHeight(e, box.style, contentHeight);
+        return Controls.glyphTop(box.contentY(), lineHeight, pass.text.glyphHeight(font), 0) + pass.text.ascent(font);
     }
 }

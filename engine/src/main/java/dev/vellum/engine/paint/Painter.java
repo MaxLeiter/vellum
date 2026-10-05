@@ -9,8 +9,9 @@ import dev.vellum.engine.layout.Box;
  */
 public final class Painter {
     private final Document document;
+    private final Layers layers = new Layers();
     /** Separate walkers so a hit test from inside painting (a control, say) cannot disturb the paint walk. */
-    private final StackingOrder paintOrder = new StackingOrder(), hitOrder = new StackingOrder();
+    private final StackingOrder paintOrder = new StackingOrder(layers), hitOrder = new StackingOrder(layers);
     private BoxPainter boxPainter;
     private HitTester hitTester;
 
@@ -35,8 +36,9 @@ public final class Painter {
 
     /** Paints the box tree under {@code root} (no overlays), leaving the canvas as it was found. */
     public void paint(Canvas canvas, Box root) {
-        if (boxPainter == null) boxPainter = new BoxPainter(this, document.host().fonts());
+        if (boxPainter == null) boxPainter = new BoxPainter(this);
         int saves = canvas.saveCount();
+        layers.validate(root, document.layoutVersion(), document.stackingVersion());
         boxPainter.begin(canvas);
         try {
             paintOrder.walk(root, boxPainter);
@@ -54,7 +56,8 @@ public final class Painter {
 
     /** The topmost hit at a point in {@code root}'s coordinate space, or null. */
     public HitResult hitTest(Box root, float x, float y) {
-        if (hitTester == null) hitTester = new HitTester(this, document.host().fonts());
+        if (hitTester == null) hitTester = new HitTester(this, document.layoutEngine().textMeasure());
+        layers.validate(root, document.layoutVersion(), document.stackingVersion());
         hitTester.begin(x, y);
         hitOrder.walk(root, hitTester);
         return hitTester.result();

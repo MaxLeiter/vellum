@@ -163,7 +163,7 @@ class PointerTest {
         fx.box(r, null, 0, 0, 108, 20); // track: thumb centre from x 4 to 104
         fx.listen(r, "input", "change", "mousemove");
         fx.down(54, 10);
-        assertEquals("50", new RangeControl(r).text());
+        assertEquals("50", RangeControl.of(r).text());
         assertTrue(r.isActive());
         fx.move(79, 10);
         assertEquals("75", r.value());

@@ -72,10 +72,10 @@ class KeyboardTest {
         Fixture fx = new Fixture("""
                 <input type=range id=a><input type=range id=b min=0 max=10 step=4 value=9>
                 <input type=range id=c min=0 max=1 step=any value=0.3><input type=range id=d value=7.4 step=0.1>""");
-        assertEquals("50", new RangeControl(fx.el("a")).text(), "default: the midpoint");
-        assertEquals("8", new RangeControl(fx.el("b")).text(), "snapped below max");
-        assertEquals("0.3", new RangeControl(fx.el("c")).text());
-        assertEquals("7.4", new RangeControl(fx.el("d")).text(), "no floating-point noise");
+        assertEquals("50", RangeControl.of(fx.el("a")).text(), "default: the midpoint");
+        assertEquals("8", RangeControl.of(fx.el("b")).text(), "snapped below max");
+        assertEquals("0.3", RangeControl.of(fx.el("c")).text());
+        assertEquals("7.4", RangeControl.of(fx.el("d")).text(), "no floating-point noise");
     }
 
     @Test

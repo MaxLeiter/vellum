@@ -71,12 +71,16 @@ final class Fixture {
     }
 
     private HitResult hitTest(float x, float y) {
-        if (forcedHit != null) return new HitResult(forcedHit, forcedHit.box, 0, 0, null, 0);
-        Element found = null;
-        for (Element e : doc.getElementsByTagName("*")) {
-            if (e.box != null && Dom.inside(e.box.clientRect(), x, y)) found = e;
+        Element found = forcedHit;
+        if (found == null) {
+            for (Element e : doc.getElementsByTagName("*")) {
+                if (e.box != null && Dom.inside(e.getBoundingClientRect(), x, y)) found = e;
+            }
         }
-        return found == null ? null : new HitResult(found, found.box, 0, 0, null, 0);
+        if (found == null) return null;
+        if (found.box == null) return new HitResult(found, null, 0, 0);
+        float[] local = Dom.local(found.box, x, y);
+        return new HitResult(found, found.box, local[0], local[1]);
     }
 
     /** Logs events of the given types reaching {@code el}, as "type:targetId" (plus "=data" for input events with data). */

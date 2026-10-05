@@ -47,14 +47,14 @@ public final class AnimationEngine {
     public void styleChanged(Element element, ComputedStyle oldBase, ComputedStyle newBase) {
         ElementAnimations state = stateOf(element);
         if (oldBase == newBase) { // the style engine kept the style: nothing to start or stop
-            if (state == null) element.style = newBase;
+            if (state == null) setStyle(element, newBase);
             return;
         }
         if (state == null) {
             boolean mayAnimate = newBase != null
                     && (!newBase.animations.isEmpty() || oldBase != null && !newBase.transitions.isEmpty());
             if (!mayAnimate) {
-                element.style = newBase;
+                setStyle(element, newBase);
                 return;
             }
             state = new ElementAnimations(this, element);
@@ -165,8 +165,18 @@ public final class AnimationEngine {
     /** Recomposes the element's style on {@code base}, invalidating layout if a layout property moved. */
     private void update(ElementAnimations state, ComputedStyle base) {
         ComputedStyle before = state.element.style, after = state.compose(base);
-        state.element.style = after;
+        setStyle(state.element, after);
         if (!document.needsLayout() && layoutMoved(before, after)) document.invalidateLayout();
+    }
+
+    /**
+     * Sets {@code element.style}, the only place it is written, telling the document when paint order moved without
+     * a relayout (the cascade invalidates layout itself; animations through {@link #update}).
+     */
+    private void setStyle(Element element, ComputedStyle style) {
+        ComputedStyle before = element.style;
+        element.style = style;
+        if (before != null && style != null && !before.sameStacking(style)) document.invalidateStacking();
     }
 
     private static boolean layoutMoved(ComputedStyle before, ComputedStyle after) {

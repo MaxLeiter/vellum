@@ -140,7 +140,7 @@ final class InlineLayout {
             int j = i;
             if (text.charAt(i) == ' ') {
                 while (j < n && text.charAt(j) == ' ') j++;
-                float w = (pass.fonts.width(" ", font) + s.wordSpacing + s.letterSpacing) * (j - i);
+                float w = pass.text.width(" ", font, s) * (j - i);
                 p.collapsible[p.add(SPACE, itemIndex, i, j, w)] = s.whiteSpace.collapsesSpaces();
             } else {
                 // A word, cut further after zero-width spaces and inner hyphens, and between all characters for
@@ -151,7 +151,7 @@ final class InlineLayout {
                     if (breakAll || breakWord || cp == 0x200B
                             || (cp == '-' && j - 1 > i && j < n && Character.isLetter(text.charAt(j)))) break;
                 }
-                int k = p.add(TEXT, itemIndex, i, j, textWidth(text.substring(i, j), font, s));
+                int k = p.add(TEXT, itemIndex, i, j, pass.text.width(text.substring(i, j), font, s));
                 if (k > 0 && p.kind[k - 1] == TEXT && p.item[k - 1] == itemIndex) {
                     char prev = text.charAt(i - 1);
                     if (breakAll || (wraps && (prev == '​' || prev == '-'))) p.breakBefore[k] = true;
@@ -160,11 +160,6 @@ final class InlineLayout {
             }
             i = j;
         }
-    }
-
-    private float textWidth(String text, FontSpec font, ComputedStyle s) {
-        float w = pass.fonts.width(text, font);
-        return s.letterSpacing == 0 ? w : w + s.letterSpacing * text.codePointCount(0, text.length());
     }
 
     /** Left margin + border + padding of an inline box (percentages of the containing block width). */
@@ -369,8 +364,8 @@ final class InlineLayout {
         Metrics m = new Metrics();
         ComputedStyle s = span.style;
         m.font = FontSpec.of(s);
-        m.ascent = pass.fonts.ascent(m.font);
-        m.glyphHeight = pass.fonts.glyphHeight(m.font);
+        m.ascent = pass.text.ascent(m.font);
+        m.glyphHeight = pass.text.glyphHeight(m.font);
         float halfLeading = (s.usedLineHeight() - m.glyphHeight) / 2;
         m.above = m.ascent + halfLeading;
         m.below = m.glyphHeight - m.ascent + halfLeading;
@@ -498,6 +493,8 @@ final class InlineLayout {
             this.contentWidth = contentWidth;
             this.percentHeight = percentHeight;
             box.lines.clear();
+            // Paint draws the inline boxes' edges as resolved here, against this containing block.
+            for (Item item : content.items) if (item instanceof Open o) BoxModel.resolveEdges(o.span().box, contentWidth);
         }
 
         void write(Line line, float indent, float y, LineMetrics m, boolean clampedEnd, boolean lastLine) {
@@ -619,11 +616,10 @@ final class InlineLayout {
             float[] off = offset(span);
             String text = runItem != null ? runItem.text().substring(runStart, runEnd) : "";
             if (runEllipsis) text += ELLIPSIS;
-            int start = runItem != null ? runItem.source(runStart) : 0;
-            int end = runItem != null ? runItem.source(runEnd) : 0;
+            int[] source = runItem == null ? null : runItem.sourceSlice(runStart, runEnd);
             lineBox.fragments.add(new Fragment.TextRun(runItem != null ? runItem.node() : null, span.element,
-                    span.style, text, start, end, runX + off[0], rootBaseline + m.shift - m.ascent + off[1],
-                    runWidth, m.glyphHeight));
+                    span.style, text, source, pass.text.spaced(text, m.font, span.style),
+                    runX + off[0], rootBaseline + m.shift - m.ascent + off[1], runWidth, m.glyphHeight));
             runItem = null;
             runEllipsis = false;
         }
@@ -647,7 +643,7 @@ final class InlineLayout {
             float w = 0;
             while (i < p.end[j]) {
                 int cp = text.codePointAt(i);
-                float cw = pass.fonts.charWidth(cp, font) + s.letterSpacing + (cp == ' ' ? s.wordSpacing : 0);
+                float cw = pass.text.advance(cp, font, s);
                 if (pen + w + cw > limit + EPSILON) break;
                 w += cw;
                 i += Character.charCount(cp);
@@ -663,7 +659,7 @@ final class InlineLayout {
         }
 
         private float ellipsisWidth(Span span) {
-            return textWidth(ELLIPSIS, metrics(span).font, span.style);
+            return pass.text.width(ELLIPSIS, metrics(span).font, span.style);
         }
 
         // -- Inline boxes --
@@ -676,17 +672,17 @@ final class InlineLayout {
 
         private void openSpan(Span span) {
             flushRun();
-            ComputedStyle s = span.style;
-            pen += s.marginLeft.resolve(contentWidth);
+            Box b = span.box;
+            pen += b.marginLeft;
             open.add(span);
             pending.add(new OpenFragment(span, reserve(), pen, true));
-            pen += edgeStart(span, contentWidth) - s.marginLeft.resolve(contentWidth);
+            pen += b.borderLeft + b.paddingLeft;
         }
 
         private void closeSpan(Span span) {
             flushRun();
-            ComputedStyle s = span.style;
-            pen += edgeEnd(span, contentWidth) - s.marginRight.resolve(contentWidth);
+            Box b = span.box;
+            pen += b.paddingRight + b.borderRight;
             for (int i = pending.size() - 1; i >= 0; i--) {
                 if (pending.get(i).span == span) {
                     closeFragment(pending.remove(i), true);
@@ -694,21 +690,20 @@ final class InlineLayout {
                 }
             }
             open.remove(span);
-            pen += s.marginRight.resolve(contentWidth);
+            pen += b.marginRight;
         }
 
         /** Fills an inline box's reserved fragment slot now that its extent on this line is known. */
         private void closeFragment(OpenFragment f, boolean last) {
             Span span = f.span;
-            ComputedStyle s = span.style;
+            Box b = span.box;
             Metrics m = metrics(span);
             float[] off = offset(span);
-            float above = BoxModel.nonNegative(s.paddingTop, contentWidth) + Math.max(0, s.borderTopWidth);
-            float below = BoxModel.nonNegative(s.paddingBottom, contentWidth) + Math.max(0, s.borderBottomWidth);
+            float above = b.paddingTop + b.borderTop, below = b.paddingBottom + b.borderBottom;
             float x = f.x + off[0];
             float y = rootBaseline + m.shift - m.ascent - above + off[1];
             float w = pen - f.x, h = m.glyphHeight + above + below;
-            lineBox.fragments.set(f.index, new Fragment.InlineBox(span.element, s, x, y, w, h, f.first, last));
+            lineBox.fragments.set(f.index, new Fragment.InlineBox(b, x, y, w, h, f.first, last, lineBox.fragments.size()));
             float[] r = bounds.get(span);
             if (r == null) {
                 bounds.put(span, new float[] {x, y, x + w, y + h});
@@ -751,18 +746,16 @@ final class InlineLayout {
         }
 
         /**
-         * Gives the inline elements' boxes the bounds of their fragments (elements without fragments get an empty
-         * box at the content origin) and positions the placeholders of lines cut off by line-clamp.
+         * Gives the inline boxes the bounds of their fragments (those without fragments get an empty box at the
+         * content origin) and positions the placeholders of lines cut off by line-clamp.
          */
         void finish(List<Line> clampedAway, float y) {
             for (Line line : clampedAway) placeholders(line, y);
             for (Item item : content.items) {
-                if (!(item instanceof Open o) || o.span().box == null) continue;
-                Box b = o.span().box;
+                if (!(item instanceof Open o)) continue;
                 float[] r = bounds.get(o.span());
-                if (r == null) setBounds(b, box.contentX(), box.contentY(), 0, 0);
-                else setBounds(b, r[0], r[1], r[2] - r[0], r[3] - r[1]);
-                BoxModel.resolveEdges(b, contentWidth);
+                if (r == null) setBounds(o.span().box, box.contentX(), box.contentY(), 0, 0);
+                else setBounds(o.span().box, r[0], r[1], r[2] - r[0], r[3] - r[1]);
             }
         }
     }

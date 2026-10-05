@@ -33,11 +33,23 @@ class ComputedStyleTest {
             }));
             assertFalse(Objects.equals(p.get(initial), p.get(changed)), p + " did not change");
             assertFalse(initial.sameAs(changed), p + ": sameAs");
-            assertEquals(!p.affectsLayout, initial.sameLayout(changed), p + ": sameLayout");
+            // Gaining a transform affects layout (containing blocks); changing one does not (below).
+            assertEquals(!p.affectsLayout && p != Prop.TRANSFORM, initial.sameLayout(changed), p + ": sameLayout");
             assertEquals(!p.inherited, initial.sameInherited(changed), p + ": sameInherited");
             ComputedStyle child = ComputedStyle.inheritFrom(changed);
             assertEquals(p.inherited, Objects.equals(p.get(child), p.get(changed)), p + ": copyInheritedFrom");
         }
+    }
+
+    @Test
+    void transformValuesArePaintOnlyButHavingOneIsNot() {
+        ComputedStyle a = new ComputedStyle(), b = new ComputedStyle(), none = new ComputedStyle();
+        a.transform = List.of(new TransformFunction.Rotate(10));
+        b.transform = List.of(new TransformFunction.Rotate(20));
+        assertTrue(a.sameLayout(b));
+        assertFalse(a.sameLayout(none));
+        assertTrue(a.sameStacking(b));
+        assertFalse(a.sameStacking(none));
     }
 
     @Test

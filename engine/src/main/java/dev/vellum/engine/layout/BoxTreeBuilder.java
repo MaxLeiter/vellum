@@ -157,12 +157,17 @@ final class BoxTreeBuilder {
 
     // ---- Block flow ----
 
-    /** Children of {@code parent} (with its pseudo-elements) into a block flow, inside inline {@code span}. */
+    /**
+     * Children of {@code parent} (with its pseudo-elements) into a block flow, inside inline {@code span}. A closed
+     * {@code <details>} shows only its summary: the UA stylesheet hides its other elements, and its loose text is
+     * left out here.
+     */
     private void addChildren(Flow flow, Element parent, Span span) {
+        boolean closedDetails = parent.tagName().equals("details") && !parent.hasAttribute("open");
         addPseudo(flow, parent, parent.beforeStyle, span);
         for (int i = 0, n = parent.childCount(); i < n; i++) {
             Node child = parent.childAt(i);
-            if (child instanceof Text t) flow.run().addText(span, t, t.data());
+            if (child instanceof Text t && !closedDetails) flow.run().addText(span, t, t.data());
             else if (child instanceof Element e) addElement(flow, e, span);
         }
         addPseudo(flow, parent, parent.afterStyle, span);
@@ -203,7 +208,7 @@ final class BoxTreeBuilder {
         if (s.position.isOutOfFlow()) {
             flow.outOfFlow(outOfFlowPseudo(host, s));
         } else if (s.display == Display.INLINE || s.display == Display.CONTENTS) {
-            Span inner = new Span(host, s, span, null);
+            Span inner = new Span(host, s, span, new Box(Box.Kind.PSEUDO, host, s));
             flow.run().open(inner);
             flow.run().addText(inner, null, s.content);
             flow.run().close(inner);

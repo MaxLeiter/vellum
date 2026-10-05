@@ -7,6 +7,8 @@ import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.html.HtmlParser;
 import dev.vellum.engine.html.HtmlSerializer;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.paint.Affine;
+import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.engine.style.ComputedStyle;
 
 import java.util.ArrayList;
@@ -21,7 +23,8 @@ import java.util.Set;
 
 /**
  * An element. Holds the DOM state (tag, attributes, interaction and form state) plus per-element results of the
- * pipeline: computed styles, the layout box and the scroll position.
+ * pipeline: computed styles and the layout box. It also owns its scroll state (the position and a smooth scroll's
+ * destination): every scroll, by input, scripts, focus or layout, goes through {@link #scrollTo}.
  *
  * <p>Form controls follow HTML: an input's {@link #inputType() type} defaults to text (also for unknown types),
  * checkboxes and radios have a live checkedness, options a live selectedness from which a select's
@@ -70,8 +73,12 @@ public class Element extends Node {
     private Boolean selected;
     /** A script's "already started" flag: it has run, or must never run (scripts from fragment parsing). */
     boolean alreadyStarted;
+    /** Bumped whenever the live value changes, so form controls know when to re-read it. */
+    private int valueVersion;
     /** Scroll offsets of a scroll container, in px. */
-    public float scrollLeft, scrollTop;
+    private float scrollLeft, scrollTop;
+    /** Where a smooth scroll in progress is heading, or NaN. */
+    private float scrollTargetLeft = Float.NaN, scrollTargetTop = Float.NaN;
 
     Element(Document ownerDocument, String tagName) {
         super(ownerDocument);
@@ -367,12 +374,8 @@ public class Element extends Node {
     /** Fires a synthetic click and, unless cancelled, its default action, as {@code HTMLElement.click()} does. */
     public void click() {
         if (isDisabled()) return;
-        float cx = 0, cy = 0;
-        if (box != null) {
-            float[] r = box.clientRect();
-            cx = r[0] + r[2] / 2;
-            cy = r[1] + r[3] / 2;
-        }
+        float[] r = getBoundingClientRect();
+        float cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
         MouseEvent e = new MouseEvent("click", true, true, cx, cy, 0, 0, Modifiers.NONE, 1, null);
         if (dispatchEvent(e)) ownerDocument.input().activate(this, e);
     }
@@ -458,7 +461,16 @@ public class Element extends Node {
         if (Objects.equals(value, v)) return;
         boolean wasEmpty = value().isEmpty();
         value = v;
+        valueVersion++;
         if (wasEmpty != value().isEmpty()) ownerDocument.stateChanged(this);
+    }
+
+    /**
+     * Incremented whenever the live value changes. With {@link Document#domVersion()} (attributes and children) it
+     * tells form controls when what they derived from the value is stale.
+     */
+    public int valueVersion() {
+        return valueVersion;
     }
 
     public boolean checked() {
@@ -595,9 +607,12 @@ public class Element extends Node {
 
     // ---- Geometry ----
 
-    /** {@code getBoundingClientRect()}: {x, y, width, height} of the border box in viewport px, or zeros. */
+    /**
+     * {@code getBoundingClientRect()}: {x, y, width, height} in viewport px of the bounding box of the border box as
+     * painted, transforms included; zeros without a box.
+     */
     public float[] getBoundingClientRect() {
-        return box == null ? new float[4] : box.clientRect();
+        return box == null ? new float[4] : Coordinates.boundingRect(box);
     }
 
     public float scrollWidth() { return box == null ? 0 : box.scrollWidth; }
@@ -605,17 +620,153 @@ public class Element extends Node {
     public float clientWidth() { return box == null ? 0 : box.paddingBoxWidth(); }
     public float clientHeight() { return box == null ? 0 : box.paddingBoxHeight(); }
 
-    /** Sets the scroll position, clamped to the scrollable range. Smooth scrolling is the input handler's job. */
+    // ---- Scrolling ----
+
+    /** How a scroll moves: {@code AUTO} follows the element's {@code scroll-behavior}. */
+    public enum ScrollBehavior { AUTO, INSTANT, SMOOTH }
+
+    /** Where {@link #scrollIntoView} puts the element in a scroller, per axis ({@code block}/{@code inline}). */
+    public enum ScrollAlign { START, CENTER, END, NEAREST }
+
+    /** The scroll offsets, in px (zero until the element is a scroll container that was scrolled). */
+    public float scrollLeft() { return scrollLeft; }
+    public float scrollTop() { return scrollTop; }
+
+    /** Scrolls instantly to (left, top), clamped to the scrollable range. */
     public void scrollTo(float left, float top) {
-        float maxX = Math.max(0, scrollWidth() - clientWidth());
-        float maxY = Math.max(0, scrollHeight() - clientHeight());
-        float nl = Math.max(0, Math.min(maxX, left));
-        float nt = Math.max(0, Math.min(maxY, top));
-        if (nl != scrollLeft || nt != scrollTop) {
-            scrollLeft = nl;
-            scrollTop = nt;
-            ownerDocument.scrolled(this);
+        scrollTo(left, top, ScrollBehavior.INSTANT);
+    }
+
+    /**
+     * Scrolls to (left, top), clamped to the scrollable range (nothing scrolls unless this is a scroll container):
+     * instantly, or eased over the next frames when the behavior is smooth ({@code AUTO}: when the element's
+     * {@code scroll-behavior} is; never when the host prefers reduced motion). Either replaces a smooth scroll in
+     * progress. {@code scroll} fires on the next frame.
+     */
+    public void scrollTo(float left, float top, ScrollBehavior behavior) {
+        float l = clampScroll(left, maxScrollLeft()), t = clampScroll(top, maxScrollTop());
+        Scrolling scrolling = ownerDocument.scrolling();
+        if (smooth(behavior) && (l != scrollLeft || t != scrollTop)) {
+            scrollTargetLeft = l;
+            scrollTargetTop = t;
+            scrolling.animate(this);
+        } else {
+            scrollTargetLeft = scrollTargetTop = Float.NaN;
+            scrolling.stop(this);
+            moveScroll(l, t);
         }
+    }
+
+    /** Scrolls by (dx, dy) from where the element is heading: a smooth scroll's destination, else its position. */
+    public void scrollBy(float dx, float dy, ScrollBehavior behavior) {
+        scrollTo(scrollDestinationLeft() + dx, scrollDestinationTop() + dy, behavior);
+    }
+
+    /** Whether {@link #scrollBy} with this delta would move it (wheel scrolling chains outward when not). */
+    public boolean canScrollBy(float dx, float dy) {
+        return canMove(scrollDestinationLeft(), dx, maxScrollLeft()) || canMove(scrollDestinationTop(), dy, maxScrollTop());
+    }
+
+    /**
+     * Clamps the position and a smooth scroll's destination to the scrollable range again, after layout changed
+     * it. Moving fires {@code scroll} like any scroll.
+     */
+    public void clampScroll() {
+        if (!Float.isNaN(scrollTargetLeft)) {
+            scrollTargetLeft = clampScroll(scrollTargetLeft, maxScrollLeft());
+            scrollTargetTop = clampScroll(scrollTargetTop, maxScrollTop());
+        }
+        moveScroll(clampScroll(scrollLeft, maxScrollLeft()), clampScroll(scrollTop, maxScrollTop()));
+    }
+
+    /**
+     * Scrolls every scroll container this element's box is in, innermost first, so the element shows: aligned per
+     * axis ({@code NEAREST}: the least scroll that shows it, none when it already shows), with the given behavior.
+     */
+    public void scrollIntoView(ScrollAlign block, ScrollAlign inline, ScrollBehavior behavior) {
+        if (box == null) return;
+        // Find every scroller's final position by scrolling instantly from the inside out (each scroll moves the
+        // element as the next one sees it), then go there with the requested behavior.
+        List<Element> scrollers = new ArrayList<>();
+        List<float[]> starts = new ArrayList<>();
+        Affine element = new Affine(), scroller = new Affine();
+        float[] r = new float[4];
+        for (Box c = box.contentParent(); c != null; c = c.contentParent()) {
+            if (!c.isScrollContainer() || !Coordinates.fromViewport(c, scroller)) continue;
+            scroller.multiply(Coordinates.toViewport(box, element)).mapBounds(0, 0, box.width, box.height, r);
+            Element e = c.element;
+            float dx = alignDelta(inline, r[0] - c.borderLeft, r[2], c.paddingBoxWidth());
+            float dy = alignDelta(block, r[1] - c.borderTop, r[3], c.paddingBoxHeight());
+            scrollers.add(e);
+            starts.add(new float[] {e.scrollLeft, e.scrollTop});
+            e.scrollLeft = clampScroll(e.scrollLeft + dx, e.maxScrollLeft());
+            e.scrollTop = clampScroll(e.scrollTop + dy, e.maxScrollTop());
+        }
+        for (int i = 0; i < scrollers.size(); i++) {
+            Element e = scrollers.get(i);
+            float left = e.scrollLeft, top = e.scrollTop;
+            e.scrollLeft = starts.get(i)[0];
+            e.scrollTop = starts.get(i)[1];
+            e.scrollTo(left, top, behavior);
+        }
+    }
+
+    /**
+     * How far to scroll an axis so [start, start + size), relative to a scrollport {@code view} long, lands as
+     * {@code align} says. {@code NEAREST} aligns the nearer edge, or the start when it does not fit.
+     */
+    private static float alignDelta(ScrollAlign align, float start, float size, float view) {
+        return switch (align) {
+            case START -> start;
+            case END -> start + size - view;
+            case CENTER -> start + (size - view) / 2;
+            case NEAREST -> start < 0 ? start : start + size > view ? Math.min(start + size - view, start) : 0;
+        };
+    }
+
+    /** One step of a smooth scroll: a fraction {@code k} of the way to the destination. True when it arrived. */
+    boolean stepSmoothScroll(float k) {
+        if (Float.isNaN(scrollTargetLeft)) return true;
+        float left = approach(scrollLeft, scrollTargetLeft, k), top = approach(scrollTop, scrollTargetTop, k);
+        boolean arrived = left == scrollTargetLeft && top == scrollTargetTop;
+        if (arrived) scrollTargetLeft = scrollTargetTop = Float.NaN;
+        moveScroll(left, top);
+        return arrived;
+    }
+
+    private void moveScroll(float left, float top) {
+        if (left == scrollLeft && top == scrollTop) return;
+        scrollLeft = left;
+        scrollTop = top;
+        ownerDocument.scrolling().moved(this);
+    }
+
+    private boolean smooth(ScrollBehavior behavior) {
+        if (ownerDocument.host().prefersReducedMotion()) return false;
+        return switch (behavior) {
+            case INSTANT -> false;
+            case SMOOTH -> true;
+            case AUTO -> style != null && style.scrollSmooth;
+        };
+    }
+
+    private float scrollDestinationLeft() { return Float.isNaN(scrollTargetLeft) ? scrollLeft : scrollTargetLeft; }
+    private float scrollDestinationTop() { return Float.isNaN(scrollTargetTop) ? scrollTop : scrollTargetTop; }
+    private float maxScrollLeft() { return box != null && box.isScrollContainer() ? box.maxScrollLeft() : 0; }
+    private float maxScrollTop() { return box != null && box.isScrollContainer() ? box.maxScrollTop() : 0; }
+
+    private static float clampScroll(float v, float max) {
+        return Math.max(0, Math.min(max, v));
+    }
+
+    /** True when a position can still move by {@code delta} within [0, max]. */
+    private static boolean canMove(float position, float delta, float max) {
+        return delta > 0 ? position < max : delta < 0 && position > 0;
+    }
+
+    private static float approach(float from, float to, float k) {
+        float v = from + (to - from) * k;
+        return Math.abs(to - v) < 0.5f ? to : v;
     }
 
     @Override

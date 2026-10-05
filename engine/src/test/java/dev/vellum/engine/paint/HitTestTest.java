@@ -80,7 +80,7 @@ class HitTestTest {
         assertSame(item.element, t.hit(root, 10, 49).element());
         Box tail = add(list, t.div(0, 95, 40, 30, 0));
         assertSame(root.element, t.hit(root, 10, 56).element(), "the tail at 55..85 is clipped away by the scroller");
-        list.element.scrollTop = 80;
+        list.element.scrollTo(0, 80);
         assertSame(tail.element, t.hit(root, 10, 16).element());
     }
 
@@ -111,14 +111,14 @@ class HitTestTest {
     void textHitsReportTheNodeAndNearestOffset() {
         var span = t.element("span");
         Fragment.TextRun run = t.text(span, "Hello", 10, 0);
-        TestTree.line(root, 0, 0, 100, 9, new Fragment.InlineBox(span, span.style, 10, 0, run.width(), 9, true, true), run);
+        TestTree.line(root, 0, 0, 100, 9, TestTree.inline(span, 10, 0, run.width(), 9, 2), run);
         // Test font advances: H 6, e 6, l 3, l 3, o 6. 7px into the run is nearest the boundary after 'H'.
         HitResult hit = t.hit(root, 17, 4);
         assertSame(span, hit.element());
         assertSame(run.node(), hit.text());
         assertEquals(1, hit.textOffset());
-        assertSame(root, hit.box());
-        assertEquals(17, hit.localX(), 1e-4);
+        assertSame(span.box, hit.box(), "the text is in the span's inline box");
+        assertEquals(7, hit.localX(), 1e-4);
         assertEquals(5, t.hit(root, 10 + 23, 4).textOffset());
         assertEquals(3, t.hit(root, 10 + 14, 4).textOffset());
         // Off the text but on the inline box (here they coincide), or off both:
@@ -130,7 +130,7 @@ class HitTestTest {
         var span = t.element("span");
         span.style.letterSpacing = 4;
         Fragment.TextRun run = t.text(span, "ab", 0, 0);
-        TestTree.line(root, 0, 0, 100, 9, new Fragment.TextRun(run.node(), span, span.style, "ab", 0, 2, 0, 0, 20, 9));
+        TestTree.line(root, 0, 0, 100, 9, new Fragment.TextRun(run.node(), span, span.style, "ab", null, null, 0, 0, 20, 9));
         assertEquals(1, t.hit(root, 9, 4).textOffset(), "a is 6 + 4 wide");
     }
 

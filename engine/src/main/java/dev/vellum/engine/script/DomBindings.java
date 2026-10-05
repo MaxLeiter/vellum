@@ -5,6 +5,8 @@ import dev.vellum.engine.css.Selectors;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.DocumentFragment;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.Element.ScrollAlign;
+import dev.vellum.engine.dom.Element.ScrollBehavior;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.dom.Text;
 import dev.vellum.engine.event.Event;
@@ -174,11 +176,13 @@ final class DomBindings {
                 .get("clientHeight", e -> Math.round(laidOut(e).clientHeight()))
                 .get("scrollWidth", e -> Math.round(laidOut(e).scrollWidth()))
                 .get("scrollHeight", e -> Math.round(laidOut(e).scrollHeight()))
-                .prop("scrollLeft", e -> laidOut(e).scrollLeft, (e, v) -> laidOut(e).scrollTo((float) Js.num(v), e.scrollTop))
-                .prop("scrollTop", e -> laidOut(e).scrollTop, (e, v) -> laidOut(e).scrollTo(e.scrollLeft, (float) Js.num(v)))
+                .prop("scrollLeft", e -> laidOut(e).scrollLeft(),
+                        (e, v) -> laidOut(e).scrollTo((float) Js.num(v), e.scrollTop(), ScrollBehavior.AUTO))
+                .prop("scrollTop", e -> laidOut(e).scrollTop(),
+                        (e, v) -> laidOut(e).scrollTo(e.scrollLeft(), (float) Js.num(v), ScrollBehavior.AUTO))
                 .action("scrollTo", (e, a) -> scroll(laidOut(e), a, false))
                 .action("scrollBy", (e, a) -> scroll(laidOut(e), a, true))
-                .action("scrollIntoView", (e, a) -> scrollIntoView(laidOut(e)))
+                .action("scrollIntoView", (e, a) -> scrollIntoView(laidOut(e), a.get(0)))
                 .action("focus", (e, a) -> e.focus())
                 .action("blur", (e, a) -> e.blur())
                 .action("click", (e, a) -> e.click())
@@ -296,35 +300,60 @@ final class DomBindings {
         return rect;
     }
 
-    /** {@code scrollTo(x, y)} / {@code scrollTo({left, top})}, or the scrollBy forms when {@code relative}. */
+    /**
+     * {@code scrollTo(x, y)} / {@code scrollTo({left, top, behavior})}, or the scrollBy forms when {@code relative}.
+     * Without a behavior the element's {@code scroll-behavior} decides.
+     */
     private static void scroll(Element e, Args a, boolean relative) {
         float left, top;
+        ScrollBehavior behavior = ScrollBehavior.AUTO;
         if (a.get(0) instanceof Scriptable options) {
             Object l = Js.property(options, "left"), t = Js.property(options, "top");
-            left = Js.isNullish(l) ? (relative ? 0 : e.scrollLeft) : (float) Js.num(l);
-            top = Js.isNullish(t) ? (relative ? 0 : e.scrollTop) : (float) Js.num(t);
+            left = Js.isNullish(l) ? (relative ? 0 : e.scrollLeft()) : (float) Js.num(l);
+            top = Js.isNullish(t) ? (relative ? 0 : e.scrollTop()) : (float) Js.num(t);
+            behavior = behavior(Js.property(options, "behavior"));
         } else {
             left = (float) a.num(0, 0);
             top = (float) a.num(1, 0);
         }
-        if (relative) {
-            left += e.scrollLeft;
-            top += e.scrollTop;
-        }
-        e.scrollTo(left, top);
+        if (relative) e.scrollBy(left, top, behavior);
+        else e.scrollTo(left, top, behavior);
     }
 
-    /** Scrolls each scrollable ancestor so the element's top edge is at its top, and it is horizontally in view. */
-    private static void scrollIntoView(Element e) {
-        if (e.box == null) return;
-        for (Element p = e.parentElement(); p != null; p = p.parentElement()) {
-            if (p.box == null || !p.box.isScrollContainer()) continue;
-            float[] r = e.getBoundingClientRect(), pr = p.getBoundingClientRect();
-            float top = r[1] - (pr[1] + p.box.borderTop);
-            float left = r[0] - (pr[0] + p.box.borderLeft);
-            float dx = left < 0 ? left : Math.max(0, left + r[2] - p.clientWidth());
-            p.scrollTo(p.scrollLeft + dx, p.scrollTop + top);
+    /**
+     * {@code scrollIntoView()}: true or nothing aligns the element's top with each scroller's, false its bottom;
+     * options give {@code block} and {@code inline} alignment ({@code start}, {@code center}, {@code end},
+     * {@code nearest}; default start and nearest) and {@code behavior}.
+     */
+    private static void scrollIntoView(Element e, Object arg) {
+        ScrollAlign block = ScrollAlign.START, inline = ScrollAlign.NEAREST;
+        ScrollBehavior behavior = ScrollBehavior.AUTO;
+        if (arg instanceof Scriptable options) {
+            block = align(Js.property(options, "block"), ScrollAlign.START);
+            inline = align(Js.property(options, "inline"), ScrollAlign.NEAREST);
+            behavior = behavior(Js.property(options, "behavior"));
+        } else if (!Js.isNullish(arg) && !Js.bool(arg)) {
+            block = ScrollAlign.END;
         }
+        e.scrollIntoView(block, inline, behavior);
+    }
+
+    private static ScrollBehavior behavior(Object value) {
+        return switch (Js.isNullish(value) ? "auto" : Js.str(value)) {
+            case "smooth" -> ScrollBehavior.SMOOTH;
+            case "instant" -> ScrollBehavior.INSTANT;
+            default -> ScrollBehavior.AUTO;
+        };
+    }
+
+    private static ScrollAlign align(Object value, ScrollAlign fallback) {
+        return switch (Js.isNullish(value) ? "" : Js.str(value)) {
+            case "start" -> ScrollAlign.START;
+            case "center" -> ScrollAlign.CENTER;
+            case "end" -> ScrollAlign.END;
+            case "nearest" -> ScrollAlign.NEAREST;
+            default -> fallback;
+        };
     }
 
     private static String title(Document d) {

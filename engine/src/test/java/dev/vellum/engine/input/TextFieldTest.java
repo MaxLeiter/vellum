@@ -3,6 +3,7 @@ package dev.vellum.engine.input;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.InputEvent;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.style.Overflow;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -241,24 +242,29 @@ class TextFieldTest {
     @Test
     void caretStaysVisibleByScrollingHorizontally() {
         t.setValue("");
-        fx.box(t, null, 0, 0, 20, 12);
+        scrolls(fx.box(t, null, 0, 0, 20, 12), Overflow.HIDDEN);
         t.focus();
         fx.type("aaaaaaaa");
-        TextField field = TextField.of(t);
-        assertEquals(48 + 1 - 20, field.scrollX(), "caret at 48 shown at the right edge");
+        assertEquals(48 + 1 - 20, t.scrollLeft(), "caret at 48 shown at the right edge");
         fx.key("Home");
-        assertEquals(0, field.scrollX());
+        assertEquals(0, t.scrollLeft());
         t.blur();
         fx.key("End");
-        assertEquals(0, field.scrollX(), "unfocused fields rest at the start");
+        assertEquals(0, t.scrollLeft(), "unfocused fields rest at the start");
     }
 
     // ---- Textarea ----
 
+    /** Gives a field's box the overflow the UA stylesheet gives it: its text scrolls by the element's offsets. */
+    private static void scrolls(Box box, Overflow overflow) {
+        box.style.overflowX = box.style.overflowY = overflow;
+        box.style.scrollSmooth = false;
+    }
+
     @Test
     void textareaWrapsAndMovesByVisualLines() {
         Element ta = fx.el("ta");
-        fx.box(ta, null, 0, 0, 30, 18);
+        scrolls(fx.box(ta, null, 0, 0, 30, 18), Overflow.AUTO);
         ta.focus();
         TextField field = TextField.of(ta);
         TextLayout layout = field.layout();
@@ -277,20 +283,20 @@ class TextFieldTest {
         assertEquals(4, field.editor.caret());
         fx.key("Enter");
         assertEquals("aaa \nbbb ccc", ta.value());
-        assertEquals(0, field.scrollY());
+        assertEquals(0, ta.scrollTop());
         fx.key("End", SHORTCUT);
-        assertEquals(9, field.scrollY(), "3 lines of 9px in 18px: scrolled to show the caret's line");
+        assertEquals(9, ta.scrollTop(), "3 lines of 9px in 18px: scrolled to show the caret's line");
     }
 
     @Test
     void textareaScrollsWithTheWheelThenChains() {
         Element ta = fx.el("ta");
-        fx.box(ta, null, 0, 0, 30, 18);
-        TextField field = TextField.of(ta);
+        scrolls(fx.box(ta, null, 0, 0, 30, 18), Overflow.AUTO);
+        TextField.of(ta).extend(); // as layout does
         assertTrue(fx.input.wheel(5, 5, 0, 5, NONE));
-        assertEquals(5, field.scrollY());
+        assertEquals(5, ta.scrollTop());
         assertTrue(fx.input.wheel(5, 5, 0, 20, NONE));
-        assertEquals(9, field.scrollY());
+        assertEquals(9, ta.scrollTop());
         assertFalse(fx.input.wheel(5, 5, 0, 5, NONE), "at the bottom and nothing outside scrolls");
     }
 

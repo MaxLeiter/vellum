@@ -54,11 +54,12 @@ final class PositionedLayout {
 
     private void place(LayoutBox box) {
         ComputedStyle s = box.style;
+        box.containingBlock = containingBlock(box);
         // The containing block's padding box, in the parent's coordinate space; a grid area replaces it and the
-        // static position.
-        float[] cb = containingBlock(box);
-        LayoutBox.Area area = cb == null ? box.gridArea : box.staticPosition;
-        if (cb == null) cb = rect(box, area);
+        // static position when the grid container is the containing block.
+        boolean inGridArea = box.gridArea != null && box.containingBlock == box.parent;
+        LayoutBox.Area area = inGridArea ? box.gridArea : box.staticPosition;
+        float[] cb = inGridArea ? rect(box, area) : paddingBox(box.containingBlock, box.parent);
         float cbX = cb[0], cbY = cb[1], cbW = cb[2], cbH = cb[3];
         BoxModel.resolveEdges(box, cbW);
         float left = s.left.resolve(cbW, Float.NaN), right = s.right.resolve(cbW, Float.NaN);
@@ -123,27 +124,33 @@ final class PositionedLayout {
     }
 
     /**
-     * The padding box of the containing block of an out-of-flow box as {x, y, width, height} in its parent's space:
-     * the nearest ancestor that is positioned (absolute only) or transformed, else the viewport. An inline element
-     * as containing block contributes the bounds of its fragments. Null when it is the box's grid area.
+     * The containing block of an out-of-flow box: the box of the nearest ancestor element that is transformed, or
+     * positioned when the box is absolute; null for the viewport. Inline elements are never transformed (CSS
+     * transforms do not apply to them) but can be positioned. A pseudo-element's search starts at its host element.
      */
-    private float[] containingBlock(LayoutBox box) {
+    private static Box containingBlock(LayoutBox box) {
         boolean fixed = box.style.position == Position.FIXED;
-        // A pseudo-element's parent is its host element itself.
         Element e = box.kind == Box.Kind.PSEUDO ? box.element : box.element.parentElement();
         for (; e != null; e = e.parentElement()) {
             Box cb = e.box;
             if (cb == null || e.style == null) continue;
-            if (e.style.hasTransform() || (!fixed && e.style.position.isPositioned())) {
-                if (cb == box.parent && box.gridArea != null) return null;
-                float[] o = origin(cb), p = origin(box.parent);
-                float x = o[0] - p[0], y = o[1] - p[1];
-                if (cb.kind == Box.Kind.INLINE) return new float[] {x, y, cb.width, cb.height};
-                return new float[] {x + cb.borderLeft, y + cb.borderTop, cb.paddingBoxWidth(), cb.paddingBoxHeight()};
-            }
+            boolean transformed = cb.kind != Box.Kind.INLINE && e.style.hasTransform();
+            if (transformed || (!fixed && e.style.position.isPositioned())) return cb;
         }
-        float[] p = origin(box.parent);
-        return new float[] {-p[0], -p[1], pass.viewportWidth, pass.viewportHeight};
+        return null;
+    }
+
+    /**
+     * The padding box of a containing block as {x, y, width, height} in {@code parent}'s space: an inline element's
+     * contributes the bounds of its fragments, the viewport (null) its size.
+     */
+    private float[] paddingBox(Box cb, Box parent) {
+        float[] p = origin(parent);
+        if (cb == null) return new float[] {-p[0], -p[1], pass.viewportWidth, pass.viewportHeight};
+        float[] o = origin(cb);
+        float x = o[0] - p[0], y = o[1] - p[1];
+        if (cb.kind == Box.Kind.INLINE) return new float[] {x, y, cb.width, cb.height};
+        return new float[] {x + cb.borderLeft, y + cb.borderTop, cb.paddingBoxWidth(), cb.paddingBoxHeight()};
     }
 
     /** The border-box origin of a box relative to the root's coordinate space, ignoring scrolling. */

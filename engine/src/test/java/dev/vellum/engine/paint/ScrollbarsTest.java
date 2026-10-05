@@ -30,7 +30,7 @@ class ScrollbarsTest {
     void thumbIsProportionalAndFollowsTheScrollOffset() {
         // 48 visible of 200: a 11.52px thumb
         assertArrayEquals(new float[] {97, 1, 2, 48 * 48 / 200f}, Scrollbars.thumb(box, true, false), 1e-4f);
-        box.element.scrollTop = 152; // the end
+        box.element.scrollTo(0, 152); // the end
         float[] thumb = Scrollbars.thumb(box, true, false);
         assertEquals(1 + 48, thumb[1] + thumb[3], 1e-4);
         assertEquals(152 / (48 - 11.52f), Scrollbars.scrollPerThumbPixel(box, true), 1e-3);

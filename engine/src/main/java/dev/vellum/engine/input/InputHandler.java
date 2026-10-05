@@ -51,8 +51,8 @@ public final class InputHandler {
     public InputHandler(Document document) {
         this.document = document;
         this.pointer = new Pointer(document);
-        this.scroller = new Scroller(document);
-        this.focus = new FocusNavigator(document, scroller);
+        this.scroller = new Scroller();
+        this.focus = new FocusNavigator(document);
         this.hitTester = (x, y) -> document.painter().hitTest(x, y);
     }
 
@@ -87,30 +87,29 @@ public final class InputHandler {
                 if (!popup.contains(x, y)) popup = null;
                 return true;
             }
-            Element target = hitAt(x, y);
+            HitResult hit = hitTest(x, y);
+            Element target = target(hit, x, y);
             if (target == null) return false;
-            if (button == 0) {
-                Drag scrollbar = scroller.press(target, x, y);
-                if (scrollbar != null) {
-                    pointer.capture(target, scrollbar);
-                    return true;
-                }
+            if (button == 0 && hit != null && hit.scrollbar() != null) {
+                pointer.capture(target, scroller.press(hit));
+                return true;
             }
             int clicks = pointer.press(target, button);
             MouseEvent down = pointer.fire("mousedown", target, button, clicks, null);
             if (button == 2) pointer.fire("contextmenu", target, button, clicks, null);
-            if (button == 0 && !down.defaultPrevented()) pressDefault(target, clicks);
+            if (button == 0 && !down.defaultPrevented()) pressDefault(target, hit, clicks);
             return true;
         });
     }
 
     /** Default action of a primary mousedown: focus (or blur), then the control's own press behaviour. */
-    private void pressDefault(Element target, int clicks) {
+    private void pressDefault(Element target, HitResult hit, int clicks) {
         focus.focusByPointer(Dom.closest(target, Element::isFocusable));
-        if (target.isDisabled()) return;
+        if (target.isDisabled() || target.box == null) return;
+        float[] at = Dom.local(target.box, hit, pointer.x, pointer.y);
         Drag drag = null;
-        if (target.isTextControl()) drag = TextField.of(target).press(pointer.x, pointer.y, clicks, pointer.mods().shift());
-        else if (target.inputType().equals("range")) drag = new RangeControl(target).press(pointer.x);
+        if (target.isTextControl()) drag = TextField.of(target).press(at[0], at[1], clicks, pointer.mods().shift());
+        else if (target.inputType().equals("range")) drag = RangeControl.of(target).press(at[0]);
         else if (target.tagName().equals("select")) openPopup(target);
         if (drag != null) pointer.capture(target, drag);
     }
@@ -126,7 +125,7 @@ public final class InputHandler {
                 if (popup.release(x, y)) popup = null;
                 return true;
             }
-            Element target = hitAt(x, y);
+            Element target = target(hitTest(x, y), x, y);
             Element clickTarget = pointer.release(target, button);
             if (target != null) pointer.fire("mouseup", target, button, pointer.clicks(), null);
             if (clickTarget != null && !clickTarget.isDisabled()) {
@@ -155,11 +154,10 @@ public final class InputHandler {
                 if (popup.contains(x, y)) popup.wheel(dy);
                 return true;
             }
-            Element target = hitAt(x, y);
+            Element target = target(hitTest(x, y), x, y);
             if (target == null) return false;
             if (pointer.dispatch(new WheelEvent(x, y, pointer.buttons(), mods, dx, dy), target).defaultPrevented()) return true;
-            boolean scrolled = target.tagName().equals("textarea") && dx == 0 && TextField.of(target).wheel(dy)
-                    || scroller.wheel(target, dx, dy);
+            boolean scrolled = scroller.wheel(target, dx, dy);
             if (scrolled) trackHover();
             return scrolled;
         });
@@ -168,18 +166,24 @@ public final class InputHandler {
     /** Re-targets hover at the pointer position (after moves, scrolls and relayouts). Returns the hovered element. */
     private Element trackHover() {
         if (!pointer.known()) return null;
-        Element target = hitAt(pointer.x, pointer.y);
-        boolean overScrollbar = pointer.captured() == null && scroller.hover(target, pointer.x, pointer.y);
+        HitResult hit = hitTest(pointer.x, pointer.y);
+        Element target = target(hit, pointer.x, pointer.y);
+        boolean overScrollbar = pointer.captured() == null && scroller.hover(hit);
         pointer.hover(target);
         pointer.updateCursor(target, overScrollbar);
         return target;
     }
 
-    /** The element under a point: the capturing element during drags, the select under its open list, else a hit test. */
-    private Element hitAt(float x, float y) {
+    /** Hit tests a point, except while a drag holds the pointer or the open dropdown covers it (null then). */
+    private HitResult hitTest(float x, float y) {
+        if (pointer.captured() != null || popup != null && popup.contains(x, y)) return null;
+        return hitTester.hitTest(x, y);
+    }
+
+    /** Where pointer events at a point go: the capturing element during drags, the select under its open list, else the hit. */
+    private Element target(HitResult hit, float x, float y) {
         if (pointer.captured() != null) return pointer.captured();
         if (popup != null && popup.contains(x, y)) return popup.select();
-        HitResult hit = hitTester.hitTest(x, y);
         return hit == null ? null : hit.element();
     }
 
@@ -262,7 +266,7 @@ public final class InputHandler {
             if (open) openPopup(el);
             return open || SelectPopup.stepClosed(el, key);
         }
-        if (el.inputType().equals("range")) return new RangeControl(el).keyDown(key);
+        if (el.inputType().equals("range")) return RangeControl.of(el).keyDown(key);
         if (el.inputType().equals("radio") && radioArrow(el, key)) return true;
         boolean pushable = Forms.isButton(el) || Forms.isDetailsSummary(el);
         boolean activate = switch (key) {
@@ -314,17 +318,19 @@ public final class InputHandler {
 
     // ---- Frame and document hooks ----
 
-    /** Per-frame work before restyle: smooth scrolling, drag auto-scroll, caret blink. */
+    /**
+     * Per-frame work before restyle: the document's scrolling (smooth scrolls, {@code scroll} events; hover follows
+     * content that moved), drag auto-scroll, caret blink.
+     */
     public void tick(double nowMs) {
-        if (scroller.tick(nowMs)) trackHover();
+        if (document.scrolling().tick(nowMs)) trackHover();
         if (pointer.drag() != null) pointer.drag().move(pointer.x, pointer.y);
         Element focused = document.focusedElement();
         if (focused != null && focused.isTextControl()) TextField.of(focused).blink(nowMs);
     }
 
-    /** Called after each relayout: clamps scroll offsets, keeps the caret in view, autofocus, re-hit-tests hover. */
+    /** Called after each relayout: keeps the caret in view, autofocus, re-hit-tests hover. */
     public void afterLayout() {
-        scroller.clampAll();
         Element focused = document.focusedElement();
         if (focused != null && focused.isTextControl()) TextField.of(focused).scrollToCaret();
         if (popup != null && popup.select().box == null) popup = null;

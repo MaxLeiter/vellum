@@ -2,7 +2,8 @@ package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.style.Display;
+import dev.vellum.engine.dom.Element.ScrollAlign;
+import dev.vellum.engine.dom.Element.ScrollBehavior;
 import dev.vellum.engine.style.Visibility;
 
 import java.util.ArrayList;
@@ -16,15 +17,13 @@ import java.util.List;
  */
 final class FocusNavigator {
     private final Document document;
-    private final Scroller scroller;
     private boolean visible;
     private boolean autofocusDone;
     /** True while a pointer press moves focus. */
     private boolean byPointer;
 
-    FocusNavigator(Document document, Scroller scroller) {
+    FocusNavigator(Document document) {
         this.document = document;
-        this.scroller = scroller;
     }
 
     /** True when focus last moved by keyboard, false after pointer focus. */
@@ -34,8 +33,9 @@ final class FocusNavigator {
 
     /**
      * The sequential navigation order: elements with a positive tabindex ascending, then those with tabindex 0, each
-     * in tree order. Skips elements that are disabled, not rendered, hidden, inside a closed {@code <details>}, and
-     * unchecked radios of a group that has a checked one (arrow keys move within a group).
+     * in tree order. Skips elements that are disabled, not rendered (no box: also the content of a closed
+     * {@code <details>}), hidden, and unchecked radios of a group that has a checked one (arrow keys move within a
+     * group).
      */
     List<Element> order() {
         List<Element> positive = new ArrayList<>(), zero = new ArrayList<>();
@@ -80,7 +80,7 @@ final class FocusNavigator {
 
     /** Focus moved to {@code e} (by keyboard, script or pointer): scrolls it into view unless the pointer did it. */
     void focusChanged(Element e) {
-        if (e != null && !byPointer) scroller.scrollIntoView(e);
+        if (e != null && !byPointer) e.scrollIntoView(ScrollAlign.NEAREST, ScrollAlign.NEAREST, ScrollBehavior.INSTANT);
     }
 
     /** Focuses the first rendered focusable {@code autofocus} element, once, unless something already has focus. */
@@ -99,26 +99,7 @@ final class FocusNavigator {
     }
 
     private static boolean isNavigable(Element e) {
-        return isRendered(e) && (e.style == null || e.style.visibility == Visibility.VISIBLE) && !inClosedDetails(e);
-    }
-
-    /**
-     * Rendered: has a box, or is a boxless (inline) element whose ancestors up to the nearest box are all displayed.
-     */
-    private static boolean isRendered(Element e) {
-        for (Element p = e; p != null; p = p.parentElement()) {
-            if (p.box != null) return true;
-            if (p.style == null || p.style.display == Display.NONE) return false;
-        }
-        return false;
-    }
-
-    /** True inside a closed {@code <details>}, except in its summary. */
-    private static boolean inClosedDetails(Element e) {
-        for (Element child = e, p = e.parentElement(); p != null; child = p, p = p.parentElement()) {
-            if (p.tagName().equals("details") && !p.hasAttribute("open") && !child.tagName().equals("summary")) return true;
-        }
-        return false;
+        return e.box != null && (e.style == null || e.style.visibility == Visibility.VISIBLE);
     }
 
     private static boolean isRadioTabStop(Element e) {
