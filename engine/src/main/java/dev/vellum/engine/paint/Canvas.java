@@ -53,7 +53,10 @@ public interface Canvas {
     /**
      * Fills {@code quadCount} convex quads. {@code xy} holds 8 floats per quad (four vertices in order around the
      * quad); {@code colors} holds 4 ARGB values per quad, one per vertex, interpolated across it. A triangle is a
-     * quad with its last vertex repeated.
+     * quad with its last vertex repeated. The painter emits every quad with the winding of vanilla's {@code fill}
+     * ((x0,y0), (x0,y1), (x1,y1), (x1,y0): a negative signed area in GUI coordinates), so back-face culling keeps
+     * them unless the transform mirrors. The arrays may be longer than needed and are reused by the caller after
+     * the call returns: copy what you keep.
      */
     void fillQuads(float[] xy, int[] colors, int quadCount);
 
@@ -76,6 +79,13 @@ public interface Canvas {
      * sprites may treat the id as an image URL.
      */
     void drawSprite(String spriteId, float x, float y, float width, float height, int tint);
+
+    /**
+     * The intrinsic size {width, height} in px of the image {@link #drawImage} would draw for {@code url}, or null
+     * when unknown (not loaded yet, or a host without the information). Used for {@code background-size}; images of
+     * unknown size fill the background positioning area. The array may be reused by the backend.
+     */
+    default float[] imageSize(String url) { return null; }
 
     /** Draws host-provided replaced content (items, entities, slots...) into the given content box. */
     void drawReplaced(ReplacedContent content, Element element, float x, float y, float width, float height);
