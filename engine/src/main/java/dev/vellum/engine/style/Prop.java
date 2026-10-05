@@ -193,6 +193,7 @@ public enum Prop {
         switch (name) {
             case "all" -> {
                 for (Prop p : values()) if (p.interpolation != Interp.NONE && p.interpolation != Interp.DISCRETE) set.add(p);
+                set.add(VISIBILITY); // discrete, but CSS interpolates it specially so fades can hide at the end
             }
             case "margin" -> set.addAll(List.of(MARGIN_TOP, MARGIN_RIGHT, MARGIN_BOTTOM, MARGIN_LEFT));
             case "padding" -> set.addAll(List.of(PADDING_TOP, PADDING_RIGHT, PADDING_BOTTOM, PADDING_LEFT));
