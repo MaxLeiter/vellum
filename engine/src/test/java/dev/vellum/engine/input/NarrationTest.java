@@ -310,4 +310,22 @@ class NarrationTest {
         page.run("document.querySelector('.gone').className = ''");
         assertEquals(List.of("Greetings!!!"), announced(page), "showing text changes what is read");
     }
+
+    @Test
+    void tabsReadTheirPlaceInTheTabListAndWhetherTheyAreSelected() {
+        Page page = load("""
+                <div role="tablist">
+                  <button id="chat" role="tab">Chat</button>
+                  <span><button id="status" role="tab" aria-selected="true">Status</button></span>
+                  <button role="tab" hidden>Secret</button>
+                  <button id="behavior" role="tab">Behavior</button>
+                </div>
+                <p><button id="lone" role="tab">Alone</button></p>
+                <div><span id="set" role="tab" aria-posinset="4" aria-setsize="9">Page 4</span></div>""");
+        assertEquals("Status, tab, 2 of 3, selected", said(page, "#status"));
+        assertEquals("Behavior, tab, 3 of 3", said(page, "#behavior"));
+        assertNull(read(page, "#lone").tabPosition(), "a tab alone has no place to read");
+        assertEquals("Page 4, tab, 4 of 9", said(page, "#set"));
+        assertNull(read(page, "#chat").checked());
+    }
 }

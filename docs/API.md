@@ -407,7 +407,7 @@ widget's tooltip. Anything inside `aria-hidden="true"` is never read.
 | `<input type=range>`, `role="slider"` with `aria-valuetext` or `aria-valuenow` | "Volume: 40 slider" |
 | text inputs, `<textarea>`, `role="textbox"` | "Name edit box: Steve" (a password's text is not read) |
 | `<select>` | "Difficulty: Hard button" |
-| `role="tab"` | "Quests tab" |
+| `role="tab"` | "Selected tab 2 out of 3. Quests tab": its place among the tabs of its `role="tablist"` (or its parent), or `aria-posinset` and `aria-setsize` |
 | `<item>`, `<slot>` | "Item: Iron Sword"; a labelled slot "Fuel. Item: Coal". An empty slot nothing labels is not read. |
 | anything else | its name |
 
@@ -424,7 +424,8 @@ what they say".
 ### Live regions
 
 An element with `aria-live="polite"`, `role="status"` or `role="log"` reads its text when it changes, after whatever
-the narrator is saying. One with `aria-live="assertive"` or `role="alert"` cuts the narrator off. `aria-live="off"`
+the narrator is saying. One with `aria-live="assertive"` or `role="alert"` cuts the narrator off; when several
+announce in the same frame, the first cuts in and the rest follow it, assertive ones first. `aria-live="off"`
 silences a role. A log reads only what it gained: its new children, so a conversation where each line is one element
 holding the speaker and what they say reads each new line as "speaker. what they say". A region inside another speaks
 for itself and is left out of the outer one's text. Changes made in the same frame are read once, as the text they

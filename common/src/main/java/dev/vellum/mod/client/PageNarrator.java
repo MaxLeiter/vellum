@@ -112,7 +112,19 @@ final class PageNarrator {
             return;
         }
         Narration narration = doc.input().narration();
-        for (Narration.Announcement a : narration.announcements()) say(Component.literal(a.text()), a.interrupt());
+        // The first assertive announcement of a frame cuts off what was being said; the rest of the frame queue after
+        // it, assertive ones first, so two alerts arriving together are both heard.
+        List<Narration.Announcement> announcements = narration.announcements(); // reading takes them
+        boolean cut = false;
+        for (Narration.Announcement a : announcements) {
+            if (!a.interrupt()) continue;
+            say(Component.literal(a.text()), !cut);
+            cut = true;
+        }
+        for (Narration.Announcement a : announcements) {
+            if (!a.interrupt()) say(Component.literal(a.text()), false);
+        }
+        boolean announced = !announcements.isEmpty();
         Accessible hovered = readsPointer ? narration.hovered() : null;
         // Keys stay with the screen under an overlay, so its elements read as the pointer uses them.
         String text = hovered == null ? null : collect(out -> narrate(hovered, false, out));
@@ -124,7 +136,7 @@ final class PageNarrator {
         if (text == null) hoverSaid = null;
         else if (!text.equals(hoverSaid) && now - hoverSince >= HOVER_DELAY_MS) {
             hoverSaid = text;
-            say(Component.literal(text), true);
+            say(Component.literal(text), !announced); // never cuts off this frame's announcements
         }
     }
 
@@ -160,6 +172,8 @@ final class PageNarrator {
 
     /** An element as vanilla narrates a widget: its title, how to use it (unless disabled), and its hint. */
     private static void narrate(Accessible a, boolean focused, NarrationElementOutput output) {
+        int[] tab = a.tabPosition();
+        if (tab != null) output.add(NarratedElementType.POSITION, Component.translatable("narrator.position.tab", tab[0], tab[1]));
         output.add(NarratedElementType.TITLE, title(a));
         String usage = a.disabled() ? null : usage(a, focused);
         if (usage != null) output.add(NarratedElementType.USAGE, Component.translatable(usage));

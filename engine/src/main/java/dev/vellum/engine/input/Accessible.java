@@ -70,14 +70,31 @@ public record Accessible(Element element, Role role, String name, String value, 
     }
 
     /**
+     * A tab's place in its set, counting from 1, as {@code {position, size}}: from {@code aria-posinset} and
+     * {@code aria-setsize}, else its place among the tabs of its {@code role="tablist"} (or its parent). Null for other
+     * roles and for a tab alone.
+     */
+    public int[] tabPosition() {
+        return Accessibility.tabPosition(element);
+    }
+
+    /** Whether it is selected ({@code aria-selected="true"}), as the current tab of a tab list is. */
+    public boolean selected() {
+        return Accessibility.selected(element);
+    }
+
+    /**
      * In plain English, its parts joined by commas and the hint after a full stop: {@code Reply 1, button},
-     * {@code Show hints, checkbox, checked}, {@code Volume, slider, 50}, {@code Iron Sword, item. Buy for 6 emeralds}.
+     * {@code Show hints, checkbox, checked}, {@code Status, tab, 2 of 3, selected}, {@code Volume, slider, 50}, {@code Iron Sword, item. Buy for 6 emeralds}.
      * For logs, the previewer and tests; hosts phrase {@link Accessible} their own way.
      */
     public String describe() {
         List<String> parts = new ArrayList<>(4);
         if (!name.isEmpty()) parts.add(name);
         if (role != Role.GENERIC) parts.add(role.word());
+        int[] tab = tabPosition();
+        if (tab != null) parts.add(tab[0] + " of " + tab[1]);
+        if (selected()) parts.add("selected");
         if (checked != null) parts.add(checked ? "checked" : "not checked");
         if (value != null && !value.isEmpty() && !value.equals(name)) parts.add(value);
         if (disabled) parts.add("disabled");

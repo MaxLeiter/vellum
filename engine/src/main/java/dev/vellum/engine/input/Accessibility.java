@@ -373,6 +373,53 @@ final class Accessibility {
         return s.substring(0, cut).stripTrailing() + "…";
     }
 
+    /**
+     * A tab's place in its set, counting from 1, as {@code {position, size}}: {@code aria-posinset} and
+     * {@code aria-setsize} when both are given, else its place among the shown {@code role="tab"} elements of its
+     * {@code role="tablist"} (or, without one, of its parent). Null when it is not a tab or is alone.
+     */
+    static int[] tabPosition(Element e) {
+        if (role(e) != Role.TAB) return null;
+        int pos = positive(attr(e, "aria-posinset")), size = positive(attr(e, "aria-setsize"));
+        if (pos > 0 && size >= pos) return new int[] {pos, size};
+        Element list = e.parentElement();
+        for (Element up = list; up != null; up = up.parentElement()) {
+            if ("tablist".equals(firstToken(attr(up, "role")))) {
+                list = up;
+                break;
+            }
+        }
+        if (list == null) return null;
+        List<Element> tabs = new ArrayList<>();
+        collectTabs(list, tabs);
+        int index = tabs.indexOf(e);
+        return index < 0 || tabs.size() < 2 ? null : new int[] {index + 1, tabs.size()};
+    }
+
+    /** The shown tabs under {@code parent} in document order, not looking into another tablist. */
+    private static void collectTabs(Element parent, List<Element> out) {
+        for (Node n : parent.childNodes()) {
+            if (!(n instanceof Element c) || ariaHidden(c) || c.style != null && c.style.display == Display.NONE) continue;
+            String r = firstToken(attr(c, "role"));
+            if ("tab".equals(r)) out.add(c);
+            else if (!"tablist".equals(r)) collectTabs(c, out);
+        }
+    }
+
+    /** Whether {@code aria-selected="true"}. */
+    static boolean selected(Element e) {
+        return "true".equals(firstToken(attr(e, "aria-selected")));
+    }
+
+    private static int positive(String s) {
+        if (s == null) return 0;
+        try {
+            return Math.max(0, Integer.parseInt(s.strip()));
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
+    }
+
     /** The first token of a space-separated list, lower case; null for none. */
     static String firstToken(String list) {
         String l = collapse(list);
