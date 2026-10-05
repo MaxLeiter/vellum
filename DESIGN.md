@@ -504,4 +504,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   with goldens in `preview/src/test/snapshots` (`-Dvellum.updateSnapshots=true` rewrites them).
 - GameTests (both loaders, headless): networking codecs, server API, container menus.
 - Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each demo UI in a real client, at GUI scales 2
-  and 3, and screenshots it to `neoforge/runs/client/screenshots/`.
+  and 3, and screenshots it to `neoforge/runs/client/screenshots/`. It drives pages through `VellumAutomation`
+  (docs/API.md), the public client API for dev automation: it hovers the showcase title screen's first button for a
+  burst of screenshots a tick apart, and fills in the templates demo and checks its state.
+- Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.
