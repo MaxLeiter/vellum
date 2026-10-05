@@ -6,7 +6,8 @@
     /*
      * TURNTABLE: blocks, items and mobs in 3D. <model> and <entity> are turned by CSS (-mc-yaw, -mc-pitch,
      * -mc-model-scale), so transitions and @keyframes animate them; `rotatable` lets you drag them around.
-     * The portraits crop entities to their head and shoulders (-mc-entity-focus: eyes, object-position).
+     * The portraits crop entities to their head and shoulders (-mc-entity-focus: eyes, object-position) and watch
+     * the pointer with a softer, capped gaze than the inventory's (-mc-gaze-reach, -mc-gaze-limit).
      */
     :root {
       --ink: #e8f0ff;
@@ -155,7 +156,8 @@
 
     .stage b { color: var(--glow); font-weight: 400; }
 
-    /* Head-and-shoulders portraits in viewfinders; they all watch the pointer. */
+    /* Head-and-shoulders portraits in viewfinders; they all watch the pointer, calmly: wherever it goes on the page,
+       they turn their heads at most 30 degrees and tilt them at most 9. */
     .portraits {
       flex: none;
       padding: 3px 4px 4px;
@@ -210,6 +212,8 @@
       aspect-ratio: 1;
       -mc-entity-focus: eyes;
       object-position: 50% 40%;
+      -mc-gaze-reach: 80px;
+      -mc-gaze-limit: 30deg 9deg;
     }
 
     /* The bust fades out at the bottom of the frame. */

@@ -46,7 +46,8 @@ import java.util.function.Supplier;
  * effects and animations), fills in the templates demo (clicks, typing, Enter), clicks a Mobdex row scrolled out of
  * its list and scrolls the list back, and answers the demo toast overlay through chat; it checks each result, and
  * waits for pages to settle rather than for a fixed time. Armour stands in pages get a render state of the
- * autopilot's ({@link VellumEntities}: arms, one raised, and no base plate), shown on a page of portraits.
+ * autopilot's ({@link VellumEntities}: arms, one raised, and no base plate), shown on a page of portraits; a
+ * conversation card compares soft and default gazes at a pointer resting far below the speakers.
  */
 public final class DevAutopilot {
     public static final boolean ENABLED = Boolean.getBoolean("vellum.autopilot");
@@ -192,6 +193,7 @@ public final class DevAutopilot {
         // Portraits: whole bodies and head-and-shoulders crops at a few sizes, and armour stands drawn from the
         // autopilot's render state (arms, one raised, no base plate). At GUI scale 3 too, where they are sharper.
         shoot(mc, "portraits", () -> VellumScreens.openInline(PORTRAITS, null));
+        conversation(mc, "portraits_conversation");
         // The Turntable's portraits watching the pointer over the stage's caption, at both scales.
         steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
         settle("the models page", VellumAutomation::screen, 0);
@@ -203,6 +205,7 @@ public final class DevAutopilot {
         });
         guiScale(mc, 3);
         shoot(mc, "portraits_gui3", () -> VellumScreens.openInline(PORTRAITS, null));
+        conversation(mc, "portraits_conversation_gui3");
         steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
         settle("the models page", VellumAutomation::screen, 0);
         hover(".stage p");
@@ -291,6 +294,55 @@ public final class DevAutopilot {
             <entity type="minecraft:fox"></entity><entity type="minecraft:ghast"></entity>\
             <entity type="minecraft:armor_stand" head="minecraft:golden_helmet"></entity>""");
 
+
+    /**
+     * A conversation card: speakers above, the reply far below them. The two on the left gaze softly
+     * ({@code -mc-gaze-reach} and {@code -mc-gaze-limit}, as Chronicle's speakers do), the two on the right as the
+     * inventory's player does; mirrored, so with the pointer on the reply each pair turns by the same geometry.
+     */
+    private static final String CONVERSATION = """
+            <style>
+              html { background: #151a24 }
+              body { margin: 0; padding: 8px; color: #8b96ad; display: flex; justify-content: center }
+              .card { width: 220px; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+                      background: #1d2434; outline: 1px solid #34405a }
+              .speakers { display: flex; gap: 6px; align-items: flex-end }
+              figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px }
+              entity { background: linear-gradient(#26304a, #10141d); outline: 1px solid #34405a }
+              .eyes { width: 56px; height: 56px; -mc-entity-focus: eyes }
+              .body { width: 36px; height: 72px }
+              .soft entity { -mc-gaze-reach: 80px; -mc-gaze-limit: 30deg 9deg }
+              p { margin: 0 0 64px; color: #e8f0ff; text-align: center }
+            </style>
+            <div class="card">
+              <div class="speakers">
+                <figure class="soft"><entity class="body" player follow-mouse></entity>soft</figure>
+                <figure class="soft"><entity class="eyes" type="minecraft:villager" follow-mouse></entity>soft</figure>
+                <figure><entity class="eyes" type="minecraft:villager" follow-mouse></entity>default</figure>
+                <figure><entity class="body" player follow-mouse></entity>default</figure>
+              </div>
+              <p>Well met, traveller. The harvest was thin this year, and the roads are worse.</p>
+              <button>Farewell</button>
+            </div>
+            """;
+
+    /**
+     * Opens {@link #CONVERSATION}, rests the pointer on its reply, checks the soft speakers' computed gaze and
+     * screenshots it as {@code vellum_<name>.png}.
+     */
+    private static void conversation(Minecraft mc, String name) {
+        steps.add(() -> VellumScreens.openInline(CONVERSATION, null));
+        settle(name, VellumAutomation::screen, SETTLE);
+        hover(".card button");
+        steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
+            String gaze = page.eval("var s = getComputedStyle(document.querySelector('.soft entity'));"
+                    + " s.getPropertyValue('-mc-gaze-reach') + ' / ' + s.getPropertyValue('-mc-gaze-limit')")
+                    .map(JsonElement::getAsString).orElse("none");
+            if (gaze.equals("80px / 30deg 9deg")) Constants.LOG.info("Vellum autopilot: soft gaze computed as {}", gaze);
+            else Constants.LOG.error("Vellum autopilot: the soft gaze computed as {}, expected 80px / 30deg 9deg", gaze);
+        }));
+        grab(mc, name, 5);
+    }
 
     /**
      * In the open Mobdex: clicks the list's last row, which is scrolled out of the list, so the click has to scroll it
