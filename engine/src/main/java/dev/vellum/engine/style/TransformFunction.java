@@ -12,4 +12,11 @@ public sealed interface TransformFunction {
     record Skew(float xDegrees, float yDegrees) implements TransformFunction {}
     /** {@code matrix(a, b, c, d, e, f)}. */
     record Matrix(float a, float b, float c, float d, float e, float f) implements TransformFunction {}
+    /**
+     * A mid-transition blend of two transform lists that do not match function-by-function. Percentages can only be
+     * resolved against the box at paint time, so the painter resolves both lists to matrices, decomposes them
+     * (translate, rotate, scale, skew) and interpolates at {@code t}.
+     */
+    record Interpolated(java.util.List<TransformFunction> from, java.util.List<TransformFunction> to, float t)
+            implements TransformFunction {}
 }

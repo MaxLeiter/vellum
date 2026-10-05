@@ -2,7 +2,10 @@ package dev.vellum.engine.anim;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.css.ResolvedKeyframe;
 import dev.vellum.engine.style.ComputedStyle;
+
+import java.util.List;
 
 /**
  * CSS transitions and keyframe animations, plus the Web Animations-style {@code element.animate()} used by scripts.
@@ -30,6 +33,14 @@ public final class AnimationEngine {
      * elements, firing transition/animation events, and invalidating layout when a layout-affecting property moved.
      */
     public void tick(double nowMs) {
+    }
+
+    /**
+     * Starts a scripted animation ({@code element.animate}). Keyframes must have offsets set (0..1, sorted); the
+     * script layer computes them with {@code StyleEngine.computeDeclarations} and distributes missing offsets.
+     */
+    public Animation animate(Element element, List<ResolvedKeyframe> keyframes, AnimationOptions options) {
+        throw new UnsupportedOperationException("TODO");
     }
 
     /** True while anything is running (hosts may use it to keep rendering). */

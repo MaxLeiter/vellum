@@ -16,3 +16,6 @@ run
 runs
 *.hprof
 .DS_Store
+
+# agent worktrees
+.ws/

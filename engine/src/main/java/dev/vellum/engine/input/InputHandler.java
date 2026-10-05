@@ -5,6 +5,7 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.event.Event;
 import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.paint.Canvas;
 
 /**
  * Turns host input into DOM events and default actions: hover/active/focus state, click synthesis, wheel and
@@ -48,6 +49,12 @@ public final class InputHandler {
 
     /** Default action for an uncancelled click on {@code target}. */
     public void activationBehavior(Element target, Event event) {}
+
+    /**
+     * Paints overlays above the whole document (open select dropdowns, the drag ghost...). The painter calls this
+     * last, with an identity transform.
+     */
+    public void paintOverlays(Canvas canvas) {}
 
     /** True when a text field has focus, so hosts can suppress their own key bindings (e.g. inventory key). */
     public boolean wantsKeyboard() { return false; }

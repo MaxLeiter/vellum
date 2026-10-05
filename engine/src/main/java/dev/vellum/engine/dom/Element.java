@@ -34,6 +34,8 @@ public class Element extends Node {
     public ComputedStyle style;
     /** Styles for the ::before and ::after pseudo-elements, or null when they have no content. */
     public ComputedStyle beforeStyle, afterStyle;
+    /** Style of the ::placeholder pseudo-element for inputs and textareas, or null. */
+    public ComputedStyle placeholderStyle;
     /** The principal layout box, or null when the element generates no box (display: none, detached). */
     public Box box;
     /** Host-provided content for replaced elements (img, item, slot, entity, canvas...). */
