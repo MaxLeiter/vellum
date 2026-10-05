@@ -112,6 +112,24 @@ VellumScreens.registerContainer(MyMenus.FORGE, "mymod:vellum/forge.html");   // 
 </section>
 ```
 
+Recipe viewers (JEI, REI, EMI) lay out around a container screen's GUI area. For a Vellum container that area is
+the page's content, measured every frame as painted: `<body>`'s in-flow child elements (a centred panel), or, when the
+page marks any, the elements with a `data-vellum-bounds` attribute. Mark them when the panel is not a direct child
+of `<body>`, when positioned parts (a side tab, a floating inventory) belong to it, or when a full-screen wrapper
+would claim the whole screen:
+
+```html
+<body>
+  <div class="backdrop">            <!-- covers the screen: not the GUI -->
+    <main class="panel" data-vellum-bounds>...</main>
+    <aside class="tabs" data-vellum-bounds>...</aside>
+  </div>
+</body>
+```
+
+The area is the union of the marked border boxes. A page with neither has the whole screen as its GUI area, so
+recipe viewers keep clear of it.
+
 The page's `vellum.data` is `{title, inventory, slots}`, where `slots[n]` is `{id, count, name}` for menu slot `n`.
 It updates when the menu's contents change (and only then), so a page can show totals or highlight search results. Clicking
 outside the page's content (where only `<html>`/`<body>` is under the pointer) drops the carried stack, as clicking

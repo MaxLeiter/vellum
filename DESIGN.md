@@ -498,8 +498,12 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   world shows).
 - **VellumContainerScreen** (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
-  `Slot.x/y` via mixin accessor); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
-  frame are moved off-screen. Slot data is sent to the page only when a stack changed.
+  `Slot.x/y` via access widener); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
+  frame are moved off-screen. Its GUI area (`leftPos`, `topPos`, `imageWidth`, `imageHeight`, which recipe viewers
+  read) is the page's content (`Coordinates.contentBounds`: the `data-vellum-bounds` elements, else body's in-flow
+  children), set each frame after layout and before painting (`DocumentDriver.Owner.beforePaint`), so slot
+  positions, relative to it as in vanilla, are placed against the same area. Slot data is sent to the page only when
+  a stack changed.
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
   tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
   slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
