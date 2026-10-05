@@ -35,11 +35,11 @@ Start a dev client (see Building) and run these in a world:
 | `/vellum open <url>` | Any page, by resource id, for example `vellum:vellum/demo/map.html` |
 | `/vellum reload` | Reload pages without restarting the client |
 
-In a dev environment pages are read from `src/main/resources`, so saving one reloads it in the open screen. F12 inside a Vellum screen toggles an inspector.
+In a dev environment pages are read from `src/main/resources`, so saving one reloads it in the open screen.
 
 ## Previewer
 
-You can also build pages without launching Minecraft. The previewer renders a page in a Swing window with the engine and the game's real font and sprites (read from your Minecraft jar), reloads when you save, and has the same F12 inspector.
+You can also build pages without launching Minecraft. The previewer renders a page in a Swing window with the engine and the game's real font and sprites (read from your Minecraft jar), reloads when you save, and has an F12 inspector that outlines the hovered element's box model.
 
 ```bash
 ./gradlew :preview:run --args="path/to/page.html --scale 3 --size 427x240"
