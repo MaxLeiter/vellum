@@ -79,6 +79,10 @@ public final class DevAutopilot {
         command(mc, "gamerule send_command_feedback false");
         command(mc, "time set 6000");
         command(mc, "weather clear 100000");
+        if (DevTour.ENABLED) {
+            DevTour.plan(mc, steps, ticks -> wait = ticks);
+            return;
+        }
         guiScale(mc, 2);
         shoot(mc, "canvastest", () -> mc.gui.setScreen(new CanvasTestScreen()));
         guiScale(mc, 3);
