@@ -97,3 +97,12 @@ Each decision has its reasons and the alternatives we looked at. Newest last.
 - Item tooltips never wrap in vanilla, so appended lines don't either; authors break lines with `\n`.
 - `title-nowrap` follows the `title` / `title-json` attribute family and HTML's old `<td nowrap>`. A CSS property would have been the first one about UA chrome, and would need the element's style where the host only reads attributes.
 **Alternatives.** An opt-in attribute (`tooltip="merge"`) keeps the old behaviour, which dropped the title. A title width attribute (`title-width="250"`) adds a setting no page has needed yet.
+
+## D-014 The gaze is softened and capped by two paint-only properties
+**Choice.** `-mc-gaze-reach: <length>` replaces the inventory's 40px in `40° × atan(d / reach)`, and `-mc-gaze-limit: <yaw> [<up> [<down>]]` caps the head's whole turn (what the viewer sees), with `none` for no cap. The body leans half of the capped turn and the head turns the rest, as at the defaults, which reproduce vanilla exactly.
+**Why.**
+- Conversation cards put the replies far below the portrait, so a vanilla gaze bowed the speaker's head whenever the pointer was on a reply. Chronicle drew its own card to avoid that; a page should only need two declarations.
+- Capping the whole turn makes `9deg` mean 9° on screen. Capping the lean, which is half of it, would have read as twice the number written.
+- Keeping the split proportional keeps a capped pose a smaller copy of vanilla's.
+- One shorthand whose optional second and third values give the tilt up and down costs one more longhand than a symmetric pair, and saves a third property for a portrait that looks up readily but barely nods.
+**Alternatives.** A smooth cap (scaling the atan so it approaches the limit) would also change the turn near the eyes, so reach and limit would no longer be independent; a separate `-mc-gaze-pitch` for asymmetric limits; attributes on `<entity>`, which could not transition.

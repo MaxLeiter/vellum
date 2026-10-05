@@ -241,7 +241,7 @@ and `object-fit`, and placed in their box by `object-position`.
 |---|---|---|
 | `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla item tooltip at once, with the lines of any `title` that applies after the item's own (below). Items can't be faded: under 50% opacity they are hidden. |
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
-| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer; `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
+| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer (`-mc-gaze-reach` and `-mc-gaze-limit` soften it, below); `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
 | `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
 | `<player-head>` | `name`, `uuid` | A player's face with the hat layer. No attributes: your own face. 16×16 by default. |
 | `<sprite>` | `src` | A GUI-atlas sprite such as `minecraft:widget/button`, at its natural size. Nine-slice and tiled sprites keep their borders when resized. |
@@ -284,6 +284,8 @@ and the chat colours as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels:
 | `-mc-pitch` | angle, `0` | Views it from above (positive) or below. |
 | `-mc-model-scale` | number, `1` | Multiplies the size that fits the box. |
 | `-mc-entity-focus` | `body` or `eyes`, `body` | `<entity>` only. What fills the box: the whole entity, or its head and shoulders. |
+| `-mc-gaze-reach` | length, `40px` | `<entity follow-mouse>` only. How gently the head turns toward the pointer: larger is gentler. |
+| `-mc-gaze-limit` | one to three angles or `none`, `none` | `<entity follow-mouse>` only. The most the head turns to either side, tilts up and tilts down. |
 
 ```css
 .stage entity { animation: spin 8s linear infinite; }
@@ -321,6 +323,32 @@ The eye point is on the entity's upright axis at its eye height. That suits mobs
 (players, villagers, golems, creepers). A pig's or a fox's head sits in front of that axis, so it moves out of the
 frame when the mob is turned sideways. The Turntable showcase (`/vellum showcase models`) has a row of portraits that
 follow the pointer.
+
+### Following the pointer
+
+`follow-mouse` turns an entity's head toward the pointer as the inventory turns the player's: by
+`40° × atan(d / 40px)` for a pointer `d` px from its eyes, sideways and up or down, so at most about 63°. The body
+leans half of that turn and the head turns the rest. Two properties change it:
+
+- `-mc-gaze-reach: <length>` replaces the 40px. At twice the reach, the pointer has to be twice as far away for the
+  same turn.
+- `-mc-gaze-limit: <yaw> [<up> [<down>]]` caps the head's turn to either side, its tilt up and its tilt down. Each
+  value is an angle or `none`, and an omitted one repeats the one before it: `30deg 9deg` is 30° either side and 9°
+  up or down, `30deg 12deg 4deg` lets the head look up further than down. The body still leans half of the capped
+  turn.
+
+On a conversation card the pointer usually rests on the replies, well below the speaker's portrait, and with the
+defaults the speaker stares at their feet. Chronicle's cards keep the head nearly level and turn it gently:
+
+```css
+entity.speaker { -mc-gaze-reach: 80px; -mc-gaze-limit: 30deg 9deg; }
+```
+
+Both are paint-only and animate (`transition: -mc-gaze-limit 300ms`). `none` doesn't interpolate, so a change to or
+from it applies at once, or halfway through in `@keyframes`. Both act only on what the pointer adds: `-mc-yaw`,
+`-mc-pitch` and dragging a `rotatable` entity turn it as before, and the gaze turns it further from there. The
+pointer's distance is measured from the eye point with `-mc-entity-focus: eyes`, and from a third of the way down the
+box with `body`, as in the inventory.
 
 ## Entity render states
 

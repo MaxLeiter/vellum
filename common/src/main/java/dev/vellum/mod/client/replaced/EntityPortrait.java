@@ -66,8 +66,8 @@ public final class EntityPortrait {
     }
 
     /**
-     * Turns the head toward a point, in degrees (right and up are positive), and, as in vanilla's inventory, leans
-     * the body that way.
+     * How far the head turns toward a point, in degrees (right and up are positive). As in vanilla's inventory, the
+     * body leans half of the way and the head turns the rest.
      */
     public record Gaze(float yaw, float pitch) {}
 
@@ -138,16 +138,17 @@ public final class EntityPortrait {
         if (entity.getId() < 0) state.ageInTicks = Util.getMillis() / 50F;
 
         Gaze gaze = pose.gaze();
-        float gazeYaw = gaze == null ? 0 : gaze.yaw(), gazePitch = gaze == null ? 0 : gaze.pitch();
+        // The body leans half of the gaze and the head turns the other half on top.
+        float leanYaw = gaze == null ? 0 : gaze.yaw() / 2, leanPitch = gaze == null ? 0 : gaze.pitch() / 2;
         // Leaning toward the gaze tilts the view the other way: looking up shows it from below.
-        float tilt = gazePitch - pose.pitch();
+        float tilt = leanPitch - pose.pitch();
         Quaternionf view = new Quaternionf().rotateX(tilt * Mth.DEG_TO_RAD);
         Quaternionf rotation = new Quaternionf().rotateZ(Mth.PI).mul(view);
         if (state instanceof LivingEntityRenderState living) {
-            living.bodyRot = 180.0F - pose.yaw() - gazeYaw;
+            living.bodyRot = 180.0F - pose.yaw() - leanYaw;
             if (gaze != null || supplied == null) {
-                living.yRot = -gazeYaw;
-                living.xRot = -gazePitch;
+                living.yRot = -leanYaw;
+                living.xRot = -leanPitch;
             }
             living.walkAnimationPos = living.ageInTicks * pose.walk();
             living.walkAnimationSpeed = pose.walk();

@@ -87,6 +87,8 @@ final class Shorthands {
                 Shorthands::transformOrigin);
         register("object-position", longhands("-vellum-object-position-x", "-vellum-object-position-y"),
                 (l, v) -> pairOf(l, Images.splitPosition(v)));
+        register("-mc-gaze-limit", longhands("-vellum-gaze-limit-yaw", "-vellum-gaze-limit-up",
+                "-vellum-gaze-limit-down"), Shorthands::dropRepeats, Shorthands::repeatingLast);
         register("scrollbar-color", longhands("-vellum-scrollbar-thumb-color", "-vellum-scrollbar-track-color"),
                 (l, v) -> isIdent(v, "auto") ? Map.of() : sequence(l, v, false));
         register("background-position", List.of(BG_X, BG_Y), Shorthands::backgroundPosition);
@@ -171,6 +173,27 @@ final class Shorthands {
             out.put(l, part);
         }
         return r.atEnd() ? out : null;
+    }
+
+    /** Values for {@code longhands} in order; each omitted one repeats the one before it ({@code -mc-gaze-limit}). */
+    private static Map<Longhand, List<ComponentValue>> repeatingLast(List<Longhand> longhands, List<ComponentValue> v) {
+        ValueReader r = new ValueReader(v);
+        ValueContext probe = new ValueContext();
+        Map<Longhand, List<ComponentValue>> out = new HashMap<>();
+        List<ComponentValue> last = null;
+        for (Longhand l : longhands) {
+            List<ComponentValue> part = r.atEnd() ? last : r.take(l.parser, probe);
+            if (part == null) return null;
+            out.put(l, last = part);
+        }
+        return r.atEnd() ? out : null;
+    }
+
+    /** The shortest value {@link #repeatingLast} reads back: trailing values equal to the one before are left out. */
+    private static String dropRepeats(List<String> values) {
+        int n = values.size();
+        while (n > 1 && values.get(n - 1).equals(values.get(n - 2))) n--;
+        return String.join(" ", values.subList(0, n));
     }
 
     /** A value recognised by {@code parser} that sets all of {@code targets} (e.g. the four border widths). */
