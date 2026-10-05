@@ -1,6 +1,6 @@
 # Minecraft 26.3 client GUI API notes
 
-Reference for the Minecraft backend (`common/`). Checked against vanilla 26.3 (NeoForm 26.3-1), NeoForge 26.3.0.26-beta and Fabric API 0.161.0+26.3. Working examples live in Chronicle (`~/Documents/mod/common/src/main/java/dev/chronicle/mod/client/`) and claudemons (`~/Documents/claudemons/common/src/main/java/dev/claudemons/mod/client/AutomatonScreen.java`).
+Notes for the Minecraft backend in `common/`. Checked against vanilla 26.3 (NeoForm 26.3-1), NeoForge 26.3.0.26-beta and Fabric API 0.161.0+26.3. Working examples live in Chronicle (`~/Documents/mod/common/src/main/java/dev/chronicle/mod/client/`) and claudemons (`~/Documents/claudemons/common/src/main/java/dev/claudemons/mod/client/AutomatonScreen.java`).
 
 Decompiled vanilla sources: unzip `~/Documents/mod/common/build/moddev/artifacts/vanilla-26.3-1-sources.jar` (after the first build, also `common/build/moddev/artifacts/` in this repo). NeoForge-patched sources: `~/Documents/mod/neoforge/build/moddev/artifacts/minecraft-patched-26.3.0.26-beta-sources.jar`.
 
@@ -9,7 +9,7 @@ Decompiled vanilla sources: unzip `~/Documents/mod/common/build/moddev/artifacts
 - `render(...)` is now `extractRenderState(GuiGraphicsExtractor, int mouseX, int mouseY, float a)` on `Renderable`/`Screen`. `renderBackground` is `extractBackground`; `renderLabels`/`renderSlot` are `extractLabels`/`extractSlot`.
 - `ResourceLocation` is now **`net.minecraft.resources.Identifier`**: `fromNamespaceAndPath`, `withDefaultNamespace`, `parse`, `tryParse`.
 - GPU API: `com.mojang.renderpearl.api.*` (`RenderPipeline`, `GpuTextureView`, `GpuSampler`, `GpuFormat`, `PrimitiveTopology`, `FilterMode`). OpenGL and Vulkan backends; GLSL compiled to SPIR-V. `com.mojang.blaze3d.*` still has `RenderSystem`, `NativeImage`, `VertexConsumer`, `PoseStack`, `Window`, `InputConstants`.
-- **Windowing and input are SDL3**, not GLFW. Key codes are SDL scancodes (`KEY_ESCAPE=41`, `KEY_RETURN=40`). Mouse buttons are `LEFT=1`, `MIDDLE=2`, `RIGHT=3`. Modifier masks: `MOD_SHIFT=3`, `MOD_CONTROL=192`, `MOD_ALT=768`.
+- **Windowing and input use SDL3** (GLFW is gone). Key codes are SDL scancodes (`KEY_ESCAPE=41`, `KEY_RETURN=40`). Mouse buttons are `LEFT=1`, `MIDDLE=2`, `RIGHT=3`. Modifier masks: `MOD_SHIFT=3`, `MOD_CONTROL=192`, `MOD_ALT=768`.
 - Screens: `minecraft.gui.setScreen(screen)` and `minecraft.gui.screen()`. There is no `Minecraft.setScreen`. On NeoForge, `Screen.onClose()` calls `minecraft.gui.popScreenLayer()`.
 
 ## 1. GuiGraphicsExtractor
@@ -80,8 +80,8 @@ setTooltipForNextFrame(Font f, ItemStack s, int x,int y)
 setComponentTooltipForNextFrame(Font f, List<Component> lines, int x,int y)
 ```
 
-### Draw order (important)
-`GuiRenderState` is a list of **strata**, each a chain of nodes. A new element goes one node above the highest node holding something its bounds intersect. Within a node, elements are re-sorted by (scissor, pipeline, texture) for batching. Painter's order is therefore preserved only for **overlapping** elements, which looks the same. Call `nextStratum()` to force "everything after is on top", e.g. for dropdowns, modals and tooltips.
+### Draw order
+`GuiRenderState` is a list of **strata**, each a chain of nodes. A new element goes one node above the highest node holding something its bounds intersect. Within a node, elements are re-sorted by (scissor, pipeline, texture) for batching. Painter's order therefore holds only for **overlapping** elements, which is the only case where order is visible. Call `nextStratum()` to force "everything after is on top", e.g. for dropdowns, modals and tooltips.
 
 **An element whose `bounds()` is null is DROPPED.**
 
@@ -197,7 +197,7 @@ boolean preeditUpdated(@Nullable PreeditEvent e)   // IME
 - Navigation: `KEY_HOME=74`, `KEY_PAGEUP=75`, `KEY_END=77`, `KEY_PAGEDOWN=78`, `KEY_RIGHT=79`, `KEY_LEFT=80`, `KEY_DOWN=81`, `KEY_UP=82`
 - Modifier keys: `KEY_LCONTROL=224`, `KEY_LSHIFT=225`
 
-**Text input must be enabled through SDL**, otherwise `charTyped` never fires. When a text field gains or loses focus, call `Minecraft.getInstance().onTextInputFocusChange(GuiEventListener owner, boolean focused)`. `textInputManager().setTextInputArea(x0,y0,x1,y1)` positions the IME window. Vanilla `EditBox.setFocused` shows the pattern.
+**Text input has to be enabled through SDL**, or `charTyped` never fires. When a text field gains or loses focus, call `Minecraft.getInstance().onTextInputFocusChange(GuiEventListener owner, boolean focused)`. `textInputManager().setTextInputArea(x0,y0,x1,y1)` positions the IME window. Vanilla `EditBox.setFocused` shows the pattern.
 
 Other:
 - Clipboard: `minecraft.keyboardHandler.getClipboard()` / `setClipboard(String)`.
