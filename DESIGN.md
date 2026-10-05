@@ -200,7 +200,7 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 |---|---|
 | `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
-| `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse`, `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
+| `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse` (softened by `-mc-gaze-reach` and `-mc-gaze-limit`), `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
 | `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box (or placed by `object-position`): at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
 | `<player-head name="..." uuid="...">` | A player's face from their skin. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
@@ -251,7 +251,7 @@ corner as a single Length; elliptical radii use the horizontal value), `backgrou
 `background-*` longhands (`-image`, `-size`, `-position`, `-repeat`, `-clip`), `flex`, `flex-flow`, `gap`,
 `place-items`, `place-content`, `place-self`, `grid-template`, `grid-area`, `grid-row`, `grid-column`, `overflow`,
 `font` (simplified), `text-decoration` (line keywords), `transition`, `animation`, `outline`, `transform-origin`,
-`object-position`, `list-style` (ignored except `none`), `-webkit-line-clamp`.
+`object-position`, `-mc-gaze-limit`, `list-style` (ignored except `none`), `-webkit-line-clamp`.
 
 `object-position` takes a `<position>` (one to four values: keywords, lengths, percentages) and is stored per axis
 (`-vellum-object-position-x`/`-y`, as `transform-origin` is). An axis no rule set is `Length.AUTO`: it serialises as
@@ -273,6 +273,15 @@ and not inherited:
   with room to turn and `object-position` places that room (unset: `50% 100%`, standing on the bottom edge). `eyes`
   crops it to its head and shoulders: the box's shorter side spans 0.7 of its eye height (at least 0.4 blocks), and
   `object-position` places the point at its eye height on its upright axis (unset: `50% 40%`).
+- `-mc-gaze-reach: <length>` (initial 40px, `<entity follow-mouse>` only): `follow-mouse` turns the head
+  `40° × atan(d / reach)` toward a pointer `d` px from the eyes, sideways and up or down (`ComputedStyle.gazeYaw`,
+  `gazePitch`). At 40px that is vanilla's inventory, up to about 63°.
+- `-mc-gaze-limit: [<angle> | none]{1,3}` (initial `none`): caps that turn to either side, up and down. An omitted
+  value repeats the one before it, so it serialises in the shortest form that reads back. Stored per part
+  (`-vellum-gaze-limit-yaw`, `-up`, `-down`) as non-negative degrees, NaN for `none`, so `none` flips rather than
+  interpolates. The caps bound only the gaze, not `-mc-yaw`, `-mc-pitch` or what dragging adds. A conversation
+  card's speaker, with the pointer on the replies below: `entity.speaker { -mc-gaze-reach: 80px; -mc-gaze-limit:
+  30deg 9deg; }`.
 
 ```html
 <entity id="…" follow-mouse style="width:32px; height:32px; -mc-entity-focus: eyes; object-position: 50% 40%"></entity>
@@ -544,8 +553,10 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
     height instead (the box's shorter side spans 0.7 of it) and the origin is placed so that the eye point, on the
     upright axis, lands where `object-position` says; the view tilt (pitch and the gaze lean) turns about the feet,
     so the origin is moved by the eye's projected height to keep the eyes still. `follow-mouse` aims the gaze from
-    that eye point (a third down the box with the body fit). Display entities are created client-side, never
-    added to the world, and play their idle animations on the clock.
+    that eye point (a third down the box with the body fit), turning the head as far as the element's
+    `-mc-gaze-reach` and `-mc-gaze-limit` give; the body leans half of that turn and the head turns the rest on top,
+    as in vanilla's inventory, so a capped gaze keeps the same split. Display entities are created client-side,
+    never added to the world, and play their idle animations on the clock.
   - The render state comes from the function a mod registered for the type (`VellumEntities.registerPortraitState`,
     docs/API.md), else from the renderer, at the frame's partial tick. Either way the picture clears the shadow,
     outline, name tag, score, leashes and passenger offset, is lit full bright, and is posed: body turn, walk

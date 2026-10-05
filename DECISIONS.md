@@ -88,3 +88,12 @@ Each decision has its reasons and the alternatives we looked at. Newest last.
 - Standard `object-position` keeps pages portable and works the same on images. A UA rule (`entity { object-position: 50% 100% }`) would have given entities their bottom default in plain CSS, but then the eyes focus could not have a default of its own.
 - Vellum cannot know about a mod's overlays (speech bubbles, task labels). The mod already knows how to make a clean state; Vellum keeps posing it so `-mc-yaw`, `rotatable` and `follow-mouse` work, and leaves the head alone without `follow-mouse` so a mod can pose it (a slumped, powered-down robot).
 **Alternatives.** Several `-mc-` properties for crop height, anchor and zoom; an `auto` keyword for `object-position`; a list of render state fields to keep. One property plus the standard one covers the portraits we have.
+
+## D-013 The gaze is softened and capped by two paint-only properties
+**Choice.** `-mc-gaze-reach: <length>` replaces the inventory's 40px in `40° × atan(d / reach)`, and `-mc-gaze-limit: <yaw> [<up> [<down>]]` caps the head's whole turn (what the viewer sees), with `none` for no cap. The body leans half of the capped turn and the head turns the rest, as at the defaults, which reproduce vanilla exactly.
+**Why.**
+- Conversation cards put the replies far below the portrait, so a vanilla gaze bowed the speaker's head whenever the pointer was on a reply. Chronicle drew its own card to avoid that; a page should only need two declarations.
+- Capping the whole turn makes `9deg` mean 9° on screen. Capping the lean, which is half of it, would have read as twice the number written.
+- Keeping the split proportional keeps a capped pose a smaller copy of vanilla's.
+- One shorthand whose optional second and third values give the tilt up and down costs one more longhand than a symmetric pair, and saves a third property for a portrait that looks up readily but barely nods.
+**Alternatives.** A smooth cap (scaling the atan so it approaches the limit) would also change the turn near the eyes, so reach and limit would no longer be independent; a separate `-mc-gaze-pitch` for asymmetric limits; attributes on `<entity>`, which could not transition.
