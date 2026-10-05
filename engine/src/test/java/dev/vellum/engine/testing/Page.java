@@ -18,8 +18,8 @@ import java.util.List;
 /**
  * A page loaded by {@link TestHost#load}, driven the way a host drives a document: frames at explicit times
  * ({@link #frame}), input at viewport points through the real hit test ({@link #click}, {@link #hover},
- * {@link #type}...), painting onto a {@link RecordingCanvas}. Element arguments are aimed at their centre, after
- * checking that the hit test finds them there.
+ * {@link #type}...), painting onto a {@link RecordingCanvas}. Element arguments are aimed where pointer input reaches
+ * them ({@link #centre}).
  */
 public final class Page {
     public static final Modifiers NONE = Modifiers.NONE;
@@ -100,16 +100,19 @@ public final class Page {
         return StyleEngine.computedValue(style(selector), property);
     }
 
-    /** The centre of an element's border box in viewport px, checking the hit test finds the element there. */
+    /**
+     * Where pointer input reaches an element, in viewport px: the centre of the part of it that shows, as
+     * {@link Document#pointerTarget} finds it (scrolling it into view when none shows). Fails when the hit test does
+     * not find the element there.
+     */
     public float[] centre(Element e) {
+        float[] at = doc.pointerTarget(e);
+        if (at != null) return at;
         float[] r = e.getBoundingClientRect();
         float x = r[0] + r[2] / 2, y = r[1] + r[3] / 2;
         HitResult hit = doc.hitTest(x, y);
-        if (hit == null || !e.contains(hit.element())) {
-            throw new AssertionError("The centre of " + e + " (" + x + ", " + y + ") hits "
-                    + (hit == null ? "nothing" : hit.element()));
-        }
-        return new float[] {x, y};
+        throw new AssertionError("Pointer input can't reach " + e + "; the centre of its border box (" + x + ", " + y
+                + ") hits " + (hit == null ? "nothing" : hit.element()));
     }
 
     // ---- Input ----

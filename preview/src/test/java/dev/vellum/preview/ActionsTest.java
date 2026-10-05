@@ -63,6 +63,31 @@ class ActionsTest {
         assertTrue(log.toString().contains("done.png"), log.toString());
     }
 
+    /** Selectors aim where the element shows, as {@code VellumAutomation} does in game, not at its border box's centre. */
+    @Test
+    void selectorsAimAtThePartThatShows() throws IOException {
+        Path page = dir.resolve("clipped.html");
+        Files.writeString(page, """
+                <body style="margin: 0">
+                <div style="height: 20px; overflow: hidden">
+                  <button id=tall style="display: block; height: 60px" onclick="this.textContent = 'clicked'">go</button>
+                </div>
+                <button id=below style="display: block; height: 40px" onclick="this.textContent = 'missed'">no</button>
+                <div style="position: relative"><p id=covered>x</p><i style="position: absolute; inset: 0"></i></div>""");
+        MinecraftAssets assets = MinecraftAssets.open(List.of(), Optional.empty());
+        MinecraftFont font = new MinecraftFont(assets);
+        PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
+                new Viewport(200, 120, 2));
+        FrameRenderer renderer = new FrameRenderer(assets, font);
+        Actions.parse("click #tall").run(scene, renderer, 200, 120, 2, dir, new PrintStream(new ByteArrayOutputStream()));
+        Document doc = scene.document();
+        assertEquals("clicked", doc.getElementById("tall").textContent(), "the middle of its 20 px that show");
+        assertEquals("no", doc.getElementById("below").textContent());
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> Actions.parse("move #covered")
+                .run(scene, renderer, 200, 120, 2, dir, new PrintStream(new ByteArrayOutputStream())));
+        assertTrue(e.getMessage().contains("covers it"), e.getMessage());
+    }
+
     @Test
     void malformedScriptsNameTheLine() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Actions.parse("wait 2\n\njump 3"));

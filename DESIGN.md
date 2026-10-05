@@ -635,7 +635,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (Minecraft's ASCII glyph widths, the Rhino runtime, in-memory resources and canvases, recorded logs, errors,
   sounds and cursors); `TestHost.load(html)` parses, sets the viewport and runs the first frame, and returns a
   `testing/Page`: frames at chosen times, input at viewport points through the real hit test (`click(element)`
-  aims at the element's centre and checks the hit lands in it), and painting onto `testing/RecordingCanvas` (every
+  aims where `Document.pointerTarget` does, the centre of the part that shows, and fails when something covers it), and painting onto `testing/RecordingCanvas` (every
   call with its transform, alpha and clip, or as a string trace). Pages are styled by the real CSS engine; hand-built
   boxes, styles and hit testers are not used. The layout suite includes ~1250 Chrome-generated fixtures from Taffy,
   run as HTML pages with Taffy's Chrome setup as a stylesheet and Ahem metrics.
