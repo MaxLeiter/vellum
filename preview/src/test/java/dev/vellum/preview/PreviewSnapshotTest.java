@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Whole-frame snapshots through the previewer's rendering path: the canvas test sheet, and every page in
  * {@code src/test/resources/pages} plus the demo UIs in {@code common/src/main/resources/assets/vellum/vellum/demo}.
+ * The item tooltips render the dev autopilot's shop row ({@code vellum/dev/shop_row.html}), which it shows in game.
  * They need Minecraft's jar (fonts and sprites) and are skipped without it. Rendering is deterministic: pages run
  * the same frames at the same times on every run.
  */
@@ -46,7 +47,7 @@ class PreviewSnapshotTest {
     @TestFactory
     Stream<DynamicTest> pagesMatchGoldens() throws IOException, URISyntaxException {
         Path testPages = Path.of(PreviewSnapshotTest.class.getResource("/pages").toURI());
-        return Stream.concat(htmlFiles(testPages), demoDirectory().map(PreviewSnapshotTest::htmlFiles).orElse(Stream.empty()))
+        return Stream.concat(htmlFiles(testPages), modPages("demo").map(PreviewSnapshotTest::htmlFiles).orElse(Stream.empty()))
                 .map(page -> DynamicTest.dynamicTest(page.getFileName().toString(), () -> pageMatchesGolden(page)));
     }
 
@@ -90,10 +91,10 @@ class PreviewSnapshotTest {
      * previewer) with the row's lines after it, unwrapped. Then a {@code title-nowrap} title, half a second later.
      */
     @Test
-    void itemAndNowrapTooltipsMatchGoldens() throws IOException, URISyntaxException {
+    void itemAndNowrapTooltipsMatchGoldens() throws IOException {
         assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
-        Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/item.html").toURI());
-        try (MinecraftAssets assets = MinecraftAssets.open(List.of(), JAR)) {
+        Path page = modPages("dev").orElseThrow().resolve("shop_row.html");
+        try (MinecraftAssets assets = MinecraftAssets.open(PreviewHost.packRoot(page).stream().toList(), JAR)) {
             MinecraftFont font = new MinecraftFont(assets);
             PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
                     new Viewport(CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE));
@@ -131,11 +132,14 @@ class PreviewSnapshotTest {
         }
     }
 
-    /** The mod's demo UIs, found by walking up from the working directory to the repository. */
-    private static Optional<Path> demoDirectory() {
+    /**
+     * A directory of the mod's pages ({@code demo}, {@code dev}), found by walking up from the working directory to
+     * the repository.
+     */
+    private static Optional<Path> modPages(String name) {
         for (Path dir = Path.of("").toAbsolutePath(); dir != null; dir = dir.getParent()) {
-            Path demos = dir.resolve("common/src/main/resources/assets/vellum/vellum/demo");
-            if (Files.isDirectory(demos)) return Optional.of(demos);
+            Path pages = dir.resolve("common/src/main/resources/assets/vellum/vellum/" + name);
+            if (Files.isDirectory(pages)) return Optional.of(pages);
         }
         return Optional.empty();
     }

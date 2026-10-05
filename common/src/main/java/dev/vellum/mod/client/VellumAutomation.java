@@ -109,13 +109,18 @@ public final class VellumAutomation {
     }
 
     /**
-     * Whether the page has stopped changing by itself, so what it shows now is what it will keep showing: no restyle,
-     * relayout or repaint pending, no smooth scroll, no template update or {@code vellum.nextTick} callback waiting,
-     * no transition or finite animation running, no drag or turntable spin, and no {@code title} tooltip waiting out
-     * its delay. Infinite animations, timers ({@code setTimeout}, {@code setInterval}), animation-frame callbacks
-     * and a text field's blinking caret don't count, as they never stop; wait for what a timer changes with
-     * {@link #text} or {@link #eval}. False until the page has loaded and painted, and until the frame after input
-     * or {@link #eval} (either may change it); true while the page shows its error panel. Poll it once a tick.
+     * Whether the page's last frame showed a tooltip: a {@code title} that has waited out its delay, or an
+     * {@code <item tooltip>}'s. Not while a container screen's slot shows its item's tooltip instead.
+     */
+    public boolean tooltipShown() {
+        return driver.requestedTooltip();
+    }
+
+    /**
+     * Whether the page has stopped changing by itself ({@link Document#settled}), so what it shows now is what it
+     * will keep showing; poll it once a tick. Also false until the page has loaded (a HUD overlay loads at its first
+     * draw) and while a navigation or {@code vellum.close()} waits for the next frame, and true while the page shows
+     * its error panel.
      */
     public boolean settled() {
         return driver.settled();
@@ -183,9 +188,9 @@ public final class VellumAutomation {
     /**
      * Drags with the left button from where {@link #hover} puts the pointer to (dx, dy) GUI px from there: presses,
      * moves there in a few steps with the button held, and releases, through the mouse handler as {@link #click}
-     * does, all at once. A {@code rotatable} element turns and tilts (and stops there: no time passes, so it has no
-     * speed to spin on with), a range slider or scrollbar follows, and a container screen's slots take a dragged
-     * stack. False, sending nothing, when hover is. The pointer stays where the drag ended.
+     * does, all within this call. The screen gets the move and drag calls a real drag brings: a {@code rotatable}
+     * element turns and tilts (and stops there, since no time passed to give it speed), a range slider or scrollbar
+     * follows. False, sending nothing, when hover is. The pointer stays where the drag ended.
      */
     public boolean drag(String selector, float dx, float dy) {
         Screen screen = inputScreen();
