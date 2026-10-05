@@ -43,7 +43,7 @@ include('preview')
 // common, neoforge and fabric build once per Minecraft version, from one source tree: the subprojects are
 // :common:26.3, :neoforge:26.3, :fabric:26.3 and so on, in <branch>/versions/<version>/. Per-version settings are in
 // stonecutter.properties.toml; the sources are written for vcsVersion, with Stonecutter comments for the others.
-def minecraftVersions = ['26.3']
+def minecraftVersions = ['26.3', '1.21.1']
 stonecutter {
     create(rootProject) {
         vcsVersion = '26.3'

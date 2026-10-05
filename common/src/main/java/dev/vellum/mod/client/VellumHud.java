@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
+import dev.vellum.mod.client.render.McGui;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -154,7 +155,7 @@ public final class VellumHud {
         boolean first = true;
         for (Overlay o : OVERLAYS.values()) {
             if (!o.shown || !o.aboveScreen(screen)) continue;
-            if (first) g.nextStratum(); // above everything the screen drew, its tooltips included
+            if (first) McGui.nextLayer(g); // above everything the screen drew, its tooltips included
             first = false;
             o.extract(g, true, partialTick);
         }
@@ -200,14 +201,12 @@ public final class VellumHud {
     // ---- Internals ----
 
     private static boolean hudVisible() {
-        Minecraft mc = Minecraft.getInstance();
-        return mc.player != null && !mc.gui.hud.isHidden();
+        return Minecraft.getInstance().player != null && !McClient.hudHidden();
     }
 
     /** The open screen while it is drawn (no loading overlay hides it): the one interactive overlays may be over. */
     private static @Nullable Screen openScreen() {
-        Minecraft mc = Minecraft.getInstance();
-        return mc.gui.overlay() == null ? mc.gui.screen() : null;
+        return McClient.loadingOverlay() ? null : McClient.screen();
     }
 
     /** The overlays that have the pointer now (above the open screen), topmost (last drawn) first. */
@@ -276,10 +275,9 @@ public final class VellumHud {
                 return;
             }
             tracking = true;
-            Minecraft mc = Minecraft.getInstance();
-            int x = (int) mc.mouseHandler.getScaledXPos(mc.getWindow()), y = (int) mc.mouseHandler.getScaledYPos(mc.getWindow());
+            int x = (int) McClient.mouseX(), y = (int) McClient.mouseY();
             page.extract(g, x, y);
-            if (page.requestedTooltip()) g.extractDeferredElements(x, y, partialTick);
+            if (page.requestedTooltip()) McGui.drawTooltipsNow(g, x, y, partialTick);
         }
 
         /** The pointer went back to the game (the screen closed): hover and presses end. */

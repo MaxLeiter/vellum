@@ -1,5 +1,6 @@
 package dev.vellum.mod.client;
 
+import dev.vellum.mod.client.render.McGui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -37,8 +38,8 @@ record ErrorPanel(String title, List<String> details) {
         if (!screen) {
             String line = details.isEmpty() ? title : title + ": " + details.getFirst();
             int w = Math.min(font.width(line), width - 8 - 2 * PAD);
-            g.fill(4, 4, 4 + w + 2 * PAD, 4 + LINE + PAD, 0xC0200808);
-            g.text(font, font.plainSubstrByWidth(line, w), 4 + PAD, 4 + PAD / 2 + 1, 0xFFFF6B6B, false);
+            McGui.fill(g, 4, 4, 4 + w + 2 * PAD, 4 + LINE + PAD, 0xC0200808);
+            McGui.text(g, font, font.plainSubstrByWidth(line, w), 4 + PAD, 4 + PAD / 2 + 1, 0xFFFF6B6B, false);
             return;
         }
         int w = Math.min(width - 16, 420), inner = w - 2 * PAD, x = (width - w) / 2;
@@ -48,8 +49,8 @@ record ErrorPanel(String title, List<String> details) {
         List<FormattedCharSequence> hint = font.split(Component.literal(HINT), inner);
         int h = (head.size() + body.size() + hint.size()) * LINE + 2 * PAD + 2 * GAP;
         int y = Math.max(4, (height - h) / 2);
-        g.fill(x, y, x + w, y + h, 0xF0200808);
-        g.outline(x, y, w, h, 0xFFB03030);
+        McGui.fill(g, x, y, x + w, y + h, 0xF0200808);
+        McGui.outline(g, x, y, w, h, 0xFFB03030);
         int ty = y + PAD;
         ty = lines(g, font, head, x + PAD, ty, 0xFFFF6B6B) + GAP;
         ty = lines(g, font, body, x + PAD, ty, 0xFFD0D0D0) + GAP;
@@ -58,7 +59,7 @@ record ErrorPanel(String title, List<String> details) {
 
     private static int lines(GuiGraphicsExtractor g, Font font, List<FormattedCharSequence> lines, int x, int y, int color) {
         for (FormattedCharSequence line : lines) {
-            g.text(font, line, x, y, color, false);
+            McGui.text(g, font, line, x, y, color, false);
             y += LINE;
         }
         return y;

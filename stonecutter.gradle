@@ -4,7 +4,9 @@
 plugins {
     id 'dev.kikugie.stonecutter'
     // https://maven.fabricmc.net/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml
+    // Loom for unobfuscated versions (26.x), and the remapping Loom for obfuscated ones (1.21.1).
     id 'net.fabricmc.fabric-loom' version '1.18.2' apply false
+    id 'net.fabricmc.fabric-loom-remap' version '1.18.2' apply false
     // https://projects.neoforged.net/neoforged/moddevgradle
     id 'net.neoforged.moddev' version '2.0.147' apply false
 }
@@ -14,4 +16,41 @@ stonecutter.active '26.3'
 stonecutter.parameters { sc ->
     // The version's settings from stonecutter.properties.toml become project properties.
     sc.properties.tags(sc.current.version)
+
+    // Renames between versions, applied to the whole source text so the shared code needs no version comments for
+    // them. Each goes one way for 26.x and the other way for older versions.
+    boolean modern = sc.current.parsed >= '26'
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('\\bResourceLocation\\b', 'Identifier', '\\bIdentifier\\b', 'ResourceLocation')
+    }
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('\\bnet\\.minecraft\\.Util\\b', 'net.minecraft.util.Util', '\\bnet\\.minecraft\\.util\\.Util\\b', 'net.minecraft.Util')
+    }
+    // 26.x's GameProfile is a record.
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('\\.getGameProfile\\(\\)\\.getName\\(\\)', '.getGameProfile().name()', '\\.getGameProfile\\(\\)\\.name\\(\\)', '.getGameProfile().getName()')
+    }
+    // 26.x moved the entity type constants from EntityType to EntityTypes. The import keeps a note, so it can go back.
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('\\bEntityType\\.([A-Z][A-Z0-9_]*)\\b', 'EntityTypes.$1', '\\bEntityTypes\\.([A-Z][A-Z0-9_]*)\\b', 'EntityType.$1')
+    }
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('import net\\.minecraft\\.world\\.entity\\.EntityType; // EntityTypes', 'import net.minecraft.world.entity.EntityTypes;',
+                'import net\\.minecraft\\.world\\.entity\\.EntityTypes;', 'import net.minecraft.world.entity.EntityType; // EntityTypes')
+    }
+    // 26.x draws GUIs by extracting render states from a GuiGraphicsExtractor; older versions draw with GuiGraphics.
+    // Only the type is renamed: what is called on it goes through McGui, which each version has its own of.
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
+    }
+    // 26.x has input event records; for older versions Vellum has records of the same shape in its own package.
+    String inputEvents = '(KeyEvent|MouseButtonEvent|MouseButtonInfo|CharacterEvent)'
+    sc.replacements.regex(modern) { spec ->
+        spec.replace("\\bdev\\.vellum\\.mod\\.client\\.input\\.$inputEvents\\b", 'net.minecraft.client.input.$1',
+                "\\bnet\\.minecraft\\.client\\.input\\.$inputEvents\\b", 'dev.vellum.mod.client.input.$1')
+    }
+    // Fabric's access widener names Mojang's names "official" on 26.x, "named" before.
+    sc.replacements.string(modern) { spec ->
+        spec.replace('accessWidener v2 named', 'accessWidener v2 official')
+    }
 }

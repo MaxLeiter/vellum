@@ -27,6 +27,11 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version)
 }
 
+// VellumBigInts ships with the engine, which also runs on Java 21 (Minecraft 1.21.1).
+tasks.withType(JavaCompile).configureEach {
+    options.release = engine_java_release as int
+}
+
 configurations {
     rhinoOriginal { canBeConsumed = false; canBeResolved = true }
 }

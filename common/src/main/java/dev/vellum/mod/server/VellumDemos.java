@@ -64,7 +64,10 @@ public final class VellumDemos {
         o.addProperty("x", p.getBlockX());
         o.addProperty("y", p.getBlockY());
         o.addProperty("z", p.getBlockZ());
+        //? if >=26 {
         o.addProperty("time", p.level().getOverworldClockTime() % 24000);
+        //?} else
+        /*o.addProperty("time", p.level().getDayTime() % 24000);*/
         return o;
     }
 }

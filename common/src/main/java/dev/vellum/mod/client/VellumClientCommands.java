@@ -46,7 +46,7 @@ public final class VellumClientCommands {
                 .then(demo)
                 .then(showcase)
                 .then(LiteralArgumentBuilder.<S>literal("reload").executes(c -> later(VellumClient::onResourceReload)))
-                .then(LiteralArgumentBuilder.<S>literal("canvastest").executes(c -> later(() -> Minecraft.getInstance().gui.setScreen(new CanvasTestScreen()))));
+                .then(LiteralArgumentBuilder.<S>literal("canvastest").executes(c -> later(() -> McClient.setScreen(new CanvasTestScreen()))));
     }
 
     /** Opens a demo page; {@code hud} toggles the demo HUD overlay instead. */
@@ -72,8 +72,7 @@ public final class VellumClientCommands {
             return;
         }
         VellumHud.show(VellumClient.DEMO_TOAST)
-                .onMessage("answer", value -> Minecraft.getInstance().gui.hud.getChat()
-                        .addClientSystemMessage(Component.literal("Rivet's request: " + value.getAsString())));
+                .onMessage("answer", value -> McClient.systemMessage(Component.literal("Rivet's request: " + value.getAsString())));
     }
 
     public static String demoUrl(String name) {
@@ -93,7 +92,10 @@ public final class VellumClientCommands {
 
     /** Runs after the chat screen that sent the command has closed (it would close a screen opened right away). */
     private static int later(Runnable action) {
+        //? if >=26 {
         Minecraft.getInstance().schedule(action);
+        //?} else
+        /*Minecraft.getInstance().tell(action);*/
         return 1;
     }
 }

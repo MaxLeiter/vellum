@@ -8,12 +8,22 @@ import org.lwjgl.sdl.SDLKeyboard;
 import org.lwjgl.sdl.SDLScancode;
 
 /**
- * SDL key events to DOM {@code KeyboardEvent} names. {@code code} comes from the scancode (the physical key:
+ * Minecraft's input to DOM names, on 26.x (SDL). {@code code} comes from the scancode (the physical key:
  * {@code KeyA}, {@code Digit1}, {@code ArrowLeft}); {@code key} from the keycode (the layout's character: {@code a},
- * {@code A} with shift, {@code Enter}, {@code Escape}).
+ * {@code A} with shift, {@code Enter}, {@code Escape}). Each Minecraft version has its own KeyNames.
  */
 final class KeyNames {
     private KeyNames() {}
+
+    /** The DOM {@code code} of a key event: the physical key. */
+    static String code(KeyEvent e) {
+        return code(e.key());
+    }
+
+    /** The DOM {@code key} of a key event: what the key means on the current layout, with shift. */
+    static String key(KeyEvent e) {
+        return key(e.key(), e.keycode(), e.hasShiftDown());
+    }
 
     static String code(int scancode) {
         if (scancode >= InputConstants.KEY_A && scancode <= InputConstants.KEY_Z) return "Key" + (char) ('A' + scancode - InputConstants.KEY_A);
@@ -106,6 +116,11 @@ final class KeyNames {
         return null;
     }
 
+    /** Escape, with or without shift, as the keyboard sends it. */
+    static KeyEvent escape(boolean shift) {
+        return new KeyEvent(InputConstants.KEY_ESCAPE, 0, shift ? InputConstants.MOD_SHIFT : 0);
+    }
+
     static Modifiers modifiers(int mods) {
         return new Modifiers((mods & InputConstants.MOD_SHIFT) != 0, (mods & InputConstants.MOD_CONTROL) != 0,
                 (mods & InputConstants.MOD_ALT) != 0, (mods & InputConstants.MOD_SUPER) != 0);
@@ -124,5 +139,10 @@ final class KeyNames {
     /** SDL mouse buttons (1 left, 2 middle, 3 right) to DOM buttons (0, 1, 2); others pass through shifted. */
     static int button(int sdlButton) {
         return sdlButton - 1;
+    }
+
+    /** DOM buttons (0 left, 1 middle, 2 right) to SDL's. */
+    static int mcButton(int domButton) {
+        return domButton + 1;
     }
 }

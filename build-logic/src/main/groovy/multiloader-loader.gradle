@@ -60,6 +60,8 @@ processResources {
     from(configurations.commonResources)
     dependsOn(configurations.engineResources)
     from(configurations.engineResources)
+    // Test instances are data from 26.x on; before, GameTests are code (common's GameTests).
+    if (stonecutter.current.parsed < '26') exclude('data/*/test_instance/**')
 }
 
 tasks.named('javadoc', Javadoc).configure {

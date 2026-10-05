@@ -9,13 +9,10 @@ import dev.vellum.mod.net.JsonLimits;
 import dev.vellum.mod.net.MessagePayload;
 import dev.vellum.mod.net.OpenPayload;
 import dev.vellum.mod.net.VellumNetwork;
-import dev.vellum.mod.registry.Entry;
-import dev.vellum.mod.registry.VellumRegistry;
 import dev.vellum.mod.server.VellumServer;
 import dev.vellum.mod.server.VellumSession;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
@@ -30,19 +27,16 @@ import java.util.function.Consumer;
  * payloads, the cap on a player's sessions, rate limits, and the settings file's fallbacks.
  */
 public final class SecurityGameTests {
-    public static final Entry<Consumer<GameTestHelper>> JSON = test("json_limits", SecurityGameTests::json);
-    public static final Entry<Consumer<GameTestHelper>> MESSAGES = test("hostile_messages", SecurityGameTests::messages);
-    public static final Entry<Consumer<GameTestHelper>> PAYLOADS = test("malformed_payloads", SecurityGameTests::payloads);
-    public static final Entry<Consumer<GameTestHelper>> SESSION_CAP = test("session_cap", SecurityGameTests::sessionCap);
-    public static final Entry<Consumer<GameTestHelper>> CONFIG = test("config_fallbacks", SecurityGameTests::config);
-    public static final Entry<Consumer<GameTestHelper>> BUCKET = test("token_bucket", SecurityGameTests::bucket);
-
     private SecurityGameTests() {}
 
-    public static void init() {}
-
-    private static Entry<Consumer<GameTestHelper>> test(String name, Consumer<GameTestHelper> body) {
-        return VellumRegistry.add(Registries.TEST_FUNCTION, name, () -> body);
+    /** Declares the tests ({@link GameTests#add}). */
+    public static void init() {
+        GameTests.add("json_limits", SecurityGameTests::json);
+        GameTests.add("hostile_messages", SecurityGameTests::messages);
+        GameTests.add("malformed_payloads", SecurityGameTests::payloads);
+        GameTests.add("session_cap", SecurityGameTests::sessionCap);
+        GameTests.add("config_fallbacks", SecurityGameTests::config);
+        GameTests.add("token_bucket", SecurityGameTests::bucket);
     }
 
     private static void json(GameTestHelper h) {

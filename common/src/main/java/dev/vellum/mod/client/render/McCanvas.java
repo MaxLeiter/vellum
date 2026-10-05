@@ -1,8 +1,5 @@
 package dev.vellum.mod.client.render;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
-import com.mojang.renderpearl.api.textures.FilterMode;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.ScissorStack;
@@ -10,12 +7,7 @@ import dev.vellum.engine.paint.Shapes;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
-import net.minecraft.client.gui.render.TextureSetup;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.state.WindowRenderState;
-import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.ARGB;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3x2f;
 import org.jspecify.annotations.Nullable;
@@ -23,11 +15,12 @@ import org.jspecify.annotations.Nullable;
 import java.util.Arrays;
 
 /**
- * The engine's {@link Canvas} over {@link GuiGraphicsExtractor}. Create one per frame, paint, then {@link #finish()}
- * (the painter balances its saves, also when it fails).
+ * The engine's {@link Canvas} over Minecraft's GUI drawing. Create one per frame, paint, then {@link #finish()}
+ * (the painter balances its saves, also when it fails). What differs between Minecraft versions is in {@link McGui},
+ * which this hands every primitive to, transformed and clipped.
  *
  * <ul>
- *   <li>Transforms: vanilla's pose stack is only 16 deep, so the canvas keeps its own matrix stack and sets
+ *   <li>Transforms: vanilla's pose stack is not deep (16 on 26.x), so the canvas keeps its own matrix stack and sets
  *       the pose matrix before each vanilla call (one push for the whole document).</li>
  *   <li>Clipping: {@link #clipRect} pushes a vanilla scissor: the transformed rectangle's bounding box,
  *       intersected with the enclosing clip and the area the renderer draws ({@link ScissorStack}). A clip with
@@ -35,9 +28,8 @@ import java.util.Arrays;
  *   <li>Opacity: there are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
  *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes are
  *       pictures blitted with a colour, so they fade (and tint).</li>
- *   <li>Geometry: rectangles and quads are submitted as {@link RectRenderState}s and {@link QuadsRenderState}s,
- *       so fractional positions, rotations and per-vertex colours all work. Consecutive primitives share one copy of
- *       the transform.</li>
+ *   <li>Geometry: rectangles and quads are drawn with their own vertices, so fractional positions, rotations and
+ *       per-vertex colours all work. Consecutive primitives share one copy of the transform.</li>
  * </ul>
  */
 public final class McCanvas implements Canvas {
@@ -49,7 +41,7 @@ public final class McCanvas implements Canvas {
     }
 
     private final Minecraft mc;
-    private final GuiGraphicsExtractor g;
+    private final McGui gui;
     private final float mouseX, mouseY;
     private final float guiScale;
     private final @Nullable SlotSink slots;
@@ -82,37 +74,20 @@ public final class McCanvas implements Canvas {
      */
     public McCanvas(GuiGraphicsExtractor g, float mouseX, float mouseY, @Nullable SlotSink slots) {
         this.mc = Minecraft.getInstance();
-        this.g = g;
+        this.gui = new McGui(g);
         this.mouseX = mouseX;
         this.mouseY = mouseY;
         this.slots = slots;
-        this.guiScale = mc.getWindow().getGuiScale();
-        this.clips = drawableArea(mc, g);
-        g.pose().pushMatrix();
-        this.m = new Matrix3x2f(g.pose());
-    }
-
-    /**
-     * Clips start from what the GUI renderer can draw this frame: the framebuffer at the GUI scale it renders with
-     * (its scissors are clamped to the framebuffer, and one clamped to nothing is a crash), within the screen and any
-     * scissor already pushed. The framebuffer is not always the GUI size: {@code Window.setWindowed} resizes it at
-     * once, while the GUI scale and size change only when the resize event arrives, so for a frame the GUI can reach
-     * past the framebuffer.
-     */
-    private static ScissorStack drawableArea(Minecraft mc, GuiGraphicsExtractor g) {
-        WindowRenderState window = mc.gameRenderer.gameRenderState().windowRenderState;
-        int scale = Math.max(1, window.guiScale);
-        int width = Math.min(g.guiWidth(), Math.ceilDiv(window.width, scale));
-        int height = Math.min(g.guiHeight(), Math.ceilDiv(window.height, scale));
-        ScreenRectangle outer = g.scissorStack.peek();
-        return outer == null ? new ScissorStack(0, 0, width, height) : new ScissorStack(Math.max(0, outer.left()),
-                Math.max(0, outer.top()), Math.min(width, outer.right()), Math.min(height, outer.bottom()));
+        this.guiScale = (float) mc.getWindow().getGuiScale();
+        // Clips start from what the GUI renderer can draw this frame (McGui.drawableArea).
+        this.clips = gui.drawableArea();
+        this.m = gui.begin();
     }
 
     /** Pops the scissors clipped outside any save and restores the pose. */
     public void finish() {
         popClips(0);
-        g.pose().popMatrix();
+        gui.end();
     }
 
     // ---- State ----
@@ -147,7 +122,7 @@ public final class McCanvas implements Canvas {
     }
 
     private void popClips(int toDepth) {
-        while (clips.depth() > toDepth) if (clips.pop()) g.disableScissor();
+        while (clips.depth() > toDepth) if (clips.pop()) gui.popScissor();
     }
 
     /** True inside an empty clip: draw calls do nothing. */
@@ -183,8 +158,7 @@ public final class McCanvas implements Canvas {
     public void clipRect(float x, float y, float width, float height) {
         boundsOf(x, y, x + width, y + height);
         if (!clips.push(bx0, by0, bx1, by1)) return;
-        g.pose().identity();
-        g.enableScissor(clips.left(), clips.top(), clips.right(), clips.bottom());
+        gui.pushScissor(clips.left(), clips.top(), clips.right(), clips.bottom());
     }
 
     @Override
@@ -198,7 +172,7 @@ public final class McCanvas implements Canvas {
     public void fillRect(float x, float y, float width, float height, int argb) {
         if (clippedAway() || width <= 0 || height <= 0) return;
         int c = color(argb);
-        if (ARGB.alpha(c) != 0) rect(RenderPipelines.GUI, TextureSetup.noTexture(), x, y, width, height, false, 0, 0, 0, 0, c);
+        if (alpha(c) != 0) rect(null, false, x, y, width, height, 0, 0, 0, 0, c);
     }
 
     @Override
@@ -216,22 +190,18 @@ public final class McCanvas implements Canvas {
             y1 = Math.max(y1, v[i + 1]);
         }
         boundsOf(x0, y0, x1, y1);
-        ScreenRectangle scissor = g.scissorStack.peek();
+        ScreenRectangle scissor = gui.scissor();
         ScreenRectangle bounds = clippedBounds(scissor);
-        if (bounds != null) {
-            g.guiRenderState.addGuiElement(new QuadsRenderState(RenderPipelines.GUI, TextureSetup.noTexture(), pose(), v, c, scissor, bounds));
-        }
+        if (bounds != null) gui.quads(pose(), v, c, bounds, scissor);
     }
 
     @Override
     public void drawText(String text, float x, float y, FontSpec font, int argb, int decorations, boolean shadow) {
         if (clippedAway()) return;
         int c = color(argb);
-        if (text.isEmpty() || ARGB.alpha(c) == 0) return;
+        if (text.isEmpty() || !McGui.textVisible(c)) return;
         McFontMetrics fonts = McFontMetrics.INSTANCE;
-        float s = font.scale();
-        g.pose().set(m).translate(x, y).scale(s, s);
-        g.text(mc.font, fonts.sequence(text, fonts.style(font, decorations)), 0, 0, c, shadow);
+        gui.text(m, x, y, font.scale(), fonts.sequence(text, fonts.style(font, decorations)), c, shadow);
     }
 
     @Override
@@ -247,10 +217,9 @@ public final class McCanvas implements Canvas {
         if (clippedAway()) return;
         int c = color(tint);
         int w = Math.round(width), h = Math.round(height);
-        if (sprite == null || ARGB.alpha(c) == 0 || w <= 0 || h <= 0) return;
+        if (sprite == null || alpha(c) == 0 || w <= 0 || h <= 0) return;
         // Nine-slice and tiling work at integer sizes; scale the remainder so the sprite still fills the box exactly.
-        g.pose().set(m).translate(x, y).scale(width / w, height / h);
-        g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, 0, 0, w, h, c);
+        gui.sprite(m, x, y, width / w, height / h, sprite, w, h, c);
     }
 
     // ---- For Minecraft content ----
@@ -267,11 +236,8 @@ public final class McCanvas implements Canvas {
     public void blit(Identifier texture, float x, float y, float width, float height,
                      float u0, float v0, float u1, float v1, int tint, boolean smooth) {
         int c = color(tint);
-        if (clippedAway() || ARGB.alpha(c) == 0 || width <= 0 || height <= 0) return;
-        AbstractTexture t = mc.getTextureManager().getTexture(texture);
-        var sampler = smooth ? RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR) : t.getSampler();
-        rect(RenderPipelines.GUI_TEXTURED, TextureSetup.singleTexture(t.getTextureView(), sampler), x, y, width, height,
-                true, u0, v0, u1, v1, c);
+        if (clippedAway() || alpha(c) == 0 || width <= 0 || height <= 0) return;
+        rect(texture, smooth, x, y, width, height, u0, v0, u1, v1, c);
     }
 
     /**
@@ -281,10 +247,8 @@ public final class McCanvas implements Canvas {
     public void drawItem(ItemStack stack, float x, float y, float size, boolean decorations) {
         if (clippedAway() || stack.isEmpty() || alpha < 0.5f) return; // items are pre-rendered sprites: they can't be faded
         boundsOf(x, y, x + size, y + size);
-        if (clippedBounds(g.scissorStack.peek()) == null) return;
-        g.pose().set(m).translate(x, y).scale(size / 16f, size / 16f);
-        g.item(stack, 0, 0);
-        if (decorations) g.itemDecorations(mc.font, stack, 0, 0);
+        if (clippedBounds(gui.scissor()) == null) return;
+        gui.item(m, x, y, size / 16f, stack, decorations);
     }
 
     /**
@@ -292,9 +256,9 @@ public final class McCanvas implements Canvas {
      * the scene, since pictures are rendered even where nothing of them shows (scrolled or clipped away, transparent).
      */
     public boolean sceneVisible(int tint, float x, float y, float width, float height) {
-        if (clippedAway() || ARGB.alpha(color(tint)) == 0) return false;
+        if (clippedAway() || alpha(color(tint)) == 0) return false;
         boundsOf(x, y, x + width, y + height);
-        return Math.round(bx1) > Math.round(bx0) && Math.round(by1) > Math.round(by0) && clippedBounds(g.scissorStack.peek()) != null;
+        return Math.round(bx1) > Math.round(bx0) && Math.round(by1) > Math.round(by0) && clippedBounds(gui.scissor()) != null;
     }
 
     /**
@@ -307,9 +271,7 @@ public final class McCanvas implements Canvas {
         if (scale <= 0 || !sceneVisible(tint, x, y, width, height)) return;
         int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
         // The picture is premultiplied, so fading scales every channel.
-        int c = color(tint);
-        int color = ARGB.scaleRGB(c, ARGB.alphaFloat(c));
-        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, color, x0, y0, x1, y1, scale, g.scissorStack.peek()));
+        gui.scene(scene, premultiplied(color(tint)), x0, y0, x1, y1, scale, gui.scissor());
     }
 
     /**
@@ -332,8 +294,22 @@ public final class McCanvas implements Canvas {
         return (float) Math.sqrt(Math.abs(m.determinant()));
     }
 
+    /** {@code argb} with the opacity multiplied into its alpha. */
     private int color(int argb) {
-        return alpha >= 1 ? argb : ARGB.multiplyAlpha(argb, alpha);
+        if (alpha >= 1) return argb;
+        if (argb == 0 || alpha <= 0) return 0;
+        return (int) Math.floor(alpha(argb) / 255f * alpha * 255f) << 24 | argb & 0xFFFFFF;
+    }
+
+    private static int alpha(int argb) {
+        return argb >>> 24;
+    }
+
+    /** {@code argb} with its colour channels multiplied by its alpha. */
+    private static int premultiplied(int argb) {
+        float a = alpha(argb) / 255f;
+        return argb & 0xFF000000 | (int) ((argb >> 16 & 0xFF) * a) << 16 | (int) ((argb >> 8 & 0xFF) * a) << 8
+                | (int) ((argb & 0xFF) * a);
     }
 
     /** The current transform for a render state, which keeps it: shared until the transform changes. */
@@ -342,11 +318,14 @@ public final class McCanvas implements Canvas {
         return pose;
     }
 
-    /** Submits one rectangle, wound for back-face culling even under a mirroring transform. */
-    private void rect(RenderPipeline pipeline, TextureSetup textures, float x, float y, float width, float height,
-                      boolean textured, float u0, float v0, float u1, float v1, int color) {
+    /**
+     * Draws one rectangle, a fill or (with a texture) a blit, wound for back-face culling even under a mirroring
+     * transform.
+     */
+    private void rect(@Nullable Identifier texture, boolean smooth, float x, float y, float width, float height,
+                      float u0, float v0, float u1, float v1, int color) {
         boundsOf(x, y, x + width, y + height);
-        ScreenRectangle scissor = g.scissorStack.peek();
+        ScreenRectangle scissor = gui.scissor();
         ScreenRectangle bounds = clippedBounds(scissor);
         if (bounds == null) return; // fully clipped
         float x0 = x, x1 = x + width;
@@ -357,8 +336,8 @@ public final class McCanvas implements Canvas {
             u0 = u1;
             u1 = u;
         }
-        g.guiRenderState.addGuiElement(new RectRenderState(pipeline, textures, pose(), x0, y, x1, y + height, textured,
-                u0, v0, u1, v1, color, scissor, bounds));
+        if (texture == null) gui.fill(pose(), x0, y, x1, y + height, color, bounds, scissor);
+        else gui.blit(pose(), texture, smooth, x0, y, x1, y + height, u0, v0, u1, v1, color, bounds, scissor);
     }
 
     /**

@@ -82,6 +82,11 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+dependencies {
+    // 26.x ships JSpecify with Minecraft; older versions don't.
+    if (stonecutter.current.parsed < '26') compileOnly('org.jspecify:jspecify:1.0.0')
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {

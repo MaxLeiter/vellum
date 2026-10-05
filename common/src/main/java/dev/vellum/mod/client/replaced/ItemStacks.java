@@ -53,7 +53,10 @@ final class ItemStacks {
     /** {@code text} parsed as an SNBT compound, or null (logged) when it is not one. {@code what} names it in the log. */
     static @Nullable CompoundTag snbt(String text, String what) {
         try {
+            //? if >=26 {
             return TagParser.parseCompoundFully(text);
+            //?} else
+            /*return TagParser.parseTag(text);*/
         } catch (CommandSyntaxException e) {
             Constants.LOG.warn("Vellum: {} is not SNBT: {}", what, e.getMessage());
             return null;

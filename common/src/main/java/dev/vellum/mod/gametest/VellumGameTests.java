@@ -8,8 +8,6 @@ import dev.vellum.mod.net.DataPayload;
 import dev.vellum.mod.net.MessagePayload;
 import dev.vellum.mod.net.OpenPayload;
 import dev.vellum.mod.net.VellumNetwork;
-import dev.vellum.mod.registry.Entry;
-import dev.vellum.mod.registry.VellumRegistry;
 import dev.vellum.mod.server.VellumDemos;
 import dev.vellum.mod.server.VellumServer;
 import dev.vellum.mod.server.VellumSession;
@@ -17,7 +15,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -34,20 +31,16 @@ import java.util.function.Consumer;
  * messages, rate limiting, closing from either side, players leaving) against mock players, and the demo chest.
  */
 public final class VellumGameTests {
-    public static final Entry<Consumer<GameTestHelper>> CODECS = test("payload_codecs", VellumGameTests::codecs);
-    public static final Entry<Consumer<GameTestHelper>> LIMITS = test("payload_limits", VellumGameTests::limits);
-    public static final Entry<Consumer<GameTestHelper>> SESSIONS = test("session_lifecycle", VellumGameTests::sessions);
-    public static final Entry<Consumer<GameTestHelper>> RATE = test("session_rate_limit", VellumGameTests::rateLimit);
-    public static final Entry<Consumer<GameTestHelper>> CHEST = test("demo_chest_menu", VellumGameTests::chest);
-
     private VellumGameTests() {}
 
+    /** Declares the tests ({@link GameTests#add}), these and {@link SecurityGameTests}'. */
     public static void init() {
+        GameTests.add("payload_codecs", VellumGameTests::codecs);
+        GameTests.add("payload_limits", VellumGameTests::limits);
+        GameTests.add("session_lifecycle", VellumGameTests::sessions);
+        GameTests.add("session_rate_limit", VellumGameTests::rateLimit);
+        GameTests.add("demo_chest_menu", VellumGameTests::chest);
         SecurityGameTests.init();
-    }
-
-    private static Entry<Consumer<GameTestHelper>> test(String name, Consumer<GameTestHelper> body) {
-        return VellumRegistry.add(Registries.TEST_FUNCTION, name, () -> body);
     }
 
     // ---- Payloads ----

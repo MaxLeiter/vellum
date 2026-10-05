@@ -122,8 +122,12 @@ final class EntityContent extends TurnableContent {
         return entity;
     }
 
-    /** Sets the entity components from {@code components}, {@code variant} and {@code color}. */
+    /**
+     * Sets the entity components from {@code components}, {@code variant} and {@code color}. Entities have data
+     * components from Minecraft 1.21.5 on; on 1.21.1 these attributes do nothing.
+     */
     private void applyComponents(Entity entity) {
+        //? if >=26 {
         String snbt = element.getAttribute("components");
         CompoundTag parsed = snbt == null ? null : ItemStacks.snbt(snbt, "<entity components>");
         CompoundTag components = parsed != null ? parsed : new CompoundTag();
@@ -134,9 +138,12 @@ final class EntityContent extends TurnableContent {
         }
         if (components.isEmpty()) return;
         ItemStacks.decode(DataComponentMap.CODEC, components, "<entity components>").ifPresent(map -> map.forEach(c -> set(entity, c)));
+        //?}
     }
 
+    //? if >=26 {
     private static <T> void set(Entity entity, TypedDataComponent<T> component) {
         entity.setComponent(component.type(), component.value());
     }
+    //?}
 }

@@ -5,8 +5,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.cursor.CursorType;
-import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.Urls;
@@ -19,6 +17,7 @@ import dev.vellum.mod.Constants;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.client.render.McCanvas;
+import dev.vellum.mod.client.render.McGui;
 import dev.vellum.mod.client.replaced.McReplaced;
 import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.MessagePayload;
@@ -52,8 +51,9 @@ import java.util.function.Predicate;
 /**
  * Hosts one Vellum document in Minecraft, for whatever shows it ({@link VellumScreen}, {@link VellumContainerScreen}
  * or a HUD overlay): loads the page, keeps its viewport in sync with the GUI-scaled window, runs frame and paint,
- * shows tooltips, forwards input (SDL to DOM; keys the page leaves alone go on to the mod's {@link #onKey} handlers),
- * switches SDL text input on while a text field has focus, routes messages, and reloads.
+ * shows tooltips, forwards input (Minecraft's to DOM events; keys the page leaves alone go on to the mod's
+ * {@link #onKey} handlers), switches text input on while a text field has focus (SDL's, on 26.x), routes messages, and
+ * reloads.
  *
  * <p>The document is its own error boundary ({@link Document#error()}): once the engine fails, the page is replaced
  * by an {@link ErrorPanel} until it is reloaded. Render thread only.
@@ -64,7 +64,7 @@ public final class DocumentDriver {
         /** {@code vellum.close()} from the page: close the screen, hide the overlay. */
         void closeDocument();
 
-        /** The screen showing the document (it owns SDL text input), or null for HUD overlays, which take no input. */
+        /** The screen showing the document (it owns text input), or null for HUD overlays, which take no input. */
         default @Nullable Screen screen() {
             return null;
         }
@@ -193,6 +193,7 @@ public final class DocumentDriver {
         }
         LIVE.remove(this);
         setTextInput(false);
+        if (owner.screen() != null) McGui.resetCursor();
         disposeDocument();
         List<Runnable> handlers = List.copyOf(closeHandlers);
         closeHandlers.clear();
@@ -248,7 +249,7 @@ public final class DocumentDriver {
     /** The GUI-scaled window, which pages are laid out in. */
     private Viewport viewport() {
         // A minimised or mid-resize window can report 0x0; a page laid out at zero size has nothing to show anyway.
-        return new Viewport(Math.max(1, width), Math.max(1, height), Minecraft.getInstance().getWindow().getGuiScale());
+        return new Viewport(Math.max(1, width), Math.max(1, height), (float) Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void disposeDocument() {
@@ -284,7 +285,7 @@ public final class DocumentDriver {
             canvas.finish();
             narrator.tick(owner.screen() == null && (mouseX != -1 || mouseY != -1));
             syncTextInput();
-            if (cursor != Cursor.AUTO && cursor != Cursor.DEFAULT) g.requestCursor(cursorType(cursor));
+            McGui.cursor(g, cursor, owner.screen() != null);
         }
         if (error == null && document != null && document.error() != null) {
             fail("Vellum could not show " + name(), document.error());
@@ -302,9 +303,9 @@ public final class DocumentDriver {
         Font font = Minecraft.getInstance().font;
         Component text = Component.translatable("vellum.serverPages.typing");
         int y = height - 17;
-        g.nextStratum();
-        g.fill(4, y, 4 + font.width(text) + 8, y + 13, 0xE0101010);
-        g.text(font, text, 8, y + 3, 0xFFFFD866, false);
+        McGui.nextLayer(g);
+        McGui.fill(g, 4, y, 4 + font.width(text) + 8, y + 13, 0xE0101010);
+        McGui.text(g, font, text, 8, y + 3, 0xFFFFD866, false);
     }
 
     /**
@@ -331,11 +332,11 @@ public final class DocumentDriver {
         if (tooltip.wrap()) {
             List<FormattedCharSequence> lines = wrappedLines(tooltip);
             if (lines.isEmpty()) return;
-            g.setTooltipForNextFrame(font, lines, x, y);
+            McGui.tooltip(g, font, lines, x, y);
         } else {
             List<Component> lines = titleLines(tooltip);
             if (lines.isEmpty()) return;
-            g.setComponentTooltipForNextFrame(font, lines, x, y);
+            McGui.componentTooltip(g, font, lines, x, y);
         }
         tooltipRequested = true;
     }
@@ -457,8 +458,7 @@ public final class DocumentDriver {
     private void followPointer(int mouseX, int mouseY) {
         Document doc = document();
         if (doc == null) return;
-        Minecraft mc = Minecraft.getInstance();
-        double x = mc.mouseHandler.getScaledXPos(mc.getWindow()), y = mc.mouseHandler.getScaledYPos(mc.getWindow());
+        double x = McClient.mouseX(), y = McClient.mouseY();
         if ((int) x != mouseX || (int) y != mouseY) {
             x = mouseX;
             y = mouseY;
@@ -481,8 +481,8 @@ public final class DocumentDriver {
         }
         lastUserInput = now;
         if (e.isEscape()) lastEscape = now;
-        String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
-        boolean used = input(in -> in.keyDown(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers()))
+        String key = KeyNames.key(e);
+        boolean used = input(in -> in.keyDown(key, KeyNames.code(e), KeyNames.modifiers(e.modifiers()))
                 || (in.wantsKeyboard() && !e.isEscape())) || keyHandled(e);
         if (used && e.isEscape() && keptTooManyEscapes(now)) {
             owner.closeDocument();
@@ -556,8 +556,8 @@ public final class DocumentDriver {
     }
 
     public boolean keyReleased(KeyEvent e) {
-        String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
-        return input(in -> in.keyUp(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers())));
+        String key = KeyNames.key(e);
+        return input(in -> in.keyUp(key, KeyNames.code(e), KeyNames.modifiers(e.modifiers())));
     }
 
     public boolean charTyped(CharacterEvent e) {
@@ -757,19 +757,6 @@ public final class DocumentDriver {
         Screen listener = owner.screen();
         if (listener == null || on == textInput) return;
         textInput = on;
-        Minecraft.getInstance().onTextInputFocusChange(listener, on);
-    }
-
-    private static CursorType cursorType(Cursor cursor) {
-        return switch (cursor) {
-            case POINTER, GRAB, GRABBING -> CursorTypes.POINTING_HAND;
-            case TEXT -> CursorTypes.IBEAM;
-            case EW_RESIZE -> CursorTypes.RESIZE_EW;
-            case NS_RESIZE -> CursorTypes.RESIZE_NS;
-            case MOVE -> CursorTypes.RESIZE_ALL;
-            case NOT_ALLOWED -> CursorTypes.NOT_ALLOWED;
-            case CROSSHAIR -> CursorTypes.CROSSHAIR;
-            default -> CursorTypes.ARROW;
-        };
+        McClient.textInput(listener, on);
     }
 }

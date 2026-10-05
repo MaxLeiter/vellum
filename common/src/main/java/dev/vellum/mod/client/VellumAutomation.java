@@ -2,15 +2,12 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.script.ScriptRuntime;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -43,7 +40,7 @@ public final class VellumAutomation {
     private static final float OFF_WINDOW = -16;
     /** The moves a {@link #drag} takes, as a quick hand would make them. */
     private static final int DRAG_STEPS = 6;
-    private static final MouseButtonInfo LEFT = new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0);
+    private static final MouseButtonInfo LEFT = new MouseButtonInfo(KeyNames.mcButton(0), 0);
 
     private final DocumentDriver driver;
     /** Whether the page is a HUD overlay's, which takes input through the screen it is interactive over. */
@@ -56,7 +53,7 @@ public final class VellumAutomation {
 
     /** The open Vellum screen ({@link VellumScreen} or {@link VellumContainerScreen}), if its page is showing. */
     public static Optional<VellumAutomation> screen() {
-        Screen screen = Minecraft.getInstance().gui.screen();
+        Screen screen = McClient.screen();
         DocumentDriver driver = screen == null ? null : DocumentDriver.of(screen);
         return driver == null ? Optional.empty() : Optional.of(new VellumAutomation(driver, false));
     }
@@ -193,11 +190,8 @@ public final class VellumAutomation {
      */
     public boolean click(String selector, int button) {
         if (!hover(selector)) return false;
-        MouseButtonInfo info = new MouseButtonInfo(button + 1, 0);
-        long window = Minecraft.getInstance().getWindow().handle();
-        MouseHandler mouse = Minecraft.getInstance().mouseHandler;
-        mouse.onButton(window, info, InputConstants.PRESS);
-        mouse.onButton(window, info, InputConstants.RELEASE);
+        McClient.mouseButton(button, true);
+        McClient.mouseButton(button, false);
         return true;
     }
 
@@ -207,8 +201,7 @@ public final class VellumAutomation {
      */
     public boolean wheel(String selector, double notches) {
         if (!hover(selector)) return false;
-        Minecraft mc = Minecraft.getInstance();
-        mc.mouseHandler.onScroll(mc.getWindow().handle(), 0, -notches);
+        McClient.scroll(notches);
         return true;
     }
 
@@ -224,9 +217,7 @@ public final class VellumAutomation {
         float[] at = screen == null ? null : aim(selector);
         if (at == null) return false;
         moveTo(screen, at[0], at[1]);
-        Minecraft mc = Minecraft.getInstance();
-        long window = mc.getWindow().handle();
-        mc.mouseHandler.onButton(window, LEFT, InputConstants.PRESS);
+        McClient.mouseButton(0, true);
         float px = at[0], py = at[1];
         for (int i = 1; i <= DRAG_STEPS; i++) {
             float x = at[0] + dx * i / DRAG_STEPS, y = at[1] + dy * i / DRAG_STEPS;
@@ -234,11 +225,16 @@ public final class VellumAutomation {
             // With a button held the handler sends a drag too, unless an overlay holding the press takes it (the
             // loaders' hooks ask VellumHud first).
             MouseButtonEvent event = new MouseButtonEvent(x, y, LEFT);
-            if (!VellumHud.mouseDragged(event)) screen.mouseDragged(event, x - px, y - py);
+            if (!VellumHud.mouseDragged(event)) {
+                //? if >=26 {
+                screen.mouseDragged(event, x - px, y - py);
+                //?} else
+                /*screen.mouseDragged(x, y, LEFT.button(), x - px, y - py);*/
+            }
             px = x;
             py = y;
         }
-        mc.mouseHandler.onButton(window, LEFT, InputConstants.RELEASE);
+        McClient.mouseButton(0, false);
         return true;
     }
 
@@ -250,7 +246,7 @@ public final class VellumAutomation {
      * open (the game has the mouse).
      */
     public void leave() {
-        Screen open = Minecraft.getInstance().gui.screen();
+        Screen open = McClient.screen();
         if (open != null) moveTo(open, OFF_WINDOW, OFF_WINDOW);
     }
 
@@ -270,12 +266,8 @@ public final class VellumAutomation {
      * vanilla's slot highlight, read it there), then a move event to the screen, as the handler sends one.
      */
     private static void moveTo(Screen screen, float x, float y) {
-        Minecraft mc = Minecraft.getInstance();
-        Window w = mc.getWindow();
-        MouseHandler mouse = mc.mouseHandler;
-        mouse.setIgnoreFirstMove(); // takes the position without queueing a second move event
-        mouse.onMove(w.handle(), x * w.getScreenWidth() / w.getGuiScaledWidth(),
-                y * w.getScreenHeight() / w.getGuiScaledHeight(), 0, 0);
+        Window w = Minecraft.getInstance().getWindow();
+        McClient.moveMouse(x * w.getScreenWidth() / w.getGuiScaledWidth(), y * w.getScreenHeight() / w.getGuiScaledHeight());
         screen.mouseMoved(x, y);
         screen.afterMouseMove();
     }
@@ -292,9 +284,8 @@ public final class VellumAutomation {
     public boolean key(String domKey) {
         KeyEvent event = inputScreen() == null ? null : KeyNames.event(domKey);
         if (event == null) return false;
-        long window = Minecraft.getInstance().getWindow().handle();
-        Minecraft.getInstance().keyboardHandler.keyPress(window, InputConstants.PRESS, event);
-        Minecraft.getInstance().keyboardHandler.keyPress(window, InputConstants.RELEASE, event);
+        McClient.key(event, true);
+        McClient.key(event, false);
         return true;
     }
 
@@ -304,13 +295,11 @@ public final class VellumAutomation {
      */
     public void type(String text) {
         if (inputScreen() == null) return;
-        Minecraft mc = Minecraft.getInstance();
-        long window = mc.getWindow().handle();
         text.codePoints().forEach(cp -> {
             KeyEvent event = KeyNames.event(Character.toString(cp));
-            if (event != null) mc.keyboardHandler.keyPress(window, InputConstants.PRESS, event);
-            mc.keyboardHandler.charTyped(window, new CharacterEvent(cp));
-            if (event != null) mc.keyboardHandler.keyPress(window, InputConstants.RELEASE, event);
+            if (event != null) McClient.key(event, true);
+            McClient.typeChar(cp);
+            if (event != null) McClient.key(event, false);
         });
     }
 
@@ -333,8 +322,7 @@ public final class VellumAutomation {
      */
     private @Nullable Screen inputScreen() {
         if (hud) return VellumHud.pointerScreen(driver);
-        Minecraft mc = Minecraft.getInstance();
-        Screen open = mc.gui.overlay() == null ? mc.gui.screen() : null; // a loading overlay takes no input
+        Screen open = McClient.loadingOverlay() ? null : McClient.screen(); // a loading overlay takes no input
         return open != null && DocumentDriver.of(open) == driver ? open : null;
     }
 

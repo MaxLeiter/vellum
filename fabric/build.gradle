@@ -1,11 +1,22 @@
 plugins {
     id 'multiloader-loader'
-    id 'net.fabricmc.fabric-loom'
 }
+
+// 26.x is unobfuscated and builds with Loom as it is. Older versions are obfuscated: they build with the remapping
+// Loom, against Mojang's mappings, and the jar is remapped to intermediary names.
+def obfuscated = stonecutter.current.parsed < '26'
+apply plugin: obfuscated ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
 dependencies {
     minecraft("com.mojang:minecraft:${minecraft_version}")
-    implementation("net.fabricmc:fabric-loader:${fabric_loader_version}")
-    implementation("net.fabricmc.fabric-api:fabric-api:${fabric_version}")
+    if (obfuscated) {
+        mappings(loom.officialMojangMappings())
+        modImplementation("net.fabricmc:fabric-loader:${fabric_loader_version}")
+        modImplementation("net.fabricmc.fabric-api:fabric-api:${fabric_version}")
+    } else {
+        implementation("net.fabricmc:fabric-loader:${fabric_loader_version}")
+        implementation("net.fabricmc.fabric-api:fabric-api:${fabric_version}")
+    }
 }
 
 fabricApi {
