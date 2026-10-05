@@ -113,6 +113,17 @@ public final class AnimationEngine {
         return false;
     }
 
+    /**
+     * True while something will change by itself and then stop: a transition or a finite animation running, a change
+     * the next tick applies, or events and callbacks waiting. An infinite animation alone never stops, so it does not
+     * count ({@link Document#settled}).
+     */
+    public boolean isSettling() {
+        if (!queued.isEmpty()) return true;
+        for (ElementAnimations state : animated) if (state.isSettling()) return true;
+        return false;
+    }
+
     // ---- For players ----
 
     /**

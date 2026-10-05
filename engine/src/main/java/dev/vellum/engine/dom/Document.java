@@ -320,6 +320,20 @@ public final class Document extends Node {
                 || scripts != null && scripts.needsFrame();
     }
 
+    /**
+     * Whether the page has stopped changing by itself, for automation that waits for it before looking: no restyle,
+     * relayout or repaint pending, no smooth scroll or {@code scroll} event, no template update or
+     * {@code vellum.nextTick} callback, no transition or finite animation running (or its events waiting), no drag
+     * or spinning turntable, and no tooltip waiting out its delay. What never ends does not count: infinite
+     * animations, timers ({@code setTimeout}, {@code setInterval}), animation-frame callbacks and the caret's blink.
+     * A stopped or closed document is settled.
+     */
+    public boolean settled() {
+        if (error != null || closed) return true;
+        return !(styleDirty || layoutDirty || laidOut || repaint || scrolling.isActive() || animationEngine.isSettling()
+                || input.isSettling() || scripts != null && scripts.needsFrame());
+    }
+
     /** Something painted changed that restyle and relayout do not track (a scroll offset, canvas pixels). */
     public void invalidatePaint() {
         repaint = true;

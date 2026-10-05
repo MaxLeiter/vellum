@@ -69,6 +69,11 @@ abstract class Player {
     /** Whether the current time moves: the player needs ticks. */
     final boolean isAdvancing() { return pending || !Double.isNaN(startTime); }
 
+    /** Whether the current time moves toward an end it reaches: forwards to a finite end, or backwards to 0. */
+    final boolean endsBySelf() {
+        return isAdvancing() && (rate < 0 || !Double.isInfinite(timing.endTime()));
+    }
+
     final boolean isFinished(double now) {
         if (paused || pending) return false;
         double t = currentTime(now);

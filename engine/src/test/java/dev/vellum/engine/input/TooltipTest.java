@@ -58,6 +58,8 @@ class TooltipTest {
         assertTrue(at(500) != null);
         page.move(60, 10);
         assertNull(at(1500), "d's empty title means no tooltip");
+        page.paint();
+        assertFalse(page.doc.needsFrame(1600), "and no frame waits for one");
         page.move(10, 30);
         assertNull(at(1600), "c's delay starts when the pointer reaches it");
         assertSame(page.byId("c"), at(2100).element());
@@ -88,6 +90,17 @@ class TooltipTest {
         assertEquals("Now", at(1016).text());
         page.byId("e").setAttribute("title", "Later");
         assertEquals("Later", at(1032).text(), "the text is read when the host asks");
+    }
+
+    @Test
+    void movingOffThePageEndsHoverAndTheTooltip() {
+        page.move(10, 10);
+        assertTrue(at(500) != null);
+        assertFalse(page.move(-16, -16), "nothing is out there");
+        assertFalse(page.byId("a").isHovered());
+        assertNull(at(2000));
+        page.paint();
+        assertTrue(page.doc.settled());
     }
 
     @Test

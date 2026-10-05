@@ -354,6 +354,14 @@ public final class InputHandler {
         return pointer.drag() != null || !turntables.isEmpty() || focused != null && focused.isTextControl();
     }
 
+    /**
+     * Whether input will still change the page by itself ({@link Document#settled}): a drag held, a turntable
+     * spinning, or a tooltip waiting out its delay. Not the caret's blink, which never stops.
+     */
+    public boolean isSettling() {
+        return pointer.drag() != null || !turntables.isEmpty() || pointer.known() && tooltips.pending();
+    }
+
     /** Called after each relayout: keeps the caret in view, autofocus, re-hit-tests hover. */
     public void afterLayout() {
         Element focused = document.focusedElement();

@@ -42,9 +42,15 @@ final class Tooltips {
         return new Tooltip(owner, text, json, x, y);
     }
 
+    /** Whether a tooltip with text is coming that the host has not been given yet: waiting out the delay, or due. */
+    boolean pending() {
+        return owner != null && !dismissed && !shown
+                && (nonBlank(owner.getAttribute("title")) != null || nonBlank(owner.getAttribute("title-json")) != null);
+    }
+
     /** Whether a tooltip becomes visible at {@code now} that the host has not been given yet. */
     boolean due(double now) {
-        return owner != null && !dismissed && !shown && now >= since + DELAY_MS;
+        return now >= since + DELAY_MS && pending();
     }
 
     private static Element owner(Element e) {
