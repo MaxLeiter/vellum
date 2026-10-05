@@ -26,6 +26,14 @@ public interface Canvas {
     /** Pops what the matching {@link #save} pushed. */
     void restore();
 
+    /** The number of saves not yet restored. */
+    int saveCount();
+
+    /** Restores until only {@code count} saves remain (unwinding after an exception, say). */
+    default void restoreToCount(int count) {
+        while (saveCount() > count) restore();
+    }
+
     void translate(float dx, float dy);
 
     /**

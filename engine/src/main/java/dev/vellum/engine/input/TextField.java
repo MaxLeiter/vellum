@@ -50,14 +50,14 @@ final class TextField {
         String value = element.value();
         if (!value.equals(editor.text())) editor.reset(value);
         editor.setMaxLength((int) Forms.number(element.getAttribute("maxlength"), -1));
-        editor.setFilter(Forms.inputType(element).equals("number") ? NUMBER_CHARS : null);
+        editor.setFilter(element.inputType().equals("number") ? NUMBER_CHARS : null);
         return this;
     }
 
     // ---- Geometry (shared with Controls.paint) ----
 
     boolean masked() {
-        return !multiline && Forms.inputType(element).equals("password");
+        return element.inputType().equals("password");
     }
 
     FontSpec font() {

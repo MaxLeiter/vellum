@@ -22,15 +22,9 @@ final class Inspector {
 
     /** Paints the overlay for the element at ({@code x}, {@code y}) in viewport px. */
     static void paint(Canvas canvas, FontMetrics fonts, Document document, float x, float y) {
-        if (document == null) return;
-        HitResult hit;
-        try {
-            hit = document.painter().hitTest(x, y);
-        } catch (RuntimeException e) {
-            label(canvas, fonts, document, "Inspector: hit testing failed (" + e + ")", 2, 2);
-            return;
-        }
-        Element element = hit == null ? null : hit.element();
+        HitResult hit = document == null ? null : document.hitTest(x, y);
+        if (hit == null) return;
+        Element element = hit.element();
         Box box = element == null ? null : element.box != null ? element.box : hit.box();
         if (box == null) return;
 

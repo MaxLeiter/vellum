@@ -132,7 +132,8 @@ which are snapshots: they do not update when the document changes.
 - Selectors: `matches(selector)`, `closest(selector)`. An invalid selector throws a `SyntaxError`.
 - Form state: `value`, `checked`, and for `<select>` `selectedIndex`, `options`, and `selected` on options.
   `value` and `checked` are live state; the attributes keep their initial values. A checkbox's `value` is `"on"`
-  unless it has a `value` attribute.
+  unless it has a `value` attribute. Checking a radio unchecks the others of its group. Setting a select's `value`
+  (or `selectedIndex`) to something no option has leaves nothing selected (`selectedIndex` is then -1).
 - Geometry (layout is brought up to date first): `getBoundingClientRect()` (`x`, `y`, `width`, `height`, `top`,
   `right`, `bottom`, `left` in GUI pixels), `offsetLeft/Top/Width/Height` (relative to the viewport;
   `offsetParent` is always null), `clientWidth/Height`, `scrollWidth/Height`, `scrollLeft/Top` (settable),
@@ -159,7 +160,7 @@ see the same event object. By kind:
 |---|---|
 | `MouseEvent` (`click`, `mousedown`, `mousemove`, `mouseover`...) | `clientX`, `clientY` (also `pageX`, `pageY`), `offsetX`, `offsetY`, `button`, `buttons`, `detail` (click count), `relatedTarget`, `shiftKey`, `ctrlKey`, `altKey`, `metaKey` |
 | `WheelEvent` (`wheel`) | the mouse fields, `deltaX`, `deltaY` (GUI pixels), `deltaMode` (always 0) |
-| `KeyboardEvent` (`keydown`, `keyup`) | `key` (`"a"`, `"Enter"`, `"ArrowLeft"`, `"Escape"`...), `code` (`"KeyA"`), `keyCode`, `repeat`, and the modifier keys |
+| `KeyboardEvent` (`keydown`, `keyup`) | `key` (`"a"`, `"Enter"`, `"ArrowLeft"`, `"Escape"`...), `code` (`"KeyA"`), `keyCode` (the legacy code of the physical key, as browsers report it on a US layout), `repeat`, and the modifier keys |
 | `FocusEvent` (`focus`, `blur`, `focusin`, `focusout`) | `relatedTarget` |
 | `InputEvent` (`beforeinput`, `input`, `change`) | `data`, `inputType` |
 | `TransitionEvent` / `AnimationEvent` | `propertyName`, `animationName`, `elapsedTime` |

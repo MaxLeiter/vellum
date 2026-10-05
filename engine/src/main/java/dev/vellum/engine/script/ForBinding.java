@@ -111,7 +111,7 @@ final class ForBinding implements Binding {
     }
 
     private Instance create() {
-        Instance instance = new Instance((Element) DomBindings.clone(template, true), TemplateCompiler.childScope(scope, null, null));
+        Instance instance = new Instance((Element) template.cloneNode(true), TemplateCompiler.childScope(scope, null, null));
         compiler.compileElement(instance.element, instance.scope, instance.block);
         return instance;
     }

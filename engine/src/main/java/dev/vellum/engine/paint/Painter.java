@@ -18,21 +18,31 @@ public final class Painter {
         this.document = document;
     }
 
-    /** Paints the current layout, then the input handler's overlays (dropdowns...) on top with an identity transform. */
+    /**
+     * Paints the current layout, then the input handler's overlays (dropdowns...) on top with an identity transform.
+     * The canvas is left as it was found, also when painting throws.
+     */
     public void paint(Canvas canvas) {
-        Box root = document.layoutEngine().root();
-        if (root != null) paint(canvas, root);
-        document.input().paintOverlays(canvas);
+        int saves = canvas.saveCount();
+        try {
+            Box root = document.layoutEngine().root();
+            if (root != null) paint(canvas, root);
+            document.input().paintOverlays(canvas);
+        } finally {
+            canvas.restoreToCount(saves);
+        }
     }
 
-    /** Paints the box tree under {@code root} (no overlays). */
+    /** Paints the box tree under {@code root} (no overlays), leaving the canvas as it was found. */
     public void paint(Canvas canvas, Box root) {
         if (boxPainter == null) boxPainter = new BoxPainter(this, document.host().fonts());
+        int saves = canvas.saveCount();
         boxPainter.begin(canvas);
         try {
             paintOrder.walk(root, boxPainter);
         } finally {
             boxPainter.end();
+            canvas.restoreToCount(saves);
         }
     }
 

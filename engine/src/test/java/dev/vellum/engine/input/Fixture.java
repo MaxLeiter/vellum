@@ -73,7 +73,7 @@ final class Fixture {
     private HitResult hitTest(float x, float y) {
         if (forcedHit != null) return new HitResult(forcedHit, forcedHit.box, 0, 0, null, 0);
         Element found = null;
-        for (Element e : Dom.elements(doc)) {
+        for (Element e : doc.getElementsByTagName("*")) {
             if (e.box != null && Dom.inside(e.box.clientRect(), x, y)) found = e;
         }
         return found == null ? null : new HitResult(found, found.box, 0, 0, null, 0);
@@ -108,8 +108,9 @@ final class Fixture {
     boolean key(String key) { return key(key, NONE); }
 
     boolean key(String key, Modifiers mods) {
-        boolean consumed = input.keyDown(key, key.length() == 1 ? "Key" + key.toUpperCase() : key, 0, false, mods);
-        input.keyUp(key, key, 0, mods);
+        String code = key.length() == 1 ? "Key" + key.toUpperCase() : key;
+        boolean consumed = input.keyDown(key, code, mods);
+        input.keyUp(key, code, mods);
         return consumed;
     }
 
@@ -117,8 +118,9 @@ final class Fixture {
     void type(String text) {
         text.codePoints().forEach(cp -> {
             String s = new String(Character.toChars(cp));
-            input.keyDown(s, "", 0, false, NONE);
+            input.keyDown(s, "", NONE);
             input.charTyped(s);
+            input.keyUp(s, "", NONE);
         });
     }
 }

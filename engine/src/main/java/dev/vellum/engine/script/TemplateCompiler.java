@@ -32,7 +32,8 @@ import java.util.regex.Pattern;
  * Expressions are compiled once per site and shared by every v-for item cloned from it.
  */
 final class TemplateCompiler {
-    private static final Set<String> SKIPPED = Set.of("script", "style", "template");
+    /** Raw-text elements, whose text is not markup; template contents are inert ({@link Element#hasInertContent}). */
+    private static final Set<String> RAW_TEXT = Set.of("script", "style");
     private static final Pattern FOR = Pattern.compile("\\s*(?:\\(([^)]*)\\)|([\\w$]+))\\s+(?:in|of)\\s+(.+)", Pattern.DOTALL);
     /** A handler that is a method path ({@code save}, {@code state.inc}) is called with the event, keeping {@code this}. */
     private static final Pattern METHOD_PATH = Pattern.compile("[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*|\\[[^\\[\\]]+])*");
@@ -60,7 +61,8 @@ final class TemplateCompiler {
         if (node instanceof Text text) {
             Function<Context, String> render = interpolation(text.data(), scope, "text \"" + text.data().strip() + "\"");
             if (render != null) block.add(new Binding.Value<>(render, text::setData));
-        } else if (node instanceof Element el && !SKIPPED.contains(el.tagName()) && !el.hasAttribute("v-pre")) {
+        } else if (node instanceof Element el && !RAW_TEXT.contains(el.tagName()) && !el.hasInertContent()
+                && !el.hasAttribute("v-pre")) {
             if (el.hasAttribute("v-for")) compileFor(el, scope, block);
             else if (el.hasAttribute("v-if")) compileIf(el, scope, block);
             else compileElement(el, scope, block);
@@ -171,7 +173,7 @@ final class TemplateCompiler {
             case "style" -> new Binding.Value<>(cx -> join("; ", fixed, flatten(expr.eval(cx, scope), "; ",
                     (name, v) -> isUnset(v) ? "" : StyleBindings.cssName(name) + ": " + Js.str(v))), v -> el.setAttribute("style", v));
             case "checked" -> new Binding.Value<>(cx -> Js.bool(expr.eval(cx, scope)), el::setChecked);
-            default -> attribute.equals("value") && Forms.hasLiveValue(el)
+            default -> attribute.equals("value") && el.hasLiveValue()
                     ? new Binding.Value<>(cx -> display(expr.eval(cx, scope)), el::setValue)
                     : new Binding.Value<>(cx -> {
                         Object v = expr.eval(cx, scope);
@@ -322,20 +324,28 @@ final class TemplateCompiler {
     private void model(Element el, Set<String> modifiers, String expression, Scriptable scope, Binding.Block block, String where) {
         Expr read = value(expression, where);
         Expr write = statements(expression + " = $value", where);
-        String type = Forms.type(el);
+        String type = el.tagName().equals("input") ? el.inputType() : el.tagName();
         boolean numeric = modifiers.contains("number") || type.equals("number") || type.equals("range");
         block.add(switch (type) {
             case "checkbox" -> new Binding.Value<>(cx -> {
                 Object model = read.eval(cx, scope);
                 return model instanceof NativeArray array
-                        ? Js.elements(array).stream().anyMatch(v -> Js.str(v).equals(Forms.value(el)))
+                        ? Js.elements(array).stream().anyMatch(v -> Js.str(v).equals(el.value()))
                         : Js.bool(model);
             }, el::setChecked);
-            case "radio" -> new Binding.Value<>(cx -> display(read.eval(cx, scope)).equals(Forms.value(el)), el::setChecked);
+            case "radio" -> new Binding.Value<>(cx -> display(read.eval(cx, scope)).equals(el.value()), el::setChecked);
+            // Checked against the DOM every digest: options may render after the model (v-for) or be replaced.
+            case "select" -> cx -> {
+                String want = display(read.eval(cx, scope));
+                Element before = el.selectedOption();
+                if (before != null && before.value().equals(want)) return false;
+                el.setValue(want);
+                return el.selectedOption() != before;
+            };
             default -> new Binding.Value<>(cx -> display(read.eval(cx, scope)), el::setValue);
         });
         EventListener update = event -> rt.enter("Error in template " + where, cx -> {
-            String own = modifiers.contains("trim") ? Forms.value(el).strip() : Forms.value(el);
+            String own = modifiers.contains("trim") ? el.value().strip() : el.value();
             Object typed = numeric ? number(own) : own;
             Object value = switch (type) {
                 case "checkbox" -> {

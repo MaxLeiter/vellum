@@ -55,12 +55,15 @@ final class CanvasTestScreen extends Screen {
             int columns = Math.max(1, (width - 4) / CELL_W);
             for (int i = 0; i < cells.size(); i++) {
                 c.save();
-                c.translate(4 + (i % columns) * CELL_W, 4 + (i / columns) * CELL_H);
-                c.fillRect(0, 0, CELL_W - 4, CELL_H - 4, 0xC0101018);
-                c.drawText(cells.get(i).name(), 3, 3, SMALL, LABEL, 0, false);
-                c.translate(3, 14);
-                cells.get(i).draw().accept(c);
-                c.restore();
+                try {
+                    c.translate(4 + (i % columns) * CELL_W, 4 + (i / columns) * CELL_H);
+                    c.fillRect(0, 0, CELL_W - 4, CELL_H - 4, 0xC0101018);
+                    c.drawText(cells.get(i).name(), 3, 3, SMALL, LABEL, 0, false);
+                    c.translate(3, 14);
+                    cells.get(i).draw().accept(c);
+                } finally {
+                    c.restoreToCount(0);
+                }
             }
         } finally {
             c.finish();

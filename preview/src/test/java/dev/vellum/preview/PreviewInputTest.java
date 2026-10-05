@@ -25,16 +25,16 @@ class PreviewInputTest {
 
     @Test
     void mapsKeysToDomNames() {
-        assertEquals(new DomKeys.Key("a", "KeyA", 65), DomKeys.of(key(KeyEvent.VK_A, 'a', 0, KeyEvent.KEY_LOCATION_STANDARD)));
-        assertEquals(new DomKeys.Key("A", "KeyA", 65), DomKeys.of(key(KeyEvent.VK_A, 'A', InputEvent.SHIFT_DOWN_MASK, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key("a", "KeyA"), DomKeys.of(key(KeyEvent.VK_A, 'a', 0, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key("A", "KeyA"), DomKeys.of(key(KeyEvent.VK_A, 'A', InputEvent.SHIFT_DOWN_MASK, KeyEvent.KEY_LOCATION_STANDARD)));
         // Ctrl+A types a control character; the DOM key is still "a".
-        assertEquals(new DomKeys.Key("a", "KeyA", 65), DomKeys.of(key(KeyEvent.VK_A, '\u0001', InputEvent.CTRL_DOWN_MASK, KeyEvent.KEY_LOCATION_STANDARD)));
-        assertEquals(new DomKeys.Key("Enter", "Enter", 13), DomKeys.of(key(KeyEvent.VK_ENTER, '\n', 0, KeyEvent.KEY_LOCATION_STANDARD)));
-        assertEquals(new DomKeys.Key(" ", "Space", 32), DomKeys.of(key(KeyEvent.VK_SPACE, ' ', 0, KeyEvent.KEY_LOCATION_STANDARD)));
-        assertEquals(new DomKeys.Key("Shift", "ShiftRight", 16),
+        assertEquals(new DomKeys.Key("a", "KeyA"), DomKeys.of(key(KeyEvent.VK_A, '\u0001', InputEvent.CTRL_DOWN_MASK, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key("Enter", "Enter"), DomKeys.of(key(KeyEvent.VK_ENTER, '\n', 0, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key(" ", "Space"), DomKeys.of(key(KeyEvent.VK_SPACE, ' ', 0, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key("Shift", "ShiftRight"),
                 DomKeys.of(key(KeyEvent.VK_SHIFT, KeyEvent.CHAR_UNDEFINED, InputEvent.SHIFT_DOWN_MASK, KeyEvent.KEY_LOCATION_RIGHT)));
-        assertEquals(new DomKeys.Key("/", "Slash", 191), DomKeys.of(key(KeyEvent.VK_SLASH, '/', 0, KeyEvent.KEY_LOCATION_STANDARD)));
-        assertEquals(new DomKeys.Key("F5", "F5", 116), DomKeys.of(key(KeyEvent.VK_F5, KeyEvent.CHAR_UNDEFINED, 0, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key("/", "Slash"), DomKeys.of(key(KeyEvent.VK_SLASH, '/', 0, KeyEvent.KEY_LOCATION_STANDARD)));
+        assertEquals(new DomKeys.Key("F5", "F5"), DomKeys.of(key(KeyEvent.VK_F5, KeyEvent.CHAR_UNDEFINED, 0, KeyEvent.KEY_LOCATION_STANDARD)));
     }
 
     private static KeyEvent key(int code, char c, int modifiers, int location) {

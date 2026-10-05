@@ -17,8 +17,8 @@ import java.util.Map;
  * {@link DynamicTexture}. Its {@link #url()} ({@code canvas:<n>}) works anywhere an image URL does, e.g.
  * {@code <img src>} or a CSS background.
  *
- * <p>The pixel methods below are the Java surface the script binding's 2D context drives (INTEGRATION: the scripting
- * workstream wires {@code getContext('2d')} to them). Changes are uploaded once per frame. Render thread only.
+ * <p>The pixel methods below are the Java surface for a 2D context; scripts cannot reach them yet, as
+ * {@code getContext('2d')} is not bound. Changes are uploaded once per frame. Render thread only.
  */
 public final class CanvasContent extends McReplaced {
     public static final String SCHEME = "canvas:";

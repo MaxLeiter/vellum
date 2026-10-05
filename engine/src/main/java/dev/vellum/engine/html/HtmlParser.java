@@ -52,9 +52,6 @@ public final class HtmlParser {
         Element container = doc.createElement("template");
         HtmlParser p = new HtmlParser(doc, html, container, false);
         p.run();
-        // Scripts created by fragment parsing (innerHTML, v-html) never run, as in browsers: server-sent markup
-        // must not be able to smuggle code past the page's own scripts.
-        for (Element script : container.getElementsByTagName("script")) script.controlState = Boolean.TRUE;
         List<Node> out = new ArrayList<>(container.childNodes());
         for (Node n : out) container.removeChild(n);
         return out;
@@ -191,6 +188,9 @@ public final class HtmlParser {
 
         Element el = doc.createElement(name);
         for (String[] a : attrs) if (!el.hasAttribute(a[0])) el.setAttribute(a[0], a[1]);
+        // Scripts created by fragment parsing (innerHTML, v-html) never run, as in browsers: server-sent markup
+        // must not be able to smuggle code past the page's own scripts.
+        if (!fullDocument && name.equals("script")) el.markAlreadyStarted();
 
         if (fullDocument && body == null && HEAD_ELEMENTS.contains(name) && stack.isEmpty()) {
             ensureHead().appendChild(el);

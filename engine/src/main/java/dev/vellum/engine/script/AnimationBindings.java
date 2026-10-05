@@ -67,7 +67,7 @@ final class AnimationBindings {
     Object animate(Element element, Args a) {
         List<Keyframe> keyframes = keyframes(a.get(0));
         AnimationOptions options = options(a.get(1));
-        rt.document.flushLayout(); // keyframes are computed on top of the current base style
+        rt.document.flushStyle(); // keyframes are computed on top of the current base style
         StyleEngine styles = rt.document.styleEngine();
         List<ResolvedKeyframe> resolved = keyframes.stream().map(k -> {
             ResolvedKeyframe r = styles.computeDeclarations(element, k.declarations(), element.baseStyle);

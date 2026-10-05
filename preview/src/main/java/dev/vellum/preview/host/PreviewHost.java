@@ -14,7 +14,6 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -90,7 +89,8 @@ public final class PreviewHost implements Host {
             try {
                 return Files.readString(file);
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                log(LogLevel.WARN, "Cannot read " + file + ": " + e);
+                return null; // unreadable is missing, as Host.loadText promises
             }
         }).orElse(null);
     }

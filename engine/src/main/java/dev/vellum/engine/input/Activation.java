@@ -30,13 +30,13 @@ final class Activation {
             default -> { // buttons, checkboxes, radios
                 if (e.isDisabled()) return;
                 playClick(doc);
-                if (Forms.isInput(e, "checkbox")) {
+                if (e.inputType().equals("checkbox")) {
                     e.setChecked(!e.checked());
                     Forms.fireInputAndChange(e);
-                } else if (Forms.isInput(e, "radio")) {
+                } else if (e.inputType().equals("radio")) {
                     Forms.checkRadio(e);
                 } else if (isSubmit(e)) {
-                    Element form = Forms.formOwner(e);
+                    Element form = e.form();
                     if (form != null) form.dispatchEvent(new Event("submit", true, true));
                 }
             }
@@ -52,7 +52,7 @@ final class Activation {
             case "label", "button" -> true;
             case "a" -> e.hasAttribute("href");
             case "summary" -> Forms.isDetailsSummary(e);
-            case "input" -> Forms.isButton(e) || Forms.isInput(e, "checkbox") || Forms.isInput(e, "radio");
+            case "input" -> Forms.isButton(e) || e.isCheckable();
             default -> false;
         };
     }
@@ -74,6 +74,6 @@ final class Activation {
             String type = e.getAttribute("type");
             return type == null || !(type.equalsIgnoreCase("button") || type.equalsIgnoreCase("reset"));
         }
-        return Forms.isInput(e, "submit") || Forms.isInput(e, "image");
+        return e.inputType().equals("submit") || e.inputType().equals("image");
     }
 }

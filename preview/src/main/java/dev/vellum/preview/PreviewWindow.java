@@ -27,8 +27,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -37,9 +35,6 @@ import java.util.function.Consumer;
  * change. Keys: F5 reload, F12 inspector, 1-4 GUI scale (unless a text field has focus), Ctrl/Cmd+S screenshot.
  */
 final class PreviewWindow {
-    /** Wheel distance per notch, in GUI px. */
-    private static final float WHEEL_STEP = 16;
-
     private final Scene scene;
     /** The page, or null for the canvas test (which takes no input). */
     private final PageScene page;
@@ -48,7 +43,6 @@ final class PreviewWindow {
     private final FileWatcher watcher;
     private final JFrame frame = new JFrame();
     private final View view = new View();
-    private final Set<Integer> keysDown = new HashSet<>();
     private final long start = System.nanoTime();
     private int scale;
     private boolean inspecting;
@@ -157,7 +151,7 @@ final class PreviewWindow {
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
-                float delta = (float) e.getPreciseWheelRotation() * WHEEL_STEP;
+                float delta = (float) e.getPreciseWheelRotation() * InputHandler.WHEEL_NOTCH;
                 // Shift turns the wheel sideways, as in browsers (and macOS trackpads send it that way).
                 input(in -> in.wheel(mouseX, mouseY, e.isShiftDown() ? delta : 0, e.isShiftDown() ? 0 : delta, modifiers(e)));
             }
@@ -169,16 +163,14 @@ final class PreviewWindow {
             @Override
             public void keyPressed(KeyEvent e) {
                 if (shortcut(e)) return;
-                boolean repeat = !keysDown.add(e.getKeyCode());
                 DomKeys.Key key = DomKeys.of(e);
-                input(in -> in.keyDown(key.key(), key.code(), key.keyCode(), repeat, modifiers(e)));
+                input(in -> in.keyDown(key.key(), key.code(), modifiers(e)));
             }
 
             @Override
             public void keyReleased(KeyEvent e) {
-                keysDown.remove(e.getKeyCode());
                 DomKeys.Key key = DomKeys.of(e);
-                input(in -> in.keyUp(key.key(), key.code(), key.keyCode(), modifiers(e)));
+                input(in -> in.keyUp(key.key(), key.code(), modifiers(e)));
             }
 
             @Override

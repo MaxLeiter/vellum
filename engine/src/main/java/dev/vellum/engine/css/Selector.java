@@ -159,16 +159,12 @@ final class Selector {
                 case HOVER -> e.isHovered();
                 case ACTIVE -> e.isActive();
                 case FOCUS -> e.isFocused();
-                case FOCUS_VISIBLE -> e.isFocused() && (isTextField(e) || e.ownerDocument().input().focusVisible());
+                case FOCUS_VISIBLE -> e.isFocused() && (e.isTextControl() || e.ownerDocument().input().focusVisible());
                 case FOCUS_WITHIN -> {
                     Element f = e.ownerDocument() == null ? null : e.ownerDocument().focusedElement();
                     yield f != null && e.contains(f);
                 }
-                case CHECKED -> switch (e.tagName()) {
-                    case "input" -> isCheckable(e) && e.checked();
-                    case "option" -> e.hasAttribute("selected");
-                    default -> false;
-                };
+                case CHECKED -> e.isCheckable() ? e.checked() : e.tagName().equals("option") && e.selected();
                 case DISABLED -> isFormControl(e) && e.isDisabled();
                 case ENABLED -> isFormControl(e) && !e.isDisabled();
                 case EMPTY -> isEmpty(e);
@@ -179,8 +175,7 @@ final class Selector {
                 case FIRST_OF_TYPE -> Nth.position(e, false, true, null, ctx) == 1;
                 case LAST_OF_TYPE -> Nth.position(e, true, true, null, ctx) == 1;
                 case ONLY_OF_TYPE -> FIRST_OF_TYPE.matches(e, ctx) && LAST_OF_TYPE.matches(e, ctx);
-                case PLACEHOLDER_SHOWN -> (e.tagName().equals("input") || e.tagName().equals("textarea"))
-                        && e.hasAttribute("placeholder") && e.value().isEmpty();
+                case PLACEHOLDER_SHOWN -> e.isTextControl() && e.hasAttribute("placeholder") && e.value().isEmpty();
                 case OPEN -> (e.tagName().equals("details") || e.tagName().equals("dialog")) && e.hasAttribute("open");
                 case SCOPE -> e == ctx.scope;
                 case ANY_LINK -> e.tagName().equals("a") && e.hasAttribute("href");
@@ -204,21 +199,6 @@ final class Selector {
             };
         }
 
-        private static boolean isCheckable(Element e) {
-            String type = e.getAttribute("type");
-            return "checkbox".equalsIgnoreCase(type) || "radio".equalsIgnoreCase(type);
-        }
-
-        /** Text fields show their focus ring for pointer focus too, as in browsers. */
-        private static boolean isTextField(Element e) {
-            if (e.tagName().equals("textarea")) return true;
-            if (!e.tagName().equals("input")) return false;
-            String type = e.getAttribute("type");
-            return type == null || switch (type.toLowerCase(Locale.ROOT)) {
-                case "text", "password", "number", "search", "email", "url", "tel" -> true;
-                default -> false;
-            };
-        }
     }
 
     /**

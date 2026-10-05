@@ -24,6 +24,9 @@ public interface ScriptRuntime {
      */
     default void receive(String channel, String json) {}
 
+    /** Called once the document's scripts have run, before {@code DOMContentLoaded} is dispatched. */
+    default void documentLoaded() {}
+
     /** Releases resources. The runtime is unusable afterwards. */
     void dispose();
 }

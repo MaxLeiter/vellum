@@ -42,8 +42,8 @@ public final class Controls {
             case "select" -> paintSelect(canvas, box, el);
             case "progress", "meter" -> paintBar(canvas, box, el);
             case "input" -> {
-                if (Forms.isTextControl(el)) paintText(canvas, box, TextField.of(el));
-                else switch (Forms.inputType(el)) {
+                if (el.isTextControl()) paintText(canvas, box, TextField.of(el));
+                else switch (el.inputType()) {
                     case "checkbox", "radio" -> paintCheck(canvas, box, el);
                     case "range" -> paintRange(canvas, box, el);
                     case "submit", "reset", "button" ->
@@ -110,7 +110,7 @@ public final class Controls {
         float inset = Math.max(1, Math.min(box.contentWidth(), box.contentHeight()) / 4);
         float x = box.contentX() + inset, y = box.contentY() + inset;
         float w = box.contentWidth() - 2 * inset, h = box.contentHeight() - 2 * inset;
-        if (Forms.isInput(el, "radio")) {
+        if (el.inputType().equals("radio")) {
             float r = Math.min(w, h) / 2;
             canvas.fillRoundedRect(x, y, w, h, new float[] {r, r, r, r, r, r, r, r}, s.accentColor);
         } else {
@@ -134,11 +134,11 @@ public final class Controls {
         float arrowWidth = fonts(box).width(ARROW, font), arrowX = box.contentX() + box.contentWidth() - arrowWidth;
         boolean shadow = nativeShadow(box.style);
         drawLine(canvas, box, ARROW, arrowX, shadow);
-        Element option = SelectPopup.selectedOption(el);
+        Element option = el.selectedOption();
         if (option == null) return;
         canvas.save();
         canvas.clipRect(box.contentX(), box.borderTop, Math.max(0, arrowX - 2 - box.contentX()), box.paddingBoxHeight());
-        drawLine(canvas, box, SelectPopup.label(option), box.contentX(), shadow);
+        drawLine(canvas, box, option.label(), box.contentX(), shadow);
         canvas.restore();
     }
 
@@ -157,7 +157,7 @@ public final class Controls {
     private static String buttonLabel(Element input) {
         String value = input.getAttribute("value");
         if (value != null) return value;
-        return switch (Forms.inputType(input)) {
+        return switch (input.inputType()) {
             case "submit" -> "Submit";
             case "reset" -> "Reset";
             default -> "";

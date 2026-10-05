@@ -82,6 +82,11 @@ public final class ImageCanvas implements Canvas {
     }
 
     @Override
+    public int saveCount() {
+        return saved.size();
+    }
+
+    @Override
     public void restore() {
         State state = saved.poll();
         if (state == null) throw new IllegalStateException("restore() without save()");

@@ -20,7 +20,7 @@ class FocusTest {
     /** Gives every element a box, except those listed. */
     private static void boxAll(Fixture fx, String... except) {
         List<String> skip = List.of(except);
-        for (Element e : Dom.elements(fx.doc)) if (!skip.contains(e.id())) fx.box(e, null, 0, 0, 10, 10);
+        for (Element e : fx.doc.getElementsByTagName("*")) if (!skip.contains(e.id())) fx.box(e, null, 0, 0, 10, 10);
     }
 
     private static List<String> ids(List<Element> elements) {

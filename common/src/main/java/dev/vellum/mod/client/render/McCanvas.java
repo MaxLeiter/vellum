@@ -30,7 +30,8 @@ import org.jspecify.annotations.Nullable;
 import java.util.Arrays;
 
 /**
- * The engine's {@link Canvas} over {@link GuiGraphicsExtractor}. Create one per frame, paint, then {@link #finish()}.
+ * The engine's {@link Canvas} over {@link GuiGraphicsExtractor}. Create one per frame, paint, then {@link #finish()}
+ * (the painter balances its saves, also when it fails).
  *
  * <ul>
  *   <li><b>Transforms.</b> Vanilla's pose stack is only 16 deep, so the canvas keeps its own matrix stack and sets
@@ -73,9 +74,8 @@ public final class McCanvas implements Canvas {
         this.m = new Matrix3x2f(g.pose());
     }
 
-    /** Unwinds everything the painter left pushed (also after an exception mid-paint) and restores the pose. */
+    /** Pops the scissors clipped outside any save and restores the pose. */
     public void finish() {
-        while (depth > 0) restore();
         popScissors();
         g.pose().popMatrix();
     }
@@ -96,6 +96,11 @@ public final class McCanvas implements Canvas {
         savedScissors[depth] = scissors;
         scissors = 0;
         depth++;
+    }
+
+    @Override
+    public int saveCount() {
+        return depth;
     }
 
     @Override

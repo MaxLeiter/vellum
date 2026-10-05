@@ -1,7 +1,9 @@
 package dev.vellum.engine.dom;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.function.DoubleConsumer;
 
@@ -10,13 +12,30 @@ import java.util.function.DoubleConsumer;
  * {@code requestAnimationFrame}. Driven by {@link Document#frame}; everything runs on the render thread.
  */
 public final class Scheduler {
-    private record Timer(int id, double due, double interval, Runnable task, long seq) {}
+    private static final class Timer {
+        final int id;
+        final double interval;
+        final Runnable task;
+        double due;
+        long seq;
+
+        Timer(int id, double due, double interval, Runnable task) {
+            this.id = id;
+            this.due = due;
+            this.interval = interval;
+            this.task = task;
+        }
+    }
+
+    private record FrameCallback(int id, DoubleConsumer callback) {}
 
     private final Document document;
     private final PriorityQueue<Timer> timers = new PriorityQueue<>((a, b) ->
             a.due != b.due ? Double.compare(a.due, b.due) : Long.compare(a.seq, b.seq));
-    private final java.util.Set<Integer> cancelled = new java.util.HashSet<>();
-    private List<Object[]> frameCallbacks = new ArrayList<>();
+    /** Timers that have not fired (one-shot) or been cleared, by id. */
+    private final Map<Integer, Timer> live = new HashMap<>();
+    /** Callbacks for the next frame, and those of the frame being run (swapped each frame). */
+    private List<FrameCallback> frameCallbacks = new ArrayList<>(), running = new ArrayList<>();
     private int nextId = 1;
     private long seq;
     private double now;
@@ -29,34 +48,39 @@ public final class Scheduler {
     public double now() { return now; }
 
     public int setTimeout(Runnable task, double delayMs) {
-        int id = nextId++;
-        timers.add(new Timer(id, now + Math.max(0, delayMs), -1, task, seq++));
-        return id;
+        return schedule(new Timer(nextId++, now + Math.max(0, delayMs), -1, task));
     }
 
     public int setInterval(Runnable task, double intervalMs) {
-        int id = nextId++;
-        double iv = Math.max(1, intervalMs);
-        timers.add(new Timer(id, now + iv, iv, task, seq++));
-        return id;
+        double interval = Math.max(1, intervalMs);
+        return schedule(new Timer(nextId++, now + interval, interval, task));
     }
 
+    private int schedule(Timer timer) {
+        timer.seq = seq++;
+        timers.add(timer);
+        live.put(timer.id, timer);
+        return timer.id;
+    }
+
+    /** {@code clearTimeout} / {@code clearInterval}; ids of fired or unknown timers are ignored. */
     public void clearTimer(int id) {
-        cancelled.add(id);
+        Timer timer = live.remove(id);
+        if (timer != null) timers.remove(timer);
     }
 
     public int requestAnimationFrame(DoubleConsumer callback) {
         int id = nextId++;
-        frameCallbacks.add(new Object[] {id, callback});
+        frameCallbacks.add(new FrameCallback(id, callback));
         return id;
     }
 
+    /** Cancels a callback, also one of the frame being run that has not been called yet. */
     public void cancelAnimationFrame(int id) {
-        frameCallbacks.removeIf(o -> (Integer) o[0] == id);
-    }
-
-    public boolean hasPendingFrameCallbacks() {
-        return !frameCallbacks.isEmpty();
+        frameCallbacks.removeIf(c -> c.id == id);
+        for (int i = 0; i < running.size(); i++) {
+            if (running.get(i) != null && running.get(i).id == id) running.set(i, null);
+        }
     }
 
     /**
@@ -68,30 +92,42 @@ public final class Scheduler {
         int budget = 1000;
         while (!timers.isEmpty() && timers.peek().due <= nowMs && budget-- > 0) {
             Timer t = timers.poll();
-            if (cancelled.remove(t.id)) continue;
-            if (t.interval > 0) timers.add(new Timer(t.id, Math.max(t.due + t.interval, nowMs), t.interval, t.task, seq++));
+            if (t.interval > 0) {
+                t.due = Math.max(t.due + t.interval, nowMs);
+                t.seq = seq++;
+                timers.add(t);
+            } else {
+                live.remove(t.id);
+            }
             try {
                 t.task.run();
             } catch (RuntimeException ex) {
                 document.reportError("Error in timer", ex);
             }
         }
-        if (!frameCallbacks.isEmpty()) {
-            List<Object[]> callbacks = frameCallbacks;
-            frameCallbacks = new ArrayList<>();
-            for (Object[] o : callbacks) {
+        if (frameCallbacks.isEmpty()) return;
+        List<FrameCallback> callbacks = frameCallbacks;
+        frameCallbacks = running;
+        running = callbacks;
+        try {
+            for (int i = 0; i < running.size(); i++) {
+                FrameCallback c = running.get(i);
+                if (c == null) continue;
                 try {
-                    ((DoubleConsumer) o[1]).accept(nowMs);
+                    c.callback.accept(nowMs);
                 } catch (RuntimeException ex) {
                     document.reportError("Error in requestAnimationFrame callback", ex);
                 }
             }
+        } finally {
+            running.clear();
         }
     }
 
     void clear() {
         timers.clear();
+        live.clear();
         frameCallbacks.clear();
-        cancelled.clear();
+        running.clear();
     }
 }

@@ -1,8 +1,7 @@
 package dev.vellum.engine.layout;
 
+import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontSpec;
-
-import java.util.Set;
 
 /**
  * Boxes without laid-out content: replaced elements (sized by {@link LayoutPass} from their natural size) and form
@@ -10,9 +9,6 @@ import java.util.Set;
  * so controls line up with surrounding text the way browsers align them.
  */
 final class LeafLayout implements FormattingContext {
-    private static final Set<String> TEXT_INPUT_TYPES = Set.of("", "text", "password", "number", "search", "email",
-            "url", "tel");
-
     private final LayoutPass pass;
 
     LeafLayout(LayoutPass pass) {
@@ -37,11 +33,10 @@ final class LeafLayout implements FormattingContext {
      */
     private float controlBaseline(LayoutBox box, float contentHeight) {
         if (box.isReplaced()) return Float.NaN;
-        String tag = box.element.tagName();
-        String type = box.element.getAttribute("type");
-        boolean singleLine = tag.equals("select")
-                || tag.equals("input") && TEXT_INPUT_TYPES.contains(type == null ? "" : type.toLowerCase());
-        if (!singleLine && !tag.equals("textarea")) return Float.NaN;
+        Element e = box.element;
+        boolean multiline = e.tagName().equals("textarea");
+        boolean singleLine = e.tagName().equals("select") || e.isTextControl() && !multiline;
+        if (!singleLine && !multiline) return Float.NaN;
         FontSpec font = FontSpec.of(box.style);
         float glyph = pass.fonts.glyphHeight(font);
         float space = singleLine ? contentHeight : box.style.usedLineHeight();

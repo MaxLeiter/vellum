@@ -150,10 +150,10 @@ class TemplatesTest {
         page.byId("b").click();
         page.byId("u").click();
         page.byId("i").click();
-        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", "a", "KeyA", 65, false, Modifiers.NONE));
-        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", "Enter", "Enter", 257, false, Modifiers.NONE));
-        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", " ", "Space", 32, false, Modifiers.NONE));
-        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", " ", "Space", 32, false, new Modifiers(false, true, false, false)));
+        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", "a", "KeyA", false, Modifiers.NONE));
+        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", "Enter", "Enter", false, Modifiers.NONE));
+        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", " ", "Space", false, Modifiers.NONE));
+        page.byId("k").dispatchEvent(new KeyboardEvent("keydown", " ", "Space", false, new Modifiers(false, true, false, false)));
         page.byId("m").click();
         page.byId("f").click();
         assertEquals("a,once,outer,outer,outer,self,outer,enter Enter,ctrl-space,method click,outer,arrow click,outer 1",
@@ -194,7 +194,7 @@ class TemplatesTest {
         assertFalse(page.byId("x").checked());
         assertTrue(page.byId("y").checked());
         assertTrue(page.byId("r2").checked());
-        assertEquals(1, Forms.selectedIndex(page.byId("s")));
+        assertEquals(1, page.byId("s").selectedIndex());
 
         toggle(page.byId("c"), true);
         toggle(page.byId("x"), true);

@@ -16,8 +16,7 @@ import java.util.List;
  * the viewport) and driven by mouse and keys. Closed selects use the same model to step their selection with the
  * arrow keys.
  *
- * <p>A select's selection is its value: {@link Element#value()} is the selected option's value, and choosing an option
- * sets it.
+ * <p>The selection is the DOM's ({@link Element#selectedOption()}): choosing a row selects its option.
  */
 final class SelectPopup {
     private static final int MAX_ROWS = 8;
@@ -40,20 +39,19 @@ final class SelectPopup {
         this.select = select;
         for (Element child : select.children()) {
             if (child.tagName().equals("optgroup")) {
-                boolean disabled = child.hasAttribute("disabled");
                 String label = child.getAttribute("label");
                 rows.add(new Row(null, label == null ? "" : label, true, 0));
                 for (Element o : child.children()) {
-                    if (o.tagName().equals("option")) rows.add(new Row(o, label(o), disabled || o.isDisabled(), PAD));
+                    if (o.tagName().equals("option")) rows.add(new Row(o, o.label(), o.isDisabled(), PAD));
                 }
             } else if (child.tagName().equals("option")) {
-                rows.add(new Row(child, label(child), child.isDisabled(), 0));
+                rows.add(new Row(child, child.label(), child.isDisabled(), 0));
             }
         }
         float w = 0;
         for (Row r : rows) w = Math.max(w, r.indent + fonts().width(r.label, font()));
         labelWidth = w;
-        Element current = selectedOption(select);
+        Element current = select.selectedOption();
         for (int i = 0; i < rows.size(); i++) if (current != null && rows.get(i).option == current) highlighted = i;
         reveal();
     }
@@ -63,19 +61,6 @@ final class SelectPopup {
     boolean isEmpty() { return rows.isEmpty(); }
 
     // ---- Options ----
-
-    /** The selected option: the first whose value is the select's value, or null. */
-    static Element selectedOption(Element select) {
-        String value = select.value();
-        for (Element o : select.getElementsByTagName("option")) if (o.value().equals(value)) return o;
-        return null;
-    }
-
-    /** The option's {@code label}, else its text with whitespace collapsed. */
-    static String label(Element option) {
-        String label = option.getAttribute("label");
-        return label != null ? label : option.textContent().strip().replaceAll("\\s+", " ");
-    }
 
     /** Arrow keys and Home/End on a closed select change the selection directly (as on Windows). */
     static boolean stepClosed(Element select, String key) {
@@ -92,8 +77,8 @@ final class SelectPopup {
 
     /** Makes {@code option} the selection, firing input and change on the select if it changed. */
     private void choose(Element option) {
-        if (option == selectedOption(select)) return;
-        select.setValue(option.value());
+        if (option == select.selectedOption()) return;
+        option.setSelected(true);
         Forms.fireInputAndChange(select);
     }
 
@@ -211,7 +196,7 @@ final class SelectPopup {
         canvas.clipRect(x + 1, y + 1, w - 2, h - 2);
         FontSpec font = font();
         float rowHeight = rowHeight(), textOffset = (rowHeight - fonts().glyphHeight(font)) / 2;
-        Element current = selectedOption(select);
+        Element current = select.selectedOption();
         for (int i = top; i < Math.min(rows.size(), top + MAX_ROWS); i++) {
             Row r = rows.get(i);
             float ry = y + 1 + (i - top) * rowHeight;

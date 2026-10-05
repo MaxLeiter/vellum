@@ -48,7 +48,7 @@ class TextFieldTest {
     void cancelledKeydownDropsItsCharacter() {
         t.addEventListener("keydown", e -> e.preventDefault());
         t.focus();
-        assertTrue(fx.input.keyDown("a", "KeyA", 0, false, NONE));
+        assertTrue(fx.input.keyDown("a", "KeyA", NONE));
         assertTrue(fx.input.charTyped("a"));
         assertEquals("hi", t.value());
         assertTrue(fx.input.charTyped("é"), "a character without a keydown (IME) still goes in");

@@ -13,15 +13,12 @@ import dev.vellum.engine.html.HtmlParser;
 import dev.vellum.shadow.rhino.Callable;
 import dev.vellum.shadow.rhino.Scriptable;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -99,7 +96,7 @@ final class DomBindings {
                 .method("insertBefore", (n, a) -> n.insertBefore(a.node(0), a.nodeOrNull(1)))
                 .method("removeChild", (n, a) -> n.removeChild(a.node(0)))
                 .method("replaceChild", (n, a) -> n.replaceChild(a.node(0), a.node(1)))
-                .method("cloneNode", (n, a) -> clone(n, a.bool(0)))
+                .method("cloneNode", (n, a) -> n.cloneNode(a.bool(0)))
                 .action("remove", (n, a) -> n.remove())
                 // ParentNode / ChildNode: arguments are nodes or strings, inserted together as one fragment.
                 .action("append", (n, a) -> n.appendChild(fragment(a)))
@@ -117,14 +114,8 @@ final class DomBindings {
                 })
                 .method("querySelector", (n, a) -> syntax(() -> Selectors.querySelector(n, a.str(0))))
                 .method("querySelectorAll", (n, a) -> syntax(() -> Selectors.querySelectorAll(n, a.str(0))))
-                .method("getElementsByTagName", (n, a) -> {
-                    String tag = a.str(0).toLowerCase(Locale.ROOT);
-                    return descendants(n, e -> tag.equals("*") || e.tagName().equals(tag));
-                })
-                .method("getElementsByClassName", (n, a) -> {
-                    Set<String> wanted = Set.copyOf(List.of(a.str(0).trim().split("\\s+")));
-                    return descendants(n, e -> e.classes().containsAll(wanted));
-                })
+                .method("getElementsByTagName", (n, a) -> n.getElementsByTagName(a.str(0)))
+                .method("getElementsByClassName", (n, a) -> n.getElementsByClassName(a.str(0)))
                 .action("addEventListener", (n, a) -> rt.events.addListener(n, a))
                 .action("removeEventListener", (n, a) -> rt.events.removeListener(n, a))
                 .method("dispatchEvent", (n, a) -> rt.events.dispatch(n, a));
@@ -164,12 +155,12 @@ final class DomBindings {
                 .method("matches", (e, a) -> syntax(() -> e.matches(a.str(0))))
                 .method("closest", (e, a) -> syntax(() -> e.closest(a.str(0))))
                 // Form state.
-                .prop("value", Forms::value, (e, v) -> e.setValue(Js.isNullish(v) ? "" : Js.str(v)))
+                .prop("value", Element::value, (e, v) -> e.setValue(Js.isNullish(v) ? "" : Js.str(v)))
                 .prop("checked", Element::checked, (e, v) -> e.setChecked(Js.bool(v)))
-                .prop("selected", Forms::selected, (e, v) -> Forms.setSelected(e, Js.bool(v)))
-                .prop("selectedIndex", Forms::selectedIndex, (e, v) -> Forms.setSelectedIndex(e, (int) Js.num(v)))
-                .get("options", Forms::options)
-                .prop("type", e -> e.tagName().equals("input") ? Forms.type(e) : Objects.requireNonNullElse(e.getAttribute("type"), ""),
+                .prop("selected", Element::selected, (e, v) -> e.setSelected(Js.bool(v)))
+                .prop("selectedIndex", Element::selectedIndex, (e, v) -> e.setSelectedIndex((int) Js.num(v)))
+                .get("options", Element::options)
+                .prop("type", e -> e.tagName().equals("input") ? e.inputType() : Objects.requireNonNullElse(e.getAttribute("type"), ""),
                         (e, v) -> e.setAttribute("type", Js.str(v)))
                 .prop("tabIndex", Element::tabIndex, (e, v) -> e.setAttribute("tabindex", String.valueOf((int) Js.num(v))))
                 // Geometry, in GUI px after a layout flush.
@@ -209,7 +200,7 @@ final class DomBindings {
                 .get("defaultView", d -> rt.global)
                 .get("location", d -> Js.property(rt.global, "location"))
                 .get("URL", Document::url)
-                .get("readyState", d -> rt.templates.installed() ? "complete" : "interactive")
+                .get("readyState", Document::readyState)
                 .method("getElementById", (d, a) -> d.getElementById(a.str(0)))
                 .method("createElement", (d, a) -> d.createElement(a.str(0)))
                 .method("createTextNode", (d, a) -> d.createTextNode(a.str(0)))
@@ -233,22 +224,6 @@ final class DomBindings {
         if (!(n instanceof Document)) n.setTextContent(Js.isNullish(value) ? "" : Js.str(value));
     }
 
-    /** {@code cloneNode}: elements copy their attributes (not listeners or live form state), as in browsers. */
-    static Node clone(Node node, boolean deep) {
-        Node copy = switch (node) {
-            case Element e -> {
-                Element c = e.ownerDocument().createElement(e.tagName());
-                e.attributes().forEach(c::setAttribute);
-                yield c;
-            }
-            case Text t -> t.ownerDocument().createTextNode(t.data());
-            case DocumentFragment f -> f.ownerDocument().createDocumentFragment();
-            default -> throw new IllegalArgumentException("Cannot clone " + node.nodeName());
-        };
-        if (deep) for (Node child : node.childNodes()) copy.appendChild(clone(child, true));
-        return copy;
-    }
-
     /** The nodes (strings become text) of {@code append(...)}, {@code before(...)} and friends, as one fragment. */
     private DocumentFragment fragment(Args a) {
         DocumentFragment f = rt.document.createDocumentFragment();
@@ -263,19 +238,6 @@ final class DomBindings {
         if (parent == null) return;
         DocumentFragment nodes = fragment(a); // first: it may move n's siblings
         parent.insertBefore(nodes, after ? n.nextSibling() : n);
-    }
-
-    private static List<Element> descendants(Node root, Predicate<Element> filter) {
-        List<Element> out = new ArrayList<>();
-        collect(root, filter, out);
-        return out;
-    }
-
-    private static void collect(Node n, Predicate<Element> filter, List<Element> out) {
-        for (Node c : n.childNodes()) {
-            if (c instanceof Element e && filter.test(e)) out.add(e);
-            collect(c, filter, out);
-        }
     }
 
     /** Runs a selector call; an invalid selector (or position) becomes a SyntaxError, as in browsers. */
@@ -315,6 +277,7 @@ final class DomBindings {
         e.remove();
     }
 
+    /** {@code e}, after a layout flush so its geometry is current. */
     private Element laidOut(Element e) {
         rt.document.flushLayout();
         return e;
@@ -365,15 +328,15 @@ final class DomBindings {
     }
 
     private static String title(Document d) {
-        Element title = d.head() == null ? null : d.head().getElementsByTagName("title").stream().findFirst().orElse(null);
-        return title == null ? "" : title.textContent().strip().replaceAll("\\s+", " ");
+        Element title = d.head() == null ? null : d.head().firstDescendant(e -> e.tagName().equals("title"));
+        return title == null ? "" : title.collapsedText();
     }
 
     private static void setTitle(Document d, String value) {
         Element head = d.head();
         if (head == null) return;
-        Element title = head.getElementsByTagName("title").stream().findFirst()
-                .orElseGet(() -> head.appendChild(d.createElement("title")));
+        Element title = head.firstDescendant(e -> e.tagName().equals("title"));
+        if (title == null) title = head.appendChild(d.createElement("title"));
         title.setTextContent(value);
     }
 

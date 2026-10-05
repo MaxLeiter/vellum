@@ -6,10 +6,8 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.shadow.rhino.Scriptable;
 
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -70,7 +68,7 @@ final class StyleBindings {
                     e.toggleClass(a.str(0), a.bool(1));
                     return a.bool(1);
                 })
-                .method("replace", (e, a) -> replaceClass(e, a.str(0), a.str(1)))
+                .method("replace", (e, a) -> e.replaceClass(a.str(0), a.str(1)))
                 .action("forEach", (e, a) -> {
                     List<String> classes = List.copyOf(e.classes());
                     for (int i = 0; i < classes.size(); i++) {
@@ -123,7 +121,7 @@ final class StyleBindings {
     }
 
     private String computedValue(Computed c, String property) {
-        rt.document.flushLayout();
+        rt.document.flushStyle();
         ComputedStyle style = switch (c.pseudo()) {
             case "::before", ":before" -> c.element().beforeStyle;
             case "::after", ":after" -> c.element().afterStyle;
@@ -135,15 +133,6 @@ final class StyleBindings {
     private static String classAttribute(Element e) {
         String value = e.getAttribute("class");
         return value == null ? "" : value;
-    }
-
-    /** {@code classList.replace(old, new)}, keeping the token's position. */
-    private static boolean replaceClass(Element e, String oldToken, String newToken) {
-        if (!e.hasClass(oldToken)) return false;
-        Set<String> classes = new LinkedHashSet<>();
-        for (String c : e.classes()) classes.add(c.equals(oldToken) ? newToken : c);
-        e.setAttribute("class", String.join(" ", classes));
-        return true;
     }
 
     // ---- Names ----

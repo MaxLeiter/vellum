@@ -17,8 +17,14 @@ public final class Text extends Node {
     public void setData(String data) {
         data = data == null ? "" : data;
         if (data.equals(this.data)) return;
+        boolean emptinessFlipped = data.isEmpty() != this.data.isEmpty();
         this.data = data;
-        if (ownerDocument != null) ownerDocument.textChanged(this);
+        ownerDocument.textChanged(this, emptinessFlipped);
+    }
+
+    @Override
+    Node cloneShallow() {
+        return new Text(ownerDocument, data);
     }
 
     @Override

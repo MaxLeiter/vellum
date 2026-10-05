@@ -106,8 +106,8 @@ public final class StyleEngine {
             readsAttributes |= cascade.readAttributes();
             el.afterStyle = pseudo(el, base, rem, PseudoElement.AFTER, el.afterStyle);
             readsAttributes |= cascade.readAttributes();
-            boolean textField = el.tagName().equals("input") || el.tagName().equals("textarea");
-            el.placeholderStyle = textField ? pseudo(el, base, rem, PseudoElement.PLACEHOLDER, el.placeholderStyle) : null;
+            el.placeholderStyle = el.isTextControl()
+                    ? pseudo(el, base, rem, PseudoElement.PLACEHOLDER, el.placeholderStyle) : null;
             state.remember(matched, parent, container, generation, readsAttributes);
         }
         if (parent == null && base.fontSize != rootFontSize) {
@@ -190,8 +190,9 @@ public final class StyleEngine {
                         out.add(new Source(loadSheet(document.resolveUrl(href)), media(e)));
                     }
                 }
-                case "template" -> { }
-                default -> collectSheets(e, out, usedStyles);
+                default -> {
+                    if (!e.hasInertContent()) collectSheets(e, out, usedStyles);
+                }
             }
         }
     }
