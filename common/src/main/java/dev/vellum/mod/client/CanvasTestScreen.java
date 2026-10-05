@@ -196,10 +196,12 @@ final class CanvasTestScreen extends Screen {
         if (mc.level == null || mc.player == null) return;
         if (pig == null) pig = EntityPortrait.create(EntityTypes.PIG, mc.level);
         if (pig == null) return;
-        ComputedStyle style = ComputedStyle.INITIAL; // standing on the bottom edge; the player looks at the pointer
+        // Standing on the bottom edge, looking ahead: the player's reach is measured from the first pose drawn
+        // (EntityReach), and the autopilot draws it here first, so its later portraits don't depend on the pointer.
+        ComputedStyle style = ComputedStyle.INITIAL;
         EntityPortrait.draw(c, pig, EntityPortrait.Pose.FRONT, style, -1, 0, 0, 30, 40);
         EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, false, 1, 0), style, -1, 30, 0, 30, 40);
-        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, true, 1, 0), style, -1, 62, 0, 30, 56);
+        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, false, 1, 0), style, -1, 62, 0, 30, 56);
     }
 
     @Override
