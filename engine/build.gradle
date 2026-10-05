@@ -2,6 +2,7 @@
 // MUST NOT depend on Minecraft or any loader. Compiled straight into each loader jar (like Chronicle's sim-core).
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
 
 repositories { mavenCentral() }
@@ -42,4 +43,18 @@ configurations {
 artifacts {
     engineJava sourceSets.main.java.sourceDirectories.singleFile
     engineResources sourceSets.main.resources.sourceDirectories.singleFile
+}
+
+java {
+    withSourcesJar()
+}
+
+// Published so mods compiling against vellum-common resolve the engine types its API uses (Document, events...).
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifactId = 'vellum-engine'
+            from components.java
+        }
+    }
 }
