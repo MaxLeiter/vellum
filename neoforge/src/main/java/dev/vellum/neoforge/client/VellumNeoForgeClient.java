@@ -6,6 +6,8 @@ import dev.vellum.mod.client.VellumClient;
 import dev.vellum.mod.client.VellumClientCommands;
 import dev.vellum.mod.client.VellumHud;
 import dev.vellum.mod.client.VellumScreens;
+import dev.vellum.mod.client.render.GuiSceneRenderState;
+import dev.vellum.mod.client.render.GuiSceneRenderer;
 import dev.vellum.mod.net.VellumNetwork;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -21,6 +23,7 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.event.RegisterPictureInPictureRenderersEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
@@ -33,6 +36,7 @@ public final class VellumNeoForgeClient {
         VellumClient.init(payload -> ClientPacketDistributor.sendToServer(payload));
         modBus.addListener(VellumNeoForgeClient::registerPayloadHandlers);
         modBus.addListener((RegisterGuiLayersEvent e) -> e.registerAbove(VanillaGuiLayers.TITLE, Constants.id("hud"), VellumHud::extract));
+        modBus.addListener((RegisterPictureInPictureRenderersEvent e) -> e.register(GuiSceneRenderState.class, GuiSceneRenderer::new));
         modBus.addListener((RegisterMenuScreensEvent e) -> {
             for (VellumScreens.ContainerBinding<?> b : VellumScreens.takeContainers()) registerMenuScreen(e, b);
         });

@@ -13,8 +13,11 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.function.Function;
+import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -50,6 +53,7 @@ public final class VellumScreens {
 
     private static final List<ContainerBinding<?>> CONTAINERS = new ArrayList<>();
     private static boolean containersRegistered;
+    private static final Map<String, Consumer<DocumentDriver>> PAGE_HOOKS = new HashMap<>();
 
     private VellumScreens() {}
 
@@ -104,6 +108,21 @@ public final class VellumScreens {
     public static List<ContainerBinding<?>> takeContainers() {
         containersRegistered = true;
         return Collections.unmodifiableList(CONTAINERS);
+    }
+
+    /**
+     * Runs {@code hook} whenever the page {@code url} loads in a screen or overlay (opened, reached by a link, or
+     * reloaded), before its scripts: to give a client-side page live data ({@code driver.push}, which may build on
+     * {@code driver.data()}, what the opener passed) and keep its driver to push updates or handle its messages.
+     */
+    public static void onPageLoad(String url, Consumer<DocumentDriver> hook) {
+        PAGE_HOOKS.merge(url, hook, Consumer::andThen);
+    }
+
+    /** {@link DocumentDriver}: {@code url} is loading. */
+    static void pageLoading(String url, DocumentDriver driver) {
+        Consumer<DocumentDriver> hook = PAGE_HOOKS.get(url.split("[?#]", 2)[0]);
+        if (hook != null) hook.accept(driver);
     }
 
     /** A server session's page; replacing another session's screen tells that server it was closed. */

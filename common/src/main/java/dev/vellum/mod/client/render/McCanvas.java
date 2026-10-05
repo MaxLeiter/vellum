@@ -11,14 +11,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix3x2f;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Arrays;
@@ -33,7 +30,8 @@ import java.util.Arrays;
  *   <li><b>Clipping.</b> {@link #clipRect} pushes a vanilla scissor: the transformed rectangle's bounding box,
  *       which vanilla intersects with the enclosing scissor. Rounded clips are not supported.</li>
  *   <li><b>Opacity.</b> There are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
- *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity.</li>
+ *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes are
+ *       pictures blitted with a colour, so they fade (and tint).</li>
  *   <li><b>Geometry.</b> Rectangles and quads are submitted as {@link RectRenderState}s and {@link QuadsRenderState}s,
  *       so fractional positions, rotations and per-vertex colours all work. Consecutive primitives share one copy of
  *       the transform.</li>
@@ -60,11 +58,17 @@ public final class McCanvas implements Canvas {
     private float alpha = 1;
     /** Scissors pushed since the last {@link #save}; popped by the matching {@link #restore}. */
     private int scissors;
+    /**
+     * Empty clips since the last {@link #save}, and in total. An empty clip is never pushed as a scissor (the 26.3
+     * renderer throws on a zero-sized one at draw time); while any is active nothing is drawn.
+     */
+    private int emptyClips, emptyClipsTotal;
     private boolean tooltip;
 
     private Matrix3x2f[] savedMatrices = new Matrix3x2f[16];
     private float[] savedAlpha = new float[16];
     private int[] savedScissors = new int[16];
+    private int[] savedEmptyClips = new int[16];
     private int depth;
 
     /** The screen-space bounding box of the last {@link #boundsOf} call. */
@@ -104,13 +108,16 @@ public final class McCanvas implements Canvas {
             savedMatrices = Arrays.copyOf(savedMatrices, depth * 2);
             savedAlpha = Arrays.copyOf(savedAlpha, depth * 2);
             savedScissors = Arrays.copyOf(savedScissors, depth * 2);
+            savedEmptyClips = Arrays.copyOf(savedEmptyClips, depth * 2);
         }
         Matrix3x2f saved = savedMatrices[depth];
         if (saved == null) savedMatrices[depth] = saved = new Matrix3x2f();
         saved.set(m);
         savedAlpha[depth] = alpha;
         savedScissors[depth] = scissors;
+        savedEmptyClips[depth] = emptyClips;
         scissors = 0;
+        emptyClips = 0;
         depth++;
     }
 
@@ -127,10 +134,18 @@ public final class McCanvas implements Canvas {
         setMatrix(savedMatrices[depth]);
         alpha = savedAlpha[depth];
         scissors = savedScissors[depth];
+        emptyClips = savedEmptyClips[depth];
     }
 
     private void popScissors() {
         for (; scissors > 0; scissors--) g.disableScissor();
+        emptyClipsTotal -= emptyClips;
+        emptyClips = 0;
+    }
+
+    /** True inside an empty clip: draw calls do nothing. */
+    private boolean clippedAway() {
+        return emptyClipsTotal > 0;
     }
 
     @Override
@@ -160,9 +175,21 @@ public final class McCanvas implements Canvas {
     @Override
     public void clipRect(float x, float y, float width, float height) {
         boundsOf(x, y, x + width, y + height);
+        int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
+        ScreenRectangle current = g.scissorStack.peek();
+        if (current != null) {
+            x0 = Math.max(x0, current.left());
+            y0 = Math.max(y0, current.top());
+            x1 = Math.min(x1, current.right());
+            y1 = Math.min(y1, current.bottom());
+        }
+        if (clippedAway() || x1 <= x0 || y1 <= y0) {
+            emptyClips++;
+            emptyClipsTotal++;
+            return;
+        }
         g.pose().identity();
-        int x0 = Math.round(bx0), y0 = Math.round(by0);
-        g.enableScissor(x0, y0, Math.max(x0, Math.round(bx1)), Math.max(y0, Math.round(by1)));
+        g.enableScissor(x0, y0, x1, y1);
         scissors++;
     }
 
@@ -175,14 +202,14 @@ public final class McCanvas implements Canvas {
 
     @Override
     public void fillRect(float x, float y, float width, float height, int argb) {
-        if (width <= 0 || height <= 0) return;
+        if (clippedAway() || width <= 0 || height <= 0) return;
         int c = color(argb);
         if (ARGB.alpha(c) != 0) rect(RenderPipelines.GUI, TextureSetup.noTexture(), x, y, width, height, false, 0, 0, 0, 0, c);
     }
 
     @Override
     public void fillQuads(float[] xy, int[] colors, int quadCount) {
-        if (quadCount <= 0) return;
+        if (clippedAway() || quadCount <= 0) return;
         float[] v = Arrays.copyOf(xy, quadCount * 8); // the caller may reuse its buffers before we render
         int[] c = new int[quadCount * 4];
         for (int i = 0; i < c.length; i++) c[i] = color(colors[i]);
@@ -204,6 +231,7 @@ public final class McCanvas implements Canvas {
 
     @Override
     public void drawText(String text, float x, float y, FontSpec font, int argb, int decorations, boolean shadow) {
+        if (clippedAway()) return;
         int c = color(argb);
         if (text.isEmpty() || ARGB.alpha(c) == 0) return;
         McFontMetrics fonts = McFontMetrics.INSTANCE;
@@ -222,6 +250,7 @@ public final class McCanvas implements Canvas {
     @Override
     public void drawSprite(String spriteId, float x, float y, float width, float height, int tint) {
         Identifier sprite = McImages.id(spriteId);
+        if (clippedAway()) return;
         int c = color(tint);
         int w = Math.round(width), h = Math.round(height);
         if (sprite == null || ARGB.alpha(c) == 0 || w <= 0 || h <= 0) return;
@@ -244,7 +273,7 @@ public final class McCanvas implements Canvas {
     public void blit(Identifier texture, float x, float y, float width, float height,
                      float u0, float v0, float u1, float v1, int tint, boolean smooth) {
         int c = color(tint);
-        if (ARGB.alpha(c) == 0 || width <= 0 || height <= 0) return;
+        if (clippedAway() || ARGB.alpha(c) == 0 || width <= 0 || height <= 0) return;
         AbstractTexture t = mc.getTextureManager().getTexture(texture);
         var sampler = smooth ? RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR) : t.getSampler();
         rect(RenderPipelines.GUI_TEXTURED, TextureSetup.singleTexture(t.getTextureView(), sampler), x, y, width, height,
@@ -253,7 +282,7 @@ public final class McCanvas implements Canvas {
 
     /** Draws an item scaled from its 16 px base to {@code size}, with count and durability when asked. */
     public void drawItem(ItemStack stack, float x, float y, float size, boolean decorations) {
-        if (stack.isEmpty() || alpha < 0.5f) return; // items are pre-rendered sprites: they can't be faded
+        if (clippedAway() || stack.isEmpty() || alpha < 0.5f) return; // items are pre-rendered sprites: they can't be faded
         g.pose().set(m).translate(x, y).scale(size / 16f, size / 16f);
         g.item(stack, 0, 0);
         if (decorations) g.itemDecorations(mc.font, stack, 0, 0);
@@ -261,7 +290,7 @@ public final class McCanvas implements Canvas {
 
     /** Shows the vanilla tooltip for {@code stack} at the pointer; vanilla draws it on top at the end of the frame. */
     public void itemTooltip(ItemStack stack) {
-        if (mouseX < 0 || stack.isEmpty()) return;
+        if (clippedAway() || mouseX < 0 || stack.isEmpty()) return;
         g.setTooltipForNextFrame(mc.font, stack, (int) mouseX, (int) mouseY);
         tooltip = true;
     }
@@ -272,15 +301,22 @@ public final class McCanvas implements Canvas {
     }
 
     /**
-     * Draws an entity render state fitted into a local box (a picture-in-picture render: it is axis-aligned on screen,
-     * so rotations only move the box). {@code pixelsPerBlock} is in local px; like items, entities can't be faded.
+     * Draws a 3D scene (an entity, block or item) into a local box, a block being {@code pixelsPerBlock} local px,
+     * multiplied by {@code tint} and the opacity. A picture-in-picture render: axis-aligned on screen, so rotations
+     * of the canvas only move the box.
      */
-    public void drawEntity(EntityRenderState state, float pixelsPerBlock, Vector3f translation, Quaternionf rotation,
-                           @Nullable Quaternionf cameraTilt, float x, float y, float width, float height) {
-        if (alpha < 0.5f) return;
+    public void drawScene(Scene scene, float pixelsPerBlock, int tint, float x, float y, float width, float height) {
+        if (clippedAway()) return;
+        float a = alpha * ARGB.alphaFloat(tint);
         boundsOf(x, y, x + width, y + height);
-        g.entity(state, pixelsPerBlock * lengthScale(), translation, rotation, cameraTilt,
-                Math.round(bx0), Math.round(by0), Math.round(bx1), Math.round(by1));
+        int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
+        float scale = pixelsPerBlock * lengthScale();
+        ScreenRectangle scissor = g.scissorStack.peek();
+        // Pictures are rendered even where nothing of them shows: skip those scrolled or clipped away.
+        if (a <= 0 || x1 <= x0 || y1 <= y0 || scale <= 0 || clippedBounds(scissor) == null) return;
+        // The picture is premultiplied, so fading scales every channel.
+        int color = ARGB.colorFromFloat(a, a * ARGB.redFloat(tint), a * ARGB.greenFloat(tint), a * ARGB.blueFloat(tint));
+        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, color, x0, y0, x1, y1, scale, scissor));
     }
 
     /**
@@ -288,7 +324,7 @@ public final class McCanvas implements Canvas {
      * A slot that is under half opacity (items can't fade) or not wholly inside the clip is not placed.
      */
     public void placeSlot(int index, float x, float y, float width, float height) {
-        if (slots == null || alpha < 0.5f) return;
+        if (slots == null || clippedAway() || alpha < 0.5f) return;
         float cx = x + width / 2, cy = y + height / 2;
         int sx = Math.round(m.m00() * cx + m.m10() * cy + m.m20() - 8), sy = Math.round(m.m01() * cx + m.m11() * cy + m.m21() - 8);
         ScreenRectangle scissor = g.scissorStack.peek();

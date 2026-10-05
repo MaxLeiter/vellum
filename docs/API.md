@@ -64,6 +64,9 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
   them reaches your `onMessage` handlers first.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
+- `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
+  a reload), before its scripts run: give it live data with `driver.push(json)` (building on `driver.data()`, what
+  the opener passed) and keep the driver to push updates or `onMessage` to handle its messages.
 
 ```java
 VellumScreens.open("mymod:vellum/notes.html", notesJson).driver()
@@ -186,7 +189,8 @@ and `object-fit`.
 |---|---|---|
 | `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla tooltip. Items can't be faded: under 50% opacity they are hidden. |
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
-| `<entity>` | `type`, `player`, `id`, `follow-mouse`, `rotate`, `scale` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). `follow-mouse` turns its head toward the pointer; `rotate` turns it by degrees; `scale` multiplies the fitted size. 48×48 by default. |
+| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn. CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`, below); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer; `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
+| `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box. At yaw and pitch 0 it looks as in the inventory, at the size an item fills its slot; CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
 | `<player-head>` | `name`, `uuid` | A player's face with the hat layer. No attributes: your own face. 16×16 by default. |
 | `<sprite>` | `src` | A GUI-atlas sprite such as `minecraft:widget/button`, at its natural size. Nine-slice and tiled sprites keep their borders when resized. |
 | `<img>` | `src` | A texture (`ns:textures/....png`, or relative to the page), a sprite (`sprite:ns:path`) or a canvas (`canvas:<id>`, the `<canvas>` with that id). The natural size comes from the PNG, sprite or canvas. `sprite:` and `canvas:` URLs work in CSS `url()` too. |
@@ -200,9 +204,30 @@ tooltip wins over it. See SCRIPTING.md.
 
 CSS extras for Minecraft: `font-family: minecraft:default | minecraft:uniform | minecraft:alt |
 minecraft:illageralt | <any font id>` (`monospace` is uniform), `text-shadow: minecraft` (the game's own shadow),
-`-mc-tint` (multiplies images and sprites; items cannot be tinted), `sprite(ns:path)` backgrounds, and the chat
-colours as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels: `1px` scales with the GUI scale, `1dp` is one
-device pixel.
+`-mc-tint` (multiplies images, sprites, entities and models; items cannot be tinted), `sprite(ns:path)` backgrounds,
+and the chat colours as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels: `1px` scales with the GUI scale,
+`1dp` is one device pixel.
+
+`<entity>` and `<model>` are turned by CSS, so transitions and animations work on them:
+
+| Property | Value | |
+|---|---|---|
+| `-mc-yaw` | angle, `0` | Turns it about the vertical axis; positive turns its front to the right. |
+| `-mc-pitch` | angle, `0` | Views it from above (positive) or below. |
+| `-mc-model-scale` | number, `1` | Multiplies the size that fits the box. |
+
+```css
+.stage entity { animation: spin 8s linear infinite; }
+.stage:hover entity { animation-play-state: paused; }
+@keyframes spin { to { -mc-yaw: 360deg; } }
+
+model { transition: -mc-yaw 600ms ease-out; }
+model:hover { -mc-yaw: 180deg; -mc-pitch: 20deg; }
+.locked entity { -mc-tint: #000; opacity: 0.6; }   /* a silhouette */
+```
+
+With `rotatable`, dragging adds to these: sideways turns it, up and down tilts the view (up to 60°), and a flick
+keeps it spinning for a moment. A `mousedown` listener that calls `preventDefault()` stops the drag.
 
 ## Commands and development
 
@@ -212,6 +237,7 @@ device pixel.
 | `/vellum demo [name]` | client | The demo gallery, or one demo: `settings`, `layout`, `animation`, `templates`, `map`, `hud` (toggles the HUD overlay), `toast` (toggles an interactive HUD overlay: press T and click it). |
 | `/vellum demo chest` | server | The inventory demo on a real chest menu (needs cheats). |
 | `/vellum demo live` | server | The templates demo as a server session with live data. |
+| `/vellum showcase [page]` | client | The showcase gallery, or one page: `title`, `hud`, `shop`, `mobdex` (every mob in the game, with your kill statistics), `journal`, `console`, `models` (blocks, items and mobs in 3D). |
 | `/vellum reload` | client | Reloads every open page. Resource reloads (F3+T) do too. |
 | `/vellum canvastest` | client | Draws every Minecraft canvas primitive without the engine, to check the renderer. |
 

@@ -7,6 +7,9 @@ accessible field net/minecraft/client/gui/GuiGraphicsExtractor guiRenderState Ln
 accessible field net/minecraft/client/gui/GuiGraphicsExtractor scissorStack Lnet/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack;
 accessible class net/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack
 
+# GuiSceneRenderer blits its pictures with a colour (vanilla's picture renderers blit white).
+accessible field net/minecraft/client/gui/render/pip/PictureInPictureRenderer textureView Lcom/mojang/renderpearl/api/textures/GpuTextureView;
+
 # VellumContainerScreen moves menu slots to where layout put their <slot> elements.
 mutable field net/minecraft/world/inventory/Slot x I
 mutable field net/minecraft/world/inventory/Slot y I

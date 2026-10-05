@@ -222,12 +222,8 @@ final class Properties {
         };
         add(List.of(Prop.JUSTIFY_CONTENT, Prop.ALIGN_ITEMS, Prop.ALIGN_CONTENT, Prop.ALIGN_SELF,
                 Prop.JUSTIFY_ITEMS, Prop.JUSTIFY_SELF), align, KEYWORD);
-        Parser nonNegative = (r, ctx) -> {
-            Float f = Numeric.number(r, ctx);
-            return f == null || f < 0 ? null : f;
-        };
-        add(Prop.FLEX_GROW, nonNegative, NUMBER);
-        add(Prop.FLEX_SHRINK, nonNegative, NUMBER);
+        add(Prop.FLEX_GROW, Properties::nonNegativeNumber, NUMBER);
+        add(Prop.FLEX_SHRINK, Properties::nonNegativeNumber, NUMBER);
         add(Prop.FLEX_BASIS, length(FLEX_BASIS_KEYWORDS, false), TEXT);
         add(Prop.ORDER, Numeric::integer, TEXT);
         add(Prop.ROW_GAP, length(NORMAL_GAP, false), TEXT);
@@ -292,6 +288,8 @@ final class Properties {
         add(Prop.TRANSFORM_ORIGIN_X, (r, ctx) -> Images.axis(r, ctx, "left", "right"), TEXT);
         add(Prop.TRANSFORM_ORIGIN_Y, (r, ctx) -> Images.axis(r, ctx, "top", "bottom"), TEXT);
         add(Prop.TINT, CssColors::read, COLOR);
+        add(List.of(Prop.MODEL_YAW, Prop.MODEL_PITCH), Numeric::angle, v -> CssText.deg((Float) v));
+        add(Prop.MODEL_SCALE, Properties::nonNegativeNumber, NUMBER);
         add(Prop.SCROLL_BEHAVIOR, Keywords.parser(Map.of("auto", false, "smooth", true)),
                 v -> (Boolean) v ? "smooth" : "auto");
         add(Prop.SCROLLBAR_WIDTH, Keywords.parser(Map.of("auto", 2, "thin", 1, "none", 0)),
@@ -373,6 +371,11 @@ final class Properties {
             } while (r.comma());
             return List.copyOf(out);
         };
+    }
+
+    private static Object nonNegativeNumber(ValueReader r, ValueContext ctx) {
+        Float f = Numeric.number(r, ctx);
+        return f == null || f < 0 ? null : f;
     }
 
     private static Parser nonNegativeTime() {

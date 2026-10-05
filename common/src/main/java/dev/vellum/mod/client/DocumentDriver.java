@@ -168,6 +168,7 @@ public final class DocumentDriver {
         LIVE.add(this);
         error = null;
         tooltipSource = null; // translations may have changed
+        if (html == null) VellumScreens.pageLoading(url, this);
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
             Constants.LOG.error("Vellum: page not found: {}", url);
@@ -180,7 +181,8 @@ public final class DocumentDriver {
     }
 
     private void applyViewport(@Nullable Document doc) {
-        if (doc != null) doc.setViewport(width, height, Minecraft.getInstance().getWindow().getGuiScale());
+        // A minimised or mid-resize window can report 0x0; a page laid out at zero size has nothing to show anyway.
+        if (doc != null) doc.setViewport(Math.max(1, width), Math.max(1, height), Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void disposeDocument() {
@@ -330,6 +332,16 @@ public final class DocumentDriver {
     }
 
     // ---- Messages ----
+
+    /** The page's URL ({@code ns:path/page.html}); for inline HTML, the base its relative URLs resolve against. */
+    public String url() {
+        return url;
+    }
+
+    /** The page's {@code vellum.data} as last pushed, or null. */
+    public @Nullable JsonElement data() {
+        return data == null ? null : JsonParser.parseString(data);
+    }
 
     /** Replaces {@code vellum.data}; the page's {@code vellum.on('data', fn)} listeners run. Kept across reloads. */
     public void push(JsonElement data) {

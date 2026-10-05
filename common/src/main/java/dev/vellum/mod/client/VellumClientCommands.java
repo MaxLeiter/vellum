@@ -24,7 +24,7 @@ public final class VellumClientCommands {
      */
     public static final List<String> SERVER_DEMOS = List.of("chest", "live");
     /** The show-off pages under {@code assets/vellum/vellum/showcase/}. */
-    public static final List<String> SHOWCASE = List.of("title", "hud", "shop", "mobdex", "journal", "console");
+    public static final List<String> SHOWCASE = List.of("title", "hud", "shop", "mobdex", "journal", "console", "models");
 
     private VellumClientCommands() {}
 
