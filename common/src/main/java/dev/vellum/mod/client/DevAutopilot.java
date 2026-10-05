@@ -84,6 +84,9 @@ public final class DevAutopilot {
         guiScale(mc, 3);
         shoot(mc, "canvastest_gui3", () -> {});
         guiScale(mc, 2);
+        for (String page : VellumClientCommands.SHOWCASE) {
+            shoot(mc, "showcase_" + page, () -> VellumScreens.open(VellumClientCommands.showcaseUrl(page)));
+        }
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
         }

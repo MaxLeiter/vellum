@@ -9,6 +9,23 @@ The API is loader-independent: the same calls work on NeoForge and Fabric.
 
 ## Depending on Vellum
 
+Gradle (until Vellum is on a public maven, publish it locally with `./gradlew publishToMavenLocal` from a Vellum
+checkout):
+
+```groovy
+repositories { mavenLocal() }
+
+// common/ (compiles against vanilla): the API, plus the engine types it exposes
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.1.0") }
+
+// neoforge/ and fabric/: the loader jar, so dev runs load Vellum as a mod (it bundles the engine and Rhino)
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.1.0") }   // or vellum-fabric-26.3
+```
+
+Declare the dependency in your mod metadata: `[[dependencies.<modid>]] modId="vellum" type="optional"` (or
+`"required"`) in `neoforge.mods.toml`, and `"suggests": {"vellum": "*"}` (or `"depends"`) in `fabric.mod.json`.
+Players install Vellum like any other mod; don't nest its jar in yours.
+
 - Treat Vellum as an **optional** dependency unless your mod is built around it. Check that it is loaded before
   touching `dev.vellum` classes:
   - NeoForge: `ModList.get().isLoaded("vellum")`
