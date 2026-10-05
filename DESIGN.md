@@ -247,9 +247,11 @@ and not inherited:
 - `-mc-model-scale: <number>` (initial 1): multiplies the size that fits the box.
 
 The `rotatable` attribute lets the pointer turn it as well: dragging sideways turns it, dragging up or down tilts the
-view (up to 60° either way), and a flick keeps spinning and eases out. The drag adds to the CSS angles
-(`host.Turntable`; replaced content takes presses through `ReplacedContent.press`, after `mousedown` listeners, which
-can cancel it). The UA stylesheet gives rotatable content `cursor: grab` (`grabbing` while held).
+view (up to 60° either way), and a flick keeps spinning and eases out. The engine handles it as a control: a press on
+a replaced element with `rotatable` that no `mousedown` listener cancelled drives the element's `input.Turntable`
+(in viewport px, on the document's frame clock, with frames requested while it spins), and the content adds
+`Turntable.yaw(element)` and `Turntable.pitch(element)` to the CSS angles. The UA stylesheet gives rotatable
+`<entity>` and `<model>` `cursor: grab` (`grabbing` while held).
 
 ### User-agent stylesheet (`engine/src/main/resources/vellum/ua.css`)
 - `*, ::before, ::after { box-sizing: border-box }` (deliberate deviation: border-box everywhere).
@@ -376,8 +378,8 @@ the scrollbar).
 
 - Pointer: hover chain (`:hover` on target and ancestors), `mouseover/out/enter/leave/move`, `mousedown/up`, `click`
   (same element down and up), `dblclick`, `contextmenu` (right button), `:active` while pressed, pointer capture
-  during drags (range thumb, scrollbar, text selection, replaced content that takes the press, such as rotatable 3D
-  content), and the cursor from `cursor` via `Host.setCursor`.
+  during drags (range thumb, scrollbar, text selection, a rotatable element's turntable), and the cursor from `cursor`
+  via `Host.setCursor`.
 - Wheel: deltas in GUI px, a notch being `InputHandler.WHEEL_NOTCH` (24 px) in every host; `wheel` event; if not
   cancelled, scrolls the nearest scroll container whose content holds the target that can move in that direction
   (smooth when `scroll-behavior: smooth`, default on), with scroll chaining.

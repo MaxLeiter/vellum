@@ -11,6 +11,7 @@ import dev.vellum.engine.event.WheelEvent;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.HitResult;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +22,8 @@ import java.util.Set;
  *
  * <p>The work is split into focused collaborators: {@link Pointer} (hover, active, clicks, capture, cursor),
  * {@link FocusNavigator} (tab order, focus-visible, autofocus), {@link Scroller} (wheel, smooth scrolling,
- * scrollbars), {@link TextField} / {@link RangeControl} / {@link SelectPopup} (per-control behaviour) and
+ * scrollbars), {@link TextField} / {@link RangeControl} / {@link SelectPopup} / {@link Turntable} (per-control
+ * behaviour) and
  * {@link Activation} (click default actions), {@link Tooltips} ({@code title} tooltips). This class routes input
  * between them.
  *
@@ -42,6 +44,8 @@ public final class InputHandler {
     private boolean suppressChar;
     /** Keys held down, so a keydown without a keyup in between is reported as auto-repeat. */
     private final Set<String> keysDown = new HashSet<>();
+    /** Turntables that are held or still spinning: frames keep coming until they stop. */
+    private final List<Turntable> turntables = new ArrayList<>();
 
     public InputHandler(Document document) {
         this.document = document;
@@ -115,8 +119,15 @@ public final class InputHandler {
         if (target.isTextControl()) drag = TextField.of(target).press(at[0], at[1], clicks, pointer.mods().shift());
         else if (target.inputType().equals("range")) drag = RangeControl.of(target).press(at[0]);
         else if (target.tagName().equals("select")) openPopup(target);
-        else if (target.replaced != null) drag = target.replaced.press(at[0], at[1]);
+        else if (target.replaced != null && target.hasAttribute("rotatable")) drag = turn(target);
         if (drag != null) pointer.capture(target, drag);
+    }
+
+    /** A press on a rotatable element: its turntable follows the pointer (in viewport px). */
+    private Drag turn(Element target) {
+        Turntable turntable = Turntable.of(target);
+        if (!turntables.contains(turntable)) turntables.add(turntable);
+        return turntable.press(pointer.x, pointer.y);
     }
 
     /** A mouse button went up. Returns true if the document is under the pointer. */
@@ -332,14 +343,15 @@ public final class InputHandler {
     public void tick(double nowMs) {
         if (document.scrolling().tick(nowMs)) trackHover();
         if (pointer.drag() != null) pointer.drag().move(pointer.x, pointer.y);
+        turntables.removeIf(t -> !t.moving());
         Element focused = document.focusedElement();
         if (focused != null && focused.isTextControl()) TextField.of(focused).blink(nowMs);
     }
 
-    /** Whether {@link #tick} has work every frame: a drag, or a focused text field's caret. */
+    /** Whether {@link #tick} has work every frame: a drag, a spinning turntable, or a focused text field's caret. */
     public boolean isActive() {
         Element focused = document.focusedElement();
-        return pointer.drag() != null || focused != null && focused.isTextControl();
+        return pointer.drag() != null || !turntables.isEmpty() || focused != null && focused.isTextControl();
     }
 
     /** Called after each relayout: keeps the caret in view, autofocus, re-hit-tests hover. */
@@ -355,6 +367,7 @@ public final class InputHandler {
     public void nodeRemoving(Node node) {
         pointer.forget(node);
         scroller.forget(node);
+        turntables.removeIf(t -> node.contains(t.element()));
         if (popup != null && node.contains(popup.select())) popup = null;
     }
 

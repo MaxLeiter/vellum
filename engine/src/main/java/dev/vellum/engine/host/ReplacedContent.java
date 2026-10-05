@@ -1,6 +1,5 @@
 package dev.vellum.engine.host;
 
-import dev.vellum.engine.input.Drag;
 import dev.vellum.engine.paint.Canvas;
 
 /**
@@ -23,13 +22,6 @@ public interface ReplacedContent {
      * on the canvas of the host that made its content.
      */
     void paint(Canvas canvas, float x, float y, float width, float height);
-
-    /**
-     * A primary press on the element that no {@code mousedown} listener cancelled, at (x, y) in its border box (local
-     * px): return a drag to receive the pointer until the button is released (it gets viewport px), or null to leave
-     * the press alone. 3D content uses it to turn under the pointer ({@code rotatable}).
-     */
-    default Drag press(float x, float y) { return null; }
 
     /** Called when an attribute of the element changes, so the content can reload (e.g. a new src or item id). */
     default void attributeChanged(String name) {}
