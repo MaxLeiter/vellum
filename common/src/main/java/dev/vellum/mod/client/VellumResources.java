@@ -1,5 +1,6 @@
 package dev.vellum.mod.client;
 
+import dev.vellum.engine.host.FileStamps;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.platform.Services;
 import net.minecraft.client.Minecraft;
@@ -11,18 +12,22 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.stream.Stream;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Where pages, stylesheets and scripts come from. A URL {@code ns:path/file.css} is the resource
  * {@code assets/ns/path/file.css}, read through the resource manager (so resource packs can restyle UIs).
  *
  * <p>In a dev environment the source tree ({@code common/src/main/resources/assets}, found from the run directory)
- * is read first and watched: saving an .html, .css or .js file reloads open documents without a rebuild.
+ * is read first, and the source files pages were read from are watched: saving one reloads open documents without a
+ * rebuild.
  */
 public final class VellumResources {
-    private static final long POLL_MS = 500;
+    private static final long POLL_MS = 200;
     private static @Nullable Path sourceAssets;
+    /** Source files read for pages, which the watcher polls. */
+    private static final Set<Path> SOURCES_READ = ConcurrentHashMap.newKeySet();
 
     private VellumResources() {}
 
@@ -30,7 +35,7 @@ public final class VellumResources {
         if (!Services.PLATFORM.isDevelopmentEnvironment()) return;
         sourceAssets = findSourceAssets();
         if (sourceAssets == null) return;
-        Constants.LOG.info("Vellum: dev mode, reading and watching UI sources in {}", sourceAssets);
+        Constants.LOG.info("Vellum: dev mode, reading UI sources from {} and reloading pages when they are saved", sourceAssets);
         Thread watcher = new Thread(VellumResources::watch, "Vellum source watcher");
         watcher.setDaemon(true);
         watcher.start();
@@ -42,7 +47,10 @@ public final class VellumResources {
         if (id == null) return null;
         Path source = sourceFile(id);
         try {
-            if (source != null) return Files.readString(source, StandardCharsets.UTF_8);
+            if (source != null) {
+                SOURCES_READ.add(source);
+                return Files.readString(source, StandardCharsets.UTF_8);
+            }
             var resource = Minecraft.getInstance().getResourceManager().getResource(id);
             if (resource.isEmpty()) return null;
             try (InputStream in = resource.get().open()) {
@@ -70,36 +78,14 @@ public final class VellumResources {
     }
 
     private static void watch() {
-        long last = fingerprint();
+        FileStamps stamps = new FileStamps();
         while (true) {
             try {
                 Thread.sleep(POLL_MS);
             } catch (InterruptedException e) {
                 return;
             }
-            long now = fingerprint();
-            if (now != last) {
-                last = now;
-                Minecraft.getInstance().execute(DocumentDriver::reloadAll);
-            }
-        }
-    }
-
-    /** Changes whenever a page, stylesheet or script is saved, added or removed. */
-    private static long fingerprint() {
-        try (Stream<Path> files = Files.walk(sourceAssets)) {
-            return files.filter(p -> {
-                String name = p.getFileName().toString();
-                return name.endsWith(".html") || name.endsWith(".css") || name.endsWith(".js");
-            }).mapToLong(p -> {
-                try {
-                    return Files.getLastModifiedTime(p).toMillis() * 31 + p.hashCode();
-                } catch (IOException e) {
-                    return 0;
-                }
-            }).sum();
-        } catch (IOException | RuntimeException e) {
-            return 0;
+            if (stamps.changed(SOURCES_READ)) Minecraft.getInstance().execute(DocumentDriver::reloadAll);
         }
     }
 }
