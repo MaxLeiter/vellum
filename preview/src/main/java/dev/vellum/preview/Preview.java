@@ -17,13 +17,15 @@ import java.util.Optional;
 public final class Preview {
     private static final String USAGE = """
             Usage: preview <page.html> [--scale N] [--size WxH] [--data data.json] [--snapshot out.png [--frames N]]
+                   preview <page.html> --actions actions.txt [--out dir] [--snapshot out.png] [--scale N] [--size WxH]
                    preview --canvas-test [--scale N] [--size WxH] [--snapshot out.png]
             The GUI size defaults to 427x240 (1280x720 at GUI scale 3), the scale to 2.""";
 
     /** Command line options. Sizes are GUI px. */
-    record Options(Path page, boolean canvasTest, int scale, int width, int height, Path data, Path snapshot, int frames) {
+    record Options(Path page, boolean canvasTest, int scale, int width, int height, Path data, Path snapshot, int frames,
+                   Path actions, Path out) {
         static Options parse(String... args) {
-            Path page = null, data = null, snapshot = null;
+            Path page = null, data = null, snapshot = null, actions = null, out = null;
             boolean canvasTest = false;
             int scale = 2, width = CanvasTest.WIDTH, height = CanvasTest.HEIGHT, frames = 1;
             for (int i = 0; i < args.length; i++) {
@@ -34,6 +36,8 @@ public final class Preview {
                     case "--frames" -> frames = positive(value(args, ++i, arg));
                     case "--data" -> data = Path.of(value(args, ++i, arg));
                     case "--snapshot" -> snapshot = Path.of(value(args, ++i, arg));
+                    case "--actions" -> actions = Path.of(value(args, ++i, arg));
+                    case "--out" -> out = Path.of(value(args, ++i, arg));
                     case "--size" -> {
                         String[] size = value(args, ++i, arg).split("x");
                         if (size.length != 2) throw new IllegalArgumentException("--size takes WxH, e.g. 427x240");
@@ -47,7 +51,20 @@ public final class Preview {
                 }
             }
             if (canvasTest == (page != null)) throw new IllegalArgumentException("Give either a page or --canvas-test");
-            return new Options(page, canvasTest, scale, width, height, data, snapshot, frames);
+            if (actions != null && canvasTest) throw new IllegalArgumentException("--actions needs a page");
+            return new Options(page, canvasTest, scale, width, height, data, snapshot, frames, actions, out);
+        }
+
+        /** Runs without a window: a snapshot or a script of actions. */
+        boolean headless() {
+            return snapshot != null || actions != null;
+        }
+
+        /** Where {@code shot} actions write: {@code --out}, else beside the snapshot, else the working directory. */
+        Path shots() {
+            if (out != null) return out;
+            Path parent = snapshot == null ? null : snapshot.toAbsolutePath().getParent();
+            return parent != null ? parent : Path.of("");
         }
 
         private static String value(String[] args, int i, String option) {
@@ -77,7 +94,7 @@ public final class Preview {
             System.exit(2);
             return;
         }
-        if (options.snapshot() != null) System.setProperty("java.awt.headless", "true");
+        if (options.headless()) System.setProperty("java.awt.headless", "true");
 
         Optional<Path> jar = MinecraftAssets.findClientJar();
         System.out.println(jar.map(j -> "Minecraft assets: " + j).orElse("No Minecraft " + MinecraftAssets.MINECRAFT_VERSION
@@ -90,10 +107,35 @@ public final class Preview {
                 options.data() == null ? null : Files.readString(options.data()),
                 new Viewport(options.width(), options.height(), options.scale()));
 
+        if (options.actions() != null) {
+            System.exit(actions((PageScene) scene, new FrameRenderer(assets, font), options));
+        }
         if (options.snapshot() != null) {
             System.exit(snapshot(scene, new FrameRenderer(assets, font), options));
         }
         SwingUtilities.invokeLater(() -> new PreviewWindow(scene, host, options.scale(), options.width(), options.height()).show());
+    }
+
+    /**
+     * Runs the {@code --actions} script, then writes the last frame to {@code --snapshot} if given. Exits 1 if the
+     * page failed, 2 if the script is malformed or names something that is not there.
+     */
+    private static int actions(PageScene scene, FrameRenderer renderer, Options options) throws IOException {
+        try {
+            Actions actions = Actions.parse(Files.readString(options.actions()));
+            Path shots = options.shots();
+            Files.createDirectories(shots.toAbsolutePath());
+            BufferedImage image = actions.run(scene, renderer, options.width(), options.height(), options.scale(), shots,
+                    System.out);
+            if (options.snapshot() != null) {
+                ImageIO.write(image, "png", options.snapshot().toFile());
+                System.out.println("Wrote " + options.snapshot().toAbsolutePath());
+            }
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.err.println(options.actions() + ": " + e.getMessage());
+            return 2;
+        }
+        return scene.error() == null ? 0 : 1;
     }
 
     /** Renders {@code frames} frames 16 ms apart and writes the last; exits non-zero if the page failed. */
