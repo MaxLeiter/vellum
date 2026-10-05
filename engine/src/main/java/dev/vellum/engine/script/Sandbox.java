@@ -17,8 +17,11 @@ import java.util.function.Function;
 final class Sandbox extends ContextFactory {
     /** Instructions one entry may run; an interpreted tight loop does roughly 100-250M per second. */
     static final long INSTRUCTION_BUDGET = 50_000_000L;
-    /** Wall-clock limit of one entry, checked whenever the observer runs. */
-    static final long TIME_BUDGET_MS = 250;
+    /**
+     * Wall-clock limit of one entry, checked whenever the observer runs. The instruction budget is the real guard;
+     * this only catches slow host calls, so it is generous enough for a cold JVM's first template pass.
+     */
+    static final long TIME_BUDGET_MS = 1000;
     static final int MAX_STACK_DEPTH = 1000;
     private static final int OBSERVER_INTERVAL = 10_000;
 
