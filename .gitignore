@@ -19,3 +19,6 @@ runs
 
 # agent worktrees
 .ws/
+
+# demo videos (large binaries)
+media/
