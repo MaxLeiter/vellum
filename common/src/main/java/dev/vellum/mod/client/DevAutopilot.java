@@ -3,8 +3,6 @@ package dev.vellum.mod.client;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.Window;
-import dev.vellum.engine.dom.Document;
-import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
@@ -13,8 +11,6 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.client.renderer.entity.state.ArmorStandRenderState;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Rotations;
@@ -190,10 +186,10 @@ public final class DevAutopilot {
         shoot(mc, "showcase_mobdex_unseen", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("mobdex"),
                 JsonParser.parseString("{\"start\": {\"mob\": \"warden\"}}")));
         mobdexList(mc);
-        // Dragging the Turntable's big model (rotatable): it turns and tilts, and keeps turning when let go.
+        // Dragging the Turntable's big model (rotatable): it turns and tilts.
         steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
         settle("the models page", VellumAutomation::screen, 0);
-        drag(mc, "model[rotatable]", 60, 20);
+        drag("model[rotatable]", 60, 20);
         shoot(mc, "showcase_models_dragged", () -> VellumAutomation.screen().ifPresent(VellumAutomation::leave));
         // Portraits: whole bodies and head-and-shoulders crops at a few sizes, and armour stands drawn from the
         // autopilot's render state (arms, one raised, no base plate). At GUI scale 3 too, where they are sharper.
@@ -635,32 +631,13 @@ public final class DevAutopilot {
         settle("the hover over " + selector, VellumAutomation::screen, 0);
     }
 
-    /**
-     * Drags with the left button from the centre of the open page's first {@code selector} element by (dx, dy) GUI px,
-     * a step a tick, as a player would.
-     */
-    private static void drag(Minecraft mc, String selector, double dx, double dy) {
-        MouseButtonInfo left = new MouseButtonInfo(1, 0); // SDL's left button
-        double[] from = new double[2];
+    /** Drags the open page's first {@code selector} element by (dx, dy) GUI px ({@link VellumAutomation#drag}). */
+    private static void drag(String selector, float dx, float dy) {
         steps.add(() -> {
-            Document doc = mc.gui.screen() instanceof VellumScreen screen ? screen.driver().document() : null;
-            Element target = doc == null ? null : doc.querySelector(selector);
-            if (target == null) {
+            if (!VellumAutomation.screen().map(page -> page.drag(selector, dx, dy)).orElse(false)) {
                 Constants.LOG.warn("Vellum autopilot: no {} to drag", selector);
-                return;
             }
-            float[] box = target.getBoundingClientRect();
-            from[0] = box[0] + box[2] / 2;
-            from[1] = box[1] + box[3] / 2;
-            mc.gui.screen().mouseMoved(from[0], from[1]);
-            mc.gui.screen().mouseClicked(new MouseButtonEvent(from[0], from[1], left), false);
         });
-        int moves = 6;
-        for (int i = 1; i <= moves; i++) {
-            double t = (double) i / moves;
-            steps.add(() -> mc.gui.screen().mouseMoved(from[0] + dx * t, from[1] + dy * t));
-        }
-        steps.add(() -> mc.gui.screen().mouseReleased(new MouseButtonEvent(from[0] + dx, from[1] + dy, left)));
     }
 
     private static void guiScale(Minecraft mc, int scale) {

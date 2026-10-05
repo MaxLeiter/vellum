@@ -34,10 +34,8 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
         driver.resize(width, height);
     }
 
-    /** The page follows the render's pointer as well as move events, so it is hovered from the first frame. */
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
-        driver.followPointer(mouseX, mouseY);
         driver.extract(g, mouseX, mouseY);
     }
 

@@ -12,6 +12,7 @@ import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +40,9 @@ import java.util.Optional;
 public final class VellumAutomation {
     /** Where {@link #leave} puts the pointer, in GUI px: outside the window, where no page or widget is. */
     private static final float OFF_WINDOW = -16;
+    /** The moves a {@link #drag} takes, as a quick hand would make them. */
+    private static final int DRAG_STEPS = 6;
+    private static final MouseButtonInfo LEFT = new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0);
 
     private final DocumentDriver driver;
     /** Whether the page is a HUD overlay's, which takes input through the screen it is interactive over. */
@@ -130,12 +134,19 @@ public final class VellumAutomation {
      */
     public boolean hover(String selector) {
         Screen screen = inputScreen();
-        Element e = find(selector);
-        float[] at = screen == null || e == null ? null : e.ownerDocument().pointerTarget(e);
-        // A click goes to the topmost interactive overlay with content there, else to the screen.
-        if (at == null || VellumHud.pointerDriverAt(at[0], at[1]) != (hud ? driver : null)) return false;
+        float[] at = screen == null ? null : aim(selector);
+        if (at == null) return false;
         moveTo(screen, at[0], at[1]);
         return true;
+    }
+
+    /**
+     * Where {@link #hover} would put the pointer, {x, y} in GUI px, without moving it (an element none of which
+     * shows is scrolled into view, as hover does); empty when hover would return false. For pointer paths of your
+     * own, such as a glide toward the element.
+     */
+    public Optional<float[]> pointerTarget(String selector) {
+        return Optional.ofNullable(inputScreen() == null ? null : aim(selector));
     }
 
     /** A left click on the first element matching {@code selector}, where {@link #hover} puts the pointer. */
@@ -166,6 +177,36 @@ public final class VellumAutomation {
         if (!hover(selector)) return false;
         Minecraft mc = Minecraft.getInstance();
         mc.mouseHandler.onScroll(mc.getWindow().handle(), 0, -notches);
+        return true;
+    }
+
+    /**
+     * Drags with the left button from where {@link #hover} puts the pointer to (dx, dy) GUI px from there: presses,
+     * moves there in a few steps with the button held, and releases, through the mouse handler as {@link #click}
+     * does, all at once. A {@code rotatable} element turns and tilts (and stops there: no time passes, so it has no
+     * speed to spin on with), a range slider or scrollbar follows, and a container screen's slots take a dragged
+     * stack. False, sending nothing, when hover is. The pointer stays where the drag ended.
+     */
+    public boolean drag(String selector, float dx, float dy) {
+        Screen screen = inputScreen();
+        float[] at = screen == null ? null : aim(selector);
+        if (at == null) return false;
+        moveTo(screen, at[0], at[1]);
+        Minecraft mc = Minecraft.getInstance();
+        long window = mc.getWindow().handle();
+        mc.mouseHandler.onButton(window, LEFT, InputConstants.PRESS);
+        float px = at[0], py = at[1];
+        for (int i = 1; i <= DRAG_STEPS; i++) {
+            float x = at[0] + dx * i / DRAG_STEPS, y = at[1] + dy * i / DRAG_STEPS;
+            moveTo(screen, x, y);
+            // With a button held the handler sends a drag too, unless an overlay holding the press takes it (the
+            // loaders' hooks ask VellumHud first).
+            MouseButtonEvent event = new MouseButtonEvent(x, y, LEFT);
+            if (!VellumHud.mouseDragged(event)) screen.mouseDragged(event, x - px, y - py);
+            px = x;
+            py = y;
+        }
+        mc.mouseHandler.onButton(window, LEFT, InputConstants.RELEASE);
         return true;
     }
 
@@ -242,6 +283,17 @@ public final class VellumAutomation {
     }
 
     // ---- Internals ----
+
+    /**
+     * Where pointer input reaches the first element matching {@code selector} ({@link Document#pointerTarget}), or
+     * null when nothing matches or a real pointer there would reach something else.
+     */
+    private float @Nullable [] aim(String selector) {
+        Element e = find(selector);
+        float[] at = e == null ? null : e.ownerDocument().pointerTarget(e);
+        // A click goes to the topmost interactive overlay with content there, else to the screen.
+        return at != null && VellumHud.pointerDriverAt(at[0], at[1]) == (hud ? driver : null) ? at : null;
+    }
 
     /**
      * The screen real input goes through to reach the page now: the open screen while it shows the page, or for an

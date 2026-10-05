@@ -404,6 +404,15 @@ public final class InputHandler {
     // ---- Queries ----
 
     /**
+     * Where the document last had the pointer, {x, y} in viewport px, from any pointer event (move, button or wheel);
+     * null before the first since it loaded and after {@link #mouseLeave}. Hosts that render with a pointer position
+     * compare it with theirs, to send a move when the two disagree.
+     */
+    public float[] pointer() {
+        return pointer.known() ? new float[] {pointer.x, pointer.y} : null;
+    }
+
+    /**
      * The tooltip to show now, or null. On an element whose content shows its own tooltip (an
      * {@code <item tooltip>}), that one at once, with the lines of the {@code title} / {@code title-json} that applies
      * after its own ({@link Tooltip#content()}). Elsewhere the nearest element with a title, from the hovered element

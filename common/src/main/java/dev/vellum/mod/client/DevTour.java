@@ -1,13 +1,8 @@
 package dev.vellum.mod.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
-import dev.vellum.engine.dom.Document;
-import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.mod.Constants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.sounds.SoundEvents;
 
@@ -19,7 +14,8 @@ import java.util.function.IntConsumer;
 /**
  * Dev-only scripted tour of the showcase for demo videos ({@code -Ptour}, which also sets {@code vellum.autopilot}).
  * The autopilot creates the world, then this plan drives the pages through Minecraft's own mouse and keyboard
- * handlers, so hover effects, clicks, sounds and scripts behave as they do for a player. With
+ * handlers, so hover effects, clicks, sounds and scripts behave as they do for a player: the pointer glides there as
+ * the window system would move it, and {@link VellumAutomation} aims, clicks and turns the wheel. With
  * {@code -Pvellum.tour.go=<file>} it waits for that file, which tools/record creates once capture has started.
  */
 final class DevTour {
@@ -31,7 +27,6 @@ final class DevTour {
     private final Minecraft mc;
     private final Deque<Runnable> steps;
     private final IntConsumer wait;
-    private double pointerX, pointerY;
 
     private DevTour(Minecraft mc, Deque<Runnable> steps, IntConsumer wait) {
         this.mc = mc;
@@ -67,13 +62,13 @@ final class DevTour {
         // Flexbox and grid: justify-content rows, then a grid-template-areas dashboard whose cells lift on hover.
         open(VellumClientCommands.demoUrl("layout"));
         pause(2.5);
-        scroll(".window", -2);
+        wheel(".window", 2);
         pause(1);
         for (String cell : new String[] {".side", ".head", ".main", ".stat", ".foot"}) {
             glide(".dashboard " + cell, 0.3);
             pause(0.5);
         }
-        scroll(".window", -3);
+        wheel(".window", 3);
         pause(1.5);
 
         // Keyframes and transitions: spinning and bobbing items, staggered slide-ins, hover lifts.
@@ -136,7 +131,10 @@ final class DevTour {
         });
     }
 
-    /** Moves the pointer to the centre of the first element matching {@code selector}, eased over {@code seconds}. */
+    /**
+     * Moves the pointer from where it is to where {@link VellumAutomation#hover} would put it on the first element
+     * matching {@code selector}, eased over {@code seconds}.
+     */
     private void glide(String selector, double seconds) {
         int ticks = Math.max(1, (int) Math.round(seconds * TPS));
         double[] path = new double[4]; // fromX, fromY, toX, toY, fixed when the glide starts
@@ -144,12 +142,16 @@ final class DevTour {
             int step = t;
             steps.add(() -> {
                 if (step == 1) {
-                    float[] r = rect(selector);
-                    if (r == null) return;
-                    path[0] = pointerX;
-                    path[1] = pointerY;
-                    path[2] = r[0] + r[2] / 2;
-                    path[3] = r[1] + r[3] / 2;
+                    Window window = mc.getWindow();
+                    path[0] = path[2] = mc.mouseHandler.getScaledXPos(window);
+                    path[1] = path[3] = mc.mouseHandler.getScaledYPos(window);
+                    float[] to = VellumAutomation.screen().flatMap(page -> page.pointerTarget(selector)).orElse(null);
+                    if (to == null) {
+                        Constants.LOG.warn("Vellum tour: the pointer can't reach {}", selector);
+                    } else {
+                        path[2] = to[0];
+                        path[3] = to[1];
+                    }
                 }
                 double k = ease((double) step / ticks);
                 move(path[0] + (path[2] - path[0]) * k, path[1] + (path[3] - path[1]) * k);
@@ -159,50 +161,28 @@ final class DevTour {
 
     private void click(String selector) {
         steps.add(() -> {
-            float[] r = rect(selector);
-            if (r == null) return;
-            move(r[0] + r[2] / 2, r[1] + r[3] / 2);
-            button(true);
-            button(false);
+            if (!VellumAutomation.screen().map(page -> page.click(selector)).orElse(false)) {
+                Constants.LOG.warn("Vellum tour: can't click {}", selector);
+            }
         });
     }
 
-    /** Wheel notches over the centre of {@code selector}; negative scrolls down, as the window system reports it. */
-    private void scroll(String selector, double notches) {
+    /** Wheel notches over {@code selector}; positive scrolls down. */
+    private void wheel(String selector, double notches) {
         steps.add(() -> {
-            float[] r = rect(selector);
-            if (r == null) return;
-            move(r[0] + r[2] / 2, r[1] + r[3] / 2);
-            mc.mouseHandler.onScroll(mc.getWindow().handle(), 0, notches);
+            if (!VellumAutomation.screen().map(page -> page.wheel(selector, notches)).orElse(false)) {
+                Constants.LOG.warn("Vellum tour: can't turn the wheel over {}", selector);
+            }
         });
     }
 
-    // ---- Input and geometry ----
-
-    /** The border box of the first match in GUI coordinates, or null (logged) when nothing matches. */
-    private float[] rect(String selector) {
-        Document document = mc.gui.screen() instanceof VellumScreen s ? s.driver().document()
-                : mc.gui.screen() instanceof VellumContainerScreen<?> c ? c.driver().document() : null;
-        Element element = document == null ? null : document.querySelector(selector);
-        if (element == null || element.box == null) {
-            Constants.LOG.warn("Vellum tour: nothing laid out matches {}", selector);
-            return null;
-        }
-        return Coordinates.boundingRect(element.box);
-    }
+    // ---- Input ----
 
     /** Moves the pointer to GUI coordinates through the mouse handler, as the window system would. */
     private void move(double gx, double gy) {
-        pointerX = gx;
-        pointerY = gy;
         Window window = mc.getWindow();
         mc.mouseHandler.onMove(window.handle(), gx * window.getScreenWidth() / window.getGuiScaledWidth(),
                 gy * window.getScreenHeight() / window.getGuiScaledHeight(), 0, 0);
-    }
-
-    private void button(boolean down) {
-        mc.mouseHandler.onButton(mc.getWindow().handle(), new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0),
-                down ? InputConstants.PRESS : InputConstants.RELEASE);
     }
 
     private static double ease(double t) {
