@@ -22,7 +22,7 @@ class InlineEffectsTest {
         RecordingCanvas c = page.paint();
         List<String> texts = c.ops("drawText").stream().map(call -> call.text() + "@" + call.alpha()).toList();
         assertEquals(List.of("a @1.0", "b @0.5", "c@0.5", " d@1.0"), texts);
-        assertEquals(0.5f, c.ops("fillRect").stream().filter(f -> f.color() == 0xFF0000FF).findFirst().orElseThrow().alpha());
+        assertEquals(0.5f, c.fill(0xFF0000FF).alpha());
         assertTrue(c.balanced());
         assertEquals(List.of("a "), new TestHost().load("<p style='margin: 0'>a <span style='opacity: 0'>b</span></p>").paint()
                 .ops("drawText").stream().map(RecordingCanvas.Call::text).toList(), "transparent: skipped");

@@ -19,11 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 class CoordinatesTest {
     private static final int RED = 0xFFFF0000, BLUE = 0xFF0000FF;
 
-    /** The fill painted in {@code color}. */
-    private static RecordingCanvas.Call painted(Page page, int color) {
-        return page.paint().ops("fillRect").stream().filter(c -> c.color() == color).findFirst().orElseThrow();
-    }
-
     @Test
     void transformsAndScrollingMapTheSameEverywhere() {
         Page page = new TestHost().load("""
@@ -36,7 +31,7 @@ class CoordinatesTest {
         // (0, 30 - 25) in it, scrolled.
         float[] rect = t.getBoundingClientRect();
         assertArrayEquals(new float[] {40, 5, 20, 20}, rect, 1e-3f);
-        assertArrayEquals(rect, painted(page, RED).bounds(), 1e-3f);
+        assertArrayEquals(rect, page.paint().fill(RED).bounds(), 1e-3f);
 
         HitResult hit = page.doc.hitTest(50, 15);
         assertSame(t, hit.element());
@@ -66,7 +61,7 @@ class CoordinatesTest {
         s.scrollTo(0, 100);
         assertArrayEquals(new float[] {5, 400, 5, 5}, a.getBoundingClientRect(), 1e-3f);
         assertArrayEquals(new float[] {315, 0, 5, 5}, f.getBoundingClientRect(), 1e-3f);
-        RecordingCanvas.Call fixed = painted(page, BLUE);
+        RecordingCanvas.Call fixed = page.paint().fill(BLUE);
         assertArrayEquals(new float[] {315, 0, 5, 5}, fixed.bounds(), 1e-3f);
         assertNull(fixed.clip(), "nor are they clipped by it");
         assertSame(f, page.doc.hitTest(316, 2).element());
@@ -77,7 +72,7 @@ class CoordinatesTest {
         assertSame(s.box, a.box.containingBlock);
         assertEquals(405, s.scrollHeight());
         assertArrayEquals(new float[] {5, 300, 5, 5}, a.getBoundingClientRect(), 1e-3f);
-        assertArrayEquals(new float[] {5, 300, 5, 5}, painted(page, RED).bounds(), 1e-3f);
+        assertArrayEquals(new float[] {5, 300, 5, 5}, page.paint().fill(RED).bounds(), 1e-3f);
     }
 
     @Test

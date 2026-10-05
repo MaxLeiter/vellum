@@ -48,9 +48,7 @@ class EndToEndTest {
         assertEquals(0x33 / 2, Colors.green(halfway), 1);
         assertEquals("rgb(" + Colors.red(halfway) + ", " + Colors.green(halfway) + ", " + Colors.blue(halfway) + ")",
                 page.computed("#b", "background-color"), "what getComputedStyle reports");
-        RecordingCanvas.Call fill = page.paint().ops("fillRect").stream()
-                .filter(c -> c.x() == 68 && c.w() == 60).findFirst().orElseThrow();
-        assertEquals(halfway, fill.color(), "painted mid-transition");
+        assertArrayEquals(new float[] {68, 4, 60, 30}, page.paint().fill(halfway).bounds(), 1e-3f, "painted mid-transition");
 
         page.click(b);
         page.frame(200);

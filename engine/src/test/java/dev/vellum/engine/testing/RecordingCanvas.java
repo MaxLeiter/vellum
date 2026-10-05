@@ -88,6 +88,12 @@ public final class RecordingCanvas implements Canvas {
         return trace().stream().filter(line -> line.startsWith(prefix)).toList();
     }
 
+    /** The first fillRect in {@code color}. */
+    public Call fill(int color) {
+        return ops("fillRect").stream().filter(c -> c.color == color).findFirst()
+                .orElseThrow(() -> new AssertionError("no fill in " + hex(color) + ": " + trace()));
+    }
+
     /** Colours of fillRect / fillRoundedRect calls, in order. */
     public List<Integer> fills() {
         return calls.stream().filter(c -> c.op.equals("fillRect") || c.op.equals("fillRoundedRect")).map(Call::color).toList();

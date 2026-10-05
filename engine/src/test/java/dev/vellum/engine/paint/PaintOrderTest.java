@@ -24,10 +24,6 @@ class PaintOrderTest {
                 + "background: #000001'>" + content + "</div>");
     }
 
-    private static RecordingCanvas.Call fill(RecordingCanvas c, int color) {
-        return c.ops("fillRect").stream().filter(f -> f.color() == color).findFirst().orElseThrow();
-    }
-
     @Test
     void followsAppendixE() {
         Page page = root("""
@@ -109,14 +105,14 @@ class PaintOrderTest {
         Page page = root("<div style='position: absolute; left: 10px; top: 10px; width: 20px; height: 10px; "
                 + "background: #00000a; transform: rotate(90deg)'></div>");
         // centre (20, 15); a 20×10 box turned a quarter is 10×20 around it
-        assertArrayEquals(new float[] {15, 5, 10, 20}, fill(page.paint(), A).bounds(), 1e-4f);
+        assertArrayEquals(new float[] {15, 5, 10, 20}, page.paint().fill(A).bounds(), 1e-4f);
     }
 
     @Test
     void transformPercentagesAndOriginUseTheBorderBox() {
         Page page = root("<div style='position: absolute; left: 10px; width: 20px; height: 10px; background: #00000a; "
                 + "transform: translate(50%, 0) scale(2); transform-origin: 0 0'></div>");
-        assertArrayEquals(new float[] {20, 0, 40, 20}, fill(page.paint(), A).bounds(), 1e-4f);
+        assertArrayEquals(new float[] {20, 0, 40, 20}, page.paint().fill(A).bounds(), 1e-4f);
     }
 
     @Test
@@ -127,7 +123,7 @@ class PaintOrderTest {
                   <div style="height: 30px"></div><div style="height: 10px; background: #00000c"></div><div style="height: 160px"></div>
                 </div>""");
         page.byId("list").scrollTo(0, 20);
-        RecordingCanvas.Call child = fill(page.paint(), C);
+        RecordingCanvas.Call child = page.paint().fill(C);
         assertEquals(21, child.y(), 1e-4, "10 + 1 + 30 - 20");
         assertArrayEquals(new float[] {11, 11, 48, 48}, child.clip(), 1e-4f);
     }
@@ -140,13 +136,13 @@ class PaintOrderTest {
                 + "</div></div>");
         Element scroller = page.byId("list");
         scroller.scrollTo(0, 20);
-        RecordingCanvas.Call escaped = fill(page.paint(), C);
+        RecordingCanvas.Call escaped = page.paint().fill(C);
         assertNull(escaped.clip());
         assertEquals(60, escaped.y(), 1e-4);
 
         scroller.setAttribute("style", list + "; position: relative"); // now the scroller is the containing block
         page.frame();
-        RecordingCanvas.Call inside = fill(page.paint(), C);
+        RecordingCanvas.Call inside = page.paint().fill(C);
         assertArrayEquals(new float[] {0, 0, 50, 50}, inside.clip(), 1e-4f);
         assertEquals(40, inside.y(), 1e-4);
     }
@@ -160,7 +156,7 @@ class PaintOrderTest {
                   <div style="height: 180px"></div>
                 </div>""");
         page.byId("list").scrollTo(0, 5);
-        RecordingCanvas.Call call = fill(page.paint(), C);
+        RecordingCanvas.Call call = page.paint().fill(C);
         assertEquals(5, call.y(), 1e-4);
         assertArrayEquals(new float[] {0, 0, 50, 50}, call.clip(), 1e-4f);
     }
