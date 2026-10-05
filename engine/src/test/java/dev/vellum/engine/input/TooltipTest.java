@@ -1,5 +1,6 @@
 package dev.vellum.engine.input;
 
+import dev.vellum.engine.css.StyleEngine;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
@@ -126,6 +127,94 @@ class TooltipTest {
         page.byId("a").setAttribute("title-nowrap", "");
         page.move(10, 10);
         assertFalse(at(500).wrap());
+    }
+
+    // ---- -mc-tooltip-delay ----
+
+    /**
+     * A map that shows its icons' titles at once (#map sets 0ms once, for every icon), one icon that waits a second
+     * (#slow overrides it), and a list that inherits 200ms from #list.
+     */
+    private static Page map() {
+        return new TestHost().load("""
+                <style>div { display: flex; height: 20px } span { width: 20px }</style>
+                <div id=map style="-mc-tooltip-delay: 0ms">
+                  <span id=rauca title="Rauca"></span><span id=slow title="Slow" style="-mc-tooltip-delay: 1s"></span>
+                </div>
+                <div id=list style="-mc-tooltip-delay: 200ms"><span id=row title="Row"></span></div>""");
+    }
+
+    @Test
+    void zeroDelayShowsOnTheFirstFrame() {
+        Page map = map();
+        map.hover(map.byId("rauca"));
+        assertTrue(map.doc.needsFrame(0), "the frame that shows it is due at once");
+        assertFalse(map.doc.settled());
+        map.frame(16);
+        Tooltip t = map.input.tooltip();
+        assertSame(map.byId("rauca"), t.element(), "on the first frame after the pointer arrived");
+        map.paint();
+        assertTrue(map.doc.settled(), "nothing is left waiting");
+        assertFalse(map.doc.needsFrame(32));
+        map.down(10, 10);
+        map.up(10, 10);
+        assertNull(map.input.tooltip(), "a press still hides it");
+    }
+
+    @Test
+    void theDelayIsInherited() {
+        Page map = map();
+        assertEquals(200, map.style("#row").tooltipDelay);
+        assertEquals("0.2s", map.computed("#row", "-mc-tooltip-delay"));
+        map.hover(map.byId("row"));
+        map.frame(16).paint(); // the hover's restyle
+        assertFalse(map.doc.needsFrame(199), "no frame is needed before the delay ends");
+        assertFalse(map.doc.settled(), "but the page is not settled while it waits");
+        assertNull(at(map, 199));
+        assertTrue(map.doc.needsFrame(200));
+        assertSame(map.byId("row"), at(map, 200).element());
+    }
+
+    @Test
+    void aChildOverridesTheInheritedDelay() {
+        Page map = map();
+        map.hover(map.byId("slow"));
+        assertNull(at(map, 16), "#slow sets its own 1s inside the 0ms map");
+        assertNull(at(map, 999));
+        assertSame(map.byId("slow"), at(map, 1000).element());
+        map.hover(map.byId("rauca"));
+        assertSame(map.byId("rauca"), at(map, 1016).element(), "its sibling still shows at once");
+    }
+
+    @Test
+    void theOwnersDelayCountsNotTheHoveredElements() {
+        Page page = new TestHost().load("<div id=row title=Row style='height: 20px; -mc-tooltip-delay: 0ms'>"
+                + "<span id=name style='-mc-tooltip-delay: 2s'>Iron Sword</span></div>");
+        page.hover(page.byId("name"));
+        assertSame(page.byId("row"), at(page, 16).element(), "the title is the row's, and so is the delay");
+    }
+
+    @Test
+    void theDelayIsANonNegativeTimeThatRestylesWithoutRelayout() {
+        assertEquals(500, Page.styleOf("color: red").tooltipDelay);
+        assertEquals("0.5s", StyleEngine.computedValue(Page.styleOf("color: red"), "-mc-tooltip-delay"));
+        assertEquals(250, Page.styleOf("-mc-tooltip-delay: 0.25s").tooltipDelay);
+        assertEquals(0, Page.styleOf("-mc-tooltip-delay: 0ms").tooltipDelay);
+        assertEquals(300, Page.styleOf("-mc-tooltip-delay: calc(100ms + 0.2s)").tooltipDelay);
+        for (String bad : new String[] {"-1ms", "0", "200", "10px", "none"}) {
+            assertEquals(500, Page.styleOf("-mc-tooltip-delay: " + bad).tooltipDelay, bad);
+        }
+        Page page = new TestHost().load("<style>.quick { -mc-tooltip-delay: 0ms }</style><div id=d title=D>Text</div>");
+        page.paint();
+        page.byId("d").addClass("quick");
+        assertFalse(page.frameLaysOut(16), "not read by layout");
+        assertEquals(0, page.style("#d").tooltipDelay);
+    }
+
+    /** Runs a frame at {@code ms} on {@code page} and asks for its tooltip. */
+    private static Tooltip at(Page page, double ms) {
+        page.frame(ms);
+        return page.input.tooltip();
     }
 
     // ---- Content with a tooltip of its own: <item tooltip> ----

@@ -416,8 +416,8 @@ public final class InputHandler {
      * The tooltip to show now, or null. On an element whose content shows its own tooltip (an
      * {@code <item tooltip>}), that one at once, with the lines of the {@code title} / {@code title-json} that applies
      * after its own ({@link Tooltip#content()}). Elsewhere the nearest element with a title, from the hovered element
-     * up, once the pointer has rested on it for half a second (and until a button or key is pressed). Hosts ask once
-     * per frame after painting and draw it on top at the pointer.
+     * up, once the pointer has rested on it for its {@code -mc-tooltip-delay} (half a second unless a rule sets it),
+     * and until a button or key is pressed. Hosts ask once per frame after painting and draw it on top at the pointer.
      */
     public Tooltip tooltip() {
         if (!pointer.known() || document.error() != null) return null;
