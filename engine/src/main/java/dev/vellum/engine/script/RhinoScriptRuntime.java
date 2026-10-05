@@ -76,7 +76,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     public void evaluate(String source, String sourceName) {
         String what = "Error in script " + sourceName;
         enter(what, cx -> {
-            Script script = compile(what, () -> cx.compileString(source, sourceName, 1, null));
+            Script script = compile(what, source, () -> cx.compileString(source, sourceName, 1, null));
             return script == null ? null : script.exec(cx, global, global);
         });
     }
@@ -87,7 +87,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         enter(what, cx -> {
             Callable handler = inlineHandlers.get(code);
             if (handler == null) {
-                handler = compile(what, () -> cx.compileFunction(global, "function (event) {\n" + code + "\n}",
+                handler = compile(what, code, () -> cx.compileFunction(global, "function (event) {\n" + code + "\n}",
                         document.url() + "#on" + event.type, 0, null));
                 if (handler == null) return null;
                 inlineHandlers.put(code, handler);
@@ -142,10 +142,13 @@ final class RhinoScriptRuntime implements ScriptRuntime {
      * Runs script work on behalf of the host. Errors are reported with {@code what} as the prefix and never thrown.
      * A nested entry (a listener run by a script's {@code el.click()}) shares the outer budget, and running out of
      * budget unwinds to the outermost entry, which reports it and skips settling: the page's state is unknown.
+     * Entries while the document loads (its scripts, the first template render, {@code DOMContentLoaded}) get the
+     * load's wall-clock budget.
      */
     Object enter(String what, Function<Context, Object> action) {
         if (disposed) return Undefined.instance;
-        return Sandbox.run(cx -> {
+        boolean loading = !document.readyState().equals("complete");
+        return Sandbox.run(loading ? Sandbox.LOAD_TIME_BUDGET_MS : Sandbox.TIME_BUDGET_MS, cx -> {
             if (depth > 0) return attempt(what, cx, action);
             depth++;
             templates.invalidate(); // any entry may change what templates show
@@ -179,10 +182,13 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         return null;
     }
 
-    /** Runs a compiler; a syntax error is reported with its location and yields null. */
-    <T> T compile(String what, Supplier<T> compiler) {
+    /**
+     * Runs a compiler of {@code source} in the sandbox ({@link Sandbox#compile}: off the clock, charged by length); a
+     * syntax error is reported with its location and yields null.
+     */
+    <T> T compile(String what, String source, Supplier<T> compiler) {
         try {
-            return compiler.get();
+            return Sandbox.compile(source, compiler);
         } catch (EvaluatorException e) {
             document.reportError(what + ": SyntaxError: " + describe(e), e);
             return null;

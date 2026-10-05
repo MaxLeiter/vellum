@@ -401,6 +401,9 @@ the scrollbar).
 JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The runtime:
 - Blocks all Java access (no `Packages`, no `java.*`, class shutter denies everything), enforces a CPU budget per
   entry (instruction observer; runaway scripts throw and are reported, the UI keeps working), and caps recursion.
+  The budget is instructions plus a wall clock for slow host calls; the clock leaves out one-off work a cold JVM makes
+  slow: compiling (charged to instructions by source length instead) and loading (a larger allowance while the
+  document loads: scripts, the template install and first render).
 - Globals: `window` (= global), `document`, `console` (log/info/warn/error/debug → host log), `setTimeout`,
   `setInterval`, `clearTimeout`, `clearInterval`, `requestAnimationFrame`, `cancelAnimationFrame`,
   `performance.now()`, `queueMicrotask`, `JSON`, `Math`, `structuredClone` (via JSON), `localStorage` (per-UI,
