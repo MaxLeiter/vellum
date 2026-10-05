@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+  <title>Vellum demos</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+      gap: 6px;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 6px;
+      color: #fff;
+      text-decoration: none;
+      background: var(--soft);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      transition: background-color 150ms, border-color 150ms, transform 150ms ease-out;
+    }
+
+    .card:hover {
+      background: rgba(110, 168, 255, 0.16);
+      border-color: rgba(110, 168, 255, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .card small {
+      color: mc-gray;
+    }
+
+    .card kbd {
+      color: mc-yellow;
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header>
+      <item id="minecraft:writable_book"></item>
+      <h1>Vellum</h1>
+      <span class="muted">demos</span>
+    </header>
+    <p class="muted">HTML, CSS and a little JavaScript, laid out by Vellum and painted by Minecraft.</p>
+    <nav class="cards">
+      <a class="card" href="settings.html">
+        <item id="minecraft:comparator"></item>
+        <b>Settings</b>
+        <small>Vanilla-styled form controls</small>
+      </a>
+      <a class="card" href="layout.html">
+        <item id="minecraft:scaffolding"></item>
+        <b>Layout</b>
+        <small>Flexbox and grid</small>
+      </a>
+      <a class="card" href="animation.html">
+        <item id="minecraft:clock"></item>
+        <b>Animation</b>
+        <small>Keyframes and transitions</small>
+      </a>
+      <a class="card" href="templates.html">
+        <item id="minecraft:writable_book"></item>
+        <b>Templates</b>
+        <small>Todos, a counter, live data</small>
+      </a>
+      <a class="card" href="map.html">
+        <item id="minecraft:filled_map"></item>
+        <b>Map</b>
+        <small>Tiles and a canvas</small>
+      </a>
+      <div class="card">
+        <item id="minecraft:chest"></item>
+        <b>Inventory</b>
+        <small>Real slots: <kbd>/vellum demo chest</kbd></small>
+      </div>
+      <div class="card">
+        <item id="minecraft:name_tag"></item>
+        <b>HUD</b>
+        <small>A title card: <kbd>/vellum demo hud</kbd></small>
+      </div>
+    </nav>
+  </main>
+</body>
+</html>

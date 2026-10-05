@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+  <title>Map</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    @keyframes ping {
+      from { transform: scale(0.6); opacity: 1; }
+      to { transform: scale(1.8); opacity: 0; }
+    }
+
+    .maps {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    /* A tile map from plain divs: a grid of 16 columns, one div per chunk. */
+    .tiles {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(16, 10px);
+      grid-auto-rows: 10px;
+      border: 1px solid var(--line);
+    }
+
+    .tile {
+      transition: filter 100ms;
+    }
+
+    .tile:hover {
+      outline: 1px solid #fff;
+    }
+
+    .you {
+      position: absolute;
+      left: 76px;
+      top: 46px;
+      width: 8px;
+      height: 8px;
+      border: 1px solid #fff;
+      border-radius: 4px;
+      animation: ping 1.2s ease-out infinite;
+      pointer-events: none;
+    }
+
+    canvas {
+      width: 96px;
+      height: 96px;
+      border: 1px solid var(--line);
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header>
+      <a class="back" href="index.html">‹ Back</a>
+      <h1>Map</h1>
+    </header>
+
+    <div class="maps">
+      <div class="tiles">
+        <div class="tile" v-for="tile in tiles" v-key="tile.i" :style="'background:' + tile.color" @mouseover="hovered = tile.name"></div>
+        <div class="you"></div>
+      </div>
+      <canvas id="minimap" width="48" height="48"></canvas>
+    </div>
+    <p class="muted">{{ hovered || 'Hover a tile' }}. The right map is a 48×48 canvas drawn by a script.</p>
+  </main>
+
+  <script>
+    const BIOMES = [
+      { name: 'Ocean', color: '#2b4f9e' },
+      { name: 'Beach', color: '#d9c98a' },
+      { name: 'Plains', color: '#7ab35a' },
+      { name: 'Forest', color: '#3f7d3a' },
+      { name: 'Mountains', color: '#8a8a8a' },
+      { name: 'Snow', color: '#f0f4f8' }
+    ];
+
+    // Smooth-ish deterministic height in 0..1 from overlapping waves.
+    function height(x, y) {
+      const h = Math.sin(x * 0.45) * 0.5 + Math.cos(y * 0.5 + x * 0.2) * 0.35 + Math.sin((x + y) * 0.9) * 0.15;
+      return (h + 1) / 2;
+    }
+
+    function biome(x, y) {
+      return BIOMES[Math.min(BIOMES.length - 1, Math.floor(height(x, y) * BIOMES.length))];
+    }
+
+    const tiles = [];
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 16; x++) {
+        const b = biome(x, y);
+        tiles.push({ i: y * 16 + x, name: b.name, color: b.color });
+      }
+    }
+    vellum.state({ tiles: tiles, hovered: '' });
+
+    const ctx = document.getElementById('minimap').getContext('2d');
+    for (let y = 0; y < 48; y++) {
+      for (let x = 0; x < 48; x++) {
+        ctx.fillStyle = biome(x / 3, y / 3).color;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    ctx.fillStyle = '#ff4040';
+    ctx.fillRect(23, 23, 2, 2);
+  </script>
+</body>
+</html>

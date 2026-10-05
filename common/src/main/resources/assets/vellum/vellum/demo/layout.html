@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <title>Layout</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    /* Flexbox: the same three chips under different justify-content values. */
+    .flex {
+      display: flex;
+      gap: 3px;
+      padding: 3px;
+      background: var(--soft);
+      border-radius: 3px;
+    }
+
+    .chip {
+      padding: 2px 6px;
+      background: #3d5a99;
+      border-radius: 8px;
+    }
+
+    .chip.grow {
+      flex: 1;
+      text-align: center;
+      background: #2f7a54;
+    }
+
+    /* Grid with named areas, like a little dashboard. */
+    .dashboard {
+      display: grid;
+      grid-template-columns: 60px 1fr 1fr;
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas:
+        "side head head"
+        "side main stat"
+        "side foot foot";
+      gap: 4px;
+      height: 100px;
+    }
+
+    .dashboard > * {
+      padding: 4px;
+      border-radius: 3px;
+      background: var(--soft);
+      transition: background-color 200ms, transform 200ms ease-out;
+    }
+
+    .dashboard > *:hover {
+      background: rgba(110, 168, 255, 0.25);
+      transform: scale(1.03);
+    }
+
+    .side { grid-area: side; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .head { grid-area: head; }
+    .main { grid-area: main; display: flex; align-items: center; justify-content: center; }
+    .stat { grid-area: stat; text-align: right; color: var(--good); font-size: 16px; }
+    .foot { grid-area: foot; color: mc-gray; }
+
+    /* Auto-filling tiles that reflow with the window width. */
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(20px, 1fr));
+      gap: 2px;
+    }
+
+    .tiles item {
+      width: 100%;
+      height: 20px;
+      padding: 2px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header>
+      <a class="back" href="index.html">‹ Back</a>
+      <h1>Layout</h1>
+    </header>
+
+    <h2>Flexbox</h2>
+    <div class="flex" style="justify-content: flex-start"><span class="chip">start</span><span class="chip">two</span><span class="chip">three</span></div>
+    <div class="flex" style="justify-content: center"><span class="chip">center</span><span class="chip">two</span><span class="chip">three</span></div>
+    <div class="flex" style="justify-content: space-between"><span class="chip">between</span><span class="chip">two</span><span class="chip">three</span></div>
+    <div class="flex"><span class="chip">fixed</span><span class="chip grow">flex: 1</span><span class="chip">fixed</span></div>
+
+    <h2>Grid areas</h2>
+    <div class="dashboard">
+      <nav class="side">
+        <item id="minecraft:compass"></item>
+        <item id="minecraft:clock"></item>
+        <item id="minecraft:spyglass"></item>
+      </nav>
+      <div class="head"><b>Overworld</b></div>
+      <div class="main"><entity type="minecraft:fox" follow-mouse style="width: 40px; height: 40px"></entity></div>
+      <div class="stat">98%</div>
+      <div class="foot">Hover a cell</div>
+    </div>
+
+    <h2>Auto-fill</h2>
+    <div class="tiles">
+      <item id="minecraft:oak_log"></item><item id="minecraft:birch_log"></item><item id="minecraft:spruce_log"></item>
+      <item id="minecraft:jungle_log"></item><item id="minecraft:acacia_log"></item><item id="minecraft:dark_oak_log"></item>
+      <item id="minecraft:mangrove_log"></item><item id="minecraft:cherry_log"></item><item id="minecraft:crimson_stem"></item>
+      <item id="minecraft:warped_stem"></item><item id="minecraft:bamboo_block"></item><item id="minecraft:pale_oak_log"></item>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,56 @@
+package dev.vellum.neoforge.client;
+
+import dev.vellum.mod.Constants;
+import dev.vellum.mod.client.DevAutopilot;
+import dev.vellum.mod.client.VellumClient;
+import dev.vellum.mod.client.VellumClientCommands;
+import dev.vellum.mod.client.VellumHud;
+import dev.vellum.mod.client.VellumScreens;
+import dev.vellum.mod.net.VellumNetwork;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
+import net.neoforged.neoforge.common.NeoForge;
+
+/** Client-only entry point: FML constructs this class on the physical client only. */
+@Mod(value = Constants.MOD_ID, dist = Dist.CLIENT)
+public final class VellumNeoForgeClient {
+    public VellumNeoForgeClient(IEventBus modBus, ModContainer container) {
+        VellumClient.init(payload -> ClientPacketDistributor.sendToServer(payload));
+        modBus.addListener(VellumNeoForgeClient::registerPayloadHandlers);
+        modBus.addListener((RegisterGuiLayersEvent e) -> e.registerAbove(VanillaGuiLayers.TITLE, Constants.id("hud"), VellumHud::extract));
+        modBus.addListener((RegisterMenuScreensEvent e) -> {
+            for (VellumScreens.ContainerBinding<?> b : VellumScreens.takeContainers()) registerMenuScreen(e, b);
+        });
+        modBus.addListener((AddClientReloadListenersEvent e) ->
+                e.addListener(Constants.id("documents"), (ResourceManagerReloadListener) resources -> VellumClient.onResourceReload()));
+        NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent e) -> e.getDispatcher().register(VellumClientCommands.create()));
+        if (DevAutopilot.ENABLED) NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> DevAutopilot.tick(Minecraft.getInstance()));
+    }
+
+    private static void registerPayloadHandlers(RegisterClientPayloadHandlersEvent event) {
+        // Runs on the client main thread (HandlerThread.MAIN is the default for this overload).
+        for (VellumNetwork.Clientbound<?> c : VellumNetwork.CLIENTBOUND) register(event, c);
+    }
+
+    private static <T extends CustomPacketPayload> void register(RegisterClientPayloadHandlersEvent event, VellumNetwork.Clientbound<T> c) {
+        event.register(c.type(), (payload, context) -> VellumClient.handle(payload));
+    }
+
+    private static <M extends AbstractContainerMenu> void registerMenuScreen(RegisterMenuScreensEvent event, VellumScreens.ContainerBinding<M> b) {
+        event.register(b.type().get(), b::create);
+    }
+}

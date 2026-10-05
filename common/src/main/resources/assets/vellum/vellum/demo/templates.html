@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head>
+  <title>Templates</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    .counter {
+      justify-content: center;
+    }
+
+    .counter .value {
+      min-width: 40px;
+      font-size: 16px;
+      text-align: center;
+    }
+
+    .counter button {
+      width: 20px;
+    }
+
+    .todos {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .todos li {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 4px;
+      background: var(--soft);
+      border-radius: 2px;
+    }
+
+    .todos li.done span {
+      color: mc-gray;
+      text-decoration: line-through;
+    }
+
+    .todos li button {
+      width: 14px;
+      height: 14px;
+      margin-left: auto;
+    }
+
+    .add input {
+      flex: 1;
+    }
+
+    .live {
+      padding: 4px 6px;
+      background: rgba(125, 220, 106, 0.1);
+      border: 1px solid rgba(125, 220, 106, 0.35);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header>
+      <a class="back" href="index.html">‹ Back</a>
+      <h1>Templates</h1>
+    </header>
+
+    <h2>Counter</h2>
+    <div class="row counter">
+      <button @click="count--">-</button>
+      <span class="value">{{ count }}</span>
+      <button @click="count++">+</button>
+    </div>
+
+    <h2>Todo</h2>
+    <div class="row add">
+      <input type="text" placeholder="Something to do..." v-model="draft" @keydown="if (event.key === 'Enter') add()">
+      <button @click="add()">Add</button>
+    </div>
+    <ul class="todos">
+      <li v-for="todo in todos" v-key="todo.id" :class="todo.done ? 'done' : ''">
+        <input type="checkbox" v-model="todo.done">
+        <span>{{ todo.text }}</span>
+        <button @click="remove(todo)">x</button>
+      </li>
+    </ul>
+    <p class="muted">{{ left() }} of {{ todos.length }} left</p>
+
+    <h2>Live data</h2>
+    <div class="live" v-if="source === 'server'">
+      {{ player }} at {{ x }}, {{ y }}, {{ z }} with {{ health }} health. Time: {{ time }}.
+      <button @click="vellum.send('say', 'Hello from Vellum!')">Say hello</button>
+    </div>
+    <p class="muted" v-if="source !== 'server'">Hi {{ player }}! Open this page with /vellum demo live and the server pushes fresh stats every second.</p>
+  </main>
+
+  <script>
+    // Expressions see loop variables, then vellum.data (player, x, y...), then this state, then globals.
+    const state = vellum.state({
+      count: 0,
+      draft: '',
+      nextId: 3,
+      todos: [
+        { id: 1, text: 'Punch a tree', done: true },
+        { id: 2, text: 'Build a Vellum UI', done: false }
+      ]
+    });
+
+    function add() {
+      const text = state.draft.trim();
+      if (text === '') return;
+      state.todos.push({ id: state.nextId++, text: text, done: false });
+      state.draft = '';
+    }
+
+    function remove(todo) {
+      state.todos = state.todos.filter(t => t !== todo);
+    }
+
+    function left() {
+      return state.todos.filter(t => !t.done).length;
+    }
+
+    // In a server session the server answers 'refresh' with a data push; the bindings update by themselves.
+    if (vellum.data.source === 'server') setInterval(() => vellum.send('refresh', {}), 1000);
+  </script>
+</body>
+</html>

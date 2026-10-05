@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+  <title>HUD title card</title>
+  <style>
+    /* A HUD overlay: no input, drawn over the game. The card fades in, holds, fades out, then closes itself. */
+    @keyframes card {
+      0% { opacity: 0; transform: translateY(-6px); }
+      15%, 80% { opacity: 1; transform: none; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes rule {
+      from { width: 0; }
+      to { width: 160px; }
+    }
+
+    .card {
+      position: absolute;
+      top: 22%;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      animation: card 4s ease-in-out both;
+    }
+
+    .over {
+      color: mc-gray;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .title {
+      font-size: 24px;
+      color: #f4e3b5;
+      text-shadow: minecraft;
+    }
+
+    .rule {
+      height: 1px;
+      background: linear-gradient(to right, transparent, #f4e3b5, transparent);
+      animation: rule 800ms 300ms ease-out both;
+    }
+
+    .sub {
+      color: #d8d0c0;
+      text-shadow: minecraft;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="over">Entering</span>
+    <span class="title">The Vellum Reaches</span>
+    <div class="rule"></div>
+    <span class="sub">Founded in the year 1 of the Web</span>
+  </div>
+
+  <script>
+    // The rule's own animationend bubbles up too; close only when the card's animation ends.
+    const card = document.querySelector('.card');
+    card.addEventListener('animationend', event => {
+      if (event.target === card) vellum.close();
+    });
+  </script>
+</body>
+</html>
