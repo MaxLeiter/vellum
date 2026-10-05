@@ -121,6 +121,19 @@ public final class Shapes {
         return radius <= 0 ? 0 : Math.max(0, radius - by);
     }
 
+    /**
+     * Twice the signed area (shoelace) of the polygon of {@code vertices} points at {@code xy[offset..]}: negative for
+     * vanilla's winding in GUI coordinates (y down), which the GUI pipeline's back-face culling keeps.
+     */
+    public static float signedArea(float[] xy, int offset, int vertices) {
+        float s = 0;
+        for (int i = 0; i < vertices; i++) {
+            int a = offset + 2 * i, b = offset + 2 * (i + 1 == vertices ? 0 : i + 1);
+            s += xy[a] * xy[b + 1] - xy[b] * xy[a + 1];
+        }
+        return s;
+    }
+
     public static boolean isRounded(float[] radii) {
         for (int i = 0; i < 8; i++) if (radii[i] > 0) return true;
         return false;

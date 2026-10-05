@@ -9,6 +9,9 @@ import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.ImageCanvas;
 import dev.vellum.preview.render.MinecraftFont;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * The {@code --canvas-test} scene: a fixed sheet of canvas primitives drawn without the engine (rects, gradient
  * quads, triangles, text styles and sizes, nine-sliced sprites, textures, items, clipping, rotation, alpha), to check
@@ -22,6 +25,7 @@ final class CanvasTest implements Scene {
 
     private final PreviewHost host;
     private final Document document;
+    private final Map<String, ReplacedContent> replaced = new HashMap<>();
 
     CanvasTest(PreviewHost host) {
         this.host = host;
@@ -202,12 +206,14 @@ final class CanvasTest implements Scene {
         c.drawSprite("minecraft:widget/button", x + 96, y, 30, 20, 0xFF80C0FF); // tinted sprite
     }
 
-    /** Draws the host's replaced content for a detached element with the given tag and attributes. */
+    /** Paints the replaced content of a detached element with the given tag and attributes, made once. */
     private void replaced(Canvas c, float x, float y, float w, float h, String tag, String... attributes) {
-        Element element = document.createElement(tag);
-        for (int i = 0; i < attributes.length; i += 2) element.setAttribute(attributes[i], attributes[i + 1]);
-        ReplacedContent content = host.createReplaced(element);
-        c.drawReplaced(content, element, x, y, w, h);
+        ReplacedContent content = replaced.computeIfAbsent(tag + " " + String.join(" ", attributes), key -> {
+            Element element = document.createElement(tag);
+            for (int i = 0; i < attributes.length; i += 2) element.setAttribute(attributes[i], attributes[i + 1]);
+            return document.replacedContent(element);
+        });
+        content.paint(c, x, y, w, h);
     }
 
     private static FontSpec font(float size, boolean bold, boolean italic) {

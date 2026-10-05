@@ -41,7 +41,7 @@ final class ItemContent extends McReplaced {
     }
 
     @Override
-    public void draw(McCanvas canvas, Element element, float x, float y, float width, float height) {
+    protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         float size = Math.min(width, height);
         canvas.drawItem(stack, x + (width - size) / 2, y + (height - size) / 2, size, true);
         if (element.isHovered() && element.hasAttribute("tooltip")) canvas.itemTooltip(stack);
@@ -49,7 +49,7 @@ final class ItemContent extends McReplaced {
 
     private ItemStack parse() {
         Identifier id = Identifier.tryParse(attr("id", "minecraft:air"));
-        int count = Math.max(1, (int) number("count", 1));
+        int count = Math.max(1, (int) element.numberAttribute("count", 1));
         if (id == null) return ItemStack.EMPTY;
         var level = Minecraft.getInstance().level;
         String components = element.getAttribute("components");

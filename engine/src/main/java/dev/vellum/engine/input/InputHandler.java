@@ -322,6 +322,12 @@ public final class InputHandler {
         if (focused != null && focused.isTextControl()) TextField.of(focused).blink(nowMs);
     }
 
+    /** Whether {@link #tick} has work every frame: a smooth scroll, a drag, or a focused text field's caret. */
+    public boolean isActive() {
+        Element focused = document.focusedElement();
+        return scroller.isActive() || pointer.drag() != null || focused != null && focused.isTextControl();
+    }
+
     /** Called after each relayout: clamps scroll offsets, keeps the caret in view, autofocus, re-hit-tests hover. */
     public void afterLayout() {
         scroller.clampAll();

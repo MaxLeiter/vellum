@@ -74,6 +74,12 @@ final class ValueContext {
         this.currentColor = style.color;
     }
 
+    /** Sets {@code currentColor}, for values read outside a cascade. */
+    ValueContext currentColor(int color) {
+        this.currentColor = color;
+        return this;
+    }
+
     void baseUrl(String baseUrl) {
         this.baseUrl = baseUrl == null ? "" : baseUrl;
     }

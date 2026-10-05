@@ -44,8 +44,16 @@ These do **not** work. Each is a syntax error unless noted:
 | `import` / `export` | several `<script>` elements; they share one global scope |
 | `Intl` (it is undefined) | format numbers and dates yourself |
 
-One semantic difference matters: **`let` in a loop head is one binding for the whole loop**, not one per iteration.
-Closures created in the loop all see the final value:
+Two semantic differences matter. **A `const` declared in a loop body is bound once**: later iterations keep the first
+value, so declare per-iteration values with `let`:
+
+```js
+for (let i = 0; i < 3; i++) { const b = i * 2; out.push(b); }  // pushes 0, 0, 0
+for (let i = 0; i < 3; i++) { let b = i * 2; out.push(b); }    // pushes 0, 2, 4
+```
+
+And **`let` in a loop head is one binding for the whole loop**, not one per iteration. Closures created in the loop
+all see the final value:
 
 ```js
 const handlers = [];
@@ -139,6 +147,15 @@ which are snapshots: they do not update when the document changes.
   `offsetParent` is always null), `clientWidth/Height`, `scrollWidth/Height`, `scrollLeft/Top` (settable),
   `scrollTo(x, y)` or `scrollTo({left, top})`, `scrollBy(...)`, `scrollIntoView()`.
 - `focus()`, `blur()`, `click()`, `animate(keyframes, options)`.
+- Canvases: `width`/`height` (settable; a new size clears the canvas) and `getContext('2d')`, which returns the
+  canvas's one 2D context (null for other types and other elements). The context supports `fillStyle` and
+  `strokeStyle` (CSS colours), `lineWidth`, `globalAlpha`, `save()`/`restore()`, `fillRect`, `strokeRect`,
+  `clearRect`, `getImageData`, `putImageData` (with an optional dirty rectangle), `createImageData(w, h)` or
+  `(imageData)`, and `drawImage(canvas, ...)` with 3, 5 or 9 arguments (another canvas only, scaled
+  nearest-neighbour). Image data is `{width, height, data}` with `data` a `Uint8ClampedArray` of RGBA bytes (a plain
+  array works for `putImageData` too). Coordinates are canvas pixels, and edges snap to whole pixels: there is no
+  antialiasing, text, paths, transforms, gradients or patterns. A canvas can be drawn on before it is added to the
+  page.
 
 **Text**: `data`, `nodeValue`, `length`.
 

@@ -1,6 +1,7 @@
 package dev.vellum.preview;
 
 import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.host.FileStamps;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.ImageCanvas;
@@ -23,24 +24,28 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Consumer;
 
 /**
- * The previewer window. Renders the scene about 60 times a second at the GUI scale (one GUI px is {@code scale}
- * window px), forwards mouse and keyboard input to the page in GUI coordinates, and reloads the page when its files
- * change. Keys: F5 reload, F12 inspector, 1-4 GUI scale (unless a text field has focus), Ctrl/Cmd+S screenshot.
+ * The previewer window. Renders the scene at the GUI scale (one GUI px is {@code scale} window px) up to 60 times a
+ * second, but only when something changed: input, a resize, a reload, or the page itself ({@link Scene#needsFrame}:
+ * animations, timers, scrolling). Forwards mouse and keyboard input to the page in GUI coordinates, and reloads the
+ * page when one of its files is saved. Keys: F5 reload, F12 inspector, 1-4 GUI scale (unless a text field has
+ * focus), Ctrl/Cmd+S screenshot.
  */
 final class PreviewWindow {
+    /** How often the page's files are checked for changes. */
+    private static final int POLL_MS = 100;
+
     private final Scene scene;
     /** The page, or null for the canvas test (which takes no input). */
     private final PageScene page;
     private final PreviewHost host;
     private final FrameRenderer renderer;
-    private final FileWatcher watcher;
+    private final FileStamps files = new FileStamps();
     private final JFrame frame = new JFrame();
     private final View view = new View();
     private final long start = System.nanoTime();
@@ -48,6 +53,8 @@ final class PreviewWindow {
     private boolean inspecting;
     private float mouseX = -1, mouseY = -1;
     private BufferedImage lastFrame;
+    /** The next frame must be rendered whatever the scene says (input, reload, resize, a setting changed). */
+    private boolean stale = true;
 
     PreviewWindow(Scene scene, PreviewHost host, int scale, int width, int height) {
         this.scene = scene;
@@ -55,11 +62,6 @@ final class PreviewWindow {
         this.host = host;
         this.renderer = new FrameRenderer(host.assets(), host.fonts());
         this.scale = scale;
-        try {
-            this.watcher = new FileWatcher(this::reload);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
         if (page != null) {
             host.onNavigate(url -> SwingUtilities.invokeLater(() -> {
                 page.open(host.resolveUrl(page.url(), url));
@@ -79,12 +81,19 @@ final class PreviewWindow {
         frame.setVisible(true);
         view.requestFocusInWindow();
         new Timer(16, e -> renderFrame()).start();
+        new Timer(POLL_MS, e -> {
+            if (files.changed(host.loadedFiles())) reload();
+        }).start();
     }
 
     private void renderFrame() {
-        if (view.getWidth() <= 0 || view.getHeight() <= 0) return;
+        int width = view.getWidth(), height = view.getHeight();
+        if (width <= 0 || height <= 0) return;
         double now = (System.nanoTime() - start) / 1e6;
-        lastFrame = renderer.render(scene, view.getWidth(), view.getHeight(), scale, now, inspecting ? this::paintInspector : null);
+        boolean resized = lastFrame == null || lastFrame.getWidth() != width || lastFrame.getHeight() != height;
+        if (!stale && !resized && !scene.needsFrame(now)) return;
+        stale = false;
+        lastFrame = renderer.render(scene, width, height, scale, now, inspecting ? this::paintInspector : null);
         view.repaint();
     }
 
@@ -98,9 +107,8 @@ final class PreviewWindow {
         pageLoaded();
     }
 
-    /** Watches the directories of the files the page loaded (the page included). */
     private void pageLoaded() {
-        host.loadedFiles().forEach(file -> watcher.watch(file.toAbsolutePath().getParent()));
+        stale = true;
         updateTitle();
     }
 
@@ -162,7 +170,10 @@ final class PreviewWindow {
         view.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                if (shortcut(e)) return;
+                if (shortcut(e)) {
+                    stale = true;
+                    return;
+                }
                 DomKeys.Key key = DomKeys.of(e);
                 input(in -> in.keyDown(key.key(), key.code(), modifiers(e)));
             }
@@ -203,6 +214,7 @@ final class PreviewWindow {
     }
 
     private void input(Consumer<InputHandler> event) {
+        stale = true;
         if (page != null) page.input(event);
     }
 

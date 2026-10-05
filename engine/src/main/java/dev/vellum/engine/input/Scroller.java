@@ -76,6 +76,11 @@ final class Scroller {
         return t != null ? t : new float[] {e.scrollLeft, e.scrollTop};
     }
 
+    /** Whether a smooth scroll is under way. */
+    boolean isActive() {
+        return !targets.isEmpty();
+    }
+
     /** Advances smooth scrolls with exponential easing. Returns true if anything moved. */
     boolean tick(double now) {
         double dt = Double.isNaN(lastTick) ? 16 : Math.max(0, now - lastTick);

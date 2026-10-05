@@ -2,8 +2,10 @@ package dev.vellum.preview.render;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.vellum.engine.host.FontFamilies;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.host.MinecraftGlyphs;
 import dev.vellum.engine.paint.Canvas;
 
 import java.awt.Color;
@@ -41,13 +43,13 @@ public final class MinecraftFont implements FontMetrics {
     }
 
     /** Minecraft's default font at its native 8px. */
-    public static final FontSpec NATIVE = new FontSpec(List.of("minecraft:default"), 8, false, false);
-    private static final String DEFAULT_FONT = NATIVE.families().getFirst();
-    /** Advances of Minecraft's ASCII glyphs, for when there is no jar (the same table as the engine's TestFonts). */
-    private static final int[] ASCII_ADVANCES = asciiAdvances();
+    public static final FontSpec NATIVE = new FontSpec(List.of(FontFamilies.DEFAULT), 8, false, false);
     private static final Font FALLBACK_FONT = new Font(Font.DIALOG, Font.PLAIN, 9);
     /** Rows of a fallback glyph bitmap, and the row its baseline sits on. */
     private static final int FALLBACK_HEIGHT = 12, FALLBACK_BASELINE = 9;
+
+    /** A spec's glyphs, kept in its host slot: the first of its families this font has. */
+    private record Resolved(MinecraftFont font, Map<Integer, Glyph> glyphs) {}
 
     private final MinecraftAssets assets;
     private final Map<String, Map<Integer, Glyph>> fonts = new ConcurrentHashMap<>();
@@ -61,7 +63,7 @@ public final class MinecraftFont implements FontMetrics {
 
     @Override
     public float width(String text, FontSpec font) {
-        Map<Integer, Glyph> glyphs = glyphs(font.families());
+        Map<Integer, Glyph> glyphs = glyphs(font);
         float width = 0;
         for (int i = 0; i < text.length(); ) {
             int cp = text.codePointAt(i);
@@ -73,12 +75,12 @@ public final class MinecraftFont implements FontMetrics {
 
     @Override
     public float charWidth(int codePoint, FontSpec font) {
-        return advance(glyph(glyphs(font.families()), codePoint), font.bold()) * font.scale();
+        return advance(glyph(glyphs(font), codePoint), font.bold()) * font.scale();
     }
 
     /** The glyph used for a code point in the first available family of {@code font}. */
     public Glyph glyph(int codePoint, FontSpec font) {
-        return glyph(glyphs(font.families()), codePoint);
+        return glyph(glyphs(font), codePoint);
     }
 
     private static float advance(Glyph glyph, boolean bold) {
@@ -94,7 +96,7 @@ public final class MinecraftFont implements FontMetrics {
      */
     public void draw(String text, FontSpec font, int argb, int decorations, boolean shadow, GlyphSink sink) {
         if ((argb >>> 24) == 0) return; // vanilla skips fully transparent text
-        Map<Integer, Glyph> glyphs = glyphs(font.families());
+        Map<Integer, Glyph> glyphs = glyphs(font);
         if (shadow) drawPass(text, glyphs, font, scaleRgb(argb, 0.25f), decorations, 1, sink);
         drawPass(text, glyphs, font, argb, decorations, 0, sink);
     }
@@ -143,26 +145,24 @@ public final class MinecraftFont implements FontMetrics {
 
     // ---- Font loading ----
 
+    private Map<Integer, Glyph> glyphs(FontSpec font) {
+        if (font.hostFont() instanceof Resolved r && r.font == this) return r.glyphs;
+        Map<Integer, Glyph> glyphs = glyphs(font.families());
+        font.setHostFont(new Resolved(this, glyphs));
+        return glyphs;
+    }
+
     private Map<Integer, Glyph> glyphs(List<String> families) {
         for (String family : families) {
-            Map<Integer, Glyph> glyphs = fonts.computeIfAbsent(fontId(family), this::load);
+            Map<Integer, Glyph> glyphs = fonts.computeIfAbsent(FontFamilies.fontId(family), this::load);
             if (!glyphs.isEmpty()) return glyphs;
         }
-        return fonts.computeIfAbsent(DEFAULT_FONT, this::load);
+        return fonts.computeIfAbsent(FontFamilies.DEFAULT, this::load);
     }
 
     private Glyph glyph(Map<Integer, Glyph> glyphs, int codePoint) {
         Glyph glyph = glyphs.get(codePoint);
         return glyph != null ? glyph : fallback.computeIfAbsent(codePoint, MinecraftFont::rasterize);
-    }
-
-    /** CSS generic families map to Minecraft's fonts; other names are font ids. */
-    private static String fontId(String family) {
-        return switch (family) {
-            case "monospace" -> "minecraft:uniform";
-            case "sans-serif", "serif", "system-ui" -> DEFAULT_FONT;
-            default -> family.contains(":") ? family : "minecraft:" + family;
-        };
     }
 
     private Map<Integer, Glyph> load(String fontId) {
@@ -238,19 +238,8 @@ public final class MinecraftFont implements FontMetrics {
         g.drawString(Character.toString(codePoint), 0, FALLBACK_BASELINE);
         g.dispose();
         int width = opaqueWidth(image);
-        float advance = codePoint < ASCII_ADVANCES.length ? ASCII_ADVANCES[codePoint] : width + 1;
+        float advance = MinecraftGlyphs.isAscii(codePoint) ? MinecraftGlyphs.asciiAdvance(codePoint) : width + 1;
         BufferedImage bitmap = width == 0 ? null : image.getSubimage(0, 0, width, FALLBACK_HEIGHT);
         return new Glyph(bitmap, 1, 7 - FALLBACK_BASELINE, advance);
-    }
-
-    private static int[] asciiAdvances() {
-        int[] advances = new int[128];
-        java.util.Arrays.fill(advances, 6);
-        String[] groups = {" ", "!',.:;i|", "`l", "\"()*I[]t{}", "<>fk", "@~"};
-        int[] widths = {4, 2, 3, 4, 5, 7};
-        for (int i = 0; i < groups.length; i++) {
-            for (char c : groups[i].toCharArray()) advances[c] = widths[i];
-        }
-        return advances;
     }
 }

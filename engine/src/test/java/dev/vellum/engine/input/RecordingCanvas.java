@@ -1,8 +1,6 @@
 package dev.vellum.engine.input;
 
-import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontSpec;
-import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
 
 import java.util.ArrayList;
@@ -54,11 +52,6 @@ final class RecordingCanvas implements Canvas {
     @Override
     public void drawSprite(String spriteId, float x, float y, float width, float height, int tint) {
         calls.add("sprite " + spriteId + " " + f(x) + "," + f(y) + " " + f(width) + "x" + f(height));
-    }
-
-    @Override
-    public void drawReplaced(ReplacedContent content, Element element, float x, float y, float width, float height) {
-        calls.add("replaced");
     }
 
     List<String> matching(String prefix) {

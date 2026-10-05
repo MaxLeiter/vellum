@@ -96,7 +96,7 @@ final class QuadBatch {
             clipMinY = Math.min(clipMinY, clip[2 * i + 1]);
             clipMaxY = Math.max(clipMaxY, clip[2 * i + 1]);
         }
-        clipSign = Math.signum(signedArea(clip, clipCount));
+        clipSign = Math.signum(Shapes.signedArea(clip, 0, clipCount));
     }
 
     // ---- Shapes ----
@@ -241,7 +241,7 @@ final class QuadBatch {
         while (m > 1 && p[0] == p[2 * m - 2] && p[1] == p[2 * m - 1]) m--;
         n = m;
         if (n < 3) return;
-        boolean reverse = signedArea(p, n) > 0;
+        boolean reverse = Shapes.signedArea(p, 0, n) > 0;
         for (int i = 1; i + 1 < n; i += 2) {
             int i1 = i, i2 = i + 1, i3 = Math.min(i + 2, n - 1);
             if (reverse) {
@@ -280,16 +280,6 @@ final class QuadBatch {
     }
 
     // ---- Geometry helpers ----
-
-    /** Twice the signed area (shoelace) of {@code p[0 .. 2n)}; negative for vanilla's winding. */
-    static float signedArea(float[] p, int n) {
-        float s = 0;
-        for (int i = 0; i < n; i++) {
-            int j = i + 1 == n ? 0 : i + 1;
-            s += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1];
-        }
-        return s;
-    }
 
     /**
      * One Sutherland–Hodgman step: keeps the part of polygon {@code in} on the inner side of the directed line

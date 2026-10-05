@@ -1,5 +1,8 @@
 package dev.vellum.engine.style;
 
+import dev.vellum.engine.host.FontFamilies;
+import dev.vellum.engine.host.FontSpec;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +24,7 @@ public final class ComputedStyle implements Cloneable {
     public static final float DEFAULT_FONT_SIZE = 8f;
     /** Ratio of Minecraft's line height (9) to its em (8): {@code line-height: normal}. */
     public static final float NORMAL_LINE_HEIGHT = 9f / 8f;
-    public static final String DEFAULT_FONT = "minecraft:default";
+    public static final String DEFAULT_FONT = FontFamilies.DEFAULT;
 
     // ---- Box ----
     public Display display = Display.INLINE;
@@ -288,6 +291,24 @@ public final class ComputedStyle implements Cloneable {
     }
 
     public boolean isBold() { return fontWeight >= 600; }
+
+    /**
+     * The font of this style. Memoized: the spec is kept while the font fields are unchanged, so text runs, form
+     * controls and hit tests share one instance (and the host's resolution cached on it). Copies share it too, and
+     * since the animation engine writes animated values into copies, the cache is checked against the fields on
+     * every read rather than trusted.
+     */
+    public FontSpec font() {
+        FontSpec f = font;
+        if (f == null || f.families() != fontFamily || Float.compare(f.size(), fontSize) != 0 || f.bold() != isBold()
+                || f.italic() != fontItalic) {
+            font = f = new FontSpec(fontFamily, fontSize, isBold(), fontItalic);
+        }
+        return f;
+    }
+
+    /** Cache for {@link #font()}; not a property. */
+    private transient FontSpec font;
 
     public boolean isScrollContainer() {
         return overflowX.scrolls() || overflowY.scrolls();

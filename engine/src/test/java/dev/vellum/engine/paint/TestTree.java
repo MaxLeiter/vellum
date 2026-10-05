@@ -14,7 +14,8 @@ import dev.vellum.engine.testing.TestHost;
 
 /** Builds box trees by hand (layout is another workstream) and paints or hit-tests them. */
 final class TestTree {
-    final Document doc = Document.create(new TestHost(), "test:paint.html");
+    final TestHost host = new TestHost();
+    final Document doc = Document.create(host, "test:paint.html");
     final Painter painter = new Painter(doc);
 
     /** An element with a fresh block style. */

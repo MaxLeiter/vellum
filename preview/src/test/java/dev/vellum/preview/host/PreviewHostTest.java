@@ -13,9 +13,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,23 +64,22 @@ class PreviewHostTest {
     void replacedElementsHaveMinecraftSizes() {
         PreviewHost host = host(List.of());
         Document document = Document.create(host, "test");
-        assertEquals(List.of(16f, 16f), size(host, document.createElement("item")));
-        assertEquals(List.of(18f, 18f), size(host, document.createElement("slot")));
-        assertEquals(List.of(32f, 48f), size(host, document.createElement("entity")));
-        assertEquals(List.of(8f, 8f), size(host, document.createElement("player-head")));
+        assertEquals(List.of(16f, 16f), size(document, document.createElement("item")));
+        assertEquals(List.of(18f, 18f), size(document, document.createElement("slot")));
+        assertEquals(List.of(48f, 48f), size(document, document.createElement("entity")));
+        assertEquals(List.of(16f, 16f), size(document, document.createElement("player-head")));
         Element canvas = document.createElement("canvas");
         canvas.setAttribute("width", "64");
-        assertEquals(List.of(64f, 150f), size(host, canvas));
+        assertEquals(List.of(64f, 150f), size(document, canvas));
         Element img = document.createElement("img");
         img.setAttribute("src", "minecraft:textures/missing.png");
-        assertTrue(Float.isNaN(host.createReplaced(img).intrinsicWidth()));
-        assertTrue(host.isReplacedTag("sprite"));
-        assertFalse(host.isReplacedTag("div"));
-        assertNull(host.createReplaced(document.createElement("div")));
+        assertTrue(Float.isNaN(document.replacedContent(img).intrinsicWidth()));
+        assertEquals(Set.of("item", "slot", "entity", "player-head"), host.replacedElements().keySet());
+        assertNull(document.replacedContent(document.createElement("div")));
     }
 
-    private static List<Float> size(PreviewHost host, Element element) {
-        ReplacedContent content = host.createReplaced(element);
+    private static List<Float> size(Document document, Element element) {
+        ReplacedContent content = document.replacedContent(element);
         return List.of(content.intrinsicWidth(), content.intrinsicHeight());
     }
 }

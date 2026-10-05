@@ -30,7 +30,7 @@ Numbered decisions with the reasons and the alternatives considered. Newest last
 ## D-005 JavaScript: Rhino 1.9.1, relocated and sandboxed
 **Choice.** We use Mozilla Rhino 1.9.1, relocated to `dev.vellum.shadow.rhino`, with its classes copied into the mod itself. It runs in interpreted mode with `initSafeStandardObjects`, a class shutter that denies everything, an instruction-count budget per call, and a stack depth limit. The runtime sits behind the `ScriptRuntime` interface.
 **Why.** Rhino has no natives, is about 1.6 MB, and supports ES2015-ish code (let/const, arrows, template literals, destructuring, generators, Map/Set, Promise, optional chaining). Its sandbox hooks were verified. Interpreted mode does not define classes at runtime, which avoids classloader trouble.
-**Known dialect limits (documented for authors).** No `class`, no `async`/`await`, no spread in calls, no `for (const x of ...)` (use `let`), no per-iteration `let` closures in `for` loops, and no modules.
+**Known dialect limits (documented for authors).** No `class`, no `async`/`await`, no spread in calls, no `for (const x of ...)` (use `let`), no per-iteration `let` closures in `for` loops, a `const` declared in a loop body keeps its first value (use `let`), and no modules.
 **Alternatives.**
 - GraalJS: about 60 MB, ships natives, and on a stock JDK runs in interpreter-only mode.
 - Nashorn: needs ASM, which risks clashing, and supports fewer ES features.

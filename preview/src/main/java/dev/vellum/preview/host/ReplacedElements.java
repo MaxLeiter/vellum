@@ -3,55 +3,39 @@ package dev.vellum.preview.host;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
-import dev.vellum.preview.render.PaintedContent;
-import dev.vellum.preview.render.Texture;
 
-import java.util.Optional;
-import java.util.Set;
+import java.util.Map;
+import java.util.function.Function;
 
 /**
- * The previewer's stand-ins for Minecraft's replaced elements: items as their flat item (or block) texture,
- * player heads as the default skin's face, entities as a silhouette, slots as nothing (CSS draws the slot), plus
- * {@code <img>}, {@code <sprite>} and blank {@code <canvas>}. Attributes are read when painting, so edits show up
- * without reloading.
+ * The previewer's stand-ins for the Minecraft elements, at the game's sizes: items as their flat item (or block)
+ * texture with the stack size, player heads as the default skin's face, entities as a silhouette, and slots as
+ * nothing (CSS draws the slot). Attributes are read when painting, so edits show up without reloading.
  */
 final class ReplacedElements {
-    static final Set<String> TAGS = Set.of("item", "slot", "entity", "player-head", "sprite", "img", "canvas");
-
     private static final int WHITE = 0xFFFFFFFF;
     private static final String STEVE = "minecraft:textures/entity/player/wide/steve.png";
 
     private ReplacedElements() {}
 
-    static PaintedContent create(Element element, MinecraftAssets assets, FontMetrics fonts) {
-        return switch (element.tagName()) {
-            case "item" -> new Item(element, assets, fonts);
-            case "slot" -> new Fixed(18, 18, (canvas, x, y, w, h) -> {});
-            case "entity" -> new Fixed(32, 48, ReplacedElements::paintSilhouette);
-            case "player-head" -> new Fixed(8, 8, ReplacedElements::paintFace);
-            case "img", "sprite" -> new Picture(element, assets);
-            case "canvas" -> new Fixed(size(element, "width", 300), size(element, "height", 150), (canvas, x, y, w, h) -> {});
-            default -> null;
-        };
-    }
-
-    private static float size(Element element, String attribute, float fallback) {
-        String value = element.getAttribute(attribute);
-        try {
-            return value == null ? fallback : Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
+    /** The elements by tag, for {@link PreviewHost#replacedElements}. */
+    static Map<String, Function<Element, ReplacedContent>> of(MinecraftAssets assets, FontMetrics fonts) {
+        return Map.of(
+                "item", element -> new Item(element, assets, fonts),
+                "slot", element -> new Fixed(18, 18, (canvas, x, y, w, h) -> {}),
+                "entity", element -> new Fixed(48, 48, ReplacedElements::paintSilhouette),
+                "player-head", element -> new Fixed(16, 16, ReplacedElements::paintFace));
     }
 
     private interface Paint {
         void paint(Canvas canvas, float x, float y, float width, float height);
     }
 
-    private record Fixed(float intrinsicWidth, float intrinsicHeight, Paint painter) implements PaintedContent {
+    private record Fixed(float intrinsicWidth, float intrinsicHeight, Paint painter) implements ReplacedContent {
         @Override
         public void paint(Canvas canvas, float x, float y, float width, float height) {
             painter.paint(canvas, x, y, width, height);
@@ -59,7 +43,19 @@ final class ReplacedElements {
     }
 
     /** {@code <item id count>}: the flat texture, and the stack size like vanilla's {@code itemCount}. */
-    private record Item(Element element, MinecraftAssets assets, FontMetrics fonts) implements PaintedContent {
+    private static final class Item implements ReplacedContent {
+        private final Element element;
+        private final MinecraftAssets assets;
+        private final FontMetrics fonts;
+        /** The count's font at the last painted size. */
+        private FontSpec countFont = MinecraftFont.NATIVE;
+
+        Item(Element element, MinecraftAssets assets, FontMetrics fonts) {
+            this.element = element;
+            this.assets = assets;
+            this.fonts = fonts;
+        }
+
         @Override public float intrinsicWidth() { return 16; }
         @Override public float intrinsicHeight() { return 16; }
 
@@ -78,39 +74,8 @@ final class ReplacedElements {
             if (count == null || count.isBlank() || count.equals("1")) return;
             // Vanilla draws the count at (17 - width, 9) in the 16px slot, white with the native shadow.
             float s = width / 16;
-            FontSpec font = new FontSpec(MinecraftFont.NATIVE.families(), 8 * s, false, false);
-            canvas.drawText(count, x + 17 * s - fonts.width(count, font), y + 9 * s, font, WHITE, 0, true);
-        }
-    }
-
-    /** {@code <img src>} (a texture, a document-relative path, or {@code sprite:ns:path}) and {@code <sprite src>}. */
-    private record Picture(Element element, MinecraftAssets assets) implements PaintedContent {
-        private String source() {
-            String src = element.getAttribute("src");
-            return src == null ? "" : src;
-        }
-
-        /** The sprite id when this shows a sprite, else null. */
-        private String sprite() {
-            if (element.tagName().equals("sprite")) return source();
-            return source().startsWith("sprite:") ? source().substring("sprite:".length()) : null;
-        }
-
-        private String textureUrl() {
-            return element.ownerDocument().resolveUrl(source());
-        }
-
-        private Optional<Texture> texture() {
-            return sprite() != null ? assets.sprite(sprite()) : assets.texture(textureUrl());
-        }
-
-        @Override public float intrinsicWidth() { return texture().map(t -> (float) t.naturalWidth()).orElse(Float.NaN); }
-        @Override public float intrinsicHeight() { return texture().map(t -> (float) t.naturalHeight()).orElse(Float.NaN); }
-
-        @Override
-        public void paint(Canvas canvas, float x, float y, float width, float height) {
-            if (sprite() != null) canvas.drawSprite(sprite(), x, y, width, height, WHITE);
-            else canvas.drawImage(textureUrl(), x, y, width, height, 0, 0, 1, 1, WHITE, false);
+            if (countFont.size() != 8 * s) countFont = new FontSpec(MinecraftFont.NATIVE.families(), 8 * s, false, false);
+            canvas.drawText(count, x + 17 * s - fonts.width(count, countFont), y + 9 * s, countFont, WHITE, 0, true);
         }
     }
 

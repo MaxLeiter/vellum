@@ -18,6 +18,10 @@ public final class Painter {
         this.document = document;
     }
 
+    Document document() {
+        return document;
+    }
+
     /**
      * Paints the current layout, then the input handler's overlays (dropdowns...) on top with an identity transform.
      * The canvas is left as it was found, also when painting throws.
