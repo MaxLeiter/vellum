@@ -17,7 +17,8 @@ class ControlsTest {
      * A 100x20 field with a 1px border and 2px padding: content at (3, 3), 94x14, so text sits at y 5.5, drawn on
      * the device pixel at 6. Nothing overflows, so nothing is clipped.
      */
-    private static final String FIELD = "display: block; width: 100px; height: 20px; padding: 2px; border: 1px solid; background: none";
+    private static final String FIELD =
+            "display: block; width: 100px; height: 20px; padding: 2px; border: 1px solid; background: none";
     private static final String BORDER = "border 0,0 100x20 #ffe0e0e0";
 
     @Test
@@ -42,7 +43,8 @@ class ControlsTest {
     @Test
     void placeholderShowsWhenEmpty() {
         Page page = new TestHost().load("<style>#styled::placeholder { color: #888 }</style>"
-                + "<input id=t placeholder=Name style='" + FIELD + "'><input id=styled placeholder=Name style='" + FIELD + "'>");
+                + "<input id=t placeholder=Name style='" + FIELD + "'>"
+                + "<input id=styled placeholder=Name style='" + FIELD + "'>");
         assertEquals(List.of("text 'Name' 3,6 #ff808080", "text 'Name' 3,26 #ff888888"), page.paint().trace("text"),
                 "the UA sheet's grey, then the page's own");
         page.byId("t").setValue("x");
@@ -63,8 +65,8 @@ class ControlsTest {
         assertEquals(List.of("text 'ab' 0,0 #ffe0e0e0", "text 'cd' 0,9 #ffe0e0e0"), page.paint().trace());
         page.byId("ta").setAttribute("style", style + "10px");
         page.frame();
-        assertEquals(List.of("clip 0,0 50x10", "text 'ab' 0,0 #ffe0e0e0", "text 'cd' 0,9 #ffe0e0e0"), page.paint().trace(),
-                "clipped when the text overflows");
+        assertEquals(List.of("clip 0,0 50x10", "text 'ab' 0,0 #ffe0e0e0", "text 'cd' 0,9 #ffe0e0e0"),
+                page.paint().trace(), "clipped when the text overflows");
     }
 
     @Test
@@ -85,8 +87,9 @@ class ControlsTest {
     @Test
     void rangeDrawsTheVanillaHandleAndLabel() {
         Page page = new TestHost().load("<input type=range id=r label=Volume style='display: block; width: 108px'>");
-        assertEquals(List.of("sprite minecraft:widget/slider 0,0 108x20", "sprite minecraft:widget/slider_handle 50,0 8x20",
-                "text 'Volume: 50' 29,6 #ffffffff shadow"), page.paint().trace());
+        assertEquals(List.of("sprite minecraft:widget/slider 0,0 108x20",
+                "sprite minecraft:widget/slider_handle 50,0 8x20", "text 'Volume: 50' 29,6 #ffffffff shadow"),
+                page.paint().trace());
         page.hover(page.byId("r"));
         assertEquals("sprite minecraft:widget/slider_handle_highlighted 50,0 8x20", page.paint().trace().get(1));
     }
@@ -95,7 +98,8 @@ class ControlsTest {
     void selectShowsItsOptionAndAnArrow() {
         String style = "display: block; padding: 0; background: none; width: ";
         Page page = new TestHost().load("<select id=s style='" + style + "80px'><option>One<option selected>Two</select>");
-        assertEquals(List.of("text '▼' 74,6 #ffffffff shadow", "text 'Two' 0,6 #ffffffff shadow"), page.paint().trace());
+        assertEquals(List.of("text '▼' 74,6 #ffffffff shadow", "text 'Two' 0,6 #ffffffff shadow"),
+                page.paint().trace());
         page.byId("s").setAttribute("style", style + "20px");
         page.frame();
         assertEquals(List.of("text '▼' 14,6 #ffffffff shadow", "clip 0,0 12x20", "text 'Two' 0,6 #ffffffff shadow"),
@@ -105,15 +109,16 @@ class ControlsTest {
     @Test
     void barsFillTheirFraction() {
         String style = "style='display: block; width: 100px; height: 10px; background: none; border: none'";
-        Page page = new TestHost().load("<progress " + style + " value=0.25></progress><progress " + style + "></progress>"
-                + "<meter " + style + " min=10 max=20 value=15></meter>");
+        Page page = new TestHost().load("<progress " + style + " value=0.25></progress>"
+                + "<progress " + style + "></progress><meter " + style + " min=10 max=20 value=15></meter>");
         assertEquals(List.of("rect 0,0 25x10 #ff5b8bd9", "rect 0,20 50x10 #ff5b8bd9"), page.paint().trace(),
                 "indeterminate progress draws no fill");
     }
 
     @Test
     void inputButtonsShowTheirLabel() {
-        Page page = new TestHost().load("<input type=submit style='display: block; width: 100px; padding: 0; background: none'>");
+        Page page = new TestHost().load(
+                "<input type=submit style='display: block; width: 100px; padding: 0; background: none'>");
         assertEquals(List.of("text 'Submit' 35,6 #ffffffff shadow"), page.paint().trace());
     }
 }

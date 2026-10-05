@@ -77,7 +77,8 @@ class PaintOrderTest {
     @Test
     void inlineFragmentsPaintInLineOrderAndAtomicsOnce() {
         Page page = root("<span style='background: #00000c'>x</span>"
-                + "<span style='display: inline-block; vertical-align: top; width: 10px; height: 9px; background: #00000b'></span>y");
+                + "<span style='display: inline-block; vertical-align: top; width: 10px; height: 9px; "
+                + "background: #00000b'></span>y");
         assertEquals(List.of("rect 0,0 100x100 #ff000001", "rect 0,0 6x9 #ff00000c", "text 'x' 0,0 #ffffffff",
                 "rect 6,0 10x9 #ff00000b", "text 'y' 16,0 #ffffffff"), page.paint().trace());
     }
@@ -135,7 +136,8 @@ class PaintOrderTest {
     void absoluteBoxesEscapeScrollersBelowTheirContainingBlock() {
         String list = "overflow: hidden; width: 50px; height: 50px; background: #00000a";
         Page page = new TestHost().load("<div id=list style='" + list + "'><div style='height: 200px'></div>"
-                + "<div style='position: absolute; top: 60px; left: 0; width: 10px; height: 10px; background: #00000c'></div></div>");
+                + "<div style='position: absolute; top: 60px; left: 0; width: 10px; height: 10px; background: #00000c'>"
+                + "</div></div>");
         Element scroller = page.byId("list");
         scroller.scrollTo(0, 20);
         RecordingCanvas.Call escaped = fill(page.paint(), C);
@@ -165,7 +167,8 @@ class PaintOrderTest {
 
     @Test
     void textShadowsPaintUnderTheText() {
-        Page page = new TestHost().load("<div id=p style='padding: 4px; color: #fff; text-shadow: 1px 2px #3f3f3f'>hi</div>");
+        Page page = new TestHost().load(
+                "<div id=p style='padding: 4px; color: #fff; text-shadow: 1px 2px #3f3f3f'>hi</div>");
         List<RecordingCanvas.Call> texts = page.paint().ops("drawText");
         assertEquals(2, texts.size());
         assertEquals(0xFF3F3F3F, texts.get(0).color());
@@ -181,7 +184,8 @@ class PaintOrderTest {
 
     @Test
     void letterSpacingDrawsGlyphByGlyph() {
-        Page page = new TestHost().load("<div style='padding-left: 10px; letter-spacing: 1px; text-decoration: underline'>ab</div>");
+        Page page = new TestHost().load(
+                "<div style='padding-left: 10px; letter-spacing: 1px; text-decoration: underline'>ab</div>");
         List<RecordingCanvas.Call> texts = page.paint().ops("drawText");
         assertEquals(List.of("a", "b"), texts.stream().map(RecordingCanvas.Call::text).toList());
         assertEquals(10, texts.get(0).x(), 1e-4);
@@ -202,7 +206,8 @@ class PaintOrderTest {
 
     @Test
     void hoveredScrollbarsWiden() {
-        Page page = new TestHost().load("<div style='overflow: auto; width: 50px; height: 50px'><div style='height: 100px'></div></div>");
+        Page page = new TestHost().load(
+                "<div style='overflow: auto; width: 50px; height: 50px'><div style='height: 100px'></div></div>");
         assertEquals(2, page.paint().ops("fillRect").getLast().w(), 1e-5);
         // Scrollbar hover is tracked by the input handler from the pointer position over the bar.
         page.move(49, 10);
@@ -237,12 +242,14 @@ class PaintOrderTest {
                 + "height: 2.2px; background: #00000a'></div>");
         RecordingCanvas canvas = new RecordingCanvas();
         canvas.devicePixel = 0.5f;
-        assertArrayEquals(new float[] {10.5f, 0, 5.0f, 2.5f}, page.paint(canvas).ops("fillRect").getFirst().args(), 1e-5f);
+        float[] snapped = page.paint(canvas).ops("fillRect").getFirst().args();
+        assertArrayEquals(new float[] {10.5f, 0, 5.0f, 2.5f}, snapped, 1e-5f);
     }
 
     @Test
     void boxesWithoutChildrenOrLinesNeedNoClip() {
-        Page page = new TestHost().load("<div style='overflow: hidden; width: 100px; height: 100px; background: #000001'></div>");
+        Page page = new TestHost().load(
+                "<div style='overflow: hidden; width: 100px; height: 100px; background: #000001'></div>");
         assertEquals(List.of("rect 0,0 100x100 #ff000001"), page.paint().trace());
     }
 
@@ -254,7 +261,8 @@ class PaintOrderTest {
         assertEquals(List.of(A, B), page.paint().fills());
         assertEquals("b", page.doc.hitTest(5, 5).element().id());
         Object tree = page.doc.layoutEngine().root();
-        page.byId("a").setAttribute("style", "position: absolute; width: 10px; height: 10px; background: #00000a; z-index: 1");
+        page.byId("a").setAttribute("style",
+                "position: absolute; width: 10px; height: 10px; background: #00000a; z-index: 1");
         page.frame();
         assertSame(tree, page.doc.layoutEngine().root(), "z-index does not affect layout: no relayout");
         assertEquals(List.of(B, A), page.paint().fills());

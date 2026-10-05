@@ -171,7 +171,8 @@ class InlineLayoutTest {
         assertEquals(1, page.byId("normal").box.lines.size(), "overflows instead of breaking");
         assertEquals(List.of("aaa", "aaa", "aa"), runs(page, "all").stream().map(Fragment.TextRun::text).toList());
         // break-word only breaks a word that does not fit on a line of its own.
-        assertEquals(List.of("a", "aaa", "aaa", "aa"), runs(page, "word").stream().map(Fragment.TextRun::text).toList());
+        assertEquals(List.of("a", "aaa", "aaa", "aa"),
+                runs(page, "word").stream().map(Fragment.TextRun::text).toList());
     }
 
     @Test
@@ -199,7 +200,8 @@ class InlineLayoutTest {
 
     @Test
     void atomicInlinesAlignOnTheBaseline() {
-        Page page = new TestHost().load("<div id=p>a<span id=block style='display: inline-block; width: 10px; height: 20px'></span></div>");
+        Page page = new TestHost().load(
+                "<div id=p>a<span id=block style='display: inline-block; width: 10px; height: 20px'></span></div>");
         Box p = page.byId("p").box, block = page.byId("block").box;
         // No lines: the inline-block's bottom margin edge sits on the baseline.
         LineBox line = p.lines.get(0);
@@ -265,7 +267,8 @@ class InlineLayoutTest {
 
     @Test
     void relativelyPositionedInlinesShiftTheirFragments() {
-        Page page = new TestHost().load("<div id=p><span id=span style='position: relative; top: 2px; left: 3px'>a</span></div>");
+        Page page = new TestHost().load(
+                "<div id=p><span id=span style='position: relative; top: 2px; left: 3px'>a</span></div>");
         assertRun(runs(page, "p").get(0), "a", 3, 2, 6);
         assertRect(page.byId("span"), 3, 2, 6, 9);
     }

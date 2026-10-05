@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class FlexGridLayoutTest {
     @Test
     void looseTextInAFlexContainerBecomesAnAnonymousItem() {
-        Page page = new TestHost().load("<div id=flex style='display: flex; width: 100px'>  aa  <div id=b style='width: 10px; order: -1'></div>   </div>");
+        Page page = new TestHost().load(
+                "<div id=flex style='display: flex; width: 100px'>  aa  <div id=b style='width: 10px; order: -1'></div>   </div>");
         Box flex = page.byId("flex").box;
         // The white-space-only run makes no item; order puts b first.
         assertEquals(2, flex.children.size());

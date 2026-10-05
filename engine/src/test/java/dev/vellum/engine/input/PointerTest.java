@@ -39,7 +39,8 @@ class PointerTest {
         page.move(60, 30);
         assertEquals(List.of("mouseout:a", "mouseleave:a", "mouseover:b", "mouseenter:b"), page.takeLog());
         page.move(55, 5);
-        assertEquals(List.of("mouseout:b", "mouseover:c", "mouseenter:c"), page.takeLog(), "b stays entered: c is inside it");
+        assertEquals(List.of("mouseout:b", "mouseover:c", "mouseenter:c"), page.takeLog(),
+                "b stays entered: c is inside it");
         page.move(56, 6);
         assertEquals(List.of(), page.log);
         assertFalse(page.move(300, 300));
@@ -111,7 +112,8 @@ class PointerTest {
     @Test
     void offsetsAreRelativeToThePaddingBox() {
         Element c = page.byId("c");
-        c.setAttribute("style", "display: block; width: 20px; height: 20px; border-left: 1px solid; border-top: 2px solid");
+        c.setAttribute("style",
+                "display: block; width: 20px; height: 20px; border-left: 1px solid; border-top: 2px solid");
         page.frame();
         float[] offset = new float[2];
         c.addEventListener("mousedown", e -> {

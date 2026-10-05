@@ -57,7 +57,8 @@ class EndToEndTest {
         assertEquals("picked: b", page.byId("status").textContent());
         assertTrue(b.hasClass("picked"));
         assertEquals(0xFFFF0000, b.style.backgroundColor, "the transition ended at 200 ms");
-        assertArrayEquals(new float[] {68, 4, 60, 30}, b.getBoundingClientRect(), 1e-3f, "border-box: the border fits inside");
+        assertArrayEquals(new float[] {68, 4, 60, 30}, b.getBoundingClientRect(), 1e-3f,
+                "border-box: the border fits inside");
         List<String> trace = page.paint().trace();
         assertTrue(trace.contains("rect 68,4 60x30 #ffff0000"), trace::toString);
         assertTrue(trace.contains("border 68,4 60x30 #ffffff00"), trace::toString);
@@ -67,7 +68,8 @@ class EndToEndTest {
     @Test
     void clicksMapThroughScrollingAndTransforms() {
         Page page = new TestHost().load("""
-                <div id=scroller style="position: absolute; left: 20px; top: 10px; width: 100px; height: 60px; overflow: auto">
+                <div id=scroller style="position: absolute; left: 20px; top: 10px; width: 100px; height: 60px;
+                                        overflow: auto">
                   <div style="height: 100px"></div>
                   <button id=target style="display: block; width: 40px; height: 20px; padding: 0;
                                            transform: translate(30px, 5px) rotate(90deg)"

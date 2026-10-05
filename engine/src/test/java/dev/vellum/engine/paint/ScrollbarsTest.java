@@ -13,7 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /** Scrollbar geometry of a 100x50 scroller with a 1px border (padding box 98x48) over 200px of content. */
 class ScrollbarsTest {
     private static final String SCROLLER = "width: 100px; height: 50px; border: 1px solid; overflow: auto";
-    private final Page page = new TestHost().load("<div id=s style='" + SCROLLER + "'><div id=content style='height: 200px'></div></div>");
+    private final Page page =
+            new TestHost().load("<div id=s style='" + SCROLLER + "'><div id=content style='height: 200px'></div></div>");
     private final Element scroller = page.byId("s");
 
     private Box box() {

@@ -30,7 +30,9 @@ class BlockLayoutTest {
 
     @Test
     void blocksStackAndFillTheContainingBlock() {
-        Page page = new TestHost().load("<div id=a style='height: 10px'></div><div id=b style='height: 20px; padding: 2px; border: 1px solid'></div>");
+        Page page = new TestHost().load("""
+                <div id=a style="height: 10px"></div>
+                <div id=b style="height: 20px; padding: 2px; border: 1px solid"></div>""");
         assertRect(page.byId("a"), 0, 0, 320, 10);
         assertRect(page.byId("b"), 0, 10, 320, 20);
         assertEquals(3, page.byId("b").box.contentX());
@@ -41,7 +43,8 @@ class BlockLayoutTest {
 
     @Test
     void contentBoxSizingAddsPaddingAndBorder() {
-        Page page = new TestHost().load("<div id=a style='box-sizing: content-box; width: 100px; height: 10px; padding: 10px; border: 2px solid'></div>");
+        Page page = new TestHost().load("<div id=a style='box-sizing: content-box; width: 100px; height: 10px; "
+                + "padding: 10px; border: 2px solid'></div>");
         assertRect(page.byId("a"), 0, 0, 124, 34);
     }
 
@@ -100,7 +103,8 @@ class BlockLayoutTest {
 
     @Test
     void parentAndFirstChildMarginsCollapseThroughBody() {
-        Page page = new TestHost().load("<div id=outer style='margin-top: 10px'><div id=inner style='margin-top: 20px; height: 5px'></div></div>");
+        Page page = new TestHost().load(
+                "<div id=outer style='margin-top: 10px'><div id=inner style='margin-top: 20px; height: 5px'></div></div>");
         // The 20px margin escapes inner, outer and body; the root contains it.
         assertRect(page.doc.body(), 0, 20, 320, 5);
         assertRect(page.byId("outer"), 0, 20, 320, 5);
@@ -132,7 +136,8 @@ class BlockLayoutTest {
 
     @Test
     void independentFormattingContextsContainChildMargins() {
-        Page page = new TestHost().load("<div id=s style='overflow: hidden'><div id=inner style='margin-top: 20px; margin-bottom: 4px; height: 5px'></div></div>");
+        Page page = new TestHost().load("<div id=s style='overflow: hidden'>"
+                + "<div id=inner style='margin-top: 20px; margin-bottom: 4px; height: 5px'></div></div>");
         assertRect(page.byId("s"), 0, 0, 320, 29);
         assertRect(page.byId("inner"), 0, 20, 320, 5);
     }

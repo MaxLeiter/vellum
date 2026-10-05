@@ -13,16 +13,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LayoutPerformanceTest {
     @Test
     void fiveHundredElementsLayOutQuickly() {
-        StringBuilder html = new StringBuilder("<div style='display: flex; flex-direction: column; gap: 4px; padding: 8px'>");
+        StringBuilder html =
+                new StringBuilder("<div style='display: flex; flex-direction: column; gap: 4px; padding: 8px'>");
         int elements = 1;
         while (elements < 500) {
             html.append("<div style='display: flex; flex-direction: column; padding: 4px; border: 1px solid'>")
                     .append("<div style='display: flex; justify-content: space-between; align-items: center'>");
             for (int i = 0; i < 3; i++) html.append("<span style='padding: 0 2px'>Title ").append(i).append("</span>");
-            html.append("</div><div style='display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 2px'>");
+            html.append("</div><div style='display: grid; gap: 2px; ")
+                    .append("grid-template-columns: repeat(auto-fill, minmax(40px, 1fr))'>");
             for (int i = 0; i < 8; i++) {
-                html.append("<div style='display: flex; flex-direction: column; align-items: center'><div>Item ").append(i)
-                        .append("</div><span style='display: inline-block; width: 16px; height: 16px'></span></div>");
+                html.append("<div style='display: flex; flex-direction: column; align-items: center'>")
+                        .append("<div>Item ").append(i).append("</div>")
+                        .append("<span style='display: inline-block; width: 16px; height: 16px'></span></div>");
             }
             html.append("</div><div style='text-align: justify'>Some wrapping text with a <b>bold part</b>")
                     .append(" and a little more after it to make several lines.</div></div>");

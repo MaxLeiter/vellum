@@ -131,8 +131,8 @@ class TransitionTest {
 
         restyle(50, "width: 200px" + t);
         assertEquals(Length.px(50), el.style.width);
-        assertEquals(List.of("transitioncancel:el=width@0.05", "transitionrun:el=width@0.0", "transitionstart:el=width@0.0"),
-                page.takeLog());
+        assertEquals(List.of("transitioncancel:el=width@0.05", "transitionrun:el=width@0.0",
+                "transitionstart:el=width@0.0"), page.takeLog());
         page.frame(100);
         assertEquals(Length.px(125), el.style.width); // the full duration again, from 50px
         page.frame(150);

@@ -34,7 +34,8 @@ class FocusTest {
         assertEquals(List.of("d", "b", "a", "c", "f", "l", "n"), order(page));
         page.byId("k").setAttribute("open", "");
         page.frame();
-        assertEquals(List.of("d", "b", "a", "c", "f", "l", "m", "n"), order(page), "m is rendered once its details opens");
+        assertEquals(List.of("d", "b", "a", "c", "f", "l", "m", "n"), order(page),
+                "m is rendered once its details opens");
     }
 
     @Test
@@ -87,7 +88,8 @@ class FocusTest {
 
     @Test
     void autofocusDefersToScriptFocus() {
-        Page page = new TestHost().load("<input id=a><input id=b autofocus><script>document.getElementById('a').focus()</script>");
+        Page page = new TestHost().load(
+                "<input id=a><input id=b autofocus><script>document.getElementById('a').focus()</script>");
         assertSame(page.byId("a"), page.doc.focusedElement());
     }
 

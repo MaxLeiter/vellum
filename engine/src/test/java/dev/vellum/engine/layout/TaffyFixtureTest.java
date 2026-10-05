@@ -37,7 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class TaffyFixtureTest {
     /** Taffy's Chrome setup: divs are flex containers unless a fixture says otherwise; Ahem at 10px, line-height 1. */
-    private static final String STYLESHEET = "<style>div { display: flex } body { font-size: 10px; line-height: 1 }</style>";
+    private static final String STYLESHEET =
+            "<style>div { display: flex } body { font-size: 10px; line-height: 1 }</style>";
 
     @TestFactory
     Stream<DynamicTest> block() throws Exception {
@@ -95,7 +96,9 @@ class TaffyFixtureTest {
             html.append(name).append(": ").append(value.replace("&", "&amp;").replace("'", "&#39;")).append("; ");
         }
         html.append("'>");
-        if (node.getTagName().equals("text")) html.append(node.getTextContent().replace("&", "&amp;").replace("<", "&lt;"));
+        if (node.getTagName().equals("text")) {
+            html.append(node.getTextContent().replace("&", "&amp;").replace("<", "&lt;"));
+        }
         for (org.w3c.dom.Element c : children(node)) append(html, c, false);
         html.append("</div>");
     }

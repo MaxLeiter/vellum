@@ -45,8 +45,8 @@ class PositionedLayoutTest {
 
     @Test
     void withoutAPositionedAncestorTheViewportIsTheContainingBlock() {
-        Page page = new TestHost().load("<div style='margin: 20px'>"
-                + "<div id=a style='position: absolute; right: 0; bottom: 0; width: 10px; height: 10px'></div></div>", 200, 100);
+        Page page = new TestHost().load("<div style='margin: 20px'><div id=a style='position: absolute; right: 0; "
+                + "bottom: 0; width: 10px; height: 10px'></div></div>", 200, 100);
         assertRect(page.byId("a"), 190, 90, 10, 10);
     }
 

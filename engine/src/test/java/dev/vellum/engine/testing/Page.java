@@ -43,11 +43,6 @@ public final class Page {
 
     // ---- Time ----
 
-    /** The time of the last frame, in ms. */
-    public double now() {
-        return now;
-    }
-
     /** Runs a frame 16 ms after the last one. */
     public Page frame() {
         return frame(now + 16);
@@ -65,7 +60,10 @@ public final class Page {
         return frameLaysOut(now + 16);
     }
 
-    /** Runs a frame at {@code ms} and reports whether it laid the document out again (every layout builds a new box tree). */
+    /**
+     * Runs a frame at {@code ms} and reports whether it laid the document out again (every layout builds a new box
+     * tree).
+     */
     public boolean frameLaysOut(double ms) {
         Object tree = doc.layoutEngine().root();
         frame(ms);
@@ -107,7 +105,8 @@ public final class Page {
         float x = r[0] + r[2] / 2, y = r[1] + r[3] / 2;
         HitResult hit = doc.hitTest(x, y);
         if (hit == null || !e.contains(hit.element())) {
-            throw new AssertionError("The centre of " + e + " (" + x + ", " + y + ") hits " + (hit == null ? "nothing" : hit.element()));
+            throw new AssertionError("The centre of " + e + " (" + x + ", " + y + ") hits "
+                    + (hit == null ? "nothing" : hit.element()));
         }
         return new float[] {x, y};
     }
@@ -155,7 +154,10 @@ public final class Page {
         return input.wheel(x, y, dx, dy, NONE);
     }
 
-    /** Presses and releases a key; single characters get the matching {@code KeyX} code. Returns whether keydown was consumed. */
+    /**
+     * Presses and releases a key; single characters get the matching {@code KeyX} code. Returns whether the keydown
+     * was consumed.
+     */
     public boolean key(String key) {
         return key(key, NONE);
     }
@@ -231,7 +233,9 @@ public final class Page {
     public String eval(String expression) {
         int before = host.logs.size();
         run("console.log(String(" + expression + "))");
-        if (host.logs.size() == before) throw new AssertionError("No value for " + expression + "; errors: " + host.errors);
+        if (host.logs.size() == before) {
+            throw new AssertionError("No value for " + expression + "; errors: " + host.errors);
+        }
         return host.logs.get(before).substring("INFO: ".length());
     }
 

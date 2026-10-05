@@ -96,8 +96,8 @@ class KeyframeAnimationTest {
         page.frame(150);
         assertEquals(0.5, opacity(), EPS);
         page.frame(200);
-        assertEquals(List.of("animationstart:el=fade@0.0", "animationiteration:el=fade@0.1", "animationend:el=fade@0.2"),
-                page.takeLog());
+        assertEquals(List.of("animationstart:el=fade@0.0", "animationiteration:el=fade@0.1",
+                "animationend:el=fade@0.2"), page.takeLog());
     }
 
     @Test
