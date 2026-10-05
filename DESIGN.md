@@ -453,8 +453,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - **McCanvas** implements `Canvas` over `GuiGraphicsExtractor`: own affine matrix stack set into the pose (the pose
   stack is only 16 deep); clip stack → `enableScissor`; alpha stack multiplied into colours; `fillRect` → `fill`
   (sub-pixel via pose translate); `fillQuads` → a custom `GuiElementRenderState` with `RenderPipelines.GUI`
-  (submitted through a mixin accessor for `guiRenderState`/scissor); `drawText` → `Font` with a `Style` (font,
-  bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi reordering only when
+  (submitted into the widened `guiRenderState`, clipped to the widened `scissorStack`); `drawText` → `Font` with a
+  `Style` (font, bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi reordering only when
   the text has right-to-left characters; `drawImage` → a textured quad (identifiers cached in `McImages`, canvases
   are registered dynamic textures); `drawSprite` → `blitSprite`. Rectangles are one render state each, sharing a copy
   of the transform until it changes.
@@ -481,17 +481,19 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (blocks and block-like items 30° from above, turned 225°; flat items face on), and items whose model reaches past
   a block are centred on their bounds and scaled to fit.
 - **Page hooks**: `VellumScreens.onPageLoad(url, hook)` runs when a page loads in any screen or overlay (opened,
-  linked to, reloaded), before its scripts, so client-side pages get live data however they are reached. The Mobdex
-  showcase uses it (`showcase.Mobdex`: every living entity type with its attributes and the player's kill
-  statistics, which it asks the server for; a mixin on `ClientPacketListener.handleAwardStats` reports when they
-  arrive).
+  linked to, reloaded), before its scripts, so client-side pages get live data however they are reached;
+  `VellumScreens.pages(url)` finds the drivers showing a page later, and `driver.merge(fields)` updates some fields
+  of `vellum.data` and keeps the rest. The Mobdex showcase uses all three (`showcase.Mobdex`: every living entity
+  type with its attributes and the player's kill statistics, which it asks the server for; while a Mobdex is open,
+  `VellumClient.tick` compares the client's copy of the statistics every client tick and pushes them when they
+  change).
 - **VellumScreen** (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows).
 - **VellumContainerScreen** (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
-  `Slot.x/y` via mixin accessor); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
+  `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
   frame are moved off-screen. Slot data is sent to the page only when a stack changed.
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
   tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's

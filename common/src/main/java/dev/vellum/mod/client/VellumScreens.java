@@ -2,6 +2,7 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.vellum.engine.host.Urls;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.net.OpenPayload;
 import net.minecraft.client.Minecraft;
@@ -112,16 +113,22 @@ public final class VellumScreens {
 
     /**
      * Runs {@code hook} whenever the page {@code url} loads in a screen or overlay (opened, reached by a link, or
-     * reloaded), before its scripts: to give a client-side page live data ({@code driver.push}, which may build on
-     * {@code driver.data()}, what the opener passed) and keep its driver to push updates or handle its messages.
+     * reloaded), before its scripts: to give a client-side page live data ({@code driver.push}, or
+     * {@code driver.merge} to keep what the opener passed) or handle its messages. {@link #pages} finds it later to
+     * push updates.
      */
     public static void onPageLoad(String url, Consumer<DocumentDriver> hook) {
         PAGE_HOOKS.merge(url, hook, Consumer::andThen);
     }
 
+    /** The drivers of the screens and overlays showing page {@code url} now (queries and fragments ignored). */
+    public static List<DocumentDriver> pages(String url) {
+        return DocumentDriver.showing(url);
+    }
+
     /** {@link DocumentDriver}: {@code url} is loading. */
     static void pageLoading(String url, DocumentDriver driver) {
-        Consumer<DocumentDriver> hook = PAGE_HOOKS.get(url.split("[?#]", 2)[0]);
+        Consumer<DocumentDriver> hook = PAGE_HOOKS.get(Urls.withoutQuery(url));
         if (hook != null) hook.accept(driver);
     }
 

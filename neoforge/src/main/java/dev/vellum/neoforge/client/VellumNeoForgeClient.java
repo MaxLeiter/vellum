@@ -59,6 +59,7 @@ public final class VellumNeoForgeClient {
         NeoForge.EVENT_BUS.addListener((ScreenEvent.MouseScrolled.Pre e) -> {
             if (VellumHud.mouseScrolled(e.getMouseX(), e.getMouseY(), e.getScrollDeltaX(), e.getScrollDeltaY())) e.setCanceled(true);
         });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> VellumClient.tick());
         if (DevAutopilot.ENABLED) NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> DevAutopilot.tick(Minecraft.getInstance()));
     }
 

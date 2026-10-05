@@ -7,6 +7,11 @@ package dev.vellum.engine.host;
 public final class Urls {
     private Urls() {}
 
+    /** {@code url} without its query and fragment: the page or resource it names. */
+    public static String withoutQuery(String url) {
+        return url.split("[?#]", 2)[0];
+    }
+
     public static String resolve(String base, String relative) {
         if (relative == null || relative.isEmpty()) return base;
         if (hasNamespaceOrScheme(relative)) return relative;

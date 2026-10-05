@@ -64,9 +64,11 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
   them reaches your `onMessage` handlers first.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
+- `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
-  a reload), before its scripts run: give it live data with `driver.push(json)` (building on `driver.data()`, what
-  the opener passed) and keep the driver to push updates or `onMessage` to handle its messages.
+  a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
+  what the opener passed, and `onMessage` to handle its messages. `VellumScreens.pages(url)` returns the drivers
+  showing that page now, to push updates to.
 
 ```java
 VellumScreens.open("mymod:vellum/notes.html", notesJson).driver()

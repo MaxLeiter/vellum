@@ -69,9 +69,9 @@ public final class VellumClient {
         DocumentDriver.reloadAll();
     }
 
-    /** The player's statistics arrived from the server (they are only sent when asked for). */
-    public static void onStatsUpdated() {
-        Mobdex.statsUpdated();
+    /** Called by the loaders at the end of every client tick. */
+    public static void tick() {
+        Mobdex.tick();
     }
 
     private static @Nullable VellumScreen sessionScreen(int session) {

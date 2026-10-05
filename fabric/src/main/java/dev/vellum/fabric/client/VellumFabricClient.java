@@ -48,6 +48,7 @@ public final class VellumFabricClient implements ClientModInitializer {
         ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(Constants.id("documents"),
                 (ResourceManagerReloadListener) resources -> VellumClient.onResourceReload());
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> dispatcher.register(VellumClientCommands.create()));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> VellumClient.tick());
         if (DevAutopilot.ENABLED) ClientTickEvents.END_CLIENT_TICK.register(DevAutopilot::tick);
     }
 

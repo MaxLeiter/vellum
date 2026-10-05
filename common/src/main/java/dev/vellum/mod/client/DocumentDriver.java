@@ -1,12 +1,14 @@
 package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.cursor.CursorType;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.host.Urls;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.HitResult;
@@ -106,6 +108,14 @@ public final class DocumentDriver {
     /** Reloads every loaded document: after a resource reload, {@code /vellum reload}, or a saved source file in dev. */
     public static void reloadAll() {
         for (DocumentDriver d : List.copyOf(LIVE)) d.reload();
+    }
+
+    /** The loaded drivers showing page {@code url} (queries and fragments ignored); never inline pages. */
+    static List<DocumentDriver> showing(String url) {
+        String page = Urls.withoutQuery(url);
+        List<DocumentDriver> drivers = new ArrayList<>();
+        for (DocumentDriver d : LIVE) if (d.html == null && Urls.withoutQuery(d.url).equals(page)) drivers.add(d);
+        return drivers;
     }
 
     // ---- Lifecycle ----
@@ -348,6 +358,16 @@ public final class DocumentDriver {
         pushData(data.toString());
     }
 
+    /**
+     * Sets the top-level fields of {@code vellum.data} that {@code fields} has and keeps the others (what the opener
+     * passed); as {@link #push}, the page's listeners run.
+     */
+    public void merge(JsonObject fields) {
+        JsonObject merged = data() instanceof JsonObject current ? current : new JsonObject();
+        for (var field : fields.entrySet()) merged.add(field.getKey(), field.getValue());
+        push(merged);
+    }
+
     void pushData(String json) {
         data = json;
         receive("data", json);
@@ -418,7 +438,7 @@ public final class DocumentDriver {
                         Constants.LOG.warn("Vellum: {} links to a malformed URL: {}", name(), target);
                     }
                 }
-            } else if (target.split("[?#]", 2)[0].endsWith(".html")) {
+            } else if (Urls.withoutQuery(target).endsWith(".html")) {
                 url = target;
                 html = null;
                 load();
