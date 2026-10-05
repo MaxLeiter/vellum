@@ -104,7 +104,7 @@ public final class VellumConfig {
     private static final Map<String, String> GROUPS = Map.of(
             "server", "What this server sends to clients and accepts from them. Read by dedicated servers and by the server inside a singleplayer world.",
             "client", "What this client lets pages do, and which of a server's pages it shows.",
-            "limits", "The engine's caps on every page, a mod's or a server's. Each must be at least 1. They apply to pages opened after the game starts.");
+            "limits", "The engine's caps on every page, a mod's or a server's. Each must be at least 1; set too low, ordinary pages stop working.");
 
     private VellumConfig() {}
 
