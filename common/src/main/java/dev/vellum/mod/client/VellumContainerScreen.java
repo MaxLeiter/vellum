@@ -3,6 +3,7 @@ package dev.vellum.mod.client;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,6 +19,9 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
+import java.util.Objects;
+import java.util.function.Function;
+
 /**
  * A container screen whose layout is a Vellum page. Each {@code <slot index="n">} element places menu slot
  * {@code n}: every frame the slot's 16×16 item area goes where the element's content box is painted, so slots follow
@@ -26,22 +30,38 @@ import org.jspecify.annotations.Nullable;
  * and handles slot clicks, drags and shift-clicks; everything else goes to the page.
  *
  * <p>Register one for a menu type with {@link VellumScreens#registerContainer}. The page's {@code vellum.data} is
- * {@code {title, inventory, slots: [{id, count, name}, ...]}}, updated when the menu's contents change, so pages can
- * show totals or filter slots by name.
+ * {@code {title, inventory, slots: [{id, count, name}, ...]}}, plus the fields of the registration's data function
+ * (the mod's own: an entity id, a tier), updated when the menu's contents or those fields change, so pages can show
+ * totals, filter slots by name, or show the mod's state.
  */
 public class VellumContainerScreen<M extends AbstractContainerMenu> extends AbstractContainerScreen<M> implements DocumentDriver.Owner {
     private static final int OFF_SCREEN = -10_000;
 
     private final DocumentDriver driver;
     private final McCanvas.SlotSink slotSink = this::placeSlot;
+    /** The mod's fields for {@code vellum.data}, or null. */
+    private final @Nullable Function<? super M, ? extends JsonObject> extra;
     /** Copies of the stacks the page was last sent, so data goes out only when the menu's contents change. */
     private @Nullable ItemStack[] sent = new ItemStack[0];
+    /** A copy of the extra fields the page was last sent. */
+    private @Nullable JsonObject sentExtra;
+    private boolean extraFailed;
     /** Whether the current press went to the page (its release goes there too) rather than to vanilla. */
     private boolean pagePress;
 
     public VellumContainerScreen(M menu, Inventory inventory, Component title, String url) {
+        this(menu, inventory, title, url, null);
+    }
+
+    /**
+     * @param extra fields to add to {@code vellum.data}, from the menu (called on open and every client tick; the
+     *              page gets new data when its result changes), or null
+     */
+    public VellumContainerScreen(M menu, Inventory inventory, Component title, String url,
+                                 @Nullable Function<? super M, ? extends JsonObject> extra) {
         super(menu, inventory, title);
         this.driver = new DocumentDriver(this, url, null, -1);
+        this.extra = extra;
         pushSlotData();
         for (Slot slot : menu.slots) hide(slot); // until the page paints them
     }
@@ -62,8 +82,15 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
         for (Slot slot : menu.slots) hide(slot); // painting puts back the slots it draws
-        driver.extract(g, mouseX, mouseY); // the page first, so vanilla's slot layer lands on top of it
+        driver.extractPage(g, mouseX, mouseY); // the page first, so vanilla's slot layer lands on top of it
         super.extractRenderState(g, mouseX, mouseY, a);
+    }
+
+    /** A hovered slot's item tooltip first; the page's {@code title} tooltip where there is none. */
+    @Override
+    protected void extractTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        super.extractTooltip(g, mouseX, mouseY);
+        if (hoveredSlot == null || !hoveredSlot.hasItem()) driver.extractTooltip(g, mouseX, mouseY);
     }
 
     @Override
@@ -83,10 +110,15 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         pushSlotData();
     }
 
-    /** Sends the title and slot contents to the page when they changed. */
+    /** Sends the title, slot contents and extra fields to the page when they changed. */
     private void pushSlotData() {
-        boolean changed = sent.length != menu.slots.size();
-        if (changed) sent = new ItemStack[menu.slots.size()];
+        JsonObject fields = extraFields();
+        boolean changed = !Objects.equals(fields, sentExtra);
+        sentExtra = fields;
+        if (sent.length != menu.slots.size()) {
+            sent = new ItemStack[menu.slots.size()];
+            changed = true;
+        }
         for (int i = 0; i < sent.length; i++) {
             ItemStack stack = menu.slots.get(i).getItem();
             if (sent[i] == null || !ItemStack.matches(sent[i], stack)) {
@@ -107,7 +139,21 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         data.addProperty("title", title.getString());
         data.addProperty("inventory", playerInventoryTitle.getString());
         data.add("slots", slots);
+        if (fields != null) fields.entrySet().forEach(e -> data.add(e.getKey(), e.getValue()));
         driver.pushData(data.toString());
+    }
+
+    /** A copy of the mod's fields now (it may reuse and change its object), or null; a failing function is logged once. */
+    private @Nullable JsonObject extraFields() {
+        if (extra == null) return null;
+        try {
+            JsonObject fields = extra.apply(menu);
+            return fields == null ? null : fields.deepCopy();
+        } catch (RuntimeException e) {
+            if (!extraFailed) Constants.LOG.error("Vellum: the data function of {} failed", title.getString(), e);
+            extraFailed = true;
+            return null;
+        }
     }
 
     @Override
@@ -135,7 +181,7 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
     @Override
     protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top) {
         Element hit = driver.elementAt(mouseX, mouseY);
-        return hit != null && (hit.tagName().equals("html") || hit.tagName().equals("body"));
+        return hit != null && DocumentDriver.isBackground(hit);
     }
 
     private static void hide(Slot slot) {

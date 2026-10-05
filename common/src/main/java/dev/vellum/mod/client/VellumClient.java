@@ -20,6 +20,7 @@ import java.util.function.Consumer;
  */
 public final class VellumClient {
     public static final Identifier DEMO_HUD = Constants.id("demo_hud");
+    public static final Identifier DEMO_TOAST = Constants.id("demo_toast");
 
     private static Consumer<CustomPacketPayload> serverSender = p ->
             Constants.LOG.warn("Vellum: no client network sender installed; dropped {}", p.type().id());
@@ -33,6 +34,7 @@ public final class VellumClient {
         VellumResources.init();
         VellumScreens.registerContainer(VellumDemos.CHEST, VellumDemos.CHEST_PAGE);
         VellumHud.register(DEMO_HUD, "vellum:vellum/demo/hud.html");
+        VellumHud.register(DEMO_TOAST, "vellum:vellum/demo/toast.html", VellumHud.Input.WHEN_CURSOR_FREE);
     }
 
     public static void sendToServer(CustomPacketPayload payload) {

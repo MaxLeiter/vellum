@@ -82,6 +82,8 @@ host: frame(nowMs)                   every frame:
         updateLayout       if layout dirty: box tree → element.box
         input.afterLayout  after any layout (also one a script flushed): caret in view, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
+host: input.tooltip()                every frame, after paint: the title tooltip to draw on top, or null
+host: close()                        pagehide, unload (scripts still run), then dispose scripts, timers, replaced content
 ```
 
 Replaced content is created when its element enters the document (not during layout), so a script can draw on a
@@ -377,6 +379,14 @@ the scrollbar).
   paste via `Host`), word-wise movement (ctrl/alt), Home/End, undo/redo (simple stack), `maxlength`, `placeholder`,
   `readonly`, horizontal scroll to keep the caret visible; `beforeinput`, `input`, `change` (on blur/Enter) events;
   textarea with line navigation.
+- Tooltips (`input.Tooltips`): the element whose `title` / `title-json` applies is the nearest one with either
+  attribute from the hover target up (an empty one means none, as in HTML). Its tooltip is due once the pointer has
+  rested on it (or inside it) for 500 ms, and is hidden by a button or key press until the pointer reaches another
+  tooltip's element. The engine only decides; hosts ask `InputHandler.tooltip()` each frame after painting (a
+  `Tooltip` record: element, text, JSON, pointer position) and draw it, so scripts can change the attributes live.
+  `needsFrame` covers the moment the delay ends.
+- Pointer leave: `InputHandler.mouseLeave()` when the host stops giving the document the pointer (an interactive
+  HUD overlay whose screen closed): hover ends with `mouseout`/`mouseleave`, a drag ends, no tooltip.
 - Focus: `focus`/`blur`/`focusin`/`focusout`; `:focus-visible` after keyboard navigation; `autofocus`; elements
   without a box (also the content of a closed `<details>`, hidden by the UA stylesheet) are not tab stops.
 - Default actions run only if the event was not cancelled: checkbox/radio toggle, `label` forwards to its control,
@@ -410,6 +420,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   - `vellum.on(channel, fn)` / `vellum.off`: messages from the server/mod.
   - `vellum.close()`, `vellum.playSound(id, volume, pitch)`, `vellum.t(key, ...args)` (translation),
     `vellum.open(url, data)` (open another UI), `vellum.nextTick(fn)` (runs `fn` once templates have rendered).
+- Lifecycle: `DOMContentLoaded` and `load` after the scripts run; `Document.close()` (screen closed, overlay hidden,
+  navigation, reload) fires `pagehide` then `unload` at the document (where `window` listeners are) while the
+  runtime is still alive, then disposes it.
 - **Templates** (no build step, AngularJS-style dirty checking): `{{ expr }}` in text and attributes,
   `v-if="expr"`, `v-for="item in expr"` (with `v-key`), `v-show`, `v-bind:attr` / `:attr`, `v-class`, `v-style`,
   `v-on:event` / `@event`, `v-model` (two-way for inputs). Expressions are JS evaluated with the scope chain
@@ -435,6 +448,12 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   `minecraft:`-style URLs, sounds, clipboard, cursor (`CursorTypes`), logging to the mod logger, translations.
 - **Replaced elements**: `item`, `slot`, `entity`, `player-head` (`McReplaced.ELEMENTS`); canvases are `McSurface`s
   (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
+- **DocumentDriver**: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
+  input, messages, reload. After painting it shows the page's title tooltip through `setTooltipForNextFrame` (lines
+  from `Font.split` at 170 px, as vanilla widget tooltips; `title-json` parsed like `<mc-text json>`), at the
+  engine's pointer; vanilla's first-set-wins rule keeps an `<item tooltip>` (set while painting) on top.
+  `onClose(Runnable)` handlers run once when the owner closes the page for good (screen removed, overlay hidden),
+  after the page's `unload`; not on navigation, reload or while suspended (link confirmation).
 - **VellumScreen** (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
@@ -443,7 +462,19 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y` via mixin accessor); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
   frame are moved off-screen. Slot data is sent to the page only when a stack changed.
+  A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
+  tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
+  slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
 - **HUD layers**: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
+  With `Input.WHEN_CURSOR_FREE` an overlay is interactive while a screen is open: the loaders draw it after the
+  screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
+  stratum, flushing its own deferred tooltip (`extractDeferredElements`: the screen's pass is over), and route
+  pointer events to it first (NeoForge `ScreenEvent.Mouse*.Pre`, cancelled when taken; Fabric
+  `ScreenMouseEvents.allowMouse*`). Hover follows the mouse position, polled each frame. A press goes to the topmost
+  overlay with content under the pointer (`DocumentDriver.contentAt`: not `html`/`body`), which then gets its
+  release and drags; otherwise the screen gets it. The wheel goes to the same overlay and falls through when unused.
+  Without a screen the overlay is drawn in the HUD layer without a pointer (`mouseLeave` on the way). Keys stay with
+  the screen.
 - **Networking**: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
   `vellum:data` (server → client: JSON for a session), `vellum:message` (client → server: session, channel, JSON),
   `vellum:close`. Server API: `VellumServer.open(player, url, data)` returns a session handle with `push(data)`,

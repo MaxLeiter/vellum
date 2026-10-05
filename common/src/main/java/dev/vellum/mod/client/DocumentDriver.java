@@ -8,6 +8,7 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.input.InputHandler;
+import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
@@ -21,6 +22,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import org.jspecify.annotations.Nullable;
 
@@ -39,7 +42,8 @@ import java.util.function.Predicate;
 /**
  * Hosts one Vellum document in Minecraft, for whatever shows it ({@link VellumScreen}, {@link VellumContainerScreen}
  * or a HUD overlay): loads the page, keeps its viewport in sync with the GUI-scaled window, runs frame and paint,
- * forwards input (SDL to DOM), switches SDL text input on while a text field has focus, routes messages, and reloads.
+ * shows {@code title} tooltips, forwards input (SDL to DOM), switches SDL text input on while a text field has focus,
+ * routes messages, and reloads.
  *
  * <p>The document is its own error boundary ({@link Document#error()}): once the engine fails, the page is replaced
  * by an {@link ErrorPanel} until it is reloaded. Render thread only.
@@ -62,11 +66,14 @@ public final class DocumentDriver {
     }
 
     private static final Set<DocumentDriver> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
+    /** Title tooltips wrap at this width, as vanilla widget tooltips do ({@code Tooltip.splitTooltip}). */
+    private static final int TOOLTIP_WIDTH = 170;
 
     private final Owner owner;
     private final McHost host = new McHost(this);
     private final int session;
     private final Map<String, List<Consumer<JsonElement>>> listeners = new HashMap<>();
+    private final List<Runnable> closeHandlers = new ArrayList<>();
     private String url;
     private @Nullable String html;
     private @Nullable String data;
@@ -78,6 +85,11 @@ public final class DocumentDriver {
     /** A child screen (link confirmation) is up and will return to this one: survive the owner's removal. */
     private boolean suspended;
     private @Nullable String pendingNavigation;
+    /** Whether the last frame asked for a tooltip (an item's while painting, or the page's title). */
+    private boolean tooltipRequested;
+    /** The last title tooltip's attributes and its wrapped lines, so JSON is parsed and lines split once. */
+    private @Nullable String tooltipSource;
+    private List<FormattedCharSequence> tooltipLines = List.of();
 
     /**
      * @param url     the page ({@code ns:path/page.html}); also the base for its relative URLs
@@ -110,7 +122,10 @@ public final class DocumentDriver {
         load();
     }
 
-    /** Disposes the document. Tells the server when a session's screen is closed by the player. */
+    /**
+     * Disposes the document (its {@code pagehide} and {@code unload} listeners run first), then runs the
+     * {@link #onClose} handlers. Tells the server when a session's screen is closed by the player.
+     */
     public void close() {
         if (suspended) {
             suspended = false;
@@ -120,7 +135,27 @@ public final class DocumentDriver {
         LIVE.remove(this);
         setTextInput(false);
         disposeDocument();
+        List<Runnable> handlers = List.copyOf(closeHandlers);
+        closeHandlers.clear();
+        for (Runnable handler : handlers) {
+            try {
+                handler.run();
+            } catch (RuntimeException e) {
+                Constants.LOG.error("Vellum: an onClose handler of {} failed", name(), e);
+            }
+        }
         if (session >= 0 && !closedByServer) VellumClient.sendToServer(new ClosedPayload(session));
+    }
+
+    /**
+     * Runs {@code handler} once, when the page closes for good: its screen is closed or replaced by another screen,
+     * or its HUD overlay is hidden. Not when the page navigates to another page or reloads, or while a link
+     * confirmation screen is open over it. The page's {@code pagehide} and {@code unload} listeners have run by then,
+     * so messages they send arrive first.
+     */
+    public DocumentDriver onClose(Runnable handler) {
+        closeHandlers.add(handler);
+        return this;
     }
 
     /** The server ended this session; {@link #close()} then won't report it back. */
@@ -132,6 +167,7 @@ public final class DocumentDriver {
         disposeDocument();
         LIVE.add(this);
         error = null;
+        tooltipSource = null; // translations may have changed
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
             Constants.LOG.error("Vellum: page not found: {}", url);
@@ -155,15 +191,26 @@ public final class DocumentDriver {
 
     // ---- Rendering ----
 
-    /** Runs a frame and paints it (or the error panel). {@code mouseX} is -1 when there is no pointer (HUDs). */
+    /**
+     * Runs a frame and paints it (or the error panel), then shows the page's {@code title} tooltip if one is up.
+     * {@code mouseX} is -1 when there is no pointer (HUD overlays).
+     */
     public void extract(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        extractPage(g, mouseX, mouseY);
+        extractTooltip(g, mouseX, mouseY);
+    }
+
+    /** {@link #extract} without the title tooltip, for owners that draw over the page and show it later. */
+    void extractPage(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         runDeferred();
+        tooltipRequested = false;
         Document doc = document();
         if (doc != null) {
             doc.frame(Util.getMillis());
             McCanvas canvas = new McCanvas(g, mouseX, mouseY, owner.slots());
             doc.paint(canvas);
             canvas.finish();
+            tooltipRequested = canvas.requestedTooltip();
             syncTextInput();
             if (cursor != Cursor.AUTO && cursor != Cursor.DEFAULT) g.requestCursor(cursorType(cursor));
         }
@@ -171,6 +218,38 @@ public final class DocumentDriver {
             fail("Vellum could not show " + name(), document.error());
         }
         if (error != null) error.extract(g, width, height, owner.screen() != null);
+    }
+
+    /**
+     * Shows the {@code title} / {@code title-json} tooltip the page has up ({@link InputHandler#tooltip()}) at the
+     * page's pointer, wrapped like vanilla widget tooltips; none when {@code mouseX} is -1 (no pointer). Vanilla draws
+     * it on top at the end of the frame, and only if nothing set a tooltip before it (an {@code <item tooltip>}, a
+     * container slot's item).
+     */
+    void extractTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        Document doc = document();
+        Tooltip tooltip = doc == null || mouseX < 0 ? null : doc.input().tooltip();
+        if (tooltip == null) return;
+        List<FormattedCharSequence> lines = tooltipLines(tooltip);
+        if (lines.isEmpty()) return;
+        g.setTooltipForNextFrame(Minecraft.getInstance().font, lines, (int) tooltip.x(), (int) tooltip.y());
+        tooltipRequested = true;
+    }
+
+    /** Whether the last {@link #extract} asked vanilla for a tooltip. */
+    boolean requestedTooltip() {
+        return tooltipRequested;
+    }
+
+    private List<FormattedCharSequence> tooltipLines(Tooltip tooltip) {
+        String source = tooltip.json() + "\u0000" + tooltip.text();
+        if (!source.equals(tooltipSource)) {
+            Component text = tooltip.json() != null ? McText.component(tooltip.json()) : null;
+            if (text == null && tooltip.text() != null) text = Component.literal(tooltip.text());
+            tooltipSource = source;
+            tooltipLines = text == null ? List.of() : Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
+        }
+        return tooltipLines;
     }
 
     /** The live document, or null while it failed or is not loaded. */
@@ -185,6 +264,19 @@ public final class DocumentDriver {
         return hit == null ? null : hit.element();
     }
 
+    /**
+     * The element under a viewport point unless only the page's background is there ({@code html} or {@code body},
+     * whatever their styles), or null: where pages that share the screen let the pointer through.
+     */
+    public @Nullable Element contentAt(double x, double y) {
+        Element hit = elementAt(x, y);
+        return hit == null || isBackground(hit) ? null : hit;
+    }
+
+    static boolean isBackground(Element element) {
+        return element.tagName().equals("html") || element.tagName().equals("body");
+    }
+
     // ---- Input (true = consumed) ----
 
     public boolean mouseMoved(double x, double y) {
@@ -197,6 +289,12 @@ public final class DocumentDriver {
 
     public boolean mouseReleased(MouseButtonEvent e) {
         return input(in -> in.mouseUp((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
+    }
+
+    /** The pointer left the page (an interactive HUD overlay whose screen closed): hover ends. */
+    void mouseLeave() {
+        Document doc = document();
+        if (doc != null) doc.input().mouseLeave();
     }
 
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {

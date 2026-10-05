@@ -19,7 +19,7 @@ import java.util.Optional;
 /**
  * Chat components for {@code <mc-text json>} ({@link Host#formatText}): the component's text (translations
  * resolved), as runs styled with CSS for its colour, bold, italic, underline, strikethrough and font. The engine
- * turns the runs into the element's children.
+ * turns the runs into the element's children. {@code title-json} tooltips parse the same way ({@link #component}).
  */
 final class McText {
     private McText() {}
@@ -36,7 +36,8 @@ final class McText {
         return runs;
     }
 
-    private static @Nullable Component component(String json) {
+    /** A chat component from JSON (with the world's registries when there is one), or null when it is malformed. */
+    static @Nullable Component component(String json) {
         try {
             var level = Minecraft.getInstance().level;
             var ops = level == null ? JsonOps.INSTANCE : level.registryAccess().createSerializationContext(JsonOps.INSTANCE);

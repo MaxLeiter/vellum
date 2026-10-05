@@ -20,6 +20,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
@@ -38,6 +39,22 @@ public final class VellumNeoForgeClient {
         modBus.addListener((AddClientReloadListenersEvent e) ->
                 e.addListener(Constants.id("documents"), (ResourceManagerReloadListener) resources -> VellumClient.onResourceReload()));
         NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent e) -> e.getDispatcher().register(VellumClientCommands.create()));
+        // Interactive HUD overlays: drawn above the screen (not its background layers) and given its pointer input first.
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.Render.Post e) -> {
+            if (e.getScreen() == Minecraft.getInstance().gui.screen()) VellumHud.extractAboveScreen(e.getGuiGraphics(), e.getPartialTick());
+        });
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.MouseButtonPressed.Pre e) -> {
+            if (VellumHud.mouseClicked(e.getMouseButtonEvent())) e.setCanceled(true);
+        });
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.MouseButtonReleased.Pre e) -> {
+            if (VellumHud.mouseReleased(e.getMouseButtonEvent())) e.setCanceled(true);
+        });
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.MouseDragged.Pre e) -> {
+            if (VellumHud.mouseDragged(e.getMouseButtonEvent())) e.setCanceled(true);
+        });
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.MouseScrolled.Pre e) -> {
+            if (VellumHud.mouseScrolled(e.getMouseX(), e.getMouseY(), e.getScrollDeltaX(), e.getScrollDeltaY())) e.setCanceled(true);
+        });
         if (DevAutopilot.ENABLED) NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> DevAutopilot.tick(Minecraft.getInstance()));
     }
 
