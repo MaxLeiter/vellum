@@ -163,12 +163,14 @@ public abstract class Node {
         Document doc = doc();
         boolean wasConnected = child.isConnected(), connected = isConnected();
         boolean move = wasConnected && connected && child.ownerDocument == doc;
+        doc.checkInsert(this, child, connected && !move);
         if (child.parent != null) {
             child.parent.unlink(child, !move);
             if (child.parent != null) return child; // a blur listener put it somewhere else: leave it there
         }
         link(child, reference == null || reference.parent != this ? children.size() : reference.index);
         child.adopt(doc);
+        if (connected && !move) doc.countNodes(size(child));
         if (connected) doc.inserted(child, !move);
         return child;
     }
@@ -211,7 +213,24 @@ public abstract class Node {
         children.remove(at);
         child.parent = null;
         renumber(at);
-        if (connected) doc.invalidate(true);
+        if (connected) {
+            if (leaving) doc.countNodes(-size(child));
+            doc.invalidate(true);
+        }
+    }
+
+    /** Nodes in the subtree of {@code node}, itself included. */
+    static int size(Node node) {
+        int n = 1;
+        for (Node c : node.children) n += size(c);
+        return n;
+    }
+
+    /** Levels of the subtree of {@code node}: 1 for a leaf. Trees are at most {@code maxDepth} deep. */
+    static int height(Node node) {
+        int h = 0;
+        for (Node c : node.children) h = Math.max(h, height(c));
+        return h + 1;
     }
 
     private void renumber(int from) {

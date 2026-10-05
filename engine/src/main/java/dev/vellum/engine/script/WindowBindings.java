@@ -20,8 +20,6 @@ import java.util.Map;
  * {@code location}, {@code structuredClone} and {@code getComputedStyle}.
  */
 final class WindowBindings {
-    /** Characters (keys plus values) each storage area holds per document. */
-    static final int STORAGE_QUOTA = 256 * 1024;
     private static final int HIDDEN = ScriptableObject.DONTENUM | ScriptableObject.READONLY;
 
     private WindowBindings() {}
@@ -83,7 +81,9 @@ final class WindowBindings {
         Members<Host> log = new Members<>(rt, console, self -> host);
         Map<String, Host.LogLevel> levels = Map.of("debug", Host.LogLevel.DEBUG, "log", Host.LogLevel.INFO,
                 "info", Host.LogLevel.INFO, "warn", Host.LogLevel.WARN, "error", Host.LogLevel.ERROR);
-        levels.forEach((name, level) -> log.action(name, (h, a) -> h.log(level, format(rt.js, a))));
+        levels.forEach((name, level) -> log.action(name, (h, a) -> {
+            if (document.allowLog()) h.log(level, truncate(format(rt.js, a), rt.limits.maxLogLength()));
+        }));
 
         HostClass<Storage> storage = new HostClass<>(rt, "Storage", Storage.class, null, null).expose("Storage");
         storage.members()
@@ -93,8 +93,8 @@ final class WindowBindings {
                 .action("setItem", (s, a) -> s.set(a.str(0), a.str(1)))
                 .action("removeItem", (s, a) -> s.remove(a.str(0)))
                 .action("clear", (s, a) -> s.clear());
-        global.defineProperty("localStorage", storage.wrap(new Storage()), HIDDEN);
-        global.defineProperty("sessionStorage", storage.wrap(new Storage()), HIDDEN);
+        global.defineProperty("localStorage", storage.wrap(new Storage(rt.limits.storageQuota())), HIDDEN);
+        global.defineProperty("sessionStorage", storage.wrap(new Storage(rt.limits.storageQuota())), HIDDEN);
     }
 
     private static void navigate(Document document, String url) {
@@ -154,16 +154,27 @@ final class WindowBindings {
         return String.join(" ", parts);
     }
 
-    /** One Web Storage area: in memory for the document's lifetime, capped at {@link #STORAGE_QUOTA}. */
+    /** A console message, cut to {@code max} characters. */
+    static String truncate(String message, int max) {
+        return message.length() <= max ? message : message.substring(0, max) + "... (" + (message.length() - max)
+                + " more characters)";
+    }
+
+    /** One Web Storage area: in memory for the document's lifetime, capped at {@code quota} characters. */
     static final class Storage {
         final Map<String, String> items = new LinkedHashMap<>();
+        private final int quota;
         private int size;
+
+        Storage(int quota) {
+            this.quota = quota;
+        }
 
         void set(String key, String value) {
             String old = items.get(key);
             int next = size - (old == null ? 0 : key.length() + old.length()) + key.length() + value.length();
-            if (next > STORAGE_QUOTA) {
-                throw Js.error("RangeError", "QuotaExceededError: storage holds at most " + STORAGE_QUOTA + " characters");
+            if (next > quota) {
+                throw Js.error("RangeError", "QuotaExceededError: storage holds at most " + quota + " characters");
             }
             items.put(key, value);
             size = next;

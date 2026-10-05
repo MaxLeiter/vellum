@@ -4,12 +4,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.function.DoubleConsumer;
 
 /**
  * Timers and animation-frame callbacks for a document: {@code setTimeout}, {@code setInterval} and
  * {@code requestAnimationFrame}. Driven by {@link Document#frame}; everything runs on the render thread.
+ *
+ * <p>Bounded by the document's {@link dev.vellum.engine.Limits}: at most {@code maxTimers} pending timers and
+ * callbacks, and {@code frameScriptTimeMs} of them per frame, after which the rest wait for the next frame.
  */
 public final class Scheduler {
     private static final class Timer {
@@ -56,7 +60,16 @@ public final class Scheduler {
         return schedule(new Timer(nextId++, now + interval, interval, task));
     }
 
+    /** Refuses a new timer or callback past {@code maxTimers}. */
+    private void checkCount() {
+        int max = document.limits().maxTimers();
+        if (live.size() + frameCallbacks.size() >= max) {
+            throw new IllegalStateException("A page may have at most " + max + " pending timers and animation frames");
+        }
+    }
+
     private int schedule(Timer timer) {
+        checkCount();
         timer.seq = seq++;
         timers.add(timer);
         live.put(timer.id, timer);
@@ -70,6 +83,7 @@ public final class Scheduler {
     }
 
     public int requestAnimationFrame(DoubleConsumer callback) {
+        checkCount();
         int id = nextId++;
         frameCallbacks.add(new FrameCallback(id, callback));
         return id;
@@ -89,13 +103,15 @@ public final class Scheduler {
     }
 
     /**
-     * Runs due timers (at most a bounded number, so an interval storm cannot hang a frame), then frame callbacks.
-     * Called by {@link Document#frame}; public so tests can drive time without the rest of the pipeline.
+     * Runs due timers, then frame callbacks, until they have taken {@code frameScriptTimeMs}: the rest wait for the
+     * next frame, so an interval storm cannot hang a frame. Called by {@link Document#frame}; public so tests can
+     * drive time without the rest of the pipeline.
      */
     public void run(double nowMs) {
         now = nowMs;
+        long deadline = Document.clock.getAsLong() + document.limits().frameScriptTimeMs() * 1_000_000L;
         int budget = 1000;
-        while (!timers.isEmpty() && timers.peek().due <= nowMs && budget-- > 0) {
+        while (!timers.isEmpty() && timers.peek().due <= nowMs && budget-- > 0 && Document.clock.getAsLong() < deadline) {
             Timer t = timers.poll();
             if (t.interval > 0) {
                 t.due = Math.max(t.due + t.interval, nowMs);
@@ -118,6 +134,14 @@ public final class Scheduler {
             for (int i = 0; i < running.size(); i++) {
                 FrameCallback c = running.get(i);
                 if (c == null) continue;
+                if (i > 0 && Document.clock.getAsLong() >= deadline) { // out of time: the rest run first next frame
+                    List<FrameCallback> later = new ArrayList<>(running.subList(i, running.size()));
+                    later.removeIf(Objects::isNull);
+                    later.addAll(frameCallbacks);
+                    frameCallbacks.clear();
+                    frameCallbacks.addAll(later);
+                    break;
+                }
                 try {
                     c.callback.accept(nowMs);
                 } catch (RuntimeException ex) {

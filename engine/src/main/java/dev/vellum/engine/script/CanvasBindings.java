@@ -15,8 +15,6 @@ import dev.vellum.shadow.rhino.typedarrays.NativeArrayBufferView;
  */
 final class CanvasBindings {
     private static final String CONTEXT = "context2d";
-    /** Image data is limited to the largest canvas. */
-    private static final long MAX_PIXELS = (long) CanvasContent.MAX_SIZE * CanvasContent.MAX_SIZE;
 
     /** Bytes of an image data array: a typed array's own buffer, or a copy of a plain array. */
     private record Bytes(byte[] bytes, int offset) {}
@@ -113,8 +111,10 @@ final class CanvasBindings {
         return new Bytes(copy, 0);
     }
 
-    private static void checkSize(int width, int height) {
-        if (width <= 0 || height <= 0 || (long) width * height > MAX_PIXELS) {
+    /** Image data is limited to the largest canvas. */
+    private void checkSize(int width, int height) {
+        long max = (long) rt.limits.maxCanvasSize() * rt.limits.maxCanvasSize();
+        if (width <= 0 || height <= 0 || (long) width * height > max) {
             throw Js.error("RangeError", "Image data of " + width + "×" + height + " pixels");
         }
     }

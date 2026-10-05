@@ -14,6 +14,9 @@ import java.util.Set;
  * ({@code <slot index="0"/>}), raw-text {@code <script>}/{@code <style>}, RCDATA {@code <textarea>}/{@code <title>},
  * character references, comments, unquoted and boolean attributes, implied end tags for {@code p}, {@code li},
  * {@code dt}/{@code dd}, {@code option}, and stray end tags (ignored).
+ *
+ * <p>Markup nested deeper than the document's {@link dev.vellum.engine.Limits#maxDepth} is flattened, as browsers
+ * do: an element at the deepest level takes no children, and what would have gone inside it follows it instead.
  */
 public final class HtmlParser {
     static final Set<String> VOID = Set.of("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
@@ -33,6 +36,9 @@ public final class HtmlParser {
     private final Node root;
     private final boolean fullDocument;
     private Element html, head, body;
+    /** Text not yet in the tree, and the node it goes into: adjacent runs are joined before one text node is made. */
+    private final StringBuilder pendingText = new StringBuilder();
+    private Node pendingParent;
 
     private HtmlParser(Document doc, String src, Node root, boolean fullDocument) {
         this.doc = doc;
@@ -94,6 +100,14 @@ public final class HtmlParser {
     }
 
     private void run() {
+        try {
+            parse();
+        } finally {
+            flushText();
+        }
+    }
+
+    private void parse() {
         while (pos < src.length()) {
             char c = src.charAt(pos);
             if (c == '<' && pos + 1 < src.length()) {
@@ -130,12 +144,20 @@ public final class HtmlParser {
             if (text.isBlank()) return;
         }
         Node parent = current();
-        Node last = parent.lastChild();
-        if (last instanceof dev.vellum.engine.dom.Text t) {
-            t.setData(t.data() + text);
-        } else {
-            parent.appendChild(doc.createTextNode(text));
-        }
+        if (parent != pendingParent) flushText();
+        pendingParent = parent;
+        pendingText.append(text); // joined in one go: text split by many comments must not cost quadratic time
+    }
+
+    /** Puts the pending text in the tree, joined to a text node that ends its parent. */
+    private void flushText() {
+        if (pendingParent == null) return;
+        Node parent = pendingParent;
+        String text = pendingText.toString();
+        pendingParent = null;
+        pendingText.setLength(0);
+        if (parent.lastChild() instanceof dev.vellum.engine.dom.Text t) t.setData(t.data() + text);
+        else parent.appendChild(doc.createTextNode(text));
     }
 
     private void markupDeclaration() {
@@ -158,6 +180,7 @@ public final class HtmlParser {
     }
 
     private void startTag() {
+        flushText();
         pos++; // <
         String name = readName().toLowerCase();
         List<String[]> attrs = new ArrayList<>();
@@ -208,7 +231,14 @@ public final class HtmlParser {
             readRawText(el, name);
             return;
         }
-        stack.add(el);
+        if (level(el) < doc.limits().maxDepth()) stack.add(el); // at the deepest level it stays empty
+    }
+
+    /** How deep a node is: 1 for a child of the document or of the fragment's container. */
+    private static int level(Node n) {
+        int level = 0;
+        for (Node p = n; p != null && !(p instanceof Document); p = p.parentNode()) level++;
+        return level;
     }
 
     /** html, head and body tags: merge attributes into the implied elements. Returns true if handled. */
@@ -259,6 +289,7 @@ public final class HtmlParser {
     }
 
     private boolean endTag() {
+        flushText();
         int save = pos;
         pos += 2;
         String name = readName().toLowerCase();

@@ -11,18 +11,21 @@ import dev.vellum.engine.style.ImageRendering;
 
 /**
  * {@code <canvas width height>}: a {@link PixelSurface} from the host, 300×150 unless the attributes say otherwise
- * (1 to 2048 px a side). Scripts draw on it with {@code getContext('2d')} ({@link Context2D}); {@code canvas:id}
+ * (1 to {@link dev.vellum.engine.Limits#maxCanvasSize} px a side, and within the page's
+ * {@link dev.vellum.engine.Limits#maxCanvasPixels} for all its canvases). Scripts draw on it with {@code getContext('2d')} ({@link Context2D}); {@code canvas:id}
  * shows it in an {@code <img>} or a CSS background. Changing the size gives a new, cleared surface, as in browsers.
  * The surface is uploaded once per frame, before painting.
  */
 public final class CanvasContent implements ReplacedContent {
-    public static final int DEFAULT_WIDTH = 300, DEFAULT_HEIGHT = 150, MAX_SIZE = 2048;
+    public static final int DEFAULT_WIDTH = 300, DEFAULT_HEIGHT = 150;
 
     private final Element element;
     private PixelSurface surface;
     /** {width, height} of the surface, shared with {@link ImageSources#size}. */
     private final float[] size = new float[2];
     private boolean resized;
+    /** Pixels reserved from the document's canvas allowance. */
+    private long reserved;
 
     CanvasContent(Element element) {
         this.element = element;
@@ -65,8 +68,8 @@ public final class CanvasContent implements ReplacedContent {
     public void attributeChanged(String name) {
         if (name.equals("width") || name.equals("height")) {
             surface.dispose();
-            allocate();
             resized = true;
+            allocate();
         }
     }
 
@@ -90,16 +93,35 @@ public final class CanvasContent implements ReplacedContent {
     @Override
     public void dispose() {
         surface.dispose();
+        element.ownerDocument().releaseCanvas(reserved);
+        reserved = 0;
     }
 
+    /**
+     * A new surface of the attributes' size. When the page's canvases would go over their pixel allowance the canvas
+     * gets a 1×1 surface, and the error is thrown once it has one.
+     */
     private void allocate() {
-        int w = side(element.numberAttribute("width", DEFAULT_WIDTH)), h = side(element.numberAttribute("height", DEFAULT_HEIGHT));
-        surface = element.ownerDocument().host().createSurface(w, h);
+        Document doc = element.ownerDocument();
+        int max = doc.limits().maxCanvasSize();
+        int w = side(element.numberAttribute("width", DEFAULT_WIDTH), max), h = side(element.numberAttribute("height", DEFAULT_HEIGHT), max);
+        doc.releaseCanvas(reserved);
+        reserved = 0;
+        IllegalStateException over = null;
+        try {
+            doc.reserveCanvas((long) w * h);
+            reserved = (long) w * h;
+        } catch (IllegalStateException e) {
+            over = e;
+            w = h = 1;
+        }
+        surface = doc.host().createSurface(w, h);
         size[0] = w;
         size[1] = h;
+        if (over != null) throw over;
     }
 
-    private static int side(float attribute) {
-        return Math.clamp(Math.round(attribute), 1, MAX_SIZE);
+    private static int side(float attribute, int max) {
+        return Math.clamp(Math.round(attribute), 1, max);
     }
 }

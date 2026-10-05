@@ -33,9 +33,6 @@ final class DomBindings {
             "mouseup", "mousemove", "mouseover", "mouseout", "mouseenter", "mouseleave", "wheel", "keydown", "keyup",
             "beforeinput", "input", "change", "focus", "blur", "focusin", "focusout", "scroll", "load", "resize",
             "message", "transitionend", "animationend");
-    /** innerHTML, outerHTML, insertAdjacentHTML and v-html take at most this many characters. */
-    static final int MAX_MARKUP = 1 << 20;
-
     private final RhinoScriptRuntime rt;
     private final HostClass<Node> node;
     private final HostClass<Element> element;
@@ -152,10 +149,10 @@ final class DomBindings {
                     e.toggleAttribute(a.str(0), on);
                     return on;
                 })
-                .prop("innerHTML", Element::innerHTML, (e, v) -> e.setInnerHTML(markup(v)))
-                .prop("outerHTML", Element::outerHTML, (e, v) -> setOuterHTML(e, markup(v)))
+                .prop("innerHTML", Element::innerHTML, (e, v) -> e.setInnerHTML(markup(rt, v)))
+                .prop("outerHTML", Element::outerHTML, (e, v) -> setOuterHTML(e, markup(rt, v)))
                 .action("insertAdjacentHTML", (e, a) -> syntax(() -> {
-                    e.insertAdjacentHTML(a.str(0), markup(a.get(1)));
+                    e.insertAdjacentHTML(a.str(0), markup(rt, a.get(1)));
                     return null;
                 }))
                 .prop("innerText", Node::textContent, DomBindings::setText)
@@ -272,10 +269,11 @@ final class DomBindings {
         return (Scriptable) w.associateValue(key, create.apply(e));
     }
 
-    /** Markup set by scripts, capped because there are no memory limits otherwise. */
-    static String markup(Object value) {
+    /** Markup set by scripts, capped at {@link dev.vellum.engine.Limits#maxMarkupLength}. */
+    static String markup(RhinoScriptRuntime rt, Object value) {
         String html = Js.isNullish(value) ? "" : Js.str(value);
-        if (html.length() > MAX_MARKUP) throw Js.error("RangeError", "Markup longer than " + MAX_MARKUP + " characters");
+        int max = rt.limits.maxMarkupLength();
+        if (html.length() > max) throw Js.error("RangeError", "Markup longer than " + max + " characters");
         return html;
     }
 

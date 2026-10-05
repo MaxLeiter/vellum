@@ -389,21 +389,41 @@ field. While the field has focus, text that only a modifier changes is left as t
 
 ## Limits
 
-Scripts are sandboxed because pages can come from servers:
+Scripts are sandboxed because pages can come from servers. The numbers below are the defaults; players and server
+owners can change them in `config/vellum.properties` (`limits.<name>`, see docs/API.md).
 
 - No Java access: `java`, `Packages` and friends do not exist, and no Java object is ever visible to scripts.
+  Rhino's non-standard globals (`Continuation`, `Script`, `With`, `Call`, `JavaException`) are removed too.
 - No network, files or other pages: the only way out is `vellum.send`.
 - CPU: each entry may run about 50 million instructions or 1 second, whichever comes first. A script that runs over
   is stopped (its `catch` and `finally` blocks do not run), the error is reported, and the page stays usable. The
-  limit covers everything the entry does, including microtasks and template updates. Two kinds of one-off work,
-  which a game that has just started makes slow, are kept off the clock: compiling (scripts, handlers, and templates
-  the first time they show) counts one instruction per character of source instead of its time, and the entries
-  that load the page (its scripts, the first template render, `DOMContentLoaded`) may take 10 seconds.
-- Recursion is limited to 1000 nested calls (an `InternalError` you can catch).
+  limit covers everything the entry does, including microtasks, template updates and regular expressions. Two kinds
+  of one-off work, which a game that has just started makes slow, are kept off the clock: compiling (scripts,
+  handlers, and templates the first time they show) counts one instruction per character of source instead of its
+  time, and the entries that load the page (its scripts, the first template render, `DOMContentLoaded`) may take 10
+  seconds. After 3 entries have run over, the page is stopped and shows its error.
+- Timers and animation frames: at most 10,000 pending. In one frame they run for at most 100 ms; the rest run in the
+  next frame. A page whose frames keep taking longer than 200 ms (25 in a row) is stopped.
+- Memory: one entry may allocate 256 MiB. If the game's memory is more than 90% full when a script runs, the page is
+  stopped and its memory released. Running out of memory stops only the page.
+- Built-ins that work in Java refuse sizes that would freeze or fill the game, with a `RangeError`: arrays (and
+  array-likes) longer than 1,048,576 elements for any `Array.prototype` method, `Array.from`, spread, `apply` and
+  `JSON.stringify`; `split`, `match`, `matchAll` and iteration of strings that would make more than 1,048,576
+  pieces; `ArrayBuffer`s and typed arrays over 16 MiB; `repeat`, `padStart`, `padEnd`, `replace` and `join` results
+  over 16,777,216 characters; BigInts over 65,536 bits. `JSON.parse` throws a `SyntaxError` for text nested more
+  than 512 deep.
+- Recursion is limited to 1000 nested calls (an `InternalError` you can catch). Recursion through the DOM (a listener
+  that clicks its own element) stops the entry with "too much recursion".
+- The document may have 100,000 nodes, nested at most 512 deep; inserting past either throws. Markup nested deeper
+  is flattened by the parser.
 - `innerHTML`, `outerHTML`, `insertAdjacentHTML` and `v-html` take at most 1M characters.
+- Canvases are at most 2048 px a side, and a page's canvases have at most 16,777,216 pixels together (four 2048 px
+  squares); a canvas that would go over throws and gets a 1×1 surface.
 - `localStorage` and `sessionStorage` hold at most 256K characters each (keys plus values); going over throws a
   `RangeError` whose message starts with `QuotaExceededError`.
 - `v-for` renders at most 10,000 items.
-- `vellum.send` delivers at most 20 messages per second.
+- `vellum.send` delivers at most 20 messages per second, and `vellum.playSound` plays at most 20 sounds per second.
+- `console` and script errors reach the log at most 50 times a second, each message cut to 4096 characters.
 
-There is no memory limit, so avoid building huge strings or arrays.
+Strings built with `+` have no cap of their own, so avoid building huge ones: the memory budget stops the entry that
+does it.

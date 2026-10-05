@@ -125,7 +125,8 @@ session.close();                  // closes the player's screen
   player has at most 8 open sessions; opening another ends the oldest.
 - Limits: inline pages 200,000 characters, data 100,000 characters (as JSON), messages 8,192 characters. `open` and
   `push` throw `IllegalArgumentException` above them. Servers can lower these in `config/vellum.properties`.
-- Pages sent by servers run sandboxed: no Java access, no network, no files, a CPU budget per script call.
+- Pages sent by servers run sandboxed: no Java access, no network, no files, and a CPU and memory budget. See
+  [Security](#security) for what they can and can't do.
 - The player decides whether server pages show at all (`client.serverPages`), and a page waits while the player is
   in chat or a menu. Don't assume the page is on screen as soon as `open` returns.
 
@@ -514,12 +515,23 @@ takes no room in the box.
 Players join servers they don't control, and servers let in clients they don't control. Vellum assumes the worst of
 both. A page a server opens is untrusted whether the server sent its HTML (`openInline`) or it comes from a mod: a
 server resource pack can replace any mod's page, script or stylesheet, so the page's code may be the server's either
-way. Messages a client sends are untrusted too, since a modified client can send anything.
+way. Your own bundled pages run under the same rules. Messages a client sends are untrusted too, since a modified
+client can send anything.
 
 ### What players are protected from
 
-- Scripts run in a sandbox: no Java, no network, no files, and a CPU budget per call. Their only way out is
-  `vellum.send` to the server that opened the page.
+- Scripts run in a sandbox: no Java, no network, no files. Their only way out is `vellum.send`, to the server that
+  opened the page or to the mod's own handlers. They can't read the clipboard (only the player's own Ctrl+V into a
+  text field does) or write it (only Ctrl+C or Ctrl+X).
+- A page can't keep the game busy. Each script call has a budget (50M instructions or 1 second), timers and frame
+  callbacks get 100 ms a frame, and a page that keeps running out of budget, or keeps frames slower than 200 ms, is
+  stopped.
+- A page can't fill the game's memory. One script call may allocate 256 MiB, a page may have 100,000 nodes nested
+  512 deep and 16M canvas pixels, built-ins refuse arrays over 1M elements and strings over 16M characters, and a
+  page whose script finds the heap more than 90% full after a collection is stopped and released. `localStorage` and
+  `sessionStorage` hold 256K characters each and last only as long as the page, so nothing reaches the disk.
+- A page can't crash the game. Any error, stack overflow and out-of-memory included, stops only that page, which
+  then shows its error. It can write at most 50 log lines a second, each cut to 4096 characters.
 - Pages load stylesheets, scripts, images and fonts through Minecraft's resource manager and nothing else. A URL with
   a scheme is a resource id like any other (`https://example.com/a.png` names `assets/https/...`), so no request
   leaves the game, no third party learns the player's IP, and no file outside the resource packs is read. In a
@@ -537,7 +549,9 @@ way. Messages a client sends are untrusted too, since a modified client can send
 - Links to web pages ask first, as chat links do, and only right after a click or key press in the page, so a script
   can't bring the question up again and again. `client.webLinks=block` turns web links off. Other links only load
   `.html` pages from resources.
-- `vellum.playSound` plays only sounds the game knows, at most 8 a second per page, no louder than
+- `vellum.send` delivers at most 20 messages a second from a server's page, counted per screen, so reloading the
+  page or following a link doesn't reset the count.
+- `vellum.playSound` plays only sounds the game knows, at most 8 a second per screen, no louder than
   `client.maxSoundVolume` and then scaled by the player's sound settings.
 - While the player types into a server's page, Vellum draws a notice at the bottom of the screen. The page can't
   cover it or tell that it is there.
@@ -546,13 +560,12 @@ way. Messages a client sends are untrusted too, since a modified client can send
 - `client.serverPages=ask` asks once per server visit before its first page shows; `block` refuses every server
   page. Refused pages are reported closed, so the server's session ends.
 
-### What a server page can still do
+### What a page can still do
 
 - Look like anything. With Minecraft's fonts and sprites a page can copy a vanilla screen, a Microsoft sign-in
   form or a "Disconnected" screen with a link. The typing notice is the only tell. Never type a password into a
   Minecraft screen.
-- Read what the player types or pastes into its own fields. Ctrl+V pastes the clipboard and Ctrl+C copies a
-  field's selection only when the player presses them; scripts can't read or write the clipboard.
+- Read what the player types or pastes into its own fields, and send it to the server.
 - Learn about the client and send it home: whether a resource exists and an image's size (from layout),
   translations including other mods' (`vellum.t`, `<mc-text key>`, translatable `<mc-text json>`), the player's key
   bindings (`keybind` components), the GUI scale and window size, and `client.reducedMotion`. A server can tell
@@ -562,10 +575,12 @@ way. Messages a client sends are untrusted too, since a modified client can send
 - Make the client look up any player name with Mojang for `<player-head name>`, as vanilla player head items do.
 - Link to another mod's page (`<a href>`, `vellum.open`). The page stays in the server's session, so its
   `vellum.send` messages go to the server, and `onPageLoad` hooks run for it.
+- Use its budgets in full. A page can allocate up to its limits every frame and make the game collect garbage more
+  often, navigate or reload itself over and over, and keep Escape. The player can still leave with Shift+Escape.
 - Push data as often as it likes. Each push runs the page's listeners within their CPU budget. A server that wants
   to slow a client down has vanilla ways to do it too.
 
-### What mod authors must do
+### What mod and server authors must do
 
 On the server:
 
@@ -582,21 +597,28 @@ On the server:
 - Don't build inline HTML from text players wrote. A name or chat line put into `openInline` markup, `innerHTML` or
   `v-html` can add elements with `onclick` handlers, which run in the viewer's page and can send messages as that
   player. Pass such text in `vellum.data` and show it with `{{ }}` or `textContent`, which never parse HTML.
+- Keep `push` data small. The client parses all of it every time.
 
 On the client:
 
 - `VellumScreens.onPageLoad` hooks run for server pages too. Check `driver.serverSession()` before giving the page
   data the server shouldn't have.
-- Don't put secrets in pages or `vellum.data`. A resource pack can replace any page's scripts.
+- Keep secrets out of pages and `vellum.data`. The player can read whatever you send, and a resource pack can
+  replace any page's scripts.
+- If your page keeps Escape with a `keydown` listener, give it a close button too. Players can leave with
+  Shift+Escape or three Escapes, but few know that.
 
 ### Settings
 
 `config/vellum.properties` is read on both sides when the game starts. The first start writes it with every key,
 its default and a comment, and later starts add keys it lacks. A missing, malformed or out-of-range value falls back
 to its default with a warning in the log; Vellum never fails to start over it. `server.` keys matter on a server
-(a dedicated one, or the one inside a singleplayer world), `client.` keys on a client.
+(a dedicated one, or the one inside a singleplayer world), `client.` keys on a client, and `limits.` keys wherever
+pages run.
 
-| Key | Default | Range | |
+What a server sends and accepts:
+
+| Key | Default | Range | Meaning |
 |---|---|---|---|
 | `server.maxInlineHtmlChars` | 200000 | 1 to 200000 | Largest page `openInline` sends; larger ones throw. |
 | `server.maxDataChars` | 100000 | 1 to 100000 | Largest `vellum.data` `open` and `push` send, as JSON; larger throws. |
@@ -605,6 +627,11 @@ to its default with a warning in the log; Vellum never fails to start over it. `
 | `server.messageBurst` | 40 | 1 to 10000 | Messages a session takes at once. |
 | `server.messagesPerSecond` | 20 | 0.1 to 10000 | Messages a session takes per second after the burst. |
 | `server.maxSessionsPerPlayer` | 8 | 1 to 1024 | Open sessions per player; one more ends the oldest. |
+
+What a client lets server pages do:
+
+| Key | Default | Range | Meaning |
+|---|---|---|---|
 | `client.serverPages` | `allow` | `allow`, `ask`, `block` | Whether pages a server opens show. `ask` asks once per visit. |
 | `client.maxInlineHtmlChars` | 200000 | 1 to 200000 | Largest inline page shown. |
 | `client.maxDataChars` | 100000 | 1 to 100000 | Largest data accepted from a server. |
@@ -623,8 +650,45 @@ to its default with a warning in the log; Vellum never fails to start over it. `
 | `client.typingNotice` | `true` | `true`, `false` | The notice while typing into a server's page. |
 | `client.reducedMotion` | `false` | `true`, `false` | Pages see `prefers-reduced-motion: reduce`. |
 
-The engine's own caps (script budgets, string, array, DOM and canvas sizes) are `limits.<name>` keys in the same
-file, one per field of the engine's `Limits` record. They apply wherever pages run.
+The engine's caps on every page, a mod's or a server's. Each must be at least 1, and `heapLimitPercent` at most
+100 (100 turns the heap check off). `dev.vellum.engine.Limits` has them all; a host can return its own from
+`Host.limits()`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `limits.instructionBudget` | 50000000 | Instructions one script call may run. |
+| `limits.timeBudgetMs` | 1000 | Wall-clock ms one script call may take. |
+| `limits.loadTimeBudgetMs` | 10000 | The same while the page loads. |
+| `limits.maxStackDepth` | 1000 | Nested script calls. |
+| `limits.maxBudgetOverruns` | 3 | Calls stopped by a budget before the page stops. |
+| `limits.frameScriptTimeMs` | 100 | Timer and frame-callback ms per frame; the rest wait a frame. |
+| `limits.slowFrameMs` | 200 | A frame slower than this counts as slow. |
+| `limits.maxSlowFrames` | 25 | Slow frames in a row before the page stops. |
+| `limits.entryAllocation` | 268435456 | Bytes one script call may allocate (256 MiB). |
+| `limits.heapLimitPercent` | 90 | Heap use after a collection that stops a running page. |
+| `limits.maxStringLength` | 16777216 | Characters from `repeat`, `padStart`, `padEnd`, `replace`, `join`. |
+| `limits.maxArrayLength` | 1048576 | Arrays built-ins iterate, `apply` arguments, pieces of `split` and `match`. |
+| `limits.maxBufferBytes` | 16777216 | Bytes of an `ArrayBuffer` or typed array. |
+| `limits.maxBigIntBits` | 65536 | Bits of a BigInt (for the whole game). |
+| `limits.maxTimers` | 10000 | Pending timers and animation frames. |
+| `limits.maxMarkupLength` | 1048576 | Characters `innerHTML`, `outerHTML`, `insertAdjacentHTML` and `v-html` take. |
+| `limits.storageQuota` | 262144 | Characters in each of `localStorage` and `sessionStorage`. |
+| `limits.maxLogLength` | 4096 | Characters of one console message. |
+| `limits.logRate` | 50 | Log lines a second. |
+| `limits.sendRate` | 20 | `vellum.send` messages a second. |
+| `limits.soundRate` | 20 | `vellum.playSound` calls a second. |
+| `limits.maxForItems` | 10000 | Items of one `v-for`. |
+| `limits.maxTemplatePasses` | 10 | Template passes per frame. |
+| `limits.maxNodes` | 100000 | Nodes in a page. |
+| `limits.maxDepth` | 512 | Element nesting, and JSON nesting in `JSON.parse`. |
+| `limits.maxCssNesting` | 32 | Nested CSS functions and blocks. |
+| `limits.maxSelectorParts` | 256 | Parts of one selector. |
+| `limits.maxListItems` | 64 | Items of a shadow list. |
+| `limits.maxGridTracks` | 100000 | Tracks of a grid track list. |
+| `limits.maxVarLength` | 65536 | Characters of a value after `var()` substitution. |
+| `limits.maxCanvasSize` | 2048 | Pixels on each side of a canvas. |
+| `limits.maxCanvasPixels` | 16777216 | Pixels of all of a page's canvases. |
+| `limits.maxInlinePageLength` | 200000 | Characters of an inline page from a server. |
 
 `client.serverPages` defaults to `allow`. Server UIs are what Vellum is for, vanilla lets servers open container
 screens without asking, and the protections above work without the player's help. Players who want a say can set

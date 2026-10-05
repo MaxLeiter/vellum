@@ -1,5 +1,6 @@
 package dev.vellum.engine.dom;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.anim.AnimationEngine;
 import dev.vellum.engine.css.Selectors;
 import dev.vellum.engine.css.StyleEngine;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -36,12 +38,19 @@ import java.util.function.Supplier;
  * plus input forwarded to {@link #input()}. Everything runs on one thread (the render thread in Minecraft).
  *
  * <p>The document is its own error boundary: if the engine throws during a host call (loading, a frame, painting,
- * input, a message), the document stops. The exception is reported once through {@link Host#reportError} and kept
- * as {@link #error()}, and later host calls do nothing, so hosts only check {@link #error()} to show it. Errors in
- * scripts and listeners are reported without stopping anything.
+ * input, a message), the document stops. Anything thrown counts, errors such as {@link StackOverflowError} and
+ * {@link OutOfMemoryError} included, so no page can take the game down. The failure is reported once through
+ * {@link Host#reportError} and kept as {@link #error()}, and later host calls do nothing, so hosts only check
+ * {@link #error()} to show it. Errors in scripts and listeners are reported without stopping anything. The document
+ * also stops itself when it breaks its {@link Limits}: too many slow frames in a row, scripts that keep running out
+ * of budget, or a heap that is nearly full ({@link #stop}).
  */
 public final class Document extends Node {
+    /** The wall clock in ns, for timing frames; tests may replace it. */
+    static LongSupplier clock = System::nanoTime;
+
     private final Host host;
+    private final Limits limits;
     private final String url;
     /** JSON delivered to scripts as {@code vellum.data} before any script runs, or null. */
     private final String initialData;
@@ -70,12 +79,23 @@ public final class Document extends Node {
     /** Listeners plus inline {@code on*} handlers in this document, by lower-case event type. */
     private final Map<String, int[]> handlers = new HashMap<>();
     private int domVersion;
+    /** Nodes in the document tree, the document itself not included. */
+    private int nodeCount;
+    /** Pixels of the live canvases. */
+    private long canvasPixels;
+    /** Time spent in the current frame (its {@link #frame} and {@link #paint}), and slow frames in a row. */
+    private long frameNanos;
+    private int slowFrames;
+    /** Log lines a second ({@link Limits#logRate}). */
+    private final RateLimit logRate;
 
     private Element focused;
 
     private Document(Host host, String url, String initialData, Viewport viewport) {
         super(null);
         this.host = host;
+        this.limits = host.limits();
+        this.logRate = new RateLimit(limits.logRate());
         this.url = url == null ? "" : url;
         this.initialData = initialData;
         this.viewportWidth = viewport.width();
@@ -125,6 +145,8 @@ public final class Document extends Node {
     public String nodeName() { return "#document"; }
 
     public Host host() { return host; }
+    /** The caps on this page, from {@link Host#limits()} when it was created. */
+    public Limits limits() { return limits; }
     public String url() { return url; }
     public Scheduler scheduler() { return scheduler; }
     public Scrolling scrolling() { return scrolling; }
@@ -279,6 +301,9 @@ public final class Document extends Node {
      * layout (scroll clamping, autofocus, re-targeting hover), which may fire events.
      */
     public void frame(double nowMs) {
+        if (error != null || closed) return;
+        checkSlowFrames();
+        long start = clock.getAsLong();
         run(() -> {
             scheduler.run(nowMs);
             input.tick(nowMs);
@@ -292,6 +317,22 @@ public final class Document extends Node {
                 input.afterLayout();
             }
         });
+        frameNanos += clock.getAsLong() - start;
+    }
+
+    /**
+     * Ends the frame before the one starting: a frame slower than {@link Limits#slowFrameMs} counts, and
+     * {@link Limits#maxSlowFrames} of them in a row stop the page (a page that keeps the game at a few frames a
+     * second, whether by scripts, styles or layout).
+     */
+    private void checkSlowFrames() {
+        if (frameNanos > limits.slowFrameMs() * 1_000_000L) slowFrames++;
+        else slowFrames = 0;
+        frameNanos = 0;
+        if (slowFrames >= limits.maxSlowFrames()) {
+            stop("The page stopped: " + slowFrames + " frames in a row took longer than " + limits.slowFrameMs()
+                    + " ms", new IllegalStateException("Page too slow"));
+        }
     }
 
     /** Restyles now if needed, for scripts reading computed styles. Fires no events. */
@@ -328,7 +369,9 @@ public final class Document extends Node {
     /** Paints the current layout. Call after {@link #frame}. */
     public void paint(Canvas canvas) {
         repaint = false;
+        long start = clock.getAsLong();
         run(() -> painter.paint(canvas));
+        frameNanos += clock.getAsLong() - start;
     }
 
     /**
@@ -476,18 +519,43 @@ public final class Document extends Node {
         }, null);
     }
 
-    /** The boundary itself: the work's result, or {@code otherwise} when it did not run or failed. */
+    /**
+     * The boundary itself: the work's result, or {@code otherwise} when it did not run or failed. Every throwable is
+     * caught: a page's markup, styles or scripts may overflow the stack or exhaust memory, and that must stop the
+     * page, not the game.
+     */
     private <T> T guarded(Supplier<T> work, T otherwise) {
         if (error != null || closed) return otherwise;
         try {
             return work.get();
-        } catch (RuntimeException | StackOverflowError e) {
-            if (error == null) {
-                error = e;
-                host.reportError("The page stopped after an engine error", e);
-            }
+        } catch (Throwable e) {
+            stop(e instanceof OutOfMemoryError ? "The page stopped: it ran out of memory"
+                    : "The page stopped after an engine error", e);
             return otherwise;
         }
+    }
+
+    /**
+     * Stops the document as its error boundary does: reports {@code message} once, keeps {@code cause} as
+     * {@link #error()}, and makes later host calls do nothing. Timers are cleared and scripts disposed. After running
+     * out of memory the page's tree and scripts are dropped too, so what the page built can be collected while the
+     * host still shows the error. Called by the engine when a page breaks its {@link Limits}.
+     */
+    public void stop(String message, Throwable cause) {
+        if (error != null) return;
+        error = cause;
+        scheduler.clear();
+        if (scripts != null) scripts.dispose();
+        if (cause instanceof VirtualMachineError) release();
+        host.reportError(message, cause);
+    }
+
+    /** Lets go of everything the page built: its scripts, and its tree with the script objects it holds. */
+    private void release() {
+        scripts = null;
+        children.clear();
+        nodeCount = 0;
+        focused = null;
     }
 
     // ---- Mutation hooks (called by nodes) ----
@@ -672,9 +740,65 @@ public final class Document extends Node {
 
     // ---- Errors and lifecycle ----
 
-    /** Reports an error in page code (a listener, a script); the document keeps running. */
+    /**
+     * Reports an error in page code (a listener, a script); the document keeps running. At most
+     * {@link Limits#logRate} errors and console messages a second reach the host, so a page cannot flood the log.
+     */
     public void reportError(String message, Throwable error) {
-        host.reportError(message, error);
+        if (allowLog()) host.reportError(message, error);
+    }
+
+    /**
+     * Takes one from the page's allowance of log lines ({@link Limits#logRate} a second, on the frame clock); false
+     * when it is used up. The first message dropped says so.
+     */
+    public boolean allowLog() {
+        boolean warned = logRate.wasRefused();
+        if (logRate.take(scheduler.now())) return true;
+        if (!warned) host.log(Host.LogLevel.WARN, "The page logs more than " + logRate.rate() + " messages a second; dropping some");
+        return false;
+    }
+
+    // ---- Size limits (called by nodes and replaced content) ----
+
+    /**
+     * Checks that inserting {@code child} under {@code parent} keeps the tree within {@link Limits#maxDepth} and,
+     * when it joins this document, within {@link Limits#maxNodes}; throws {@link IllegalStateException} otherwise,
+     * before anything changes.
+     */
+    void checkInsert(Node parent, Node child, boolean arriving) {
+        int depth = 0;
+        for (Node n = parent; n != null && !(n instanceof Document); n = n.parent) depth++;
+        if (depth + Node.height(child) > limits.maxDepth()) {
+            throw new IllegalStateException("Elements may be nested at most " + limits.maxDepth() + " deep");
+        }
+        if (arriving && nodeCount + Node.size(child) > limits.maxNodes()) {
+            throw new IllegalStateException("A page may have at most " + limits.maxNodes() + " nodes");
+        }
+    }
+
+    /** {@code delta} nodes joined (or, when negative, left) this document's tree. */
+    void countNodes(int delta) {
+        nodeCount += delta;
+    }
+
+    /** Nodes in the document tree. */
+    public int nodeCount() { return nodeCount; }
+
+    /**
+     * Reserves {@code pixels} for a canvas surface, within {@link Limits#maxCanvasPixels} for the whole page; throws
+     * {@link IllegalStateException} when they do not fit. {@link #releaseCanvas} gives them back.
+     */
+    public void reserveCanvas(long pixels) {
+        if (canvasPixels + pixels > limits.maxCanvasPixels()) {
+            throw new IllegalStateException("The page's canvases may have at most " + limits.maxCanvasPixels()
+                    + " pixels together");
+        }
+        canvasPixels += pixels;
+    }
+
+    public void releaseCanvas(long pixels) {
+        canvasPixels = Math.max(0, canvasPixels - pixels);
     }
 
     /**

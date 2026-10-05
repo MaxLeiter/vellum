@@ -20,9 +20,6 @@ import java.util.Map;
  * list moves existing elements, and only new items are cloned and compiled.
  */
 final class ForBinding implements Binding {
-    /** Items rendered at most; the cloning is Java work outside the script budget. */
-    static final int MAX_ITEMS = 10_000;
-
     private static final class Instance {
         final Element element;
         final NativeObject scope;
@@ -97,19 +94,20 @@ final class ForBinding implements Binding {
     private void renderItems(Context cx) {
         Object value = source.eval(cx, scope);
         int count = 0;
+        int max = rt.limits.maxForItems(); // the cloning is Java work outside the script budget
         if (value instanceof Number n) {
-            for (int i = 0; i < n.doubleValue() && i < MAX_ITEMS; i++, count++) render(cx, i + 1, i, i);
+            for (int i = 0; i < n.doubleValue() && i < max; i++, count++) render(cx, i + 1, i, i);
         } else if (value instanceof NativeArray array) {
             Object[] values = cx.getElements(array);
-            for (int i = 0; i < values.length && i < MAX_ITEMS; i++, count++) render(cx, values[i], i, i);
+            for (int i = 0; i < values.length && i < max; i++, count++) render(cx, values[i], i, i);
         } else if (value instanceof Scriptable object) {
             Object[] ids = object.getIds();
-            for (int i = 0; i < ids.length && i < MAX_ITEMS; i++, count++) {
+            for (int i = 0; i < ids.length && i < max; i++, count++) {
                 String name = String.valueOf(ids[i]);
                 render(cx, Js.property(object, name), name, i);
             }
         }
-        if (count == MAX_ITEMS) rt.document.host().log(Host.LogLevel.WARN, "v-for renders at most " + MAX_ITEMS + " items");
+        if (count == max) rt.document.host().log(Host.LogLevel.WARN, "v-for renders at most " + max + " items");
     }
 
     /**
