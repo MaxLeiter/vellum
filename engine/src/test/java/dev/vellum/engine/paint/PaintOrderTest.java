@@ -222,7 +222,9 @@ class PaintOrderTest {
         Box root = t.div(0, 0, 100, 100, ROOT);
         Box list = add(root, scroller(t.div(0, 0, 50, 50, A), Overflow.AUTO, 0, 0, 50, 100));
         assertEquals(2, t.paint(root).ops("fillRect").getLast().w(), 1e-5);
-        t.doc.setHovered(list.element, true);
+        // Scrollbar hover is tracked by the input handler from the pointer position over the bar.
+        t.doc.input().setHitTester((x, y) -> t.doc.painter().hitTest(root, x, y));
+        t.doc.input().mouseMove(49, 10, dev.vellum.engine.event.Modifiers.NONE);
         RecordingCanvas.Call thumb = t.paint(root).ops("fillRect").getLast();
         assertArrayEquals(new float[] {46, 0, 4, 25}, thumb.bounds(), 1e-5f);
     }
