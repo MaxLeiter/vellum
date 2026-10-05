@@ -183,10 +183,7 @@ public final class McCanvas implements Canvas {
         if (texture != null) blit(texture, x, y, width, height, u0, v0, u1, v1, tint, smooth);
     }
 
-    /**
-     * The natural size of an image URL in px, or null when unknown (for {@code background-size}).
-     * INTEGRATION: becomes an override of {@code Canvas.imageSize} once the paint workstream's Canvas is merged.
-     */
+    @Override
     public float @Nullable [] imageSize(String url) {
         return McReplaced.imageSize(url);
     }

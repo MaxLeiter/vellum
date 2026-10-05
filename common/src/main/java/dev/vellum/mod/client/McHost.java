@@ -6,6 +6,7 @@ import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.script.ScriptRuntime;
+import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McFontMetrics;
@@ -55,12 +56,10 @@ final class McHost implements Host {
 
     @Override
     public @Nullable ScriptRuntime createScriptRuntime(Document document) {
-        // INTEGRATION: the scripting workstream provides dev.vellum.engine.script.Scripting.rhino(), a
-        // Function<Document, ScriptRuntime>. Replace the null below with Scripting.rhino().apply(document); the
-        // initial data is delivered before any script runs, so pages can read vellum.data at load.
-        ScriptRuntime runtime = null;
+        // Initial data is delivered before any script runs, so pages can read vellum.data at load.
+        ScriptRuntime runtime = Scripting.rhino().apply(document);
         String data = driver.data();
-        if (runtime != null && data != null) runtime.receive("data", data);
+        if (data != null) runtime.receive("data", data);
         return runtime;
     }
 
