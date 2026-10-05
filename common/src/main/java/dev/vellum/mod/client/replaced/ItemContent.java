@@ -6,7 +6,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * {@code <item id="minecraft:diamond_sword" count="1" components="{...}" tooltip>}: an item stack drawn scaled from
- * 16 px to the content box, with count and durability. {@code components} is SNBT for the stack's data components
+ * 16 px to the content box's shorter side (placed by {@code object-position}), with count and durability. {@code components} is SNBT for the stack's data components
  * ({@link ItemStacks#of}). With the {@code tooltip} attribute, hovering shows the vanilla item tooltip.
  */
 final class ItemContent extends McReplaced {
@@ -35,7 +35,7 @@ final class ItemContent extends McReplaced {
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         float size = Math.min(width, height);
-        canvas.drawItem(stack, x + (width - size) / 2, y + (height - size) / 2, size, true);
+        canvas.drawItem(stack, x + style().objectX(width - size), y + style().objectY(height - size), size, true);
         if (element.isHovered() && element.hasAttribute("tooltip")) canvas.itemTooltip(stack);
     }
 }

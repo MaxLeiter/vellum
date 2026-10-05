@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * {@code <player-head name="..." uuid="...">}: a player's face (the 8×8 face plus the hat layer) from their skin,
- * multiplied by {@code -mc-tint}. Without attributes it shows the local player. Unknown profiles resolve in the background and show the default
+ * a square placed by {@code object-position}, multiplied by {@code -mc-tint}. Without attributes it shows the local player. Unknown profiles resolve in the background and show the default
  * skin until then.
  */
 final class PlayerHeadContent extends McReplaced {
@@ -42,9 +42,9 @@ final class PlayerHeadContent extends McReplaced {
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Identifier skin = Minecraft.getInstance().playerSkinRenderCache().getOrDefault(profile).playerSkin().body().texturePath();
         float size = Math.min(width, height);
-        x += (width - size) / 2;
-        y += (height - size) / 2;
-        int tint = element.style == null ? -1 : element.style.tint;
+        x += style().objectX(width - size);
+        y += style().objectY(height - size);
+        int tint = style().tint;
         canvas.blit(skin, x, y, size, size, 8 * PX, 8 * PX, 16 * PX, 16 * PX, tint, false);
         canvas.blit(skin, x, y, size, size, 40 * PX, 8 * PX, 48 * PX, 16 * PX, tint, false);
     }

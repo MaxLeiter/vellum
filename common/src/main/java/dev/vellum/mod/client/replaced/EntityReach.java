@@ -26,17 +26,21 @@ import java.util.Map;
  * <p>Measured by submitting the entity as its renderer would draw it (with every renderer's own transforms and
  * scales, and every layer, whatever order it is submitted in) into a collector that only looks at where the models'
  * cubes are. Renderers that draw something else than models (an ender dragon's custom geometry) are measured by their
- * bounding box. Measured once per entity type, age and size (slimes come in sizes).
+ * bounding box. Measured once per entity type, age and size (slimes come in sizes), and separately for states a mod
+ * supplied (which may show other parts), from the first state drawn.
  */
 record EntityReach(float radius, float bottom, float top) {
-    private record Key(EntityType<?> type, boolean baby, float width, float height) {}
+    private record Key(EntityType<?> type, boolean baby, float width, float height, boolean supplied) {}
 
     private static final Map<Key, EntityReach> MEASURED = new HashMap<>();
 
-    /** The reach of the entity {@code state} shows, never less than its bounding box. */
-    static EntityReach of(EntityRenderState state) {
+    /**
+     * The reach of the entity {@code state} shows, never less than its bounding box; {@code supplied} when a mod's
+     * function made the state.
+     */
+    static EntityReach of(EntityRenderState state, boolean supplied) {
         Key key = new Key(state.entityType, state instanceof LivingEntityRenderState living && living.isBaby,
-                state.boundingBoxWidth, state.boundingBoxHeight);
+                state.boundingBoxWidth, state.boundingBoxHeight, supplied);
         EntityReach reach = MEASURED.get(key);
         if (reach == null) MEASURED.put(key, reach = measure(state));
         return reach;
