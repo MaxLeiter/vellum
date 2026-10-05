@@ -52,9 +52,9 @@ public final class Painter {
 
     /**
      * Whether the scrollbar of {@code container} on that axis is widened (hovered or being dragged), for both
-     * painting and hit testing. TODO(integration): {@code document.input().isScrollbarHovered(container.element, vertical)}.
+     * painting and hit testing.
      */
     boolean scrollbarHovered(Box container, boolean vertical) {
-        return container.element.isHovered();
+        return document.input().isScrollbarHovered(container.element, vertical);
     }
 }
