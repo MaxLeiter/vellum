@@ -160,8 +160,41 @@ device pixel.
   pages when a file they were read from is saved.
 - `config/vellum-client.properties`: `reducedMotion=true` makes pages match `@media (prefers-reduced-motion: reduce)`.
 
+## Dev automation
+
+`dev.vellum.mod.client.VellumAutomation` drives a page from code, for dev autopilots and in-game checks. It finds
+elements by CSS selector and sends input through Minecraft's own mouse and keyboard handlers, the path real input
+takes, so vanilla slot highlights, clicks and shift-clicks work in container screens as well. Render thread only;
+positions are GUI pixels.
+
+```java
+VellumAutomation.screen().ifPresent(page -> {      // the open VellumScreen or VellumContainerScreen
+    page.click("#amount");                         // pointer to the element's centre, press, release
+    page.type("64");                               // key down, character, key up per character
+    page.key("Enter");
+    boolean ok = page.eval("state.amount").map(v -> v.getAsInt() == 64).orElse(false);
+});
+```
+
+| Method | |
+|---|---|
+| `static Optional<VellumAutomation> screen()` | The open Vellum screen, if its page is showing. |
+| `static Optional<VellumAutomation> hud(Identifier id)` | A shown HUD overlay. Overlays take no input: the input methods return false. |
+| `boolean exists(String selector)` | Whether an element matches. |
+| `Optional<float[]> rect(String selector)` | `{x, y, width, height}` of the first match's border box as painted (after scrolling and transforms, like `getBoundingClientRect()`). |
+| `Optional<String> text(String selector)` | Its `textContent`. |
+| `boolean hover(String selector)` | Moves the pointer to its centre. False when nothing matches or it has no box. |
+| `boolean click(String selector)`, `click(String selector, int button)` | A click at its centre; `button` is 0 left, 1 middle, 2 right. |
+| `boolean wheel(String selector, double notches)` | Turns the wheel over it; positive notches scroll down. |
+| `boolean key(String domKey)` | Presses and releases the key that gives a DOM key name (`"Enter"`, `"ArrowDown"`, `"a"`, `"A"`) on the current layout. False when no key does. |
+| `void type(String text)` | Types text. Characters no key gives are sent as text only. |
+| `Optional<JsonElement> eval(String js)` | Runs `js` in the page's script sandbox; its completion value as JSON. Empty for undefined, functions and errors (which are reported like any script error). |
+
+Vellum's own autopilot (`./gradlew :fabric:runClient -Pautopilot`) uses it to hover the showcase title screen and to
+fill in the templates demo.
+
 ## Stability
 
 The API is `dev.vellum.mod.server.VellumServer`, `VellumSession`, and `dev.vellum.mod.client.VellumScreens`,
-`VellumScreen`, `VellumContainerScreen`, `VellumHud` and `DocumentDriver`'s public methods. Other classes are
+`VellumScreen`, `VellumContainerScreen`, `VellumHud`, `VellumAutomation` and `DocumentDriver`'s public methods. Other classes are
 internal. Vellum is at 0.x: expect changes, which will be listed in the changelog.

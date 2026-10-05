@@ -75,7 +75,7 @@
 
     <h2>Todo</h2>
     <div class="row add">
-      <input type="text" placeholder="Something to do..." v-model="draft" @keydown="if (event.key === 'Enter') add()">
+      <input type="text" placeholder="Something to do..." v-model="draft" @keydown.enter="add()">
       <button @click="add()">Add</button>
     </div>
     <ul class="todos">

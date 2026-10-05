@@ -2,6 +2,10 @@ package dev.vellum.mod.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.vellum.engine.event.Modifiers;
+import net.minecraft.client.input.KeyEvent;
+import org.jspecify.annotations.Nullable;
+import org.lwjgl.sdl.SDLKeyboard;
+import org.lwjgl.sdl.SDLScancode;
 
 /**
  * SDL key events to DOM {@code KeyboardEvent} names. {@code code} comes from the scancode (the physical key:
@@ -87,6 +91,19 @@ final class KeyNames {
             return shift ? ch.toUpperCase() : ch;
         }
         return "Unidentified";
+    }
+
+    /**
+     * The SDL key event that gives DOM key {@code key} on the current keyboard layout: the inverse of {@link #key},
+     * the first scancode whose key, unshifted or with shift, is {@code key}. Null when no key gives it.
+     */
+    static @Nullable KeyEvent event(String key) {
+        for (int scancode = 1; scancode < SDLScancode.SDL_SCANCODE_COUNT; scancode++) {
+            int keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, (short) 0, false);
+            if (key.equals(key(scancode, keycode, false))) return new KeyEvent(scancode, keycode, 0);
+            if (key.equals(key(scancode, keycode, true))) return new KeyEvent(scancode, keycode, InputConstants.MOD_SHIFT);
+        }
+        return null;
     }
 
     static Modifiers modifiers(int mods) {

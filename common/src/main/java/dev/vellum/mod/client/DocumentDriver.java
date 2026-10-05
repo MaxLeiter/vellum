@@ -91,6 +91,12 @@ public final class DocumentDriver {
         this.session = session;
     }
 
+    /** The driver showing its page in {@code screen}, or null. */
+    static @Nullable DocumentDriver of(Screen screen) {
+        for (DocumentDriver d : LIVE) if (d.owner.screen() == screen) return d;
+        return null;
+    }
+
     /** Reloads every loaded document: after a resource reload, {@code /vellum reload}, or a saved source file in dev. */
     public static void reloadAll() {
         for (DocumentDriver d : List.copyOf(LIVE)) d.reload();

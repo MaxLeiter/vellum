@@ -49,6 +49,12 @@ public final class VellumHud {
         if (o.driver != null) o.driver.pushData(o.data);
     }
 
+    /** The driver of a shown overlay once it has drawn, or null. */
+    static @Nullable DocumentDriver driver(Identifier id) {
+        Overlay o = OVERLAYS.get(id);
+        return o == null || !o.shown ? null : o.driver;
+    }
+
     /** The HUD layer both loaders register above the title layer. */
     public static void extract(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();

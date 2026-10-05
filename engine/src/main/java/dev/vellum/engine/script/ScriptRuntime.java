@@ -15,6 +15,13 @@ public interface ScriptRuntime {
     /** Runs a classic script (inline {@code <script>} or {@code src}). Errors are reported, not thrown. */
     void evaluate(String source, String sourceName);
 
+    /**
+     * Runs a script like {@link #evaluate} and returns its completion value as JSON text ({@code "count + 1"} gives
+     * {@code "3"}), or null when it has none: undefined, a function, a value JSON cannot express, or an error (which
+     * is reported). For host tooling and tests.
+     */
+    String evaluateToJson(String source, String sourceName);
+
     /** Runs an inline handler attribute ({@code onclick="..."}) with {@code this} = element and {@code event} bound. */
     void runInlineHandler(Element element, String code, Event event);
 

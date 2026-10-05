@@ -74,10 +74,22 @@ final class RhinoScriptRuntime implements ScriptRuntime {
 
     @Override
     public void evaluate(String source, String sourceName) {
+        run(source, sourceName, false);
+    }
+
+    @Override
+    public String evaluateToJson(String source, String sourceName) {
+        return run(source, sourceName, true) instanceof String json ? json : null;
+    }
+
+    /** Runs a script as an entry; its completion value, as JSON when {@code json}. */
+    private Object run(String source, String sourceName, boolean json) {
         String what = "Error in script " + sourceName;
-        enter(what, cx -> {
+        return enter(what, cx -> {
             Script script = compile(what, () -> cx.compileString(source, sourceName, 1, null));
-            return script == null ? null : script.exec(cx, global, global);
+            if (script == null) return null;
+            Object value = script.exec(cx, global, global);
+            return json ? js.stringify(value) : value;
         });
     }
 

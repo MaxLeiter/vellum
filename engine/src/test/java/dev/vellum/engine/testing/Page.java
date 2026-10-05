@@ -1,5 +1,6 @@
 package dev.vellum.engine.testing;
 
+import com.google.gson.JsonParser;
 import dev.vellum.engine.css.StyleEngine;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
@@ -231,12 +232,9 @@ public final class Page {
 
     /** {@code String(expression)} evaluated in the page. */
     public String eval(String expression) {
-        int before = host.logs.size();
-        run("console.log(String(" + expression + "))");
-        if (host.logs.size() == before) {
-            throw new AssertionError("No value for " + expression + "; errors: " + host.errors);
-        }
-        return host.logs.get(before).substring("INFO: ".length());
+        String json = doc.scripts().evaluateToJson("String(" + expression + ")", "test:eval.js");
+        if (json == null) throw new AssertionError("No value for " + expression + "; errors: " + host.errors);
+        return JsonParser.parseString(json).getAsString();
     }
 
     /** The errors reported so far, one per line. */
