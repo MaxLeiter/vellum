@@ -406,6 +406,8 @@ the scrollbar).
 
 - Transitions: on restyle, for each property in `transition-property` whose base value changed (and interpolates),
   start a transition from the current animated value to the new value with the duration, delay and timing function.
+  A shorthand names the longhands it sets in the shorthand registry (`StyleEngine.transitionProperties`), so
+  `transition: outline` animates the outline's width and colour but not `outline-offset`, as in CSS.
   Retargeting mid-flight starts from the current value (with the spec's reversing shortening for reversed transitions).
   `transitionrun/start/end/cancel` events.
 - Keyframes: `animation-name` maps to `@keyframes`; keyframes resolved per element via the style engine;
