@@ -8,6 +8,7 @@ import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.CharacterEvent;
@@ -40,6 +41,9 @@ import java.util.function.Function;
  * {@code {title, inventory, slots: [{id, count, name}, ...]}}, plus the fields of the registration's data function
  * (the mod's own: an entity id, a tier), updated when the menu's contents or those fields change, so pages can show
  * totals, filter slots by name, or show the mod's state.
+ *
+ * <p>The narrator reads it as a {@link VellumScreen}: the page's {@code <title>} if it has one (else the menu's title),
+ * then its focused or hovered element; a hovered {@code <slot>} reads as its item ("Item: Coal").
  */
 public class VellumContainerScreen<M extends AbstractContainerMenu> extends AbstractContainerScreen<M> implements DocumentDriver.Owner {
     private static final int OFF_SCREEN = -10_000;
@@ -179,6 +183,23 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
             extraFailed = true;
             return null;
         }
+    }
+
+    /** The page's {@code <title>}, else the menu's title. */
+    @Override
+    public Component getTitle() {
+        return driver.narrator().title(super.getTitle());
+    }
+
+    /** The page's focused or hovered element (a slot reads as its item); with none, what vanilla says. */
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        if (!driver.narrator().addNarratedElement(output)) super.updateNarratedWidget(output);
+    }
+
+    @Override
+    public String narration() {
+        return PageNarrator.collect(this::updateNarrationState);
     }
 
     @Override

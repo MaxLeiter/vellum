@@ -1,5 +1,9 @@
 {
   "vellum.screen": "Vellum",
   "vellum.demo.chest": "Vellum Demo Chest",
-  "vellum.demo.title": "Vellum demos"
+  "vellum.demo.title": "Vellum demos",
+  "vellum.narrate.link": "%s link",
+  "vellum.narration.radio": "Radio button: %s",
+  "vellum.narration.checkbox.usage.focused.check": "Press Space to check",
+  "vellum.narration.checkbox.usage.focused.uncheck": "Press Space to uncheck"
 }
