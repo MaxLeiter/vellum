@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <title>Emperor Cualius</title>
+  <!-- Chronicle's two asks. Its map pins show their tooltips the moment the pointer is on them, as vanilla slots do:
+       the map sets -mc-tooltip-delay once and every pin inherits it, while the shop row's note keeps the default half
+       second. And the narrator reads the conversation: the page's title, a reply by its aria-label ("Reply 1: About
+       the letter button"), and each new line of the log as "speaker. what they say". The flourish is aria-hidden. -->
+  <style>
+    html { background: #151a24 }
+    body { margin: 0; padding: 12px; display: flex; gap: 12px; align-items: start; color: #8b96ad }
+    .map { position: relative; width: 120px; height: 90px; background: #3b5b2f; outline: 1px solid #34405a;
+           -mc-tooltip-delay: 0ms }
+    .pin { position: absolute; width: 8px; height: 8px; background: #a33; outline: 1px solid #000 }
+    .card { width: 220px; padding: 6px; display: flex; flex-direction: column; gap: 6px; background: #1d2434;
+            outline: 1px solid #34405a }
+    .row { display: flex; align-items: center; gap: 4px; color: #e8f0ff }
+    .row.quick { -mc-tooltip-delay: 0ms }
+    item { width: 16px; height: 16px }
+    .log { max-height: 72px; overflow: auto; color: #e8f0ff }
+    .line { margin: 0 0 4px }
+    .speaker { display: block; color: #f0c040 }
+    .replies { display: flex; flex-direction: column; gap: 2px }
+    .replies button { text-align: left }
+    .flourish { color: #34405a; text-align: center }
+  </style>
+</head>
+<body>
+  <div class="map" aria-label="Map of the Empire">
+    <div class="pin" id="rauca" style="left: 30px; top: 50px"
+         title-json='{"text":"Rauca","extra":[{"text":"\na great city","color":"gray","italic":true}]}'></div>
+    <div class="pin" id="candacona" style="left: 84px; top: 18px" title="Candacona"></div>
+  </div>
+  <div class="card">
+    <div class="row quick" id="shop" title="Buy for 6 emeralds"><item id="minecraft:iron_sword"></item>Iron Sword</div>
+    <div class="row" id="note" title="Iron comes a long way to get here">Why so dear?</div>
+    <div class="log" id="log" role="log">
+      <p class="line"><b class="speaker">Emperor Cualius</b>Greetings, stranger! Have you done what I asked?</p>
+    </div>
+    <div class="replies">
+      <button id="reply" aria-label="Reply 1: About the letter">1 About “Word to Candacona”…</button>
+      <button id="farewell" aria-label="Reply 2: Farewell">2 Farewell</button>
+    </div>
+    <div class="flourish" aria-hidden="true">~ ~ ~</div>
+  </div>
+  <script>
+    const log = document.getElementById('log');
+
+    /** Adds a line to the log: the speaker above what they say, in one element. */
+    function say(speaker, text) {
+      const line = document.createElement('p');
+      line.className = 'line';
+      const who = document.createElement('b');
+      who.className = 'speaker';
+      who.textContent = speaker;
+      line.appendChild(who);
+      line.appendChild(document.createTextNode(text));
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    document.getElementById('reply').addEventListener('click', () => {
+      say('You', 'About the letter.');
+      setTimeout(() => say('Emperor Cualius', 'Then take it to Candacona, and quickly.'), 300);
+    });
+    document.getElementById('farewell').addEventListener('click', () => vellum.close());
+  </script>
+</body>
+</html>
