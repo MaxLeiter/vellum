@@ -40,7 +40,8 @@ loom {
             setConfigName('Fabric Client')
             ideConfigGenerated(true)
             runDir('runs/client')
-            // `./gradlew :fabric:runClient -Pautopilot` opens the Vellum demo screens, screenshots them and quits.
+            // `./gradlew :fabric:26.3:runClient -Pautopilot` (or :fabric:1.21.1) opens the Vellum demo screens,
+            // screenshots them and quits.
             if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
                 property('vellum.autopilot', 'true')
             }

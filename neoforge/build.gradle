@@ -16,7 +16,8 @@ neoForge {
         client {
             client()
             gameDirectory = this.mkdir(this.file('runs/client'))
-            // `./gradlew :neoforge:runClient -Pautopilot` opens the Vellum demo screens, screenshots them and quits.
+            // `./gradlew :neoforge:26.3:runClient -Pautopilot` (or :neoforge:1.21.1) opens the Vellum demo screens,
+            // screenshots them and quits.
             if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
                 systemProperty('vellum.autopilot', 'true')
             }
@@ -32,7 +33,7 @@ neoForge {
         data {
             clientData()
             gameDirectory = this.mkdir(this.file('runs/data'))
-            // DataGen can be run by - "./gradlew :neoforge:runData" in Terminal.
+            // DataGen can be run by - "./gradlew :neoforge:26.3:runData" in Terminal.
             // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
             programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }

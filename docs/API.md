@@ -15,11 +15,30 @@ checkout):
 repositories { mavenLocal() }
 
 // common/ (compiles against vanilla): the API, plus the engine types it exposes
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.2.0") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.3.0") }
 
 // neoforge/ and fabric/: the loader jar, so dev runs load Vellum as a mod (it bundles the engine and Rhino)
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.2.0") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.3.0") }   // or vellum-fabric-26.3
 ```
+
+Each Minecraft version has its own artifacts, all at the same Vellum version:
+
+| Minecraft | Common | NeoForge | Fabric |
+|---|---|---|---|
+| 26.3 | `dev.vellum:vellum-common-26.3` | `dev.vellum:vellum-neoforge-26.3` | `dev.vellum:vellum-fabric-26.3` |
+| 1.21.1 | `dev.vellum:vellum-common-1.21.1` | `dev.vellum:vellum-neoforge-1.21.1` | `dev.vellum:vellum-fabric-1.21.1` |
+
+On 1.21.1 the Fabric jar is remapped to intermediary names like any Fabric mod for an obfuscated version: depend on it
+with `modImplementation`, and compile against Mojang's mappings, as `vellum-common-1.21.1` is. The API is the same on
+both versions, except:
+
+- `VellumEntities.registerPortraitState` is 26.3 only (1.21.1 has no entity render states; see
+  [Entity render states](#entity-render-states)).
+- `DocumentDriver.onKey` handlers get Vellum's `dev.vellum.mod.client.input.KeyEvent` on 1.21.1, a record with
+  the shape of 26.3's `net.minecraft.client.input.KeyEvent` (`key()`, `modifiers()`, `isEscape()`,
+  `hasShiftDown()`...) whose `key()` is a GLFW key code and whose `scancode()` replaces `keycode()`.
+- `VellumScreen` and `VellumContainerScreen` override 1.21.1's screen methods (`render`, `mouseClicked(double, double,
+  int)`...), so subclasses override those there.
 
 Declare the dependency in your mod metadata: `[[dependencies.<modid>]] modId="vellum" type="optional"` (or
 `"required"`) in `neoforge.mods.toml`, and `"suggests": {"vellum": "*"}` (or `"depends"`) in `fabric.mod.json`.
@@ -471,6 +490,8 @@ holding it does not announce the change.
 
 ## Entity render states
 
+Minecraft 26.3 only: 1.21.1 has no entity render states, and Vellum poses the entity itself there.
+
 Vellum draws an entity from the render state its renderer makes. If your renderer adds things for the world (speech
 bubbles, labels, effects), register a function that makes a state for screens instead:
 
@@ -802,13 +823,14 @@ count. A page whose timers keep starting transitions or animations may never set
 is one), so cap the wait. A HUD overlay is not settled until its page has loaded, at its first draw; a page showing
 its error panel is settled.
 
-Vellum's own autopilot (`./gradlew :neoforge:runClient -Pautopilot`, or `:fabric:runClient`) uses all of this: it
-waits for each page to settle, hovers the showcase title screen, drags a turntable, opens a page under a resting
-cursor and checks it is hovered within its first frames, hovers items and titles for their tooltips, checks that a
-map pin with `-mc-tooltip-delay: 0ms` shows its title on the first frame and what the narrator is given on a
-conversation (its title, a hovered reply, each new line of its log), closes a page with a mod's key through `onKey`,
-fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and answers the demo toast through chat,
-whose hovered button the overlay narrates. It ends by logging how many of its checks failed.
+Vellum's own autopilot (`./gradlew :neoforge:26.3:runClient -Pautopilot`, or `:fabric:26.3`, `:neoforge:1.21.1`
+and `:fabric:1.21.1`) uses all of this: it waits for each page to settle, hovers the showcase title screen, drags a
+turntable, opens a page under a resting cursor and checks it is hovered within its first frames, hovers items and
+titles for their tooltips, checks that a map pin with `-mc-tooltip-delay: 0ms` shows its title on the first frame and
+what the narrator is given on a conversation (its title, a hovered reply, each new line of its log), closes a page
+with a mod's key through `onKey`, fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and
+answers the demo toast through chat, whose hovered button the overlay narrates. It ends by logging how many of its
+checks failed, and on 1.21.1 the ones it skipped because their feature is 26.3 only.
 
 ## Stability
 

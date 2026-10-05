@@ -14,9 +14,9 @@ Publish Vellum locally from a Vellum checkout, then depend on it (see `docs/API.
 ```groovy
 repositories { mavenLocal() }
 // common/
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.2.0") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.3.0") }   // or vellum-common-1.21.1
 // neoforge/ and fabric/
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.2.0") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.3.0") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
 If most of your UI moves to Vellum, make it a required dependency (`type="required"` in `neoforge.mods.toml`,

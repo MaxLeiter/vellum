@@ -84,8 +84,8 @@ Assets are read straight from a Minecraft 26.3 client jar and never copied into 
 in this order:
 
 1. `-Dvellum.mcJar=/path/to/client.jar` or the `VELLUM_MC_JAR` environment variable;
-2. `vanilla-26.3-*.jar` in `common/build/moddev/artifacts/` (this repository after a build, or a parent directory's),
-   then in `~/Documents/mod/common/build/moddev/artifacts/`;
+2. `vanilla-26.3-*.jar` in `common/versions/26.3/build/moddev/artifacts/` or `common/build/moddev/artifacts/` (this
+   repository after a build, or a parent directory's), then in `~/Documents/mod/common/build/moddev/artifacts/`;
 3. the launcher's `versions/26.3/26.3.jar` in `~/Library/Application Support/minecraft`, `~/.minecraft` or
    `%APPDATA%/.minecraft`.
 

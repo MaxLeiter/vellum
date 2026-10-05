@@ -41,7 +41,7 @@ import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
 /**
- * Dev-only visual check ({@code ./gradlew :neoforge:runClient -Pautopilot} or {@code :fabric:runClient -Pautopilot},
+ * Dev-only visual check ({@code ./gradlew :neoforge:26.3:runClient -Pautopilot}, or {@code :fabric:26.3}, {@code :neoforge:1.21.1}, {@code :fabric:1.21.1},
  * i.e. {@code -Dvellum.autopilot=true}): creates a superflat creative world, opens the canvas test, every showcase
  * page and demo, screenshots each to {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas
  * test and the 3D pages also at 3), logs the frame rate of each (and of benchmark pages of 3D content), and quits.
