@@ -63,6 +63,9 @@ public enum Prop {
     VERTICAL_ALIGN("vertical-align", false, true, Interp.DISCRETE, s -> s.verticalAlign, (s, v) -> s.verticalAlign = (VerticalAlign) v),
     ASPECT_RATIO("aspect-ratio", false, true, Interp.FLOAT, s -> s.aspectRatio, (s, v) -> s.aspectRatio = (Float) v),
     OBJECT_FIT("object-fit", false, false, Interp.DISCRETE, s -> s.objectFit, (s, v) -> s.objectFit = (ObjectFit) v),
+    /** {@code object-position}'s axes ({@link Length#AUTO} until set). */
+    OBJECT_POSITION_X("-vellum-object-position-x", false, false, Interp.LENGTH, s -> s.objectPositionX, (s, v) -> s.objectPositionX = (Length) v),
+    OBJECT_POSITION_Y("-vellum-object-position-y", false, false, Interp.LENGTH, s -> s.objectPositionY, (s, v) -> s.objectPositionY = (Length) v),
 
     FLEX_DIRECTION("flex-direction", false, true, Interp.DISCRETE, s -> s.flexDirection, (s, v) -> s.flexDirection = (FlexDirection) v),
     FLEX_WRAP("flex-wrap", false, true, Interp.DISCRETE, s -> s.flexWrap, (s, v) -> s.flexWrap = (FlexWrap) v),
@@ -128,6 +131,7 @@ public enum Prop {
     MODEL_YAW("-mc-yaw", false, false, Interp.FLOAT, s -> s.modelYaw, (s, v) -> s.modelYaw = (Float) v),
     MODEL_PITCH("-mc-pitch", false, false, Interp.FLOAT, s -> s.modelPitch, (s, v) -> s.modelPitch = (Float) v),
     MODEL_SCALE("-mc-model-scale", false, false, Interp.FLOAT, s -> s.modelScale, (s, v) -> s.modelScale = (Float) v),
+    ENTITY_FOCUS("-mc-entity-focus", false, false, Interp.DISCRETE, s -> s.entityFocus, (s, v) -> s.entityFocus = (EntityFocus) v),
 
     SCROLL_BEHAVIOR("scroll-behavior", false, false, Interp.DISCRETE, s -> s.scrollSmooth, (s, v) -> s.scrollSmooth = (Boolean) v),
     SCROLLBAR_WIDTH("scrollbar-width", false, true, Interp.DISCRETE, s -> s.scrollbarWidth, (s, v) -> s.scrollbarWidth = (Integer) v),
@@ -202,6 +206,7 @@ public enum Prop {
                     BORDER_BOTTOM_RIGHT_RADIUS, BORDER_BOTTOM_LEFT_RADIUS));
             case "background" -> set.add(BACKGROUND_COLOR);
             case "transform-origin" -> set.addAll(List.of(TRANSFORM_ORIGIN_X, TRANSFORM_ORIGIN_Y));
+            case "object-position" -> set.addAll(List.of(OBJECT_POSITION_X, OBJECT_POSITION_Y));
             case "outline" -> set.addAll(List.of(OUTLINE_WIDTH, OUTLINE_COLOR, OUTLINE_OFFSET));
             case "gap" -> set.addAll(List.of(ROW_GAP, COLUMN_GAP));
             case "flex" -> set.addAll(List.of(FLEX_GROW, FLEX_SHRINK, FLEX_BASIS));

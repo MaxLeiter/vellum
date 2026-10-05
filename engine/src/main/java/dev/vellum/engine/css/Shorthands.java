@@ -85,6 +85,8 @@ final class Shorthands {
                 Shorthands::gridTemplate);
         register("transform-origin", longhands("-vellum-transform-origin-x", "-vellum-transform-origin-y"),
                 Shorthands::transformOrigin);
+        register("object-position", longhands("-vellum-object-position-x", "-vellum-object-position-y"),
+                (l, v) -> pairOf(l, Images.splitPosition(v)));
         register("scrollbar-color", longhands("-vellum-scrollbar-thumb-color", "-vellum-scrollbar-track-color"),
                 (l, v) -> isIdent(v, "auto") ? Map.of() : sequence(l, v, false));
         register("background-position", List.of(BG_X, BG_Y), Shorthands::backgroundPosition);
@@ -355,7 +357,11 @@ final class Shorthands {
             if (Numeric.of(items.get(2), new ValueContext()) == null) return null;
             items = items.subList(0, 2);
         }
-        List<List<ComponentValue>> axes = items.size() > 2 ? null : Images.splitPosition(items);
+        return pairOf(l, items.size() > 2 ? null : Images.splitPosition(items));
+    }
+
+    /** A position's x and y values ({@link Images#splitPosition}) for an x and a y longhand; null when it had none. */
+    private static Map<Longhand, List<ComponentValue>> pairOf(List<Longhand> l, List<List<ComponentValue>> axes) {
         return axes == null ? null : Map.of(l.get(0), axes.get(0), l.get(1), axes.get(1));
     }
 

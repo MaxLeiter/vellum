@@ -2,6 +2,7 @@ package dev.vellum.engine.css;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.style.ComputedStyle;
+import dev.vellum.engine.style.EntityFocus;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,10 @@ import static dev.vellum.engine.testing.Page.styleOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-/** {@code -mc-yaw}, {@code -mc-pitch} and {@code -mc-model-scale}: how 3D content is turned, viewed and sized. */
+/**
+ * {@code -mc-yaw}, {@code -mc-pitch}, {@code -mc-model-scale} and {@code -mc-entity-focus}: how 3D content is turned,
+ * viewed, sized and framed.
+ */
 class ModelPropertiesTest {
     @Test
     void anglesInAnyUnitComputeToDegrees() {
@@ -30,9 +34,29 @@ class ModelPropertiesTest {
     }
 
     @Test
+    void entityFocusIsAKeyword() {
+        assertEquals(EntityFocus.BODY, styleOf("color: red").entityFocus);
+        assertEquals("body", computedValue(styleOf("color: red"), "-mc-entity-focus"));
+        ComputedStyle eyes = styleOf("-mc-entity-focus: EYES");
+        assertEquals(EntityFocus.EYES, eyes.entityFocus);
+        assertEquals("eyes", computedValue(eyes, "-mc-entity-focus"));
+        assertEquals(EntityFocus.BODY, styleOf("-mc-entity-focus: head").entityFocus, "unknown keywords are invalid");
+        assertEquals(EntityFocus.EYES, styleOf("-mc-entity-focus: eyes; -mc-entity-focus: 1").entityFocus);
+    }
+
+    @Test
     void notInherited() {
-        Page page = new TestHost().load("<div style='-mc-yaw: 90deg'><p id=p></p></div>");
+        Page page = new TestHost().load("<div style='-mc-yaw: 90deg; -mc-entity-focus: eyes'><p id=p></p></div>");
         assertEquals(0, page.style("#p").modelYaw);
+        assertEquals(EntityFocus.BODY, page.style("#p").entityFocus);
+    }
+
+    @Test
+    void focusChangesWithoutRelayout() {
+        Page page = new TestHost().load("<style>#m.on { -mc-entity-focus: eyes }</style><div id=m></div>");
+        page.byId("m").addClass("on");
+        assertFalse(page.frameLaysOut(16), "paint-only");
+        assertEquals(EntityFocus.EYES, page.byId("m").style.entityFocus);
     }
 
     @Test
