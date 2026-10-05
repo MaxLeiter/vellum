@@ -55,6 +55,30 @@ class ActionsTest {
         assertTrue(log.toString().contains("done.png"), log.toString());
     }
 
+    /** {@code --narrate}: the title, live regions and what focus and the pointer read, printed as they change. */
+    @Test
+    void narrationIsPrinted() throws IOException {
+        Path page = dir.resolve("talk.html");
+        Files.writeString(page, """
+                <head><title>Emperor Cualius</title></head>
+                <body style="margin: 0">
+                <p id=line aria-live=polite>Greetings, stranger!</p>
+                <button id=reply aria-label="Reply 1: About the letter"
+                        onclick="document.getElementById('line').textContent = 'Then go.'">1 About it</button>""");
+        TestScene t = TestScene.open(page, Optional.empty(), 200, 120, 2);
+        ByteArrayOutputStream said = new ByteArrayOutputStream();
+        t.scene().narrateTo(new PrintStream(said));
+        Actions.parse("wait 1\nclick #reply\nwait 1").run(t.scene(), t.renderer(), 200, 120, 2, dir,
+                new PrintStream(new ByteArrayOutputStream()));
+        assertEquals("""
+                [narrate] title: Emperor Cualius
+                [narrate] live: Greetings, stranger!
+                [narrate] live: Then go.
+                [narrate] focus: Reply 1: About the letter, button
+                [narrate] pointer: Reply 1: About the letter, button
+                """, said.toString().replace(System.lineSeparator(), "\n"));
+    }
+
     /** Selectors aim where the element shows, as {@code VellumAutomation} does in game, not at its border box's centre. */
     @Test
     void selectorsAimAtThePartThatShows() throws IOException {

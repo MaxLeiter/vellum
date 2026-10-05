@@ -14,6 +14,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.renderer.entity.state.ArmorStandRenderState;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Rotations;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.Difficulty;
@@ -43,9 +44,10 @@ import java.util.function.Supplier;
  *
  * <p>It drives pages with {@link VellumAutomation}: hovers the title screen's first button for a burst of screenshots
  * a tick apart, drags a turntable, opens a page under the resting cursor (hovered within its first frames, without a
- * mouse move), hovers items and titles for their tooltips, closes a page with a mod's key
- * ({@link DocumentDriver#onKey}), fills in the templates demo, clicks a Mobdex row scrolled out of its list and
- * scrolls the list back, and answers the demo toast overlay through chat. It waits for pages to settle rather than
+ * mouse move), hovers items and titles for their tooltips, checks that Chronicle's map pins show their titles at once
+ * and what the narrator reads on its conversation, closes a page with a mod's key ({@link DocumentDriver#onKey}),
+ * fills in the templates demo, clicks a Mobdex row scrolled out of its list and scrolls the list back, and answers the
+ * demo toast overlay through chat. It waits for pages to settle rather than
  * for a fixed time, checks each result ({@link #check}), and logs how many checks failed when it finishes. Its own
  * pages are in {@code assets/vellum/vellum/dev/}: portraits whose armour stands get the autopilot's render state
  * ({@link VellumEntities}: arms, one raised, and no base plate), and a conversation card comparing soft and default
@@ -183,6 +185,7 @@ public final class DevAutopilot {
         leave(); // or the next pages open hovered
         firstHover(mc);
         tooltips(mc);
+        chronicle(mc);
         modKeys(mc);
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
@@ -286,6 +289,66 @@ public final class DevAutopilot {
     }
 
     /**
+     * Chronicle's map and conversation ({@code dev/chronicle.html}). Tooltips: a map pin shows its title on the first
+     * frame after the pointer arrives (the map's {@code -mc-tooltip-delay: 0ms}), while a row with the default delay
+     * shows nothing then and its title half a second later. Narration, recorded rather than heard
+     * ({@link VellumAutomation#recordNarration}): the screen reads the page's title, then a hovered reply as vanilla
+     * reads a button ("Reply 1: About the letter button"); the log reads its last line when the page opens, then each
+     * new line, the reply's first and the answer a moment later; the aria-hidden flourish is never read.
+     */
+    private static void chronicle(Minecraft mc) {
+        String greeting = "Emperor Cualius. Greetings, stranger! Have you done what I asked?";
+        String answer = "Emperor Cualius. Then take it to Candacona, and quickly.";
+        open("the Chronicle page", () -> {
+            VellumAutomation.recordNarration().clear();
+            VellumScreens.open(devUrl("chronicle"));
+        });
+        moveOnto("#rauca");
+        steps.add(() -> check(shownNow(), "a map pin's title shows on the first frame (-mc-tooltip-delay: 0ms)",
+                "a map pin's title did not show at once"));
+        moveOnto("#note");
+        steps.add(() -> check(!shownNow(), "a row with the default delay shows no title on the first frame",
+                "a row with the default delay showed its title at once"));
+        settle("the note's tooltip", 0);
+        steps.add(() -> check(shownNow(), "and shows it once its half second is up", "the note's title never showed"));
+        grab(mc, "chronicle_tooltip", 0);
+        onPage("the Chronicle page", page -> {
+            String narration = page.narration().orElse("");
+            check(narration.startsWith("Emperor Cualius"), "the narrator reads the page's title: '{}'",
+                    "the narration '{}' does not start with the page's title", narration);
+        });
+        hover("#reply");
+        onPage("the Chronicle page", page -> {
+            String reply = Component.translatable("gui.narrate.button", "Reply 1: About the letter").getString();
+            String narration = page.narration().orElse("");
+            check(narration.contains(reply) && !narration.contains("~"), "the narration '{}' reads the hovered reply as '{}'",
+                    "the narration '{}' has no '{}', or reads the aria-hidden flourish", narration, reply);
+            page.click("#reply");
+        });
+        until("the log's answer was narrated", ticks -> VellumAutomation.recordNarration().contains(answer));
+        steps.add(() -> {
+            List<String> recorded = VellumAutomation.recordNarration();
+            check(recorded.equals(List.of(greeting, "You. About the letter.", answer)),
+                    "the log reads its last line on opening, then each new line: {}",
+                    "the log narrated {}, expected its greeting, the reply and the answer", recorded);
+            VellumAutomation.stopRecordingNarration();
+        });
+        leave();
+    }
+
+    /** Moves the pointer onto the first element of the open page matching {@code selector}, without waiting. */
+    private static void moveOnto(String selector) {
+        steps.add(() -> {
+            if (!VellumAutomation.screen().map(page -> page.hover(selector)).orElse(false)) fail("nothing to hover at {}", selector);
+        });
+    }
+
+    /** Whether the open page's last frame showed a tooltip. */
+    private static boolean shownNow() {
+        return VellumAutomation.screen().map(VellumAutomation::tooltipShown).orElse(false);
+    }
+
+    /**
      * A mod's key on Chronicle's book ({@code dev/mod_keys.html}, {@link DocumentDriver#onKey}): a handler that
      * closes the page on J. Typed into a focused field, J is text and the handler is not asked; neither is it for a
      * key the page cancels. With nothing focused, J reaches it and the page closes.
@@ -364,11 +427,13 @@ public final class DevAutopilot {
     /**
      * The demo toast overlay takes the pointer only while chat is open: hovers and clicks its Allow button through
      * {@link VellumAutomation#hud} with chat open (and checks that it takes none without), screenshots the hover and
-     * its tooltip, and checks the answer arrives and the toast closes.
+     * its tooltip, checks the overlay narrates the hovered button, and checks the answer arrives and the toast closes.
      */
     private static void toast(Minecraft mc) {
         Supplier<Optional<VellumAutomation>> toast = () -> VellumAutomation.hud(VellumClient.DEMO_TOAST);
         String[] answer = new String[1];
+        String allow = Component.translatable("gui.narrate.button", "Allow").getString();
+        steps.add(() -> VellumAutomation.recordNarration().clear());
         steps.add(() -> {
             mc.gui.setScreen(null);
             VellumHud.show(VellumClient.DEMO_TOAST).onMessage("answer", value -> answer[0] = value.getAsString());
@@ -385,6 +450,15 @@ public final class DevAutopilot {
                 .map(JsonElement::getAsBoolean).orElse(false), "the toast's Allow button is hovered",
                 "the toast's Allow button is not hovered"));
         grab(mc, "toast_hover", 0);
+        // The chat screen under the toast knows nothing of it, so the overlay reads its hovered button itself.
+        until("the toast's hovered button was narrated",
+                ticks -> VellumAutomation.recordNarration().stream().anyMatch(s -> s.startsWith(allow)));
+        steps.add(() -> {
+            List<String> said = VellumAutomation.recordNarration();
+            check(said.stream().anyMatch(s -> s.startsWith(allow)), "the toast overlay narrated {}, reading its hovered '{}'",
+                    "the toast overlay narrated {}, nothing starting '{}'", said, allow);
+            VellumAutomation.stopRecordingNarration();
+        });
         steps.add(() -> {
             if (!toast.get().map(page -> page.click(ALLOW)).orElse(false)) fail("could not click the toast's Allow button");
         });

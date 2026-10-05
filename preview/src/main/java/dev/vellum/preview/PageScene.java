@@ -3,11 +3,15 @@ package dev.vellum.preview;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Viewport;
 import dev.vellum.engine.host.Host;
+import dev.vellum.engine.input.Accessible;
 import dev.vellum.engine.input.InputHandler;
+import dev.vellum.engine.input.Narration;
 import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.preview.host.PreviewHost;
 
+import java.io.PrintStream;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
@@ -25,6 +29,11 @@ final class PageScene implements Scene {
     private Throwable loadError;
     /** The viewport of the last frame (the window's size and scale), which a reload starts the page in. */
     private Viewport viewport;
+    /** Where {@code --narrate} prints what a narrator would be given, or null. */
+    private PrintStream narration;
+    /** Whether the page's title was printed, and the focus and pointer narration last printed. */
+    private boolean titleNarrated;
+    private String focusNarrated, pointerNarrated;
 
     /** Loads the page shown in {@code viewport}, so its scripts see that viewport from the start. */
     PageScene(PreviewHost host, String url, String data, Viewport viewport) {
@@ -49,9 +58,20 @@ final class PageScene implements Scene {
         reload();
     }
 
+    /**
+     * Prints what a narrator would be given to {@code out} after every frame ({@code --narrate}): the page's title once
+     * it loads, each live region announcement, and the focused and hovered elements when what they read changes, as
+     * {@link Accessible#describe()} says them. In game the pointer's is read once it rests; here at once.
+     */
+    void narrateTo(PrintStream out) {
+        narration = out;
+    }
+
     void reload() {
         if (document != null) document.close();
         document = null;
+        titleNarrated = false;
+        focusNarrated = pointerNarrated = null;
         String html = host.loadText(url);
         if (html != null) {
             loadError = null;
@@ -68,6 +88,27 @@ final class PageScene implements Scene {
         if (document == null) return;
         document.setViewport(width, height, scale);
         document.frame(nowMs);
+        if (narration != null && document.error() == null) narrate();
+    }
+
+    private void narrate() {
+        Narration n = document.input().narration();
+        if (!titleNarrated) {
+            titleNarrated = true;
+            if (!document.title().isEmpty()) narration.println("[narrate] title: " + document.title());
+        }
+        for (Narration.Announcement a : n.announcements()) {
+            narration.println("[narrate] " + (a.interrupt() ? "at once: " : "live: ") + a.text());
+        }
+        focusNarrated = narrate("focus", n.focused(), focusNarrated);
+        pointerNarrated = narrate("pointer", n.hovered(), pointerNarrated);
+    }
+
+    /** Prints what {@code a} reads as when it is not what was printed last; returns it. */
+    private String narrate(String what, Accessible a, String last) {
+        String text = a == null ? null : a.describe();
+        if (text != null && !Objects.equals(text, last)) narration.println("[narrate] " + what + ": " + text);
+        return text;
     }
 
     /** The page, then its tooltip if one is up (drawn as in game). */

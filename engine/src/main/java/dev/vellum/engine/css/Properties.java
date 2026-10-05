@@ -66,6 +66,7 @@ final class Properties {
     private static final Function<Object, String> NUMBER = v -> CssText.number((Float) v);
     private static final Function<Object, String> COLOR = v -> CssColors.serialize((Integer) v);
     private static final Function<Object, String> KEYWORD = v -> Keywords.css((Enum<?>) v);
+    private static final Function<Object, String> SECONDS = v -> CssText.seconds((Float) v);
 
     // ---- Keyword tables ----
     private static final Map<String, Length> SIZE_KEYWORDS = Map.of("auto", Length.AUTO,
@@ -274,6 +275,7 @@ final class Properties {
         }), v -> (Integer) v == 0 ? "none" : v.toString());
         add(Prop.TEXT_SHADOW, (r, ctx) -> Shadows.read(r, ctx, false), v -> Shadows.serialize(cast(v), false));
         add(Prop.CURSOR, Properties::cursor, KEYWORD);
+        add(Prop.TOOLTIP_DELAY, nonNegative(Numeric::time), SECONDS);
         add(Prop.POINTER_EVENTS, Keywords.parser(PointerEvents.class, Map.of("all", PointerEvents.AUTO)), KEYWORD);
         add(Prop.USER_SELECT, Keywords.parser(UserSelect.class, Map.of("contain", UserSelect.AUTO)), KEYWORD);
         add(Prop.IMAGE_RENDERING, Keywords.parser(Map.of("auto", ImageRendering.SMOOTH, "smooth", ImageRendering.SMOOTH,
@@ -327,16 +329,15 @@ final class Properties {
         addComponent("background-clip", bg, Keywords.parser(BackgroundLayer.Box.class), KEYWORD);
 
         Parser time = Numeric::time;
-        Function<Object, String> seconds = v -> CssText.seconds((Float) v);
         Function<Object, String> timing = v -> Timings.serialize((TimingFunction) v);
         ListGroup tr = ListGroup.TRANSITION;
         addComponent("transition-property", tr, (r, ctx) -> {
             Token t = r.next(Type.IDENT);
             return t == null ? null : t.lower;
         }, TEXT);
-        addComponent("transition-duration", tr, nonNegative(time), seconds);
+        addComponent("transition-duration", tr, nonNegative(time), SECONDS);
         addComponent("transition-timing-function", tr, Timings::read, timing);
-        addComponent("transition-delay", tr, time, seconds);
+        addComponent("transition-delay", tr, time, SECONDS);
 
         ListGroup an = ListGroup.ANIMATION;
         addComponent("animation-name", an, (r, ctx) -> {
@@ -344,9 +345,9 @@ final class Properties {
             if (t == null) t = r.next(Type.STRING);
             return t == null ? null : t.is(Type.IDENT) && t.lower.equals("none") ? "none" : t.value;
         }, TEXT);
-        addComponent("animation-duration", an, or(Map.of("auto", 0f), nonNegative(time)), seconds);
+        addComponent("animation-duration", an, or(Map.of("auto", 0f), nonNegative(time)), SECONDS);
         addComponent("animation-timing-function", an, Timings::read, timing);
-        addComponent("animation-delay", an, time, seconds);
+        addComponent("animation-delay", an, time, SECONDS);
         addComponent("animation-iteration-count", an,
                 or(Map.of("infinite", Float.POSITIVE_INFINITY), nonNegative(Numeric::number)),
                 v -> (Float) v == Float.POSITIVE_INFINITY ? "infinite" : CssText.number((Float) v));

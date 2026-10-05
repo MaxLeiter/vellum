@@ -136,6 +136,8 @@ public enum Prop {
     GAZE_LIMIT_YAW("-vellum-gaze-limit-yaw", false, false, Interp.FLOAT, s -> s.gazeLimitYaw, (s, v) -> s.gazeLimitYaw = (Float) v),
     GAZE_LIMIT_UP("-vellum-gaze-limit-up", false, false, Interp.FLOAT, s -> s.gazeLimitUp, (s, v) -> s.gazeLimitUp = (Float) v),
     GAZE_LIMIT_DOWN("-vellum-gaze-limit-down", false, false, Interp.FLOAT, s -> s.gazeLimitDown, (s, v) -> s.gazeLimitDown = (Float) v),
+    /** {@code -mc-tooltip-delay}, in ms. Read by input, not by layout or paint. */
+    TOOLTIP_DELAY("-mc-tooltip-delay", true, false, Interp.DISCRETE, s -> s.tooltipDelay, (s, v) -> s.tooltipDelay = (Float) v),
 
     SCROLL_BEHAVIOR("scroll-behavior", false, false, Interp.DISCRETE, s -> s.scrollSmooth, (s, v) -> s.scrollSmooth = (Boolean) v),
     SCROLLBAR_WIDTH("scrollbar-width", false, true, Interp.DISCRETE, s -> s.scrollbarWidth, (s, v) -> s.scrollbarWidth = (Integer) v),

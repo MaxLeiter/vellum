@@ -5,6 +5,7 @@ import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 
@@ -13,7 +14,8 @@ import java.util.List;
  * 16 px to the square {@code object-fit: contain} fits in the content box (placed by {@code object-position}), with
  * count and durability. {@code components} is SNBT for the stack's data components
  * ({@link ItemStacks#of}). With the {@code tooltip} attribute, hovering shows the vanilla item tooltip, with the lines
- * of the {@code title} that applies after the item's own ({@link ItemTooltips}).
+ * of the {@code title} that applies after the item's own ({@link ItemTooltips}). The narrator reads it by the item's
+ * name.
  */
 final class ItemContent extends McReplaced {
     private ItemStack stack;
@@ -44,6 +46,12 @@ final class ItemContent extends McReplaced {
     @Override
     public boolean showsTooltip() {
         return tooltip && !stack.isEmpty();
+    }
+
+    /** The narrator reads the item by its name, as vanilla's item tooltip shows it. */
+    @Override
+    public @Nullable String accessibleName() {
+        return stack.isEmpty() ? null : stack.getHoverName().getString();
     }
 
     @Override

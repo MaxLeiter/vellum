@@ -204,7 +204,7 @@ final class DomBindings {
         m.get("documentElement", Document::documentElement)
                 .get("head", Document::head)
                 .get("body", Document::body)
-                .prop("title", DomBindings::title, (d, v) -> setTitle(d, Js.str(v)))
+                .prop("title", Document::title, (d, v) -> d.setTitle(Js.str(v)))
                 .get("activeElement", d -> d.focusedElement() != null ? d.focusedElement() : d.body())
                 .get("defaultView", d -> rt.global)
                 .get("location", d -> Js.property(rt.global, "location"))
@@ -359,19 +359,6 @@ final class DomBindings {
             case "nearest" -> ScrollAlign.NEAREST;
             default -> fallback;
         };
-    }
-
-    private static String title(Document d) {
-        Element title = d.head() == null ? null : d.head().firstDescendant(e -> e.tagName().equals("title"));
-        return title == null ? "" : title.collapsedText();
-    }
-
-    private static void setTitle(Document d, String value) {
-        Element head = d.head();
-        if (head == null) return;
-        Element title = head.firstDescendant(e -> e.tagName().equals("title"));
-        if (title == null) title = head.appendChild(d.createElement("title"));
-        title.setTextContent(value);
     }
 
     // ---- on<event> properties ----

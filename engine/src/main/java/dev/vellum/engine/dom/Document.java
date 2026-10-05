@@ -177,6 +177,30 @@ public final class Document extends Node {
         return new DocumentFragment(this);
     }
 
+    /**
+     * The document's title, as {@code document.title}: the text of the first {@code <title>} in {@code <head>} with its
+     * whitespace collapsed, or "" without one. Read when asked, so a script's change shows at once; hosts use it as
+     * the screen's title for the narrator.
+     */
+    public String title() {
+        Element title = titleElement();
+        return title == null ? "" : title.collapsedText();
+    }
+
+    /** Sets the title's text ({@code document.title = ...}), adding a {@code <title>} to {@code <head>} if it has none. */
+    public void setTitle(String text) {
+        Element head = head();
+        if (head == null) return;
+        Element title = titleElement();
+        if (title == null) title = head.appendChild(createElement("title"));
+        title.setTextContent(text);
+    }
+
+    private Element titleElement() {
+        Element head = head();
+        return head == null ? null : head.firstDescendant(e -> e.tagName().equals("title"));
+    }
+
     public Element getElementById(String id) {
         return firstDescendant(e -> id.equals(e.attribute("id")));
     }
@@ -435,6 +459,14 @@ public final class Document extends Node {
      */
     public boolean guard(BooleanSupplier work) {
         return guarded(work::getAsBoolean, false);
+    }
+
+    /**
+     * Runs a host's query inside the document's error boundary: its result, or {@code otherwise} when the document is
+     * stopped or closed, or the query failed (the document stops, as for any host call).
+     */
+    public <T> T guard(Supplier<T> work, T otherwise) {
+        return guarded(work, otherwise);
     }
 
     private void run(Runnable work) {

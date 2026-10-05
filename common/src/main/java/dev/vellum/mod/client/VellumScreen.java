@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -11,6 +12,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * A screen showing a Vellum page. The page draws its own background over the dimmed world (or the title panorama
  * when no world is loaded); Escape closes the screen unless the page handles it. Open one with {@link VellumScreens}.
+ *
+ * <p>Its title is the page's {@code <title>} (live, as scripts change {@code document.title}), else "Vellum". The
+ * narrator reads it, then the page's focused or hovered element as vanilla reads its widgets ({@link PageNarrator}).
  */
 public class VellumScreen extends Screen implements DocumentDriver.Owner {
     private final DocumentDriver driver;
@@ -48,6 +52,23 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
     public VellumScreen pauses(boolean pauses) {
         this.pauses = pauses;
         return this;
+    }
+
+    /** The page's {@code <title>}, else the screen's own ("Vellum"). */
+    @Override
+    public Component getTitle() {
+        return driver.narrator().title(super.getTitle());
+    }
+
+    /** The page's focused or hovered element, phrased as vanilla's widgets; with none, what vanilla says. */
+    @Override
+    protected void updateNarratedWidget(NarrationElementOutput output) {
+        if (!driver.narrator().addNarratedElement(output)) super.updateNarratedWidget(output);
+    }
+
+    @Override
+    public String narration() {
+        return PageNarrator.collect(this::updateNarrationState);
     }
 
     @Override

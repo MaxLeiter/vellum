@@ -17,6 +17,7 @@ import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -114,6 +115,32 @@ public final class VellumAutomation {
      */
     public boolean tooltipShown() {
         return driver.requestedTooltip();
+    }
+
+    /**
+     * What Minecraft's narrator says for this page's screen now, all of it, as vanilla puts a screen's narration
+     * together when the screen opens: the screen's title (the page's {@code <title>}), then the element the page reads
+     * (the focused one, else the one under the pointer) in vanilla's widget phrasing, such as
+     * {@code "Emperor Cualius. Reply 1: About the letter button. Left click to activate"}. Empty for a HUD overlay.
+     * Works with the narrator off, for checks; the narrator itself waits for the pointer to rest before reading.
+     */
+    public Optional<String> narration() {
+        return Optional.ofNullable(driver.owner().narration());
+    }
+
+    /**
+     * Starts recording what Vellum hands Minecraft's narrator besides a screen's own narration ({@link #narration}):
+     * what live regions announce and what HUD overlays read under the pointer, each as the text said. While it
+     * records, pages work out what they would say even with the narrator off. Returns the list it records into, the
+     * same one until {@link #stopRecordingNarration}. Render thread only.
+     */
+    public static List<String> recordNarration() {
+        return PageNarrator.record();
+    }
+
+    /** Stops {@link #recordNarration}: pages narrate only while the narrator is on again. */
+    public static void stopRecordingNarration() {
+        PageNarrator.stopRecording();
     }
 
     /**

@@ -72,6 +72,14 @@ public final class DocumentDriver {
 
         /** Every frame, once the document's frame has run (its layout is current) and before it paints. */
         default void beforePaint(Document document) {}
+
+        /**
+         * What the narrator says for the screen showing the document now, all of it, as vanilla puts a screen's
+         * narration together ({@link VellumAutomation#narration}); null for owners that are not screens.
+         */
+        default @Nullable String narration() {
+            return null;
+        }
     }
 
     private static final Set<DocumentDriver> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
@@ -80,6 +88,7 @@ public final class DocumentDriver {
 
     private final Owner owner;
     private final McHost host = new McHost(this);
+    private final PageNarrator narrator = new PageNarrator(this);
     private final int session;
     private final Map<String, List<Consumer<JsonElement>>> listeners = new HashMap<>();
     private final List<Runnable> closeHandlers = new ArrayList<>();
@@ -250,6 +259,7 @@ public final class DocumentDriver {
             McCanvas canvas = new McCanvas(g, mouseX, mouseY, owner.slots());
             doc.paint(canvas);
             canvas.finish();
+            narrator.tick(owner.screen() == null && (mouseX != -1 || mouseY != -1));
             syncTextInput();
             if (cursor != Cursor.AUTO && cursor != Cursor.DEFAULT) g.requestCursor(cursorType(cursor));
         }
@@ -335,6 +345,15 @@ public final class DocumentDriver {
     boolean settled() {
         if (error != null) return true;
         return document != null && pendingNavigation == null && !closeRequested && document.settled();
+    }
+
+    Owner owner() {
+        return owner;
+    }
+
+    /** What the page gives Minecraft's narrator: the screen's title, the element it reads, live regions. */
+    PageNarrator narrator() {
+        return narrator;
     }
 
     /** The live document, or null while it failed or is not loaded. */
@@ -562,6 +581,8 @@ public final class DocumentDriver {
                 url = target;
                 html = null;
                 load();
+                // Another page in the same screen: the narrator reads its title, as for a screen that opens.
+                if (screen != null) screen.triggerImmediateNarration(false);
             }
         }
         if (closeRequested) {

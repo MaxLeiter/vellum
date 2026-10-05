@@ -161,6 +161,14 @@ public final class ComputedStyle implements Cloneable {
     public int scrollbarWidth = 2;
     public int scrollbarThumbColor = 0x80FFFFFF, scrollbarTrackColor = 0x20000000;
 
+    // ---- Tooltips (inherited) ----
+    /**
+     * {@code -mc-tooltip-delay}: how long, in ms, the pointer rests on an element before its {@code title} tooltip
+     * shows. Half a second unless a rule sets it, as browsers wait for title tooltips; {@code 0ms} shows it at once, as
+     * vanilla shows a slot's item.
+     */
+    public float tooltipDelay = 500f;
+
     // ---- Animation ----
     public List<TransitionSpec> transitions = List.of();
     public List<AnimationSpec> animations = List.of();
@@ -222,6 +230,7 @@ public final class ComputedStyle implements Cloneable {
         tint = parent.tint;
         scrollbarThumbColor = parent.scrollbarThumbColor;
         scrollbarTrackColor = parent.scrollbarTrackColor;
+        tooltipDelay = parent.tooltipDelay;
         customProperties = parent.customProperties;
     }
 
@@ -240,7 +249,7 @@ public final class ComputedStyle implements Cloneable {
                 && pointerEvents == o.pointerEvents && userSelect == o.userSelect
                 && imageRendering == o.imageRendering && accentColor == o.accentColor && tint == o.tint
                 && scrollbarThumbColor == o.scrollbarThumbColor && scrollbarTrackColor == o.scrollbarTrackColor
-                && customProperties.equals(o.customProperties);
+                && same(tooltipDelay, o.tooltipDelay) && customProperties.equals(o.customProperties);
     }
 
     /**
@@ -307,7 +316,8 @@ public final class ComputedStyle implements Cloneable {
                 && same(gazeLimitYaw, o.gazeLimitYaw) && same(gazeLimitUp, o.gazeLimitUp)
                 && same(gazeLimitDown, o.gazeLimitDown) && scrollSmooth == o.scrollSmooth
                 && scrollbarThumbColor == o.scrollbarThumbColor
-                && scrollbarTrackColor == o.scrollbarTrackColor && transitions.equals(o.transitions)
+                && scrollbarTrackColor == o.scrollbarTrackColor && same(tooltipDelay, o.tooltipDelay)
+                && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
                 && isFlexOrGridItemHint == o.isFlexOrGridItemHint;
     }
