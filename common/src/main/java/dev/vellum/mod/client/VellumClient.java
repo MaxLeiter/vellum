@@ -35,7 +35,7 @@ public final class VellumClient {
         VellumResources.init();
         VellumScreens.registerContainer(VellumDemos.CHEST, VellumDemos.CHEST_PAGE);
         VellumHud.register(DEMO_HUD, "vellum:vellum/demo/hud.html");
-        VellumHud.register(DEMO_TOAST, "vellum:vellum/demo/toast.html", VellumHud.Input.WHEN_CURSOR_FREE);
+        VellumHud.register(DEMO_TOAST, "vellum:vellum/demo/toast.html", VellumHud.Input.WHEN_CHAT_OPEN);
         VellumScreens.onPageLoad(Mobdex.URL, Mobdex::load);
     }
 

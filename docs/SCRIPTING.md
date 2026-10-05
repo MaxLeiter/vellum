@@ -354,15 +354,23 @@ Text fields update the model on every `input` event; `.lazy` waits for `change` 
 trims the text, and `.number` turns text that parses as a number into one (`type="number"` and `type="range"` do
 this anyway). The model must be something you can assign to: a name or a property path.
 
+The other way, a text field shows its model: every update compares the model with the field's text and replaces the
+text when they differ, so clearing the model right after reading what was typed (`send(); draft = ''`) empties the
+field. While the field has focus, text that only a modifier changes is left as typed: `.trim`'s spaces, `.number`'s
+`1.`, and with `.lazy` everything until `change`.
+
 ## Limits
 
 Scripts are sandboxed because pages can come from servers:
 
 - No Java access: `java`, `Packages` and friends do not exist, and no Java object is ever visible to scripts.
 - No network, files or other pages: the only way out is `vellum.send`.
-- CPU: each entry may run about 50 million instructions or 250 ms, whichever comes first. A script that runs over is
-  stopped (its `catch` and `finally` blocks do not run), the error is reported, and the page stays usable. The
-  limit covers everything the entry does, including microtasks and template updates.
+- CPU: each entry may run about 50 million instructions or 1 second, whichever comes first. A script that runs over
+  is stopped (its `catch` and `finally` blocks do not run), the error is reported, and the page stays usable. The
+  limit covers everything the entry does, including microtasks and template updates. Two kinds of one-off work,
+  which a game that has just started makes slow, are kept off the clock: compiling (scripts, handlers, and templates
+  the first time they show) counts one instruction per character of source instead of its time, and the entries
+  that load the page (its scripts, the first template render, `DOMContentLoaded`) may take 10 seconds.
 - Recursion is limited to 1000 nested calls (an `InternalError` you can catch).
 - `innerHTML`, `outerHTML`, `insertAdjacentHTML` and `v-html` take at most 1M characters.
 - `localStorage` and `sessionStorage` hold at most 256K characters each (keys plus values); going over throws a

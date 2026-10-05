@@ -113,7 +113,29 @@ class CascadeTest {
         assertEquals(Length.px(20), s.marginLeft);
         assertEquals(Length.of(-5, 50), s.paddingLeft);
         assertEquals(0.25f, s.opacity);
-        assertEquals(Length.ZERO, s.marginRight, "min() over px and % cannot fold: invalid, so initial");
+        assertEquals("min(10%, 5px)", s.marginRight.toString(), "px against % waits for the reference");
+    }
+
+    @Test
+    void mathFunctionsMixingPxAndPercentagesResolveAgainstTheReference() {
+        ComputedStyle s = styleOf("font-size: 10px; width: clamp(72px, 25%, 100px); height: max(2em, 50% - 4px); "
+                + "min-width: min(10px, 20px, 5%, 1%); max-width: calc(min(50%, 40px) * 2 + 1px); "
+                + "padding-left: calc(10px - max(0px, 10% - 5px)); margin-top: min(-1px, 1%)");
+        assertEquals("clamp(72px, 25%, 100px)", s.width.toString());
+        assertEquals(72, s.width.resolve(100), "the minimum");
+        assertEquals(80, s.width.resolve(320), "the preferred value");
+        assertEquals(100, s.width.resolve(1000), "the maximum");
+        assertEquals(46, s.height.resolve(100));
+        assertEquals(20, s.height.resolve(10));
+        assertEquals("min(10px, 1%)", s.minWidth.toString(), "arguments of one kind fold first");
+        assertEquals(81, s.maxWidth.resolve(100));
+        assertEquals(41, s.maxWidth.resolve(40));
+        assertEquals(10, s.paddingLeft.resolve(40));
+        assertEquals(5, s.paddingLeft.resolve(100));
+        assertEquals(-1, s.marginTop.resolve(50));
+        assertEquals(Length.ZERO, styleOf("padding-top: calc(-1px - 5%)").paddingTop, "negative whatever the reference");
+        assertEquals(Float.NaN, s.height.resolve(Float.NaN, Float.NaN), "an unknown reference is auto");
+        assertTrue(s.width.hasPercent());
     }
 
     @Test

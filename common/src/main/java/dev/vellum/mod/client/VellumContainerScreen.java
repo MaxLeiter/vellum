@@ -2,7 +2,9 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -28,6 +30,11 @@ import java.util.function.Function;
  * scrolling, transforms and animations. Slots that are not painted (no element, hidden, scrolled out of their clip)
  * move off-screen. Vanilla still draws slot items, highlights, tooltips and the carried stack, on top of the page,
  * and handles slot clicks, drags and shift-clicks; everything else goes to the page.
+ *
+ * <p>The screen's GUI area ({@code leftPos}, {@code topPos}, {@code imageWidth}, {@code imageHeight}, which JEI, REI
+ * and other mods read to lay out beside it) is the page's content, updated every frame: the elements marked
+ * {@code data-vellum-bounds}, or {@code body}'s in-flow children ({@link Coordinates#contentBounds}). Slot positions
+ * are relative to it, as in vanilla.
  *
  * <p>Register one for a menu type with {@link VellumScreens#registerContainer}. The page's {@code vellum.data} is
  * {@code {title, inventory, slots: [{id, count, name}, ...]}}, plus the fields of the registration's data function
@@ -73,10 +80,27 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
     @Override
     protected void init() {
         super.init();
-        // Slots are placed in screen coordinates from the page's layout.
-        leftPos = 0;
-        topPos = 0;
+        setGuiArea(0, 0, width, height); // the whole screen until the page has laid out
         driver.resize(width, height);
+    }
+
+    /** The GUI area is where the page's content is, as laid out for this frame (slots are placed relative to it). */
+    @Override
+    public void beforePaint(Document document) {
+        float[] r = Coordinates.contentBounds(document);
+        if (r == null) {
+            setGuiArea(0, 0, width, height);
+            return;
+        }
+        int x0 = (int) Math.floor(r[0]), y0 = (int) Math.floor(r[1]);
+        setGuiArea(x0, y0, (int) Math.ceil(r[0] + r[2]) - x0, (int) Math.ceil(r[1] + r[3]) - y0);
+    }
+
+    private void setGuiArea(int left, int top, int width, int height) {
+        leftPos = left;
+        topPos = top;
+        imageWidth = width;
+        imageHeight = height;
     }
 
     @Override
@@ -98,11 +122,12 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         return slotSink;
     }
 
+    /** Vanilla's slot positions are relative to the GUI area. */
     private void placeSlot(int index, int x, int y) {
         if (index >= menu.slots.size()) return;
         Slot slot = menu.slots.get(index);
-        slot.x = x;
-        slot.y = y;
+        slot.x = x - leftPos;
+        slot.y = y - topPos;
     }
 
     @Override
@@ -203,9 +228,15 @@ public class VellumContainerScreen<M extends AbstractContainerMenu> extends Abst
         driver.mouseMoved(x, y);
     }
 
+    /**
+     * Presses on slots go to vanilla, and so do presses on the page's background while a stack is carried: vanilla drops
+     * it ({@link #hasClickedOutside}), as outside a vanilla container.
+     */
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        pagePress = slotAt(event.x(), event.y()) == null && driver.mouseClicked(event);
+        boolean vanilla = slotAt(event.x(), event.y()) != null
+                || !menu.getCarried().isEmpty() && driver.contentAt(event.x(), event.y()) == null;
+        pagePress = !vanilla && driver.mouseClicked(event);
         return pagePress || super.mouseClicked(event, doubleClick);
     }
 

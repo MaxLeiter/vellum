@@ -141,6 +141,19 @@ class TransitionTest {
     }
 
     @Test
+    void lengthsWithMathFunctionsTransitionAsAMix() {
+        String t = "; transition: width 100ms linear";
+        restyle(0, "width: 40px" + t);
+        restyle(0, "width: clamp(72px, 25%, 100px)" + t);
+        page.frame(50);
+        assertEquals("calc(20px + 0.5 * clamp(72px, 25%, 100px))", el.style.width.toString());
+        assertEquals(60, el.box.width, EPS, "half-way from 40px to 25% of 320px");
+        page.frame(100);
+        assertEquals("clamp(72px, 25%, 100px)", el.style.width.toString());
+        assertEquals(80, el.box.width, EPS);
+    }
+
+    @Test
     void reversingIsShortened() {
         fadeOut(FADE);
         page.frame(25);

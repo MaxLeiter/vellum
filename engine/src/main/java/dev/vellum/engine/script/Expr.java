@@ -22,7 +22,7 @@ final class Expr {
     Expr(RhinoScriptRuntime rt, String source, String where) {
         this.rt = rt;
         this.what = "Error in template " + where;
-        this.script = rt.compile(what, () ->
+        this.script = rt.compile(what, source, () ->
                 Context.getCurrentContext().compileString(source, rt.document.url() + "#template", 1, null));
     }
 

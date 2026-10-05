@@ -2,11 +2,13 @@ package dev.vellum.engine.script;
 
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SandboxTest {
@@ -51,6 +53,76 @@ class SandboxTest {
                 """);
         assertEquals(1, page.host.errors.size(), page.host.errors.toString());
         assertEquals("false", page.eval("after"));
+    }
+
+    /** A simulated clock, in ns; tests move it. */
+    private final long[] now = {0};
+
+    @AfterEach
+    void realClock() {
+        Sandbox.clock = System::nanoTime;
+    }
+
+    private void simulatedClock() {
+        Sandbox.clock = () -> now[0];
+    }
+
+    @Test
+    void compilingIsOffTheClock() {
+        simulatedClock();
+        String loop = "for (var i = 0; i < 100000; i++) {}"; // several instruction checks, which also check the clock
+        Sandbox.run(cx -> {
+            Sandbox.compile("source", () -> now[0] += 5_000_000_000L); // a five-second compile on a cold JVM
+            return cx.evaluateString(cx.initSafeStandardObjects(), loop, "test", 1, null);
+        });
+        assertThrows(Sandbox.BudgetExceeded.class, () -> Sandbox.run(cx -> {
+            now[0] += 5_000_000_000L; // the same time spent running
+            return cx.evaluateString(cx.initSafeStandardObjects(), loop, "test", 1, null);
+        }));
+    }
+
+    @Test
+    void compilingCostsInstructionsSoGeneratedCodeCannotRunForever() {
+        simulatedClock(); // frozen: only instructions can stop the loop
+        Page page = new TestHost().load("<button id=b></button>");
+        page.host.failOnError = false;
+        page.run("""
+                var b = document.getElementById('b'), big = '/*' + 'x'.repeat(100000) + '*/', n = 0;
+                for (;;) { b.setAttribute('onclick', big + 'n++'); b.click(); big += ' ' }""");
+        assertEquals(1, page.host.errors.size(), page.host.errors.toString());
+        assertTrue(page.host.errors.getFirst().contains("budget"), page.host.errors.getFirst());
+        assertTrue(Integer.parseInt(page.eval("n")) < Sandbox.INSTRUCTION_BUDGET / 100000, page.eval("n"));
+    }
+
+    /**
+     * A page whose first render is slow (here every binding makes a slow host call: on a cold JVM everything is) loads
+     * within the load's allowance; the same work later is over the usual budget.
+     */
+    @Test
+    void loadingTakesTheLoadBudget() {
+        simulatedClock();
+        TestHost host = new TestHost() {
+            @Override
+            public String translate(String key, String... args) {
+                now[0] += 5_000_000; // 5 ms
+                return key;
+            }
+        };
+        // Each binding runs enough instructions for the budget to be checked as the render goes.
+        StringBuilder html = new StringBuilder("""
+                <script>
+                  var s = vellum.state({n: 0});
+                  function slow(key) { for (var i = 0; i < 50; i++) {} return vellum.t(key) }
+                </script>""");
+        for (int i = 0; i < 400; i++) html.append("<p :title=\"slow('k') + s.n\">{{ slow('t') }}</p>");
+        Page page = host.load(html.toString()); // 800 slow calls: 4 s
+        assertEquals("k0", page.query("p").getAttribute("title"));
+        assertEquals("t", page.query("p").textContent());
+        host.failOnError = false;
+        page.run("s.n = 1");
+        page.frame(16);
+        assertEquals(1, host.errors.size(), host.errors.toString());
+        assertTrue(host.errors.getFirst().contains("Error in templates: Script stopped"), host.errors.getFirst());
     }
 
     @Test

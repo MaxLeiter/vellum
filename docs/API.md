@@ -114,6 +114,24 @@ VellumScreens.registerContainer(MyMenus.FORGE, "mymod:vellum/forge.html");   // 
 </section>
 ```
 
+Recipe viewers (JEI, REI, EMI) lay out around a container screen's GUI area. For a Vellum container that area is
+the page's content, measured every frame as painted: `<body>`'s in-flow child elements (a centred panel), or, when the
+page marks any, the elements with a `data-vellum-bounds` attribute. Mark them when the panel is not a direct child
+of `<body>`, when positioned parts (a side tab, a floating inventory) belong to it, or when a full-screen wrapper
+would claim the whole screen:
+
+```html
+<body>
+  <div class="backdrop">            <!-- covers the screen: not the GUI -->
+    <main class="panel" data-vellum-bounds>...</main>
+    <aside class="tabs" data-vellum-bounds>...</aside>
+  </div>
+</body>
+```
+
+The area is the union of the marked border boxes. A page with neither has the whole screen as its GUI area, so
+recipe viewers keep clear of it.
+
 The page's `vellum.data` is `{title, inventory, slots}`, where `slots[n]` is `{id, count, name}` for menu slot `n`.
 It updates when the menu's contents change (and only then), so a page can show totals or highlight search results. Clicking
 outside the page's content (where only `<html>`/`<body>` is under the pointer) drops the carried stack, as clicking
@@ -154,11 +172,11 @@ can hide itself with `vellum.close()`, for example when its animation ends. Data
 is kept for the next `show`. `show` returns the page's driver, for `onMessage` and `onClose` handlers; they last
 until the overlay is hidden (showing it again makes a new driver).
 
-By default overlays take no input. Register one with `VellumHud.Input.WHEN_CURSOR_FREE` and the player can use it
-with the mouse whenever a screen frees the cursor (chat, an inventory, a Vellum screen, any screen):
+By default overlays take no input. Say over which screens the player can use one with the mouse, and it is drawn
+above those screens and gets their pointer input first:
 
 ```java
-VellumHud.register(id("ask"), "mymod:vellum/ask.html", VellumHud.Input.WHEN_CURSOR_FREE);
+VellumHud.register(id("ask"), "mymod:vellum/ask.html", VellumHud.Input.WHEN_CHAT_OPEN);
 
 VellumHud.show(id("ask"))
         .onMessage("answer", value -> Approvals.answer(value.getAsString()));
@@ -171,14 +189,24 @@ VellumHud.show(id("ask"))
 </div>
 ```
 
-- While a screen is open the overlay is drawn above it, and pointer input goes to the overlay first: hover (and
-  `title` tooltips), clicks and the wheel.
+| Registration | Interactive over |
+|---|---|
+| `register(id, url)` or `Input.NONE` | nothing |
+| `Input.WHEN_CHAT_OPEN` | chat (`ChatScreen`, also chat in bed) |
+| `Input.WHEN_CURSOR_FREE` | every screen, full-screen ones (inventories, menus, Vellum screens) included |
+| `register(id, url, Predicate<Screen> interactiveOver)` | the screens the predicate accepts, e.g. `screen -> screen instanceof ChatScreen \|\| screen instanceof InventoryScreen` |
+
+- Over a screen it is interactive over, the overlay is drawn above the screen, and pointer input goes to the overlay
+  first: hover (and `title` tooltips), clicks and the wheel.
 - Input falls through to the screen wherever only the page's background is under the pointer (`<html>`, `<body>`,
   whatever their styles) or nothing is. Content that should let clicks through can say `pointer-events: none`.
   A wheel the page does not use (nothing scrolls, no listener cancels it) reaches the screen too.
-- A press that went to the overlay keeps its release and drags. When the screen closes, hover ends (`mouseleave`
-  fires) and the overlay is drawn in the HUD again, without the pointer.
+- A press that went to the overlay keeps its release and drags.
+- With no screen open, or under any other screen, the overlay is drawn in the HUD layer as a plain overlay: under
+  the screen, without the pointer. When the screen it was over closes (or another replaces it), hover ends
+  (`mouseleave` fires).
 - Keyboard input stays with the screen: typing in chat still types in chat.
+- The predicate is asked every frame and for every pointer event, with the open screen; keep it cheap.
 
 Try it: `/vellum demo toast`, then press T and click a button.
 

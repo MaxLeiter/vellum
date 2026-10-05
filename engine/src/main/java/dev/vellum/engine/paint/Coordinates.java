@@ -1,7 +1,11 @@
 package dev.vellum.engine.paint;
 
+import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.style.ComputedStyle;
+
+import java.util.List;
 
 /**
  * Where boxes are on screen: the one mapping between a box's border-box coordinates and viewport coordinates, as
@@ -12,6 +16,9 @@ import dev.vellum.engine.style.ComputedStyle;
  * block), and drawn through its CSS transform and those of its ancestors ({@link #transform}).
  */
 public final class Coordinates {
+    /** Marks the elements whose border boxes are a page's {@link #contentBounds}. */
+    public static final String BOUNDS_ATTRIBUTE = "data-vellum-bounds";
+
     private Coordinates() {}
 
     /**
@@ -48,6 +55,30 @@ public final class Coordinates {
     /** The bounding rectangle {x, y, width, height} of {@code box}'s border box in viewport coordinates. */
     public static float[] boundingRect(Box box) {
         return toViewport(box, new Affine()).mapBounds(0, 0, box.width, box.height, new float[4]);
+    }
+
+    /**
+     * Where a page's content is, {x, y, width, height} in viewport coordinates: the union of the border boxes of the
+     * elements marked {@value #BOUNDS_ATTRIBUTE}, or when none is, of {@code body}'s in-flow child elements (what a
+     * centred panel is); as painted, so after scrolling and transforms. Null when none of them has a box. Hosts tell
+     * the game where their GUI is with it (Minecraft container screens, which JEI and REI lay out around).
+     */
+    public static float[] contentBounds(Document doc) {
+        List<Element> parts = doc.descendants(e -> e.hasAttribute(BOUNDS_ATTRIBUTE));
+        Element body = doc.body();
+        if (parts.isEmpty() && body != null) {
+            parts = body.children().stream().filter(e -> e.box != null && !e.box.outOfFlow).toList();
+        }
+        float x0 = Float.POSITIVE_INFINITY, y0 = Float.POSITIVE_INFINITY, x1 = Float.NEGATIVE_INFINITY, y1 = x1;
+        for (Element e : parts) {
+            if (e.box == null) continue;
+            float[] r = boundingRect(e.box);
+            x0 = Math.min(x0, r[0]);
+            y0 = Math.min(y0, r[1]);
+            x1 = Math.max(x1, r[0] + r[2]);
+            y1 = Math.max(y1, r[1] + r[3]);
+        }
+        return x0 > x1 ? null : new float[] {x0, y0, x1 - x0, y1 - y0};
     }
 
     /**

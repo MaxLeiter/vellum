@@ -5,12 +5,14 @@ import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.paint.ScissorStack;
 import dev.vellum.engine.paint.Shapes;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.state.WindowRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
@@ -28,7 +30,8 @@ import java.util.Arrays;
  *   <li><b>Transforms.</b> Vanilla's pose stack is only 16 deep, so the canvas keeps its own matrix stack and sets
  *       the pose matrix before each vanilla call (one push for the whole document).</li>
  *   <li><b>Clipping.</b> {@link #clipRect} pushes a vanilla scissor: the transformed rectangle's bounding box,
- *       which vanilla intersects with the enclosing scissor. Rounded clips are not supported.</li>
+ *       intersected with the enclosing clip and the area the renderer draws ({@link ScissorStack}). A clip with
+ *       nothing left is not pushed, and nothing inside it is drawn. Rounded clips are not supported.</li>
  *   <li><b>Opacity.</b> There are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
  *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes are
  *       pictures blitted with a colour, so they fade (and tint).</li>
@@ -56,19 +59,14 @@ public final class McCanvas implements Canvas {
     /** A copy of {@link #m} for render states, which keep it; made on demand after {@code m} changes. */
     private @Nullable Matrix3x2f pose;
     private float alpha = 1;
-    /** Scissors pushed since the last {@link #save}; popped by the matching {@link #restore}. */
-    private int scissors;
-    /**
-     * Empty clips since the last {@link #save}, and in total. An empty clip is never pushed as a scissor (the 26.3
-     * renderer throws on a zero-sized one at draw time); while any is active nothing is drawn.
-     */
-    private int emptyClips, emptyClipsTotal;
+    /** The clips, mirrored by vanilla's scissor stack where they are not empty. */
+    private final ScissorStack clips;
     private boolean tooltip;
 
     private Matrix3x2f[] savedMatrices = new Matrix3x2f[16];
     private float[] savedAlpha = new float[16];
-    private int[] savedScissors = new int[16];
-    private int[] savedEmptyClips = new int[16];
+    /** {@link ScissorStack#depth()} at each {@link #save}, for the matching {@link #restore}. */
+    private int[] savedClips = new int[16];
     private int depth;
 
     /** The screen-space bounding box of the last {@link #boundsOf} call. */
@@ -90,13 +88,31 @@ public final class McCanvas implements Canvas {
         this.mouseY = mouseY;
         this.slots = slots;
         this.guiScale = mc.getWindow().getGuiScale();
+        this.clips = drawableArea(mc, g);
         g.pose().pushMatrix();
         this.m = new Matrix3x2f(g.pose());
     }
 
+    /**
+     * Clips start from what the GUI renderer can draw this frame: the framebuffer at the GUI scale it renders with
+     * (its scissors are clamped to the framebuffer, and one clamped to nothing is a crash), within the screen and any
+     * scissor already pushed. The framebuffer is not always the GUI size: {@code Window.setWindowed} resizes it at
+     * once, while the GUI scale and size change only when the resize event arrives, so for a frame the GUI can reach
+     * past the framebuffer.
+     */
+    private static ScissorStack drawableArea(Minecraft mc, GuiGraphicsExtractor g) {
+        WindowRenderState window = mc.gameRenderer.gameRenderState().windowRenderState;
+        int scale = Math.max(1, window.guiScale);
+        int width = Math.min(g.guiWidth(), Math.ceilDiv(window.width, scale));
+        int height = Math.min(g.guiHeight(), Math.ceilDiv(window.height, scale));
+        ScreenRectangle outer = g.scissorStack.peek();
+        return outer == null ? new ScissorStack(0, 0, width, height) : new ScissorStack(Math.max(0, outer.left()),
+                Math.max(0, outer.top()), Math.min(width, outer.right()), Math.min(height, outer.bottom()));
+    }
+
     /** Pops the scissors clipped outside any save and restores the pose. */
     public void finish() {
-        popScissors();
+        popClips(0);
         g.pose().popMatrix();
     }
 
@@ -107,17 +123,13 @@ public final class McCanvas implements Canvas {
         if (depth == savedMatrices.length) {
             savedMatrices = Arrays.copyOf(savedMatrices, depth * 2);
             savedAlpha = Arrays.copyOf(savedAlpha, depth * 2);
-            savedScissors = Arrays.copyOf(savedScissors, depth * 2);
-            savedEmptyClips = Arrays.copyOf(savedEmptyClips, depth * 2);
+            savedClips = Arrays.copyOf(savedClips, depth * 2);
         }
         Matrix3x2f saved = savedMatrices[depth];
         if (saved == null) savedMatrices[depth] = saved = new Matrix3x2f();
         saved.set(m);
         savedAlpha[depth] = alpha;
-        savedScissors[depth] = scissors;
-        savedEmptyClips[depth] = emptyClips;
-        scissors = 0;
-        emptyClips = 0;
+        savedClips[depth] = clips.depth();
         depth++;
     }
 
@@ -129,23 +141,19 @@ public final class McCanvas implements Canvas {
     @Override
     public void restore() {
         if (depth == 0) return;
-        popScissors();
         depth--;
+        popClips(savedClips[depth]);
         setMatrix(savedMatrices[depth]);
         alpha = savedAlpha[depth];
-        scissors = savedScissors[depth];
-        emptyClips = savedEmptyClips[depth];
     }
 
-    private void popScissors() {
-        for (; scissors > 0; scissors--) g.disableScissor();
-        emptyClipsTotal -= emptyClips;
-        emptyClips = 0;
+    private void popClips(int toDepth) {
+        while (clips.depth() > toDepth) if (clips.pop()) g.disableScissor();
     }
 
     /** True inside an empty clip: draw calls do nothing. */
     private boolean clippedAway() {
-        return emptyClipsTotal > 0;
+        return clips.clippedAway();
     }
 
     @Override
@@ -175,22 +183,9 @@ public final class McCanvas implements Canvas {
     @Override
     public void clipRect(float x, float y, float width, float height) {
         boundsOf(x, y, x + width, y + height);
-        int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
-        ScreenRectangle current = g.scissorStack.peek();
-        if (current != null) {
-            x0 = Math.max(x0, current.left());
-            y0 = Math.max(y0, current.top());
-            x1 = Math.min(x1, current.right());
-            y1 = Math.min(y1, current.bottom());
-        }
-        if (clippedAway() || x1 <= x0 || y1 <= y0) {
-            emptyClips++;
-            emptyClipsTotal++;
-            return;
-        }
+        if (!clips.push(bx0, by0, bx1, by1)) return;
         g.pose().identity();
-        g.enableScissor(x0, y0, x1, y1);
-        scissors++;
+        g.enableScissor(clips.left(), clips.top(), clips.right(), clips.bottom());
     }
 
     @Override
@@ -338,10 +333,8 @@ public final class McCanvas implements Canvas {
         if (slots == null || clippedAway() || alpha < 0.5f) return;
         float cx = x + width / 2, cy = y + height / 2;
         int sx = Math.round(m.m00() * cx + m.m10() * cy + m.m20() - 8), sy = Math.round(m.m01() * cx + m.m11() * cy + m.m21() - 8);
-        ScreenRectangle scissor = g.scissorStack.peek();
-        if (scissor != null && (sx < scissor.left() || sy < scissor.top() || sx + 16 > scissor.right() || sy + 16 > scissor.bottom())) {
-            return;
-        }
+        boolean clipped = clips.depth() > 0; // the screen edge alone does not hide a slot
+        if (clipped && (sx < clips.left() || sy < clips.top() || sx + 16 > clips.right() || sy + 16 > clips.bottom())) return;
         slots.place(index, sx, sy);
     }
 

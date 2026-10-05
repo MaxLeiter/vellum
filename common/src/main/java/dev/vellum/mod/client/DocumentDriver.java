@@ -65,6 +65,9 @@ public final class DocumentDriver {
         default McCanvas.@Nullable SlotSink slots() {
             return null;
         }
+
+        /** Every frame, once the document's frame has run (its layout is current) and before it paints. */
+        default void beforePaint(Document document) {}
     }
 
     private static final Set<DocumentDriver> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
@@ -219,6 +222,7 @@ public final class DocumentDriver {
         Document doc = document();
         if (doc != null) {
             doc.frame(Util.getMillis());
+            owner.beforePaint(doc);
             McCanvas canvas = new McCanvas(g, mouseX, mouseY, owner.slots());
             doc.paint(canvas);
             canvas.finish();

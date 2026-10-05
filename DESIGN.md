@@ -58,7 +58,7 @@ Packages in `engine/` (`dev.vellum.engine.*`):
 | `css` | Tokenizer, parser, selectors, cascade (`StyleEngine`), the user-agent stylesheet |
 | `html` | `HtmlParser`, `HtmlSerializer` |
 | `layout` | `LayoutEngine`, `Box`, `LineBox`, `Fragment`; block, inline, flex, grid, positioning |
-| `paint` | `Painter` (paint order + hit testing), `Canvas` (backend contract), `Shapes` (tessellation) |
+| `paint` | `Painter` (paint order + hit testing), `Canvas` (backend contract), `Shapes` (tessellation), `ScissorStack` (clips for scissor-based hosts) |
 | `replaced` | The engine's replaced elements (`img`, `sprite`, `canvas`), the registry that adds the host's, `ImageSources` (image sizes, `canvas:` images), `Context2D` (the canvas 2D context) |
 | `anim` | `AnimationEngine`: transitions, @keyframes animations, `element.animate()` |
 | `input` | `InputHandler` (pointer, wheel, keyboard, focus), form controls, smooth scrolling |
@@ -203,7 +203,10 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 - Cascade: UA sheet < author sheets (document order) < inline style; `!important` reverses origin order; specificity;
   source order. Inheritance via `Prop.inherited`. `inherit`, `initial`, `unset`, `revert` (as unset).
 - Custom properties `--x` and `var(--x, fallback)` anywhere in a value (substituted before parsing the value).
-- `calc()`, `min()`, `max()`, `clamp()` for lengths, percentages and numbers. Mixed `px + %` folds into `Length`.
+- `calc()`, `min()`, `max()`, `clamp()` for lengths, percentages and numbers, nested freely. Lengths fold into
+  `Length`'s `px + %` pair where they can (sums, products with numbers, comparisons of all-px or all-% arguments);
+  a comparison that mixes px and % (`clamp(72px, 25%, 100px)`) stays an expression that layout resolves against
+  the percentage's reference, and serialises as written.
 
 ### Selectors
 Type, universal, `#id`, `.class`, attribute (`[a]`, `=`, `~=`, `|=`, `^=`, `$=`, `*=`, ` i` flag), combinators
@@ -364,10 +367,11 @@ the scrollbar).
 - **Keyframes**: `animation-name` maps to `@keyframes`; keyframes resolved per element via the style engine;
   per-keyframe timing functions; iterations, direction, fill mode, delay, play state; `animationstart/iteration/end`.
   Animated values override the base style; transitions apply under animations as in CSS.
-- **Interpolation** by `Prop.Interp`: lengths (px and % parts separately; keyword ↔ length flips at 50%), floats,
-  ints (rounded), colours (premultiplied), shadow lists (pairwise, padding with transparent zero shadows), transform
-  lists (pairwise by function type when lists match; otherwise decompose both to matrices and interpolate
-  translate/rotate/scale/skew), discrete for everything else.
+- **Interpolation** by `Prop.Interp`: lengths (px and % parts separately; with `min()`/`max()`/`clamp()` terms, as
+  `calc(a × (1 − t) + b × t)`; keyword ↔ length flips at 50%), floats, ints (rounded), colours (premultiplied), shadow
+  lists (pairwise, padding with transparent zero shadows), transform lists (pairwise by function type when lists
+  match; otherwise decompose both to matrices and interpolate translate/rotate/scale/skew), discrete for everything
+  else.
 - Layout-affecting animated properties invalidate layout each frame; paint-only ones (opacity, transform, colours)
   do not.
 - `element.animate(keyframes, options)` from scripts creates the same animation objects (Web Animations subset:
@@ -413,6 +417,9 @@ the scrollbar).
 JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The runtime:
 - Blocks all Java access (no `Packages`, no `java.*`, class shutter denies everything), enforces a CPU budget per
   entry (instruction observer; runaway scripts throw and are reported, the UI keeps working), and caps recursion.
+  The budget is instructions plus a wall clock for slow host calls; the clock leaves out one-off work a cold JVM makes
+  slow: compiling (charged to instructions by source length instead) and loading (a larger allowance while the
+  document loads: scripts, the template install and first render).
 - Globals: `window` (= global), `document`, `console` (log/info/warn/error/debug → host log), `setTimeout`,
   `setInterval`, `clearTimeout`, `clearInterval`, `requestAnimationFrame`, `cancelAnimationFrame`,
   `performance.now()`, `queueMicrotask`, `JSON`, `Math`, `structuredClone` (via JSON), `localStorage` (per-UI,
@@ -451,7 +458,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 ## 11. Minecraft integration (`common/`)
 
 - **McCanvas** implements `Canvas` over `GuiGraphicsExtractor`: own affine matrix stack set into the pose (the pose
-  stack is only 16 deep); clip stack → `enableScissor`; alpha stack multiplied into colours; `fillRect` → `fill`
+  stack is only 16 deep); clips → `enableScissor` through `paint.ScissorStack` (intersected with the area the
+  renderer draws, the framebuffer at its GUI scale, which for a frame after `Window.setWindowed` is smaller than the
+  GUI; empty clips are never pushed and hide their content); alpha stack multiplied into colours; `fillRect` → `fill`
   (sub-pixel via pose translate); `fillQuads` → a custom `GuiElementRenderState` with `RenderPipelines.GUI`
   (submitted into the widened `guiRenderState`, clipped to the widened `scissorStack`); `drawText` → `Font` with a
   `Style` (font, bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi
@@ -502,20 +511,25 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - **VellumContainerScreen** (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
-  frame are moved off-screen. Slot data is sent to the page only when a stack changed.
+  frame are moved off-screen. Its GUI area (`leftPos`, `topPos`, `imageWidth`, `imageHeight`, which recipe viewers
+  read) is the page's content (`Coordinates.contentBounds`: the `data-vellum-bounds` elements, else body's in-flow
+  children), set each frame after layout and before painting (`DocumentDriver.Owner.beforePaint`), so slot
+  positions, relative to it as in vanilla, are placed against the same area. Slot data is sent to the page only when
+  a stack changed.
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
   tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
   slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
 - **HUD layers**: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
-  With `Input.WHEN_CURSOR_FREE` an overlay is interactive while a screen is open: the loaders draw it after the
-  screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
+  `register(id, url, Predicate<Screen> interactiveOver)` (or `Input.WHEN_CHAT_OPEN`, `Input.WHEN_CURSOR_FREE`: any
+  screen) makes it interactive over the screens the predicate accepts, asked each frame and pointer event with the
+  open screen. Over such a screen the loaders draw it after the screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
   stratum, flushing its own deferred tooltip (`extractDeferredElements`: the screen's pass is over), and route
   pointer events to it first (NeoForge `ScreenEvent.Mouse*.Pre`, cancelled when taken; Fabric
   `ScreenMouseEvents.allowMouse*`). Hover follows the mouse position, polled each frame. A press goes to the topmost
   overlay with content under the pointer (`DocumentDriver.contentAt`: not `html`/`body`), which then gets its
   release and drags; otherwise the screen gets it. The wheel goes to the same overlay and falls through when unused.
-  Without a screen the overlay is drawn in the HUD layer without a pointer (`mouseLeave` on the way). Keys stay with
-  the screen.
+  Without a screen, or under one the predicate rejects, the overlay is drawn in the HUD layer without a pointer
+  (`mouseLeave` on the way). Keys stay with the screen.
 - **Networking**: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
   `vellum:data` (server → client: JSON for a session), `vellum:message` (client → server: session, channel, JSON),
   `vellum:close`. Server API: `VellumServer.open(player, url, data)` returns a session handle with `push(data)`,

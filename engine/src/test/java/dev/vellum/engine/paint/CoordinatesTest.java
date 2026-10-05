@@ -104,4 +104,31 @@ class CoordinatesTest {
         assertSame(tree, page.doc.layoutEngine().root(), "a new transform value only moves paint: no relayout");
         assertArrayEquals(new float[] {53, 0, 5, 5}, a.getBoundingClientRect(), 1e-3f);
     }
+
+    /**
+     * The page's content area, which container screens report as their GUI so JEI and REI lay out beside it: a centred
+     * 188px panel is where it is, not the top-left 176×166 vanilla assumes.
+     */
+    @Test
+    void contentBoundsAreBodysInFlowChildrenOrTheMarkedElements() {
+        String centred = "<style>body { display: flex; align-items: center; justify-content: center; height: 100vh }</style>";
+        Page page = new TestHost().load(centred + """
+                <main style="width: 188px; height: 100px"></main>
+                <div style="position: absolute; left: 0; top: 0; width: 5px; height: 5px"></div>""");
+        assertArrayEquals(new float[] {66, 70, 188, 100}, Coordinates.contentBounds(page.doc), 1e-3f,
+                "positioned children are not the panel");
+
+        page = new TestHost().load(centred + """
+                <main style="width: 188px; height: 100px"><div data-vellum-bounds style="height: 20px"></div></main>
+                <aside data-vellum-bounds style="position: absolute; left: 4px; top: 200px; width: 10px; height: 10px">
+                </aside>""");
+        assertArrayEquals(new float[] {4, 70, 250, 140}, Coordinates.contentBounds(page.doc), 1e-3f,
+                "the union of the marked elements");
+
+        page.run("document.querySelector('main').style.transform = 'translateX(10px)'");
+        page.frame();
+        assertEquals(76 + 188, Coordinates.contentBounds(page.doc)[0] + Coordinates.contentBounds(page.doc)[2], 1e-3f,
+                "as painted");
+        assertNull(Coordinates.contentBounds(new TestHost().load("").doc));
+    }
 }

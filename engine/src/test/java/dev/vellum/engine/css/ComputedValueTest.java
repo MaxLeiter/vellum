@@ -16,6 +16,8 @@ class ComputedValueTest {
                 + "--x: 1px  2px; content: 'hi'; aspect-ratio: 2; grid-template-columns: repeat(2, 1fr) 10px; "
                 + "grid-row: span 2; text-shadow: minecraft; box-shadow: 1px 2px red inset");
         assertEquals("calc(50% + 2px)", computedValue(s, "width"));
+        assertEquals("clamp(72px, 25%, 100px)", computedValue(styleOf("width: clamp(72px, 25%, 100px)"), "width"));
+        assertEquals("calc(100% - max(4px, 10%))", computedValue(styleOf("width: calc(100% - max(4px, 10%))"), "width"));
         assertEquals("12px", computedValue(s, "height"));
         assertEquals("rgba(255, 0, 0, 0.502)", computedValue(s, "color"));
         assertEquals("inline-block", computedValue(s, "display"));
