@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<!-- object-position on images and the Minecraft elements' stand-ins, and -mc-entity-focus on entities. -->
+<style>
+  body { padding: 6px; display: flex; flex-direction: column; gap: 6px; background: #1c2230; }
+  .row { display: flex; gap: 6px; align-items: flex-start; }
+  .row > * { background: #2c3550; outline: 1px solid #45507a; }
+  img { width: 48px; height: 32px; object-fit: none; }
+  img.contain { object-fit: contain; }
+  item, player-head, model { width: 48px; height: 24px; }
+  entity { width: 32px; height: 48px; }
+  .tall { width: 24px; height: 64px; }
+  .eyes { -mc-entity-focus: eyes; }
+  .square { width: 32px; height: 32px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <img src="minecraft:textures/item/diamond.png">
+    <img src="minecraft:textures/item/diamond.png" style="object-position: left top">
+    <img src="minecraft:textures/item/diamond.png" style="object-position: right 4px bottom 25%">
+    <img src="minecraft:textures/item/diamond.png" style="object-position: -4px">
+    <img class="contain" src="minecraft:textures/item/diamond.png" style="object-position: right">
+  </div>
+  <div class="row">
+    <item id="minecraft:emerald"></item>
+    <item id="minecraft:emerald" style="object-position: left"></item>
+    <player-head style="object-position: right"></player-head>
+    <model block="minecraft:stone" style="object-position: 25%"></model>
+    <model item="minecraft:apple" style="object-position: right"></model>
+  </div>
+  <div class="row">
+    <entity type="minecraft:zombie" class="tall"></entity>
+    <entity type="minecraft:zombie" class="tall" style="object-position: center top"></entity>
+    <entity type="minecraft:zombie" class="eyes"></entity>
+    <entity type="minecraft:zombie" class="eyes square"></entity>
+    <entity type="minecraft:zombie" class="eyes square" style="object-position: 30% 60%"></entity>
+    <entity type="minecraft:zombie" class="eyes square" style="-mc-model-scale: 0.5"></entity>
+  </div>
+</body>
+</html>
