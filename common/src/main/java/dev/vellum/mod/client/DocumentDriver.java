@@ -630,11 +630,22 @@ public final class DocumentDriver {
         }
         List<Consumer<JsonElement>> local = listeners.get(channel);
         if (local != null) {
+            JsonElement value = null;
             try {
-                JsonElement value = JsonParser.parseString(json);
-                for (Consumer<JsonElement> l : List.copyOf(local)) l.accept(value);
+                value = JsonParser.parseString(json);
             } catch (JsonParseException | IllegalStateException e) {
                 Constants.LOG.warn("Vellum: {} sent malformed JSON on '{}'", name(), channel);
+            }
+            // Each handler is the mod's code: one that throws (reading a field the page left out, say) is logged and the
+            // rest still run. Its exception never reaches the page, which may not be the mod's own script.
+            if (value != null) {
+                for (Consumer<JsonElement> l : List.copyOf(local)) {
+                    try {
+                        l.accept(value);
+                    } catch (RuntimeException e) {
+                        Constants.LOG.error("Vellum: a handler for '{}' on {} threw", channel, name(), e);
+                    }
+                }
             }
         }
         if (session < 0) return true;
