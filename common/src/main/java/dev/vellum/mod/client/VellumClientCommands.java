@@ -22,6 +22,8 @@ public final class VellumClientCommands {
      * claims every {@code /vellum ...} command once a client {@code vellum} node exists.
      */
     public static final List<String> SERVER_DEMOS = List.of("chest", "live");
+    /** The show-off pages under {@code assets/vellum/vellum/showcase/}. */
+    public static final List<String> SHOWCASE = List.of("title", "hud", "shop", "mobdex", "journal", "console");
 
     private VellumClientCommands() {}
 
@@ -29,6 +31,9 @@ public final class VellumClientCommands {
         LiteralArgumentBuilder<S> demo = LiteralArgumentBuilder.<S>literal("demo").executes(c -> later(() -> demo("gallery")));
         for (String name : DEMOS) demo.then(LiteralArgumentBuilder.<S>literal(name).executes(c -> later(() -> demo(name))));
         for (String name : SERVER_DEMOS) demo.then(LiteralArgumentBuilder.<S>literal(name).executes(c -> askServer("vellum demo " + name)));
+        LiteralArgumentBuilder<S> showcase = LiteralArgumentBuilder.<S>literal("showcase")
+                .executes(c -> later(() -> VellumScreens.open(showcaseUrl("index"))));
+        for (String name : SHOWCASE) showcase.then(LiteralArgumentBuilder.<S>literal(name).executes(c -> later(() -> VellumScreens.open(showcaseUrl(name)))));
         return LiteralArgumentBuilder.<S>literal("vellum")
                 .then(LiteralArgumentBuilder.<S>literal("open")
                         .then(RequiredArgumentBuilder.<S, String>argument("url", StringArgumentType.greedyString())
@@ -37,6 +42,7 @@ public final class VellumClientCommands {
                                     return later(() -> VellumScreens.open(url));
                                 })))
                 .then(demo)
+                .then(showcase)
                 .then(LiteralArgumentBuilder.<S>literal("reload").executes(c -> later(VellumClient::onResourceReload)))
                 .then(LiteralArgumentBuilder.<S>literal("canvastest").executes(c -> later(() -> Minecraft.getInstance().gui.setScreen(new CanvasTestScreen()))));
     }
@@ -56,6 +62,10 @@ public final class VellumClientCommands {
 
     public static String demoUrl(String name) {
         return "vellum:vellum/demo/" + (name.equals("gallery") ? "index" : name) + ".html";
+    }
+
+    public static String showcaseUrl(String name) {
+        return "vellum:vellum/showcase/" + name + ".html";
     }
 
     /** Sends a command straight to the server, past the client dispatcher (which would take it again). */
