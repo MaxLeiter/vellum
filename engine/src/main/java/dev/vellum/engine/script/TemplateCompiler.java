@@ -342,7 +342,7 @@ final class TemplateCompiler {
                 el.setValue(want);
                 return el.selectedOption() != before;
             };
-            default -> new Binding.Value<>(cx -> display(read.eval(cx, scope)), el::setValue);
+            default -> textModel(el, read, scope, modifiers, numeric, type.equals("range"));
         });
         EventListener update = event -> rt.enter("Error in template " + where, cx -> {
             String own = modifiers.contains("trim") ? el.value().strip() : el.value();
@@ -366,6 +366,29 @@ final class TemplateCompiler {
         } else {
             el.addEventListener(modifiers.contains("lazy") ? "change" : "input", update);
         }
+    }
+
+    /**
+     * The model of a text field (an input or a textarea), checked against the field's live value on every digest as
+     * Vue's vModelText does, rather than against what the binding last rendered: a model reset in the same frame as
+     * typing still reaches the field. The field is written only when it differs, so its caret and selection survive.
+     * While it has focus, what a modifier would rewrite under the caret is left alone: {@code .trim}'s spaces,
+     * {@code .number}'s "1.", and with {@code .lazy} the typing until {@code change} commits it.
+     */
+    private Binding textModel(Element el, Expr read, Scriptable scope, Set<String> modifiers, boolean numeric,
+                              boolean range) {
+        String[] rendered = {null}; // the model at the last digest
+        return cx -> {
+            Object model = read.eval(cx, scope);
+            String want = display(model), before = rendered[0], have = el.value();
+            rendered[0] = want;
+            if (have.equals(want) || numeric && model instanceof Number n && number(have) instanceof Double d
+                    && d == n.doubleValue()) return false;
+            if (el.isFocused() && !range && (modifiers.contains("lazy") && want.equals(before)
+                    || modifiers.contains("trim") && have.strip().equals(want))) return false;
+            el.setValue(want);
+            return true;
+        };
     }
 
     /** Text as a number when it parses as one (Vue's looseToNumber), else unchanged. */

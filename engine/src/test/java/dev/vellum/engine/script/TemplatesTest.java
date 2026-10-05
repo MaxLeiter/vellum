@@ -24,6 +24,7 @@ class TemplatesTest {
     }
 
     private static void type(Element input, String text) {
+        input.ownerDocument().setFocus(input);
         input.setValue(text);
         input.dispatchEvent(new InputEvent("input", text, "insertText"));
     }
@@ -194,6 +195,48 @@ class TemplatesTest {
         page.run("s.name = 'Zed'");
         page.frame();
         assertEquals("Zed", name.value());
+    }
+
+    /** The field follows the model, not what the binding last rendered: a reset in the same frame as typing shows. */
+    @Test
+    void textModelResetInTheSameFrameAsTypingReachesTheField() {
+        Page page = new TestHost().load("""
+                <input id=i v-model="ui.draft"><p>model: [{{ ui.draft }}]</p><p id=out></p>
+                <script>
+                const ui = {draft: ''};
+                setTimeout(() => {
+                  const i = document.getElementById('i');
+                  i.value = 'typed';
+                  i.dispatchEvent(new Event('input', {bubbles: true}));
+                  ui.draft = '';
+                  setTimeout(() => { document.getElementById('out').textContent = 'field: [' + i.value + ']'; }, 100);
+                }, 100);
+                </script>""");
+        page.frame(100).frame(150).frame(200).frame(250);
+        assertEquals("field: []", page.byId("out").textContent());
+        assertEquals("", page.byId("i").value());
+    }
+
+    @Test
+    void focusedTextModelsKeepWhatModifiersWouldRewrite() {
+        Page page = new TestHost().load("""
+                <input id=n v-model.number="n"><input id=t v-model.trim="t"><input id=l v-model.lazy="l">
+                <script>const s = vellum.state({n: 0, t: '', l: 'old'})</script>""");
+        type(page.byId("n"), "1.");
+        page.frame();
+        assertEquals("1.", page.byId("n").value(), "1. is the number 1: the field keeps its text");
+        type(page.byId("t"), "a ");
+        page.frame();
+        assertEquals("a ", page.byId("t").value(), "the space being typed stays");
+        type(page.byId("l"), "new");
+        page.frame();
+        assertEquals("new", page.byId("l").value(), ".lazy: typing waits for change");
+        page.run("s.l = 'reset'");
+        page.frame();
+        assertEquals("reset", page.byId("l").value(), "a model change still shows");
+        page.doc.setFocus(null);
+        page.frame();
+        assertEquals("a", page.byId("t").value(), "without focus the field shows the model");
     }
 
     @Test

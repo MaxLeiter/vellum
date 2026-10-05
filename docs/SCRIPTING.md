@@ -354,6 +354,11 @@ Text fields update the model on every `input` event; `.lazy` waits for `change` 
 trims the text, and `.number` turns text that parses as a number into one (`type="number"` and `type="range"` do
 this anyway). The model must be something you can assign to: a name or a property path.
 
+The other way, a text field shows its model: every update compares the model with the field's text and replaces the
+text when they differ, so clearing the model right after reading what was typed (`send(); draft = ''`) empties the
+field. While the field has focus, text that only a modifier changes is left as typed: `.trim`'s spaces, `.number`'s
+`1.`, and with `.lazy` everything until `change`.
+
 ## Limits
 
 Scripts are sandboxed because pages can come from servers:
