@@ -227,8 +227,8 @@ final class Properties {
         };
         add(List.of(Prop.JUSTIFY_CONTENT, Prop.ALIGN_ITEMS, Prop.ALIGN_CONTENT, Prop.ALIGN_SELF,
                 Prop.JUSTIFY_ITEMS, Prop.JUSTIFY_SELF), align, KEYWORD);
-        add(Prop.FLEX_GROW, Properties::nonNegativeNumber, NUMBER);
-        add(Prop.FLEX_SHRINK, Properties::nonNegativeNumber, NUMBER);
+        add(Prop.FLEX_GROW, nonNegative(Numeric::number), NUMBER);
+        add(Prop.FLEX_SHRINK, nonNegative(Numeric::number), NUMBER);
         add(Prop.FLEX_BASIS, length(FLEX_BASIS_KEYWORDS, false), TEXT);
         add(Prop.ORDER, Numeric::integer, TEXT);
         add(Prop.ROW_GAP, length(NORMAL_GAP, false), TEXT);
@@ -294,15 +294,13 @@ final class Properties {
         add(Prop.TRANSFORM_ORIGIN_Y, (r, ctx) -> Images.axis(r, ctx, "top", "bottom"), TEXT);
         add(Prop.TINT, CssColors::read, COLOR);
         add(List.of(Prop.MODEL_YAW, Prop.MODEL_PITCH), Numeric::angle, v -> CssText.deg((Float) v));
-        add(Prop.MODEL_SCALE, Properties::nonNegativeNumber, NUMBER);
+        add(Prop.MODEL_SCALE, nonNegative(Numeric::number), NUMBER);
         add(Prop.ENTITY_FOCUS, Keywords.parser(EntityFocus.class), KEYWORD);
         add(Prop.GAZE_REACH, (r, ctx) -> Numeric.px(r, ctx, false), PX);
         // -mc-gaze-limit's parts: magnitudes, or none (NaN, so it flips rather than interpolates).
-        add(List.of(Prop.GAZE_LIMIT_YAW, Prop.GAZE_LIMIT_UP, Prop.GAZE_LIMIT_DOWN), or(Map.of("none", Float.NaN),
-                (r, ctx) -> {
-                    Float a = Numeric.angle(r, ctx);
-                    return a == null || a < 0 ? null : a;
-                }), v -> Float.isNaN((Float) v) ? "none" : CssText.deg((Float) v));
+        add(List.of(Prop.GAZE_LIMIT_YAW, Prop.GAZE_LIMIT_UP, Prop.GAZE_LIMIT_DOWN),
+                or(Map.of("none", Float.NaN), nonNegative(Numeric::angle)),
+                v -> Float.isNaN((Float) v) ? "none" : CssText.deg((Float) v));
         add(Prop.SCROLL_BEHAVIOR, Keywords.parser(Map.of("auto", false, "smooth", true)),
                 v -> (Boolean) v ? "smooth" : "auto");
         add(Prop.SCROLLBAR_WIDTH, Keywords.parser(Map.of("auto", 2, "thin", 1, "none", 0)),
@@ -336,7 +334,7 @@ final class Properties {
             Token t = r.next(Type.IDENT);
             return t == null ? null : t.lower;
         }, TEXT);
-        addComponent("transition-duration", tr, nonNegativeTime(), seconds);
+        addComponent("transition-duration", tr, nonNegative(time), seconds);
         addComponent("transition-timing-function", tr, Timings::read, timing);
         addComponent("transition-delay", tr, time, seconds);
 
@@ -346,13 +344,12 @@ final class Properties {
             if (t == null) t = r.next(Type.STRING);
             return t == null ? null : t.is(Type.IDENT) && t.lower.equals("none") ? "none" : t.value;
         }, TEXT);
-        addComponent("animation-duration", an, or(Map.of("auto", 0f), nonNegativeTime()), seconds);
+        addComponent("animation-duration", an, or(Map.of("auto", 0f), nonNegative(time)), seconds);
         addComponent("animation-timing-function", an, Timings::read, timing);
         addComponent("animation-delay", an, time, seconds);
-        addComponent("animation-iteration-count", an, or(Map.of("infinite", Float.POSITIVE_INFINITY), (r, ctx) -> {
-            Float n = Numeric.number(r, ctx);
-            return n == null || n < 0 ? null : n;
-        }), v -> (Float) v == Float.POSITIVE_INFINITY ? "infinite" : CssText.number((Float) v));
+        addComponent("animation-iteration-count", an,
+                or(Map.of("infinite", Float.POSITIVE_INFINITY), nonNegative(Numeric::number)),
+                v -> (Float) v == Float.POSITIVE_INFINITY ? "infinite" : CssText.number((Float) v));
         addComponent("animation-direction", an, Keywords.parser(AnimationSpec.Direction.class), KEYWORD);
         addComponent("animation-fill-mode", an, Keywords.parser(AnimationSpec.FillMode.class), KEYWORD);
         addComponent("animation-play-state", an, Keywords.parser(Map.of("running", false, "paused", true)),
@@ -386,15 +383,11 @@ final class Properties {
         };
     }
 
-    private static Object nonNegativeNumber(ValueReader r, ValueContext ctx) {
-        Float f = Numeric.number(r, ctx);
-        return f == null || f < 0 ? null : f;
-    }
-
-    private static Parser nonNegativeTime() {
+    /** What {@code number} reads (a number, time or angle), unless it is negative. */
+    private static Parser nonNegative(Parser number) {
         return (r, ctx) -> {
-            Float t = Numeric.time(r, ctx);
-            return t == null || t < 0 ? null : t;
+            Object v = number.parse(r, ctx);
+            return v instanceof Float f && f < 0 ? null : v;
         };
     }
 
