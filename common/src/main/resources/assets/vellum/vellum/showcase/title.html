@@ -637,8 +637,8 @@
   <div class="fade"></div>
 
   <script>
-    // Note: inside loop bodies these scripts use let, not const. Rhino initialises a const in a loop body only
-    // once, so every iteration would see the first value.
+    // Loop bodies here use let, not const: Rhino initialises a const in a loop body only once, so every iteration
+    // would see the first value.
 
     // A tiny seeded random generator (an LCG), so the landscape is the same every time the page opens.
     function seeded(seed) {

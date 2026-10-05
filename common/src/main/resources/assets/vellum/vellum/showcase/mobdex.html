@@ -1055,7 +1055,7 @@
     function entry(m) {
       const parts = m.id.split(':'), ns = parts[0], path = parts[1], vanilla = ns === 'minecraft';
       const tab = CATEGORY_TAB[m.category] || 'other';
-      const e = Object.assign({ name: titleCase(path), cats: [tab], home: vanilla ? '—' : ns.toUpperCase(),
+      const e = Object.assign({ name: titleCase(path), cats: [tab], home: vanilla ? 'Unknown' : ns.toUpperCase(),
         drops: null, desc: KIND[tab] + (vanilla ? '' : ' from ' + ns) + '. Stands ' + m.height + ' blocks tall.',
         known: m.hp !== undefined }, m, (vanilla && FLAVOUR[path]) || {});
       e.caught = (m.killed || 0) > 0;

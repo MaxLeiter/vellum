@@ -699,7 +699,7 @@
             <item v-if="m.kind === 'sys' && m.icon" :id="m.icon"></item>
             <span v-if="m.kind === 'sys'">{{ m.text }} <b>{{ m.strong }}</b></span>
             <!-- chat bubble -->
-            <!-- No whitespace between the text, the caret and the buttons: see the engine note at the end. -->
+            <!-- No whitespace between the text, the caret and the buttons (see the engine note at the end of the script). -->
             <div class="bubble" v-if="m.kind !== 'sys'">{{ m.shown }}<span class="caret" v-if="m.streaming">▌</span><div
                  class="ask" v-if="m.ask && !m.answer && !m.streaming">
                 <div class="btn" @click="answer(m, true)">APPROVE</div>
@@ -957,10 +957,9 @@
       sys('Permission:', p.name + ' → ' + level.toUpperCase(), p.icon);
     }
 
-    // Engine note: InlineLayout.shapeText (engine/.../layout/InlineLayout.java:144) writes
-    // `p.collapsible[p.add(...)]`, which indexes the old array when add() grows it, so a run of inline content
-    // whose 17th (33rd, 65th...) piece is a space throws and stops the page. Streamed text sweeps through every
-    // length, so the bubble keeps its text first and leaves no trailing whitespace after the caret.
+    // Engine note: InlineLayout.shapeText once indexed p.collapsible before add() had grown it, so a run of inline
+    // content whose 17th (33rd, 65th...) piece was a space threw and stopped the page. That is fixed; the bubble
+    // markup still has no whitespace between the text, the caret and the buttons, from when streamed text hit it.
   </script>
 </body>
 </html>

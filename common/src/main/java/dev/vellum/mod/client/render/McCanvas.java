@@ -27,15 +27,15 @@ import java.util.Arrays;
  * (the painter balances its saves, also when it fails).
  *
  * <ul>
- *   <li><b>Transforms.</b> Vanilla's pose stack is only 16 deep, so the canvas keeps its own matrix stack and sets
+ *   <li>Transforms: vanilla's pose stack is only 16 deep, so the canvas keeps its own matrix stack and sets
  *       the pose matrix before each vanilla call (one push for the whole document).</li>
- *   <li><b>Clipping.</b> {@link #clipRect} pushes a vanilla scissor: the transformed rectangle's bounding box,
+ *   <li>Clipping: {@link #clipRect} pushes a vanilla scissor: the transformed rectangle's bounding box,
  *       intersected with the enclosing clip and the area the renderer draws ({@link ScissorStack}). A clip with
  *       nothing left is not pushed, and nothing inside it is drawn. Rounded clips are not supported.</li>
- *   <li><b>Opacity.</b> There are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
+ *   <li>Opacity: there are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
  *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes are
  *       pictures blitted with a colour, so they fade (and tint).</li>
- *   <li><b>Geometry.</b> Rectangles and quads are submitted as {@link RectRenderState}s and {@link QuadsRenderState}s,
+ *   <li>Geometry: rectangles and quads are submitted as {@link RectRenderState}s and {@link QuadsRenderState}s,
  *       so fractional positions, rotations and per-vertex colours all work. Consecutive primitives share one copy of
  *       the transform.</li>
  * </ul>

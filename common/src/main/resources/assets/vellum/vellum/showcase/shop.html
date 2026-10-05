@@ -726,7 +726,7 @@
   <div class="fx" id="fx"></div>
 
   <script>
-    // Note: Rhino initialises a const inside a loop body only once, so loops here use let.
+    // Loops here use let: Rhino initialises a const inside a loop body only once.
 
     const WARES = [
       { id: 'bread', name: 'Bread', icon: 'minecraft:bread', price: 1, rarity: 'common', cat: 'food' },

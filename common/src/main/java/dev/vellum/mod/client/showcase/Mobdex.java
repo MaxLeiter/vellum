@@ -75,7 +75,7 @@ public final class Mobdex {
         for (DocumentDriver page : pages) page.merge(data);
     }
 
-    /** Living entity types: exactly those with default attributes (both loaders add modded ones there). */
+    /** Living entity types: those with default attributes (both loaders add modded ones there), except the player. */
     private static List<EntityType<?>> types() {
         List<EntityType<?>> types = new ArrayList<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
