@@ -460,10 +460,19 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 
 ## 12. Testing
 
-- `engine` unit tests (JUnit): parser, selectors, cascade, each layout mode (compared against hand-computed and
-  browser-verified expectations), animation timing, events, scripting.
-- `engine/src/test/java/dev/vellum/engine/testing/TestHost`: a deterministic host with Minecraft's ASCII glyph widths,
-  used by all tests. `ImageCanvas` (Java2D) renders documents to PNGs for snapshot tests and the previewer.
+- `engine` tests (JUnit): parser, selectors, cascade, each layout mode (compared against hand-computed and
+  browser-verified expectations), animation timing, events, scripting, and `EndToEndTest` for whole pages.
+- Tests go through the real pipeline, the way hosts drive it. `testing/TestHost` is a deterministic host
+  (Minecraft's ASCII glyph widths, the Rhino runtime, in-memory resources and canvases, recorded logs, errors,
+  sounds and cursors); `TestHost.load(html)` parses, sets the viewport and runs the first frame, and returns a
+  `testing/Page`: frames at chosen times, input at viewport points through the real hit test (`click(element)`
+  aims at the element's centre and checks the hit lands in it), and painting onto `testing/RecordingCanvas` (every
+  call with its transform, alpha and clip, or as a string trace). Pages are styled by the real CSS engine; hand-built
+  boxes, styles and hit testers are not used. The layout suite includes ~1250 Chrome-generated fixtures from Taffy,
+  run as HTML pages with Taffy's Chrome setup as a stylesheet and Ahem metrics.
+- `preview` snapshot tests render the canvas test sheet, `preview/src/test/resources/pages` and the demo UIs
+  through the previewer's path (`ImageCanvas`, Java2D) with Minecraft's jar, ten frames 16 ms apart, and compare them
+  with goldens in `preview/src/test/snapshots` (`-Dvellum.updateSnapshots=true` rewrites them).
 - GameTests (both loaders, headless): networking codecs, server API, container menus.
 - Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each demo UI in a real client, at GUI scales 2
   and 3, and screenshots it to `neoforge/runs/client/screenshots/`.
