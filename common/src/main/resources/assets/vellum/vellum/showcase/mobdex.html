@@ -1,0 +1,1136 @@
+<!doctype html>
+<html>
+<head>
+  <title>Mobdex</title>
+  <style>
+    /*
+     * MOBDEX: a Pokédex-style handheld for Minecraft mobs.
+     * The device is plain boxes: bevels are two-tone borders, the plastic is a vertical gradient, the lens is a
+     * radial gradient with a glow (box-shadow) that pulses. Everything else is the dark LCD inside.
+     */
+    :root {
+      --red-hi: #ff7d6e;
+      --red: #d7322a;
+      --red-edge: #5c0d0a;
+      --bezel: #d9d4cc;
+      --lcd: #0c1820;
+      --ink: #d6f1ff;
+      --dim: #5d7d91;
+      --cyan: #5cc8ff;
+      --danger: #e5484d;
+      /* Category colours live in the script (COLORS) and reach the CSS as a per-element --c. */
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 4px;
+    }
+
+    /* ---------------------------------------------------------------- the casing */
+
+    .dex {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 472px;
+      height: 100%;
+      max-height: 262px;
+      padding: 0 6px 6px;
+      background: linear-gradient(to bottom, #ec4a40 0%, var(--red) 40%, #b0221c 100%);
+      border: 2px solid;
+      border-color: var(--red-hi) var(--red-edge) var(--red-edge) var(--red-hi);
+      border-radius: 6px;
+      /* The first shadow is the device's thickness, the second its drop shadow. */
+      box-shadow: 0 3px 0 #4a0806, 0 6px 10px rgba(0, 0, 0, 0.6);
+      animation: power-on 500ms ease-out both;
+    }
+
+    @keyframes power-on {
+      from { transform: translateY(12px) scale(0.96); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    /* ---------------------------------------------------------------- top band: lens, LEDs, title, counters */
+
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      flex: none;
+      margin: 0 -6px 6px;
+      padding: 0 8px;
+      /* A moulded seam: dark line, then a highlight line under it. */
+      border-bottom: 1px solid var(--red-edge);
+      box-shadow: 0 1px 0 #f0645a;
+    }
+
+    .lens {
+      position: relative;
+      flex: none;
+      width: 24px;
+      height: 24px;
+      border: 2px solid #f6f6f6;
+      border-radius: 12px;
+      background: radial-gradient(circle at 35% 30%, #e4fbff 0%, #6fd2ff 22%, #1f7ee0 58%, #0a2a66 100%);
+      animation: lens-pulse 2.4s ease-in-out infinite;
+    }
+
+    /* The specular highlight: a small white ellipse up and to the left. */
+    .lens::after {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 3px;
+      width: 6px;
+      height: 4px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+    @keyframes lens-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px var(--red-edge), 0 0 2px rgba(92, 200, 255, 0.4); }
+      50% { box-shadow: 0 0 0 1px var(--red-edge), 0 0 10px rgba(92, 200, 255, 0.95); }
+    }
+
+    .leds {
+      display: flex;
+      gap: 3px;
+      align-self: flex-start;
+      margin-top: 5px;
+    }
+
+    .led {
+      width: 6px;
+      height: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.55);
+      border-radius: 3px;
+      animation: blink 1.6s steps(1) infinite;
+    }
+
+    .led.r { background: radial-gradient(circle at 35% 35%, #ffd0d0, #ff3b30 60%); }
+    .led.y { background: radial-gradient(circle at 35% 35%, #fff6c8, #ffcc00 60%); animation-duration: 2.2s; animation-delay: 300ms; }
+    .led.g { background: radial-gradient(circle at 35% 35%, #d8ffd8, #34c759 60%); animation-duration: 0.9s; animation-delay: 150ms; }
+
+    @keyframes blink {
+      0% { opacity: 1; }
+      70% { opacity: 0.35; }
+    }
+
+    .title {
+      display: flex;
+      flex-direction: column;
+      margin-left: 2px;
+    }
+
+    .title b {
+      font-size: 16px;
+      letter-spacing: 1px;
+      color: #fff;
+      text-shadow: 1px 1px 0 var(--red-edge);
+    }
+
+    .title small {
+      color: #ffc2bb;
+      letter-spacing: 1px;
+    }
+
+    /* The counters sit in a little black LCD window. */
+    .counter {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+      padding: 3px 6px;
+      background: #10140f;
+      border: 1px solid;
+      border-color: var(--red-edge) #f0645a #f0645a var(--red-edge);
+      color: #9cff8a;
+    }
+
+    .counter span { color: #4f7f45; }
+
+    /* Speaker grille: slits made from a repeating gradient. */
+    .grille {
+      width: 18px;
+      height: 18px;
+      background: repeating-linear-gradient(to right, var(--red-edge) 0 2px, transparent 2px 4px);
+      border-radius: 2px;
+    }
+
+    /* ---------------------------------------------------------------- body: two screens and the hinge */
+
+    .body {
+      display: flex;
+      flex: 1;
+      gap: 4px;
+      min-height: 0;
+    }
+
+    /* The light plastic frame around each LCD. */
+    .bezel {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 7px 5px 5px;
+      background: linear-gradient(to bottom, #ece8e1, var(--bezel) 50%, #b9b3aa);
+      border: 1px solid;
+      border-color: #fff #7c776f #7c776f #fff;
+      border-radius: 3px;
+    }
+
+    .bezel.left {
+      flex: 0 0 41%;
+      border-bottom-left-radius: 12px;
+    }
+
+    .bezel.right {
+      flex: 1;
+      border-bottom-right-radius: 12px;
+    }
+
+    /* Two tiny red dots above each screen, like the original. */
+    .bezel::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 50%;
+      width: 10px;
+      height: 3px;
+      margin-left: -5px;
+      background: linear-gradient(to right, #c0201a 0 3px, transparent 3px 7px, #c0201a 7px);
+    }
+
+    .screen {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      padding: 3px;
+      color: var(--ink);
+      background: var(--lcd);
+      /* Faint scanlines over the LCD. */
+      background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 2px);
+      border: 1px solid;
+      border-color: #2a2622 #fbf8f2 #fbf8f2 #2a2622;
+      box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+    }
+
+    .bezel.left .screen { border-bottom-left-radius: 8px; }
+    .bezel.right .screen { border-bottom-right-radius: 8px; }
+
+    /* The list fades out at the bottom edge instead of being cut off. */
+    .bezel.left .screen::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      right: 3px;
+      bottom: 3px;
+      height: 10px;
+      background: linear-gradient(to bottom, rgba(12, 24, 32, 0), var(--lcd));
+      pointer-events: none;
+    }
+
+    /* The hinge: a cylinder (light stripe in the middle of a dark gradient) with grooves every 12px. */
+    .hinge {
+      flex: none;
+      width: 8px;
+      margin: 10px 0 4px;
+      background: linear-gradient(to right, var(--red-edge), #e8483f 40%, #ff8a7e 50%, #b0221c 70%, var(--red-edge));
+      border-radius: 2px;
+    }
+
+    .hinge div {
+      height: 100%;
+      background: repeating-linear-gradient(to bottom, transparent 0 10px, rgba(60, 6, 4, 0.7) 10px 12px);
+    }
+
+    /* ---------------------------------------------------------------- left screen: search, filters, list */
+
+    .search {
+      position: relative;
+      flex: none;
+    }
+
+    .search input {
+      width: 100%;
+      height: 14px;
+      padding: 0 4px 0 15px;
+      color: var(--ink);
+      background: #071017;
+      border: 1px solid #23465c;
+    }
+
+    .search input:focus {
+      background-image: none;
+      border-color: var(--cyan);
+    }
+
+    /* A sprite drawn as a background, so -mc-tint applies (the <sprite> element ignores it). */
+    .search i {
+      position: absolute;
+      left: 2px;
+      top: 1px;
+      width: 12px;
+      height: 12px;
+      background: sprite(minecraft:icon/search);
+      -mc-tint: #7fb7d6;
+      pointer-events: none;
+    }
+
+    .tabs {
+      display: flex;
+      flex: none;
+      gap: 1px;
+      margin: 3px 0 2px;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      height: 18px;
+      color: var(--dim);
+      background: #13232e;
+      border: 1px solid #1d3442;
+      border-bottom-width: 2px;
+      cursor: pointer;
+      transition: background-color 150ms, border-color 150ms, transform 120ms ease-out;
+    }
+
+    .tab:hover {
+      transform: translateY(-1px);
+      border-color: #3a6680;
+    }
+
+    .tab.on {
+      color: #fff;
+      background: var(--c);
+      border-color: rgba(255, 255, 255, 0.5) rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.45) rgba(255, 255, 255, 0.5);
+    }
+
+    .tab item { width: 16px; height: 16px; }
+
+    .listhead {
+      display: flex;
+      flex: none;
+      justify-content: space-between;
+      padding: 1px 2px 2px;
+      color: var(--dim);
+      border-bottom: 1px solid #1d3442;
+    }
+
+    .listhead b { color: var(--hc); }
+
+    .list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #3a6680 transparent;
+    }
+
+    .row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 12px;
+      padding: 0 3px 0 4px;
+      cursor: pointer;
+      transition: background-color 120ms, padding-left 150ms ease-out;
+      /* Rows slide in one after another when the list first appears (delay set per row inline). */
+      animation: row-in 300ms ease-out both;
+    }
+
+    @keyframes row-in {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .row:hover { background: rgba(92, 200, 255, 0.08); }
+
+    .row .no { color: var(--dim); }
+    .row .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row.unseen .nm { color: #34505f; }
+
+    /* The selected row: a category-coloured wash from the left and a cursor arrow. */
+    .row.sel {
+      padding-left: 11px;
+      background: linear-gradient(to right, var(--c), rgba(0, 0, 0, 0) 85%);
+      text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    .row.sel .no { color: #fff; }
+
+    .row.sel::before {
+      content: "▶";
+      position: absolute;
+      left: 1px;
+      top: 2px;
+      font-size: 8px;
+      color: #fff;
+      animation: nudge 600ms ease-in-out infinite alternate;
+    }
+
+    @keyframes nudge {
+      to { transform: translateX(1px); }
+    }
+
+    /* A tiny capture ball, from two gradient stops and a radius. */
+    .ball {
+      flex: none;
+      width: 7px;
+      height: 7px;
+      border: 1px solid #0a0a0a;
+      border-radius: 4px;
+      background: linear-gradient(to bottom, #f0453c 0 2px, #0a0a0a 2px 3px, #f4f4f4 3px);
+    }
+
+    .seen-dot {
+      flex: none;
+      width: 3px;
+      height: 3px;
+      margin: 0 2px;
+      background: var(--dim);
+    }
+
+    .empty {
+      padding: 12px 4px;
+      color: var(--dim);
+      text-align: center;
+    }
+
+    /* ---------------------------------------------------------------- right screen: the entry */
+
+    .entry {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .entry-head {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: none;
+      height: 14px;
+      padding: 0 2px 2px;
+      border-bottom: 1px solid #1d3442;
+    }
+
+    .entry-head .no {
+      color: var(--dim);
+    }
+
+    .entry-head .name {
+      font-size: 12px;
+      color: #fff;
+      text-shadow: 1px 1px 0 #000;
+      animation: name-in 300ms ease-out both;
+    }
+
+    @keyframes name-in {
+      from { opacity: 0; transform: translateX(6px); letter-spacing: 3px; }
+      to { opacity: 1; transform: none; letter-spacing: 0; }
+    }
+
+    .badges {
+      display: flex;
+      gap: 2px;
+      margin-left: auto;
+    }
+
+    .badge {
+      padding: 1px 3px 0;
+      height: 10px;
+      color: #fff;
+      background: var(--c);
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
+      animation: badge-in 250ms ease-out both;
+    }
+
+    .badge:nth-child(2) { animation-delay: 80ms; }
+
+    @keyframes badge-in {
+      from { transform: scale(0.4); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    .entry-main {
+      position: relative;
+      display: flex;
+      gap: 6px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* The holo stage: a spotlight, a perspective-free floor grid, corner brackets and a scan line. */
+    /* The stage grows with the screen; the entity fills it, minus a margin. */
+    .stage {
+      position: relative;
+      flex: 0 0 38%;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 88%, rgba(92, 200, 255, 0.35) 0%, rgba(92, 200, 255, 0) 45%),
+        radial-gradient(circle at 50% 40%, rgba(92, 200, 255, 0.14) 0%, rgba(92, 200, 255, 0) 70%),
+        repeating-linear-gradient(to right, rgba(92, 200, 255, 0.07) 0 1px, transparent 1px 8px),
+        repeating-linear-gradient(to bottom, rgba(92, 200, 255, 0.07) 0 1px, transparent 1px 8px);
+      border: 1px solid #1d3442;
+    }
+
+    .stage entity {
+      position: absolute;
+      inset: 8px 6px 4px;
+      width: auto;
+      height: auto;
+    }
+
+    .corner {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      border: 0 solid var(--cyan);
+    }
+
+    .corner.tl { left: 2px; top: 2px; border-top-width: 1px; border-left-width: 1px; }
+    .corner.tr { right: 2px; top: 2px; border-top-width: 1px; border-right-width: 1px; }
+    .corner.bl { left: 2px; bottom: 2px; border-bottom-width: 1px; border-left-width: 1px; }
+    .corner.br { right: 2px; bottom: 2px; border-bottom-width: 1px; border-right-width: 1px; }
+
+    .scan {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 1px;
+      background: rgba(140, 220, 255, 0.55);
+      box-shadow: 0 0 4px rgba(92, 200, 255, 0.9);
+      animation: scan 2.6s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(0); opacity: 0; }
+      10%, 90% { opacity: 1; }
+      to { transform: translateY(140px); opacity: 0; }
+    }
+
+    /* Runs once per selection (the element is re-created by a keyed v-for): a flash that fades away. */
+    .flash {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(180, 240, 255, 0.9), rgba(92, 200, 255, 0.2));
+      animation: flash 450ms ease-out both;
+      pointer-events: none;
+    }
+
+    @keyframes flash {
+      from { opacity: 1; transform: scaleY(1); }
+      to { opacity: 0; transform: scaleY(0.05); }
+    }
+
+    /* Unseen mobs: static noise and a blinking NO DATA. */
+    .noise {
+      position: absolute;
+      inset: -8px 0 0;
+      background:
+        repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(to right, rgba(92, 200, 255, 0.06) 0 2px, transparent 2px 5px);
+      animation: noise 180ms steps(3) infinite;
+    }
+
+    @keyframes noise {
+      to { transform: translateY(6px); }
+    }
+
+    .nodata {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 40px;
+      color: var(--danger);
+      text-align: center;
+      animation: blink 1s steps(1) infinite;
+    }
+
+    /* A "LIVE" feed tag in the stage corner. */
+    .live {
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: var(--ink);
+    }
+
+    .live::before {
+      content: "";
+      width: 4px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--danger);
+      animation: blink 1s steps(1) infinite;
+    }
+
+    /* ---- stats */
+
+    /* Rows spread over the stage's height, so a taller screen gets airier stats rather than a gap. */
+    .stats {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 3px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 8px;
+    }
+
+    /* One label column for every row of the stats panel. */
+    .stat .k, .hearts .k, .info .k, .drops .k {
+      flex: none;
+      width: 31px;
+      color: var(--dim);
+    }
+
+    .stat .v {
+      width: 22px;
+      text-align: right;
+    }
+
+    /* The bar is a flex row so its fill stretches to the bar's height (see the report on % heights). */
+    .bar {
+      display: flex;
+      flex: 1;
+      height: 6px;
+      background: #071017;
+      border: 1px solid #1d3442;
+    }
+
+    .fill {
+      width: 0;
+      background: var(--c);
+      /* Switching mobs moves the bars from the old value to the new one. */
+      transition: width 450ms cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+
+    .hearts {
+      display: flex;
+      align-items: center;
+      height: 9px;
+      margin-top: 1px;
+    }
+
+    .heart {
+      width: 9px;
+      height: 9px;
+      margin-right: -1px;
+      background: sprite(minecraft:hud/heart/container);
+      animation: beat 300ms ease-out both;
+    }
+
+    .heart.full { background: sprite(minecraft:hud/heart/full), sprite(minecraft:hud/heart/container); }
+    .heart.half { background: sprite(minecraft:hud/heart/half), sprite(minecraft:hud/heart/container); }
+
+    @keyframes beat {
+      from { transform: scale(0); }
+      70% { transform: scale(1.3); }
+      to { transform: none; }
+    }
+
+    .more {
+      margin-left: 3px;
+      color: #ff8a80;
+    }
+
+    .info {
+      display: flex;
+      align-items: center;
+      height: 9px;
+    }
+
+    .skull {
+      width: 8px;
+      color: #23465c;
+    }
+
+    .skull.on {
+      color: var(--danger);
+      text-shadow: 0 0 2px rgba(229, 72, 77, 0.6);
+    }
+
+    .drops {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .drop {
+      width: 18px;
+      height: 18px;
+      padding: 1px;
+      background: #071017;
+      border: 1px solid #1d3442;
+      animation: badge-in 250ms ease-out both;
+    }
+
+    .drop item { width: 16px; height: 16px; }
+
+    /* ---- description */
+
+    .desc {
+      position: relative;
+      flex: none;
+      height: 34px;
+      padding: 3px 4px;
+      line-height: 10px;
+      background: #071017;
+      border: 1px solid #1d3442;
+    }
+
+    .caret {
+      color: var(--cyan);
+      animation: blink 700ms steps(1) infinite;
+    }
+
+    /* ---- the CAUGHT stamp */
+
+    .stamp {
+      position: absolute;
+      left: 3px;
+      bottom: 12px;
+      padding: 2px 4px 1px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: #ff4d42;
+      background: rgba(255, 77, 66, 0.1);
+      border: 2px solid #ff4d42;
+      outline: 1px solid rgba(255, 77, 66, 0.6);
+      outline-offset: 1px;
+      transform: rotate(-14deg);
+      animation: stamp 420ms cubic-bezier(0.3, 1.4, 0.5, 1) 250ms both;
+      pointer-events: none;
+    }
+
+    @keyframes stamp {
+      from { transform: rotate(-35deg) scale(3); opacity: 0; }
+      60% { opacity: 1; }
+      to { transform: rotate(-14deg) scale(1); opacity: 1; }
+    }
+
+    /* The nav keys under the entry. */
+    .keys {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex: none;
+      color: var(--dim);
+    }
+
+    .key {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 10px;
+      color: var(--ink);
+      background: #13232e;
+      border: 1px solid #23465c;
+      cursor: pointer;
+      transition: background-color 120ms, transform 80ms;
+    }
+
+    .key:hover { background: #1d3a4c; }
+    .key:active { transform: translateY(1px); }
+
+    .keys .sp { flex: 1; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .lens, .led, .scan, .noise, .row, .row.sel::before { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="dex">
+    <header class="top">
+      <div class="lens"></div>
+      <div class="leds"><div class="led r"></div><div class="led y"></div><div class="led g"></div></div>
+      <div class="title"><b>MOBDEX</b><small>FIELD UNIT 26.3</small></div>
+      <div class="counter">
+        <div><span>SEEN </span>{{ pad(seenCount()) }}</div>
+        <div><span>CAUGHT </span>{{ pad(caughtCount()) }}</div>
+      </div>
+      <div class="grille"></div>
+    </header>
+
+    <div class="body">
+      <!-- Left screen: search, category filter and the numbered list. -->
+      <section class="bezel left">
+        <div class="screen">
+          <div class="search">
+            <input type="text" placeholder="Search name or #" v-model="query" @input="keepSelectionVisible()">
+            <i></i>
+          </div>
+          <nav class="tabs">
+            <div v-for="t in TABS" :key="t.id" class="tab" :class="{ on: filter === t.id }"
+                 :style="{ '--c': color(t.id) }" @click="setFilter(t.id)">
+              <item v-if="t.icon" :id="t.icon"></item>
+              <span v-else>ALL</span>
+            </div>
+          </nav>
+          <div class="listhead" :style="{ '--hc': color(filter) }">
+            <b>{{ filterName() }}</b>
+            <span>{{ filtered().length }} {{ filtered().length === 1 ? 'ENTRY' : 'ENTRIES' }}</span>
+          </div>
+          <div class="list" id="list">
+            <div v-for="(m, i) in filtered()" :key="m.id" class="row" :id="'row-' + m.id"
+                 :class="{ sel: m.id === sel, unseen: !m.seen }"
+                 :style="{ '--c': color(m.cats[0]), animationDelay: Math.min(i, 14) * 25 + 'ms' }"
+                 @click="select(m.id)">
+              <span class="no">#{{ pad(m.no) }}</span>
+              <span class="nm">{{ m.seen ? m.name : '??????' }}</span>
+              <span class="ball" v-if="m.caught"></span>
+              <span class="seen-dot" v-else-if="m.seen"></span>
+            </div>
+            <div class="empty" v-if="filtered().length === 0">No mob matches "{{ query }}"</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="hinge"><div></div></div>
+
+      <!-- Right screen: the selected entry. -->
+      <section class="bezel right">
+        <div class="screen">
+          <div class="entry">
+            <div class="entry-head">
+              <span class="no">#{{ pad(mob().no) }}</span>
+              <!-- A keyed v-for of one item re-creates the element whenever the key changes, so its CSS
+                   entrance animation plays again for every new selection. -->
+              <span class="name" v-for="k in [sel]" :key="k">{{ mob().seen ? mob().name.toUpperCase() : '??????' }}</span>
+              <div class="badges" v-for="k in [sel]" :key="k">
+                <span class="badge" v-for="c in (mob().seen ? mob().cats : [])" :key="c"
+                      :style="{ '--c': color(c) }">{{ c.toUpperCase() }}</span>
+              </div>
+            </div>
+
+            <div class="entry-main">
+              <div class="stage" @mouseenter="hovering = true" @mouseleave="hovering = false">
+                <div v-if="mob().seen">
+                  <!-- rotate is driven from a script (see spin()); follow-mouse while hovered. -->
+                  <entity :type="'minecraft:' + mob().id" :follow-mouse="hovering"></entity>
+                </div>
+                <div v-else>
+                  <div class="noise"></div>
+                  <div class="nodata">NO DATA</div>
+                </div>
+                <div class="corner tl"></div><div class="corner tr"></div>
+                <div class="corner bl"></div><div class="corner br"></div>
+                <div class="scan"></div>
+                <div class="flash" v-for="k in [sel]" :key="k"></div>
+                <div class="live" v-if="mob().seen">{{ hovering ? 'LOCK' : 'LIVE' }}</div>
+              </div>
+
+              <div class="stats">
+                <div class="stat" v-for="s in STATS" :key="s.key" :style="{ '--c': s.color }">
+                  <span class="k">{{ s.label }}</span>
+                  <div class="bar"><div class="fill" :style="{ width: statWidth(s) }"></div></div>
+                  <span class="v">{{ statText(s) }}</span>
+                </div>
+                <div class="hearts" v-for="k in [sel]" :key="k">
+                  <span class="k">LIFE</span>
+                  <div v-for="(h, i) in hearts()" class="heart" :class="h"
+                       :style="{ animationDelay: (150 + i * 30) + 'ms' }"></div>
+                  <span class="more" v-if="mob().seen && mob().hp > 20">+{{ (mob().hp - 20) / 2 }}</span>
+                  <span v-if="!mob().seen">??</span>
+                </div>
+                <div class="info">
+                  <span class="k">HOME</span>
+                  <span>{{ mob().seen ? mob().home : '???' }}</span>
+                </div>
+                <div class="info">
+                  <span class="k">RISK</span>
+                  <span v-for="(on, i) in threat()" class="skull" :class="{ on: on }">☠</span>
+                </div>
+                <div class="drops" v-for="k in [sel]" :key="k">
+                  <span class="k">DROPS</span>
+                  <div class="drop" v-for="(d, i) in (mob().seen ? mob().drops : [])" :key="d"
+                       :style="{ animationDelay: (200 + i * 70) + 'ms' }">
+                    <item :id="'minecraft:' + d" tooltip></item>
+                  </div>
+                  <span v-if="mob().seen && mob().drops.length === 0">NOTHING</span>
+                  <span v-if="!mob().seen">???</span>
+                </div>
+              </div>
+
+              <div class="stamp" v-for="k in [sel]" :key="k" v-if="mob().caught">CAUGHT</div>
+            </div>
+
+            <div class="desc">{{ typed() }}<span class="caret" v-if="typing()">█</span></div>
+
+            <div class="keys">
+              <div class="key" @click="step(-1)">▲</div>
+              <div class="key" @click="step(1)">▼</div>
+              <span>or arrow keys</span>
+              <span class="sp"></span>
+              <span>{{ mob().caught ? 'IN BOX 1' : mob().seen ? 'SEEN ONLY' : 'UNKNOWN' }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    // ---- Data. A real mod would push this from the server (vellum.data) instead of embedding it.
+    // hp in health points (two per heart), atk = damage on Normal, def = natural armor, spd = movement speed.
+    const MOBS = [
+      { id: 'zombie', name: 'Zombie', home: 'Overworld', cats: ['hostile'], hp: 20, atk: 3, def: 2, spd: 0.23, drops: ['rotten_flesh', 'iron_ingot', 'carrot'], caught: true,
+        desc: 'Shambles toward any light at night. Burns at dawn, unless it found a hat.' },
+      { id: 'skeleton', name: 'Skeleton', home: 'Overworld', cats: ['hostile'], hp: 20, atk: 4, def: 0, spd: 0.25, drops: ['bone', 'arrow'], caught: true,
+        desc: 'A crack shot that strafes while it aims. Runs from wolves on sight.' },
+      { id: 'creeper', name: 'Creeper', home: 'Overworld', cats: ['hostile'], hp: 20, atk: 43, def: 0, spd: 0.25, drops: ['gunpowder', 'music_disc_cat'], caught: true,
+        desc: 'Hugs are its love language. So are explosions. Hates cats.' },
+      { id: 'spider', name: 'Spider', home: 'Overworld', cats: ['hostile'], hp: 16, atk: 2, def: 0, spd: 0.3, drops: ['string', 'spider_eye'], caught: true,
+        desc: 'Climbs any wall. Calm in daylight, but its red eyes mean business at dusk.' },
+      { id: 'enderman', name: 'Enderman', home: 'Everywhere', cats: ['neutral'], hp: 40, atk: 7, def: 0, spd: 0.3, drops: ['ender_pearl'], caught: false,
+        desc: 'Do not meet its gaze. Redecorates your house one block at a time.' },
+      { id: 'witch', name: 'Witch', home: 'Swamp huts', cats: ['hostile'], hp: 26, atk: 6, def: 0, spd: 0.25, drops: ['redstone', 'glowstone_dust', 'stick'], caught: false,
+        desc: 'Brews on the go and drinks its own healing potions mid-fight.' },
+      { id: 'slime', name: 'Slime', home: 'Swamps', cats: ['hostile'], hp: 16, atk: 4, def: 0, spd: 0.3, drops: ['slime_ball'], caught: true,
+        desc: 'Splits in two when struck. Loves swamps and certain chunks deep down.' },
+      { id: 'blaze', name: 'Blaze', home: 'Fortresses', cats: ['hostile'], hp: 20, atk: 6, def: 0, spd: 0.23, drops: ['blaze_rod'], caught: false,
+        desc: 'A whirl of rods and smoke. Snowballs sting it more than swords do.' },
+      { id: 'ghast', name: 'Ghast', home: 'Nether', cats: ['hostile'], hp: 10, atk: 17, def: 0, spd: 0.4, drops: ['ghast_tear', 'gunpowder'], caught: false,
+        desc: 'Cries like a lost kitten. Swing at its fireballs to send them home.' },
+      { id: 'pig', name: 'Pig', home: 'Grassland', cats: ['passive'], hp: 10, atk: 0, def: 0, spd: 0.25, drops: ['porkchop'], caught: true,
+        desc: 'Happy in mud. Rides well with a saddle and a carrot on a stick.' },
+      { id: 'cow', name: 'Cow', home: 'Grassland', cats: ['passive'], hp: 10, atk: 0, def: 0, spd: 0.2, drops: ['beef', 'leather'], caught: true,
+        desc: 'Fills a bucket with milk. Its moo is the sound of every farm.' },
+      { id: 'sheep', name: 'Sheep', home: 'Grassland', cats: ['passive'], hp: 8, atk: 0, def: 0, spd: 0.23, drops: ['mutton'], caught: true,
+        desc: 'Dye it once and it stays that colour. Regrows wool by eating grass.' },
+      { id: 'chicken', name: 'Chicken', home: 'Grassland', cats: ['passive'], hp: 4, atk: 0, def: 0, spd: 0.25, drops: ['feather', 'chicken', 'egg'], caught: true,
+        desc: 'Lays an egg every few minutes. Falls slowly, flapping hopefully.' },
+      { id: 'rabbit', name: 'Rabbit', home: 'Deserts', cats: ['passive'], hp: 3, atk: 0, def: 0, spd: 0.3, drops: ['rabbit_hide', 'rabbit_foot'], caught: false,
+        desc: 'Raids carrot farms at speed. A lucky foot is worth the chase.' },
+      { id: 'horse', name: 'Horse', home: 'Plains', cats: ['passive'], hp: 22, atk: 0, def: 0, spd: 0.225, drops: ['leather'], caught: true,
+        desc: 'Tame it with patience and an empty hand. Speed runs in the family.' },
+      { id: 'fox', name: 'Fox', home: 'Taiga', cats: ['passive'], hp: 10, atk: 2, def: 0, spd: 0.3, drops: ['sweet_berries'], caught: false,
+        desc: 'Sleeps all day, steals your sword at night. Trusts only the sneaky.' },
+      { id: 'villager', name: 'Villager', home: 'Villages', cats: ['passive'], hp: 20, atk: 0, def: 0, spd: 0.5, drops: [], caught: true,
+        desc: 'Hrmm. Trades emeralds for nearly anything, and gossips about you.' },
+      { id: 'allay', name: 'Allay', home: 'Outposts', cats: ['passive'], hp: 20, atk: 0, def: 0, spd: 0.1, drops: [], caught: false,
+        desc: 'Fetches any item you show it. Dances whenever a note block plays.' },
+      { id: 'wolf', name: 'Wolf', home: 'Forests', cats: ['neutral'], hp: 8, atk: 4, def: 0, spd: 0.3, drops: [], caught: true,
+        desc: 'A bone makes a friend for life. The whole pack defends its owner.' },
+      { id: 'iron_golem', name: 'Iron Golem', home: 'Villages', cats: ['neutral'], hp: 100, atk: 15, def: 0, spd: 0.25, drops: ['iron_ingot', 'poppy'], caught: true,
+        desc: 'Guardian of villages. Offers poppies to the children it likes.' },
+      { id: 'bee', name: 'Bee', home: 'Flower fields', cats: ['neutral'], hp: 10, atk: 2, def: 0, spd: 0.3, drops: [], caught: false,
+        desc: 'Pollinates crops on its rounds. It can sting only once, so it rarely does.' },
+      { id: 'llama', name: 'Llama', home: 'Mountains', cats: ['neutral'], hp: 22, atk: 1, def: 0, spd: 0.175, drops: ['leather'], caught: false,
+        desc: 'Spits when insulted. Carries chests for wandering traders.' },
+      { id: 'polar_bear', name: 'Polar Bear', home: 'Ice plains', cats: ['neutral'], hp: 30, atk: 6, def: 0, spd: 0.25, drops: ['cod', 'salmon'], caught: false,
+        desc: 'Gentle unless a cub is near. Fishes the icy seas for supper.' },
+      { id: 'piglin', name: 'Piglin', home: 'Crimson', cats: ['neutral'], hp: 16, atk: 5, def: 0, spd: 0.35, drops: ['gold_ingot'], caught: false,
+        desc: 'Loves gold above all else. Wear some, or be chased out of the Nether.' },
+      { id: 'squid', name: 'Squid', home: 'Oceans', cats: ['water'], hp: 10, atk: 0, def: 0, spd: 0.7, drops: ['ink_sac'], caught: true,
+        desc: 'Inks the water when startled. Mostly tentacles and good intentions.' },
+      { id: 'glow_squid', name: 'Glow Squid', home: 'Dark water', cats: ['water', 'ambient'], hp: 10, atk: 0, def: 0, spd: 0.7, drops: ['glow_ink_sac'], caught: false,
+        desc: 'Lights the deepest caves. Its ink makes sign text shine.' },
+      { id: 'axolotl', name: 'Axolotl', home: 'Lush caves', cats: ['water'], hp: 14, atk: 2, def: 0, spd: 1, drops: [], caught: true,
+        desc: 'Plays dead to heal. A loyal ally against drowned and guardians.' },
+      { id: 'dolphin', name: 'Dolphin', home: 'Warm oceans', cats: ['water'], hp: 10, atk: 3, def: 0, spd: 1.2, drops: ['cod'], caught: false,
+        desc: 'Leads swimmers to sunken treasure. Feed it fish and it follows.' },
+      { id: 'turtle', name: 'Turtle', home: 'Beaches', cats: ['water', 'passive'], hp: 30, atk: 0, def: 0, spd: 0.25, drops: ['seagrass'], caught: false,
+        desc: 'Always returns to the beach it hatched on. Scutes make fine helmets.' },
+      { id: 'guardian', name: 'Guardian', home: 'Monuments', cats: ['water', 'hostile'], hp: 30, atk: 6, def: 0, spd: 0.5, drops: ['prismarine_shard', 'prismarine_crystals'], caught: false,
+        desc: 'Patrols ocean monuments with a charging eye laser. Very spiky.' },
+      { id: 'bat', name: 'Bat', home: 'Caves', cats: ['ambient'], hp: 6, atk: 0, def: 0, spd: 0.1, drops: [], caught: false,
+        desc: 'Squeaks in caves. Does nothing at all, and is proud of it.' },
+      { id: 'shulker', name: 'Shulker', home: 'End cities', cats: ['hostile'], hp: 30, atk: 4, def: 20, spd: 0, drops: ['shulker_shell'], caught: false,
+        desc: 'Hides in its shell in End cities. Its bullets make you float.' },
+      { id: 'ender_dragon', name: 'Ender Dragon', home: 'The End', cats: ['boss'], hp: 200, atk: 15, def: 0, spd: 0.7, drops: ['dragon_breath'], caught: false,
+        desc: 'Rules the End from obsidian pillars, healing at its crystals.' },
+      { id: 'wither', name: 'Wither', home: 'Summoned', cats: ['boss', 'hostile'], hp: 300, atk: 8, def: 4, spd: 0.6, drops: ['nether_star'], caught: false, seen: false },
+      { id: 'warden', name: 'Warden', home: 'Deep Dark', cats: ['hostile'], hp: 500, atk: 30, def: 0, spd: 0.3, drops: ['sculk_catalyst'], caught: false, seen: false },
+      { id: 'sniffer', name: 'Sniffer', home: 'Ancient', cats: ['passive'], hp: 14, atk: 0, def: 0, spd: 0.1, drops: ['moss_block'], caught: false, seen: false }
+    ];
+    MOBS.forEach((m, i) => {
+      m.no = i + 1;
+      if (m.seen === undefined) m.seen = true;
+    });
+
+    const TABS = [
+      { id: 'all' },
+      { id: 'hostile', icon: 'minecraft:iron_sword' },
+      { id: 'passive', icon: 'minecraft:wheat' },
+      { id: 'neutral', icon: 'minecraft:bone' },
+      { id: 'water', icon: 'minecraft:tropical_fish' },
+      { id: 'ambient', icon: 'minecraft:glow_ink_sac' },
+      { id: 'boss', icon: 'minecraft:nether_star' }
+    ];
+
+    // Each bar's scale: the value that fills it.
+    const STATS = [
+      { key: 'hp', label: 'HP', max: 100, color: '#e5484d' },
+      { key: 'atk', label: 'ATK', max: 20, color: '#f0a020' },
+      { key: 'def', label: 'DEF', max: 20, color: '#7ab0e0' },
+      { key: 'spd', label: 'SPD', max: 0.4, color: '#46c46a' }
+    ];
+
+    // One colour per category: filter tabs, badges and the selected row get it as --c.
+    const COLORS = { all: '#5cc8ff', hostile: '#e5484d', passive: '#46a758', neutral: '#f0a020', water: '#3e9be9', ambient: '#8e6bd8', boss: '#c13cd6' };
+
+    // ---- State. A mod can open the dex on a mob or a filter with data {start: {mob: 'creeper', filter: 'hostile'}}.
+    // The options sit under one key because templates look names up in vellum.data before state and globals:
+    // a top-level `filter` in the data would shadow state.filter for good.
+    const opening = vellum.data.start || {};
+    const state = vellum.state({
+      sel: opening.mob || 'creeper',
+      filter: opening.filter || 'all',
+      query: opening.query || '',
+      hovering: false,
+      typedLen: 0
+    });
+
+    function pad(n) { return String(n).padStart(3, '0'); }
+    function color(cat) { return COLORS[cat] || COLORS.all; }
+    function mob() { return MOBS.find(m => m.id === state.sel) || MOBS[0]; }
+    function seenCount() { return MOBS.filter(m => m.seen).length; }
+    function caughtCount() { return MOBS.filter(m => m.caught).length; }
+    function filterName() { return state.filter === 'all' ? 'ALL MOBS' : state.filter.toUpperCase(); }
+
+    function filtered() {
+      const q = state.query.trim().toLowerCase();
+      return MOBS.filter(m => {
+        if (state.filter !== 'all' && !m.cats.includes(state.filter)) return false;
+        if (q === '') return true;
+        // Unseen mobs can only be found by number: their names are a mystery.
+        return (m.seen && m.name.toLowerCase().includes(q)) || pad(m.no).includes(q.replace('#', ''));
+      });
+    }
+
+    function statWidth(s) {
+      const m = mob();
+      return m.seen ? Math.min(100, m[s.key] / s.max * 100) + '%' : '0%';
+    }
+
+    function statText(s) {
+      const m = mob();
+      if (!m.seen) return '??';
+      return s.key === 'spd' ? m.spd.toFixed(2) : String(m[s.key]);
+    }
+
+    // Health as vanilla hearts: up to ten, full or half.
+    function hearts() {
+      const m = mob();
+      if (!m.seen) return [];
+      const shown = Math.min(m.hp, 20), out = [];
+      for (let i = 0; i < 10; i++) out.push(shown >= (i + 1) * 2 ? 'full' : shown >= i * 2 + 1 ? 'half' : 'none');
+      return out;
+    }
+
+    // Threat as five skulls: passive mobs are harmless, neutral ones top out at three.
+    function threat() {
+      const m = mob(), out = [];
+      let n = 0;
+      if (m.seen && !m.cats.includes('passive')) n = Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5));
+      for (let i = 0; i < 5; i++) out.push(i < n);
+      return out;
+    }
+
+    // ---- The description types itself out, Pokédex style.
+    function entryText() {
+      const m = mob();
+      return m.seen ? m.desc : 'Not yet encountered. Explore further to log this mob.';
+    }
+    function typed() { return entryText().slice(0, state.typedLen); }
+    function typing() { return state.typedLen < entryText().length; }
+
+    // The timer runs only while there is text to type: every timer tick re-checks the templates.
+    let typer = null;
+    function typeEntry() {
+      state.typedLen = 0;
+      if (typer === null) {
+        typer = setInterval(() => {
+          state.typedLen += 2;
+          if (!typing()) { clearInterval(typer); typer = null; }
+        }, 16);
+      }
+    }
+    typeEntry();
+
+    // ---- Selection.
+    function select(id) {
+      if (id === state.sel) return;
+      state.sel = id;
+      typeEntry();
+      vellum.playSound('minecraft:block.note_block.bit', 0.35, 1.8);
+      vellum.nextTick(revealSelected);
+    }
+
+    function setFilter(id) {
+      state.filter = id;
+      vellum.playSound('minecraft:ui.button.click', 0.25, 1.4);
+      keepSelectionVisible();
+    }
+
+    // When a filter or search hides the selected mob, select the first one still listed.
+    function keepSelectionVisible() {
+      const list = filtered();
+      if (list.length && !list.some(m => m.id === state.sel)) select(list[0].id);
+    }
+
+    function step(delta) {
+      const list = filtered();
+      if (list.length === 0) return;
+      const i = list.findIndex(m => m.id === state.sel);
+      select(list[Math.max(0, Math.min(list.length - 1, i + delta))].id);
+    }
+
+    // Scroll the list just enough to show the selected row.
+    function revealSelected() {
+      const list = document.getElementById('list');
+      const row = document.getElementById('row-' + state.sel);
+      if (!list || !row) return;
+      const l = list.getBoundingClientRect(), r = row.getBoundingClientRect();
+      if (r.top < l.top) list.scrollTop -= l.top - r.top;
+      else if (r.bottom > l.bottom) list.scrollTop += r.bottom - l.bottom;
+    }
+
+    document.addEventListener('keydown', e => {
+      if (document.activeElement && document.activeElement.tagName === 'INPUT' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      if (e.key === 'ArrowDown') { step(1); e.preventDefault(); }
+      if (e.key === 'ArrowUp') { step(-1); e.preventDefault(); }
+    });
+
+    // ---- The turntable: <entity rotate="deg"> is a static pose, so a timer turns it. Hovering eases the mob to
+    // face you (rotate 0) and follow-mouse takes over. 30 updates a second looks smooth and halves the cost of a
+    // per-frame loop: each setAttribute restyles the document, and each timer tick re-checks the templates.
+    let angle = 0;
+    setInterval(() => {
+      if (state.hovering) angle += (((0 - angle + 540) % 360) - 180) * 0.25;
+      else angle = (angle + 1.2) % 360;
+      const e = document.querySelector('.stage entity');
+      if (e) e.setAttribute('rotate', angle.toFixed(1));
+    }, 33);
+
+    vellum.nextTick(revealSelected);
+  </script>
+</body>
+</html>
