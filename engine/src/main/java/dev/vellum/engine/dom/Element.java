@@ -240,6 +240,7 @@ public class Element extends Node {
         return switch (tagName) {
             case "button", "input", "select", "textarea" -> !"hidden".equals(getAttribute("type"));
             case "a" -> hasAttribute("href");
+            case "summary" -> parent instanceof Element p && p.tagName.equals("details");
             default -> hasAttribute("contenteditable");
         };
     }
@@ -275,12 +276,28 @@ public class Element extends Node {
 
     // ---- Form values ----
 
-    /** The live value of a form control: the typed value, else the value attribute, else the text for textareas. */
+    /**
+     * The live value of a form control: the typed value, else the value attribute, else the text for textareas.
+     * A select's value is its selected option's (the last with {@code selected}, else the first enabled); an option's
+     * value defaults to its text.
+     */
     public String value() {
         if (value != null) return value;
-        if (tagName.equals("textarea")) return textContent();
         String v = getAttribute("value");
-        return v == null ? "" : v;
+        return switch (tagName) {
+            case "textarea" -> textContent();
+            case "select" -> {
+                Element first = null, selected = null;
+                for (Element o : getElementsByTagName("option")) {
+                    if (o.hasAttribute("selected")) selected = o;
+                    else if (first == null && !o.hasAttribute("disabled")) first = o;
+                }
+                Element o = selected != null ? selected : first;
+                yield o == null ? "" : o.value();
+            }
+            case "option" -> v != null ? v : textContent().strip().replaceAll("\\s+", " ");
+            default -> v == null ? "" : v;
+        };
     }
 
     public void setValue(String v) {

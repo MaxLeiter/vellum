@@ -316,6 +316,7 @@ public final class Document extends Node {
         if (element != null && (!element.isConnected() || element.ownerDocument() != this)) return;
         Element old = focused;
         focused = element;
+        input.focusChanged(old, element);
         if (old != null) {
             old.focused = false;
             old.dispatchEvent(new FocusEvent("blur", element));
