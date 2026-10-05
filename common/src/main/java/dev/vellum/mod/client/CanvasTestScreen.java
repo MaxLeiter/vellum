@@ -196,8 +196,8 @@ final class CanvasTestScreen extends Screen {
         if (pig == null) pig = EntityPortrait.create(EntityTypes.PIG, mc.level);
         if (pig == null) return;
         EntityPortrait.draw(c, pig, EntityPortrait.Pose.FRONT, -1, 0, 0, 30, 40);
-        EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, 0, 0, 1, 0, Float.NaN), -1, 30, 0, 30, 40);
-        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, 20, 10, 1, 0, Float.NaN), -1, 62, 0, 30, 56);
+        EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, 0, 0, 1, 0), -1, 30, 0, 30, 40);
+        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, 20, 10, 1, 0), -1, 62, 0, 30, 56);
     }
 
     @Override

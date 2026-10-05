@@ -280,9 +280,14 @@ public final class McCanvas implements Canvas {
                 true, u0, v0, u1, v1, c);
     }
 
-    /** Draws an item scaled from its 16 px base to {@code size}, with count and durability when asked. */
+    /**
+     * Draws an item scaled from its 16 px base to {@code size}, with count and durability when asked. Items outside
+     * the clip are skipped before their model is resolved.
+     */
     public void drawItem(ItemStack stack, float x, float y, float size, boolean decorations) {
         if (clippedAway() || stack.isEmpty() || alpha < 0.5f) return; // items are pre-rendered sprites: they can't be faded
+        boundsOf(x, y, x + size, y + size);
+        if (clippedBounds(g.scissorStack.peek()) == null) return;
         g.pose().set(m).translate(x, y).scale(size / 16f, size / 16f);
         g.item(stack, 0, 0);
         if (decorations) g.itemDecorations(mc.font, stack, 0, 0);
@@ -301,22 +306,28 @@ public final class McCanvas implements Canvas {
     }
 
     /**
+     * Whether a 3D scene in a local box, multiplied by {@code tint}, would show: callers check before they resolve
+     * the scene, since pictures are rendered even where nothing of them shows (scrolled or clipped away, transparent).
+     */
+    public boolean sceneVisible(int tint, float x, float y, float width, float height) {
+        if (clippedAway() || ARGB.alpha(color(tint)) == 0) return false;
+        boundsOf(x, y, x + width, y + height);
+        return Math.round(bx1) > Math.round(bx0) && Math.round(by1) > Math.round(by0) && clippedBounds(g.scissorStack.peek()) != null;
+    }
+
+    /**
      * Draws a 3D scene (an entity, block or item) into a local box, a block being {@code pixelsPerBlock} local px,
      * multiplied by {@code tint} and the opacity. A picture-in-picture render: axis-aligned on screen, so rotations
      * of the canvas only move the box.
      */
     public void drawScene(Scene scene, float pixelsPerBlock, int tint, float x, float y, float width, float height) {
-        if (clippedAway()) return;
-        float a = alpha * ARGB.alphaFloat(tint);
-        boundsOf(x, y, x + width, y + height);
-        int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
         float scale = pixelsPerBlock * lengthScale();
-        ScreenRectangle scissor = g.scissorStack.peek();
-        // Pictures are rendered even where nothing of them shows: skip those scrolled or clipped away.
-        if (a <= 0 || x1 <= x0 || y1 <= y0 || scale <= 0 || clippedBounds(scissor) == null) return;
+        if (scale <= 0 || !sceneVisible(tint, x, y, width, height)) return;
+        int x0 = Math.round(bx0), y0 = Math.round(by0), x1 = Math.round(bx1), y1 = Math.round(by1);
         // The picture is premultiplied, so fading scales every channel.
-        int color = ARGB.colorFromFloat(a, a * ARGB.redFloat(tint), a * ARGB.greenFloat(tint), a * ARGB.blueFloat(tint));
-        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, color, x0, y0, x1, y1, scale, scissor));
+        int c = color(tint);
+        int color = ARGB.scaleRGB(c, ARGB.alphaFloat(c));
+        g.guiRenderState.addPicturesInPictureState(new GuiSceneRenderState(scene, color, x0, y0, x1, y1, scale, g.scissorStack.peek()));
     }
 
     /**

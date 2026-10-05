@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
+import net.minecraft.util.Util;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntitySpawnRequest;
@@ -14,9 +15,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
-
-import java.util.Map;
-import java.util.WeakHashMap;
 
 /**
  * Draws a live entity fitted into a box, as vanilla's inventory does for the player, as a {@link Scene} (a
@@ -34,21 +32,21 @@ public final class EntityPortrait {
     private static final float TOP_MARGIN = 0.08f;
     /** Free space on each side, as a fraction of the box width. */
     private static final float SIDE_MARGIN = 0.05f;
-    /** How far each entity's model reaches, measured once. */
-    private static final Map<Entity, EntityReach> REACH = new WeakHashMap<>();
 
     /**
      * How the entity is shown, in degrees. {@code yaw} turns it (0 faces the viewer, positive turns its front to the
      * right) and {@code pitch} views it from above (positive) or below. {@code gazeYaw}/{@code gazePitch} turn its
      * head toward a point (right and up are positive) and, as in vanilla's inventory, lean it that way. {@code scale}
-     * multiplies the size that fits the box, {@code walk} swings its limbs at that speed (0 stands still), and
-     * {@code ageTicks} is the time its idle animations play at, or NaN for the entity's own.
+     * multiplies the size that fits the box and {@code walk} swings its limbs at that speed (0 stands still).
      */
-    public record Pose(float yaw, float pitch, float gazeYaw, float gazePitch, float scale, float walk, float ageTicks) {
-        public static final Pose FRONT = new Pose(0, 0, 0, 0, 1, 0, Float.NaN);
+    public record Pose(float yaw, float pitch, float gazeYaw, float gazePitch, float scale, float walk) {
+        public static final Pose FRONT = new Pose(0, 0, 0, 0, 1, 0);
     }
 
-    /** Display entities get negative ids: renderers need one, and real entities' ids are positive. */
+    /**
+     * Display entities get negative ids: renderers need one, and real entities' ids are positive. They never tick, so
+     * their idle animations play on the clock.
+     */
     private static int nextDisplayId = -1;
 
     private EntityPortrait() {}
@@ -63,15 +61,16 @@ public final class EntityPortrait {
 
     /**
      * Draws {@code entity} into the box {@code (x, y, width, height)} in the canvas's current transform, multiplied by
-     * {@code tint} (ARGB; white for none).
+     * {@code tint} (ARGB; white for none). Nothing is extracted for a box that is clipped away or transparent.
      */
     public static void draw(McCanvas canvas, Entity entity, Pose pose, int tint, float x, float y, float width, float height) {
+        if (!canvas.sceneVisible(tint, x, y, width, height)) return;
         EntityRenderState state = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, 1.0F);
         state.shadowPieces.clear();
         state.outlineColor = 0;
         state.nameTag = null;
         state.lightCoords = LightCoordsUtil.FULL_BRIGHT;
-        if (!Float.isNaN(pose.ageTicks())) state.ageInTicks = pose.ageTicks();
+        if (entity.getId() < 0) state.ageInTicks = Util.getMillis() / 50F;
 
         // Leaning toward the gaze tilts the view the other way: looking up shows it from below.
         Quaternionf view = new Quaternionf().rotateX((pose.gazePitch() - pose.pitch()) * Mth.DEG_TO_RAD);
@@ -90,7 +89,7 @@ public final class EntityPortrait {
             rotation.mul(new Quaternionf().rotateY(pose.yaw() * Mth.DEG_TO_RAD));
         }
 
-        EntityReach reach = REACH.computeIfAbsent(entity, e -> EntityReach.of(state));
+        EntityReach reach = EntityReach.of(state);
         float sweep = 2 * reach.radius(), tall = Math.max(0.3F, reach.top() - reach.bottom());
         float sin = Math.abs(Mth.sin(pose.pitch() * Mth.DEG_TO_RAD)), cos = Math.abs(Mth.cos(pose.pitch() * Mth.DEG_TO_RAD));
         float pixelsPerBlock = Math.min(height * (1 - TOP_MARGIN) / (tall * cos + sweep * sin),

@@ -1,19 +1,14 @@
 package dev.vellum.mod.client.replaced;
 
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.vellum.engine.dom.Element;
-import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.TypedDataComponent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -83,7 +78,7 @@ final class EntityContent extends TurnableContent {
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Entity entity = entity();
-        if (entity != null) EntityPortrait.draw(canvas, entity, pose(canvas, entity, x, y, width, height), tint(), x, y, width, height);
+        if (entity != null) EntityPortrait.draw(canvas, entity, pose(canvas, x, y, width, height), tint(), x, y, width, height);
     }
 
     private void load() {
@@ -96,16 +91,14 @@ final class EntityContent extends TurnableContent {
     }
 
     /** The pose from the element's style and attributes and the pointer: the one place that decides how it stands. */
-    private EntityPortrait.Pose pose(McCanvas canvas, Entity entity, float x, float y, float width, float height) {
+    private EntityPortrait.Pose pose(McCanvas canvas, float x, float y, float width, float height) {
         float gazeYaw = 0, gazePitch = 0;
         if (followMouse && canvas.mouseX() >= 0) {
             // As vanilla's inventory: up to about ±30° toward a pointer 40 px away from the eyes.
             gazeYaw = (float) Math.atan((canvas.mouseX() - x - width / 2) / 40.0F) * 20.0F;
             gazePitch = (float) Math.atan((y + height / 3 - canvas.mouseY()) / 40.0F) * 20.0F;
         }
-        // Created entities never tick: their idle animations run on the clock instead.
-        float age = entity == created ? Util.getMillis() / 50F : Float.NaN;
-        return new EntityPortrait.Pose(yaw(), pitch(), gazeYaw, gazePitch, modelScale(), walk, age);
+        return new EntityPortrait.Pose(yaw(), pitch(), gazeYaw, gazePitch, modelScale(), walk);
     }
 
     private @Nullable Entity entity() {
@@ -131,30 +124,22 @@ final class EntityContent extends TurnableContent {
                 if (item != null) living.setItemSlot(slot, ItemStacks.parse(item, 1, null));
             }
         }
-        applyComponents(entity, level);
+        applyComponents(entity);
         return entity;
     }
 
     /** Sets the entity components from {@code components}, {@code variant} and {@code color}. */
-    private void applyComponents(Entity entity, Level level) {
-        CompoundTag components = new CompoundTag();
+    private void applyComponents(Entity entity) {
         String snbt = element.getAttribute("components");
-        if (snbt != null) {
-            try {
-                components = TagParser.parseCompoundFully(snbt);
-            } catch (CommandSyntaxException e) {
-                Constants.LOG.warn("Vellum: <entity components> is not SNBT: {}", e.getMessage());
-            }
-        }
+        CompoundTag parsed = snbt == null ? null : ItemStacks.snbt(snbt, "<entity components>");
+        CompoundTag components = parsed != null ? parsed : new CompoundTag();
         String typeId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
         for (String name : new String[] {"variant", "color"}) {
             String value = element.getAttribute(name);
             if (value != null) components.put(typeId + "/" + name, StringTag.valueOf(value.strip()));
         }
         if (components.isEmpty()) return;
-        DataComponentMap.CODEC.parse(level.registryAccess().createSerializationContext(NbtOps.INSTANCE), components)
-                .resultOrPartial(error -> Constants.LOG.warn("Vellum: <entity> components: {}", error))
-                .ifPresent(map -> map.forEach(c -> set(entity, c)));
+        ItemStacks.decode(DataComponentMap.CODEC, components, "<entity components>").ifPresent(map -> map.forEach(c -> set(entity, c)));
     }
 
     private static <T> void set(Entity entity, TypedDataComponent<T> component) {

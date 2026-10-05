@@ -26,6 +26,8 @@ import org.jspecify.annotations.Nullable;
  */
 final class ModelContent extends TurnableContent {
     private static final BlockDisplayContext DISPLAY = BlockDisplayContext.create();
+    /** One for every {@code <model>}: it holds nothing but the model manager, which outlives resource reloads. */
+    private static @Nullable BlockModelResolver resolver;
 
     private @Nullable BlockState block;
     private ItemStack item = ItemStack.EMPTY;
@@ -53,29 +55,31 @@ final class ModelContent extends TurnableContent {
 
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
+        int tint = tint();
+        if (!canvas.sceneVisible(tint, x, y, width, height)) return;
         Scene scene = scene();
-        if (scene != null) canvas.drawScene(scene, Math.min(width, height) * modelScale(), tint(), x, y, width, height);
+        if (scene != null) canvas.drawScene(scene, Math.min(width, height) * modelScale(), tint, x, y, width, height);
     }
 
     private void load() {
-        String state = element.getAttribute("block");
+        String state = attr("block", "");
         block = null;
-        if (state != null && !state.isBlank()) {
+        if (!state.isEmpty()) {
             try {
-                block = BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, state.strip(), false).blockState();
+                block = BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, state, false).blockState();
             } catch (CommandSyntaxException ignored) {
                 // An unknown block or property: nothing to draw.
             }
         }
-        item = block != null ? ItemStack.EMPTY : ItemStacks.parse(element.getAttribute("item"),
-                Math.max(1, (int) element.numberAttribute("count", 1)), element.getAttribute("components"));
+        item = block != null ? ItemStack.EMPTY : ItemStacks.of(element, "item");
     }
 
     /** This frame's model (items animate, and models change with resource packs), or null when there is none. */
     private @Nullable Scene scene() {
         Minecraft mc = Minecraft.getInstance();
         if (block != null) {
-            new BlockModelResolver(mc.getModelManager()).update(blockModel, block, DISPLAY);
+            if (resolver == null) resolver = new BlockModelResolver(mc.getModelManager());
+            resolver.update(blockModel, block, DISPLAY);
             if (blockModel.isEmpty()) return null;
             return Scene.block(this, blockModel, mc.getModelManager().getBlockModelSet().get(block), yaw(), pitch());
         }
