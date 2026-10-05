@@ -54,7 +54,8 @@ VellumScreens.open("mymod:vellum/journal.html", journalJson);
 VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 ```
 
-- `vellum.close()` (or Escape, unless the page handles it) closes the screen.
+- `vellum.close()` (or Escape, unless the page handles it) closes the screen. Shift+Escape always closes it, and so
+  do three quick Escapes (see [Security](#security)).
 - `vellum.send(channel, value)` in the page calls every `onMessage(channel, ...)` handler with the value as a
   `JsonElement`.
 - `screen.driver().push(json)` replaces `vellum.data`; template bindings update and `vellum.on('data', fn)`
@@ -81,7 +82,8 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
   a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
   what the opener passed, and `onMessage` to handle its messages. `VellumScreens.pages(url)` returns the drivers
-  showing that page now, to push updates to.
+  showing that page now, to push updates to. The hook also runs when a server opens or links to the page:
+  `driver.serverSession()` is then true, and you should not give the page anything the server must not see.
 
 ```java
 VellumScreens.open("mymod:vellum/notes.html", notesJson).driver()
@@ -117,11 +119,15 @@ session.close();                  // closes the player's screen
 - The page must exist on the client (your mod is installed there, or a server resource pack ships it). A server-only
   mod can send the page itself: `VellumServer.openInline(player, html, data)` with inline `<style>` and `<script>`.
 - Messages from the page (`vellum.send(channel, value)`) arrive on the server thread with the sending player. They
-  are rate-limited (a burst of 40, then 20 per second); malformed JSON and messages from other players are dropped.
-- `onClose` runs once, when the player closes the screen, opens another session, leaves, or you call `close()`.
+  are rate-limited (a burst of 40, then 20 per second); malformed or too deeply nested JSON and messages from other
+  players are dropped. Treat every message as hostile input: see [Security](#security).
+- `onClose` runs once, when the player closes the screen, opens another session, leaves, or you call `close()`. A
+  player has at most 8 open sessions; opening another ends the oldest.
 - Limits: inline pages 200,000 characters, data 100,000 characters (as JSON), messages 8,192 characters. `open` and
-  `push` throw `IllegalArgumentException` above them.
+  `push` throw `IllegalArgumentException` above them. Servers can lower these in `config/vellum.properties`.
 - Pages sent by servers run sandboxed: no Java access, no network, no files, a CPU budget per script call.
+- The player decides whether server pages show at all (`client.serverPages`), and a page waits while the player is
+  in chat or a menu. Don't assume the page is on screen as soon as `open` returns.
 
 ## Container screens
 
@@ -503,6 +509,127 @@ The fields from `bodyRot` down are set on living entities' states only. Without 
 straight ahead unless `follow-mouse` turns it. The body fit measures the state you return, so whatever it leaves out
 takes no room in the box.
 
+## Security
+
+Players join servers they don't control, and servers let in clients they don't control. Vellum assumes the worst of
+both. A page a server opens is untrusted whether the server sent its HTML (`openInline`) or it comes from a mod: a
+server resource pack can replace any mod's page, script or stylesheet, so the page's code may be the server's either
+way. Messages a client sends are untrusted too, since a modified client can send anything.
+
+### What players are protected from
+
+- Scripts run in a sandbox: no Java, no network, no files, and a CPU budget per call. Their only way out is
+  `vellum.send` to the server that opened the page.
+- Pages load stylesheets, scripts, images and fonts through Minecraft's resource manager and nothing else. A URL with
+  a scheme is a resource id like any other (`https://example.com/a.png` names `assets/https/...`), so no request
+  leaves the game, no third party learns the player's IP, and no file outside the resource packs is read. In a
+  development environment pages are also read from `common/src/main/resources/assets`, and never from outside it.
+- A canvas can only draw other canvases, so `getImageData` can't read the pixels of a texture, a skin or the screen.
+  There is no `toDataURL`.
+- Shift+Escape always closes a Vellum screen, and the page never sees the key. Escape pressed three times within 1.5
+  seconds closes it too, even when the page keeps Escape with `preventDefault()`.
+- A server page only replaces nothing, a container screen or another Vellum screen. While the player is in chat, the
+  pause menu, options, a sign or any other screen, the page waits until they leave it. A server can't catch keys
+  typed into chat, and the pause menu with its Disconnect button stays reachable.
+- A server that opens a page within a second of the player closing one with Escape, three times in a row, can't
+  open pages for 30 seconds, and the player is told in chat. Opens are rate limited (5 at once, then one a second;
+  a waiting page is replaced by a newer one).
+- Links to web pages ask first, as chat links do, and only right after a click or key press in the page, so a script
+  can't bring the question up again and again. `client.webLinks=block` turns web links off. Other links only load
+  `.html` pages from resources.
+- `vellum.playSound` plays only sounds the game knows, at most 8 a second per page, no louder than
+  `client.maxSoundVolume` and then scaled by the player's sound settings.
+- While the player types into a server's page, Vellum draws a notice at the bottom of the screen. The page can't
+  cover it or tell that it is there.
+- Data from a server is capped in size and nesting depth before a script parses it. A malformed packet, in either
+  direction, disconnects the sender and crashes nothing.
+- `client.serverPages=ask` asks once per server visit before its first page shows; `block` refuses every server
+  page. Refused pages are reported closed, so the server's session ends.
+
+### What a server page can still do
+
+- Look like anything. With Minecraft's fonts and sprites a page can copy a vanilla screen, a Microsoft sign-in
+  form or a "Disconnected" screen with a link. The typing notice is the only tell. Never type a password into a
+  Minecraft screen.
+- Read what the player types or pastes into its own fields. Ctrl+V pastes the clipboard and Ctrl+C copies a
+  field's selection only when the player presses them; scripts can't read or write the clipboard.
+- Learn about the client and send it home: whether a resource exists and an image's size (from layout),
+  translations including other mods' (`vellum.t`, `<mc-text key>`, translatable `<mc-text json>`), the player's key
+  bindings (`keybind` components), the GUI scale and window size, and `client.reducedMotion`. A server can tell
+  from these which mods and resource packs a player has, as vanilla's translatable sign text once allowed.
+- Draw any entity the client knows by its network id. The server sent those entities, so this reveals nothing to
+  it, but it can show the player entities the game would hide.
+- Make the client look up any player name with Mojang for `<player-head name>`, as vanilla player head items do.
+- Link to another mod's page (`<a href>`, `vellum.open`). The page stays in the server's session, so its
+  `vellum.send` messages go to the server, and `onPageLoad` hooks run for it.
+- Push data as often as it likes. Each push runs the page's listeners within their CPU budget. A server that wants
+  to slow a client down has vanilla ways to do it too.
+
+### What mod authors must do
+
+On the server:
+
+- Treat every message as hostile. A modified client can send any JSON value on any channel to its own sessions, up
+  to the rate limit. Check types (`isJsonPrimitive()` before `getAsString()`), ranges (negative, zero and enormous
+  counts; `1e999` parses as infinity) and that the player may act now: still near the block, still holding the
+  items, the shop still in stock. Vellum logs a handler's exception and carries on.
+- Take ids, prices and names from your own state, not from the message. A message should say what the player
+  chose, and the server decides what that costs.
+- Don't rely on `onClose` arriving soon. A client may never report a close. Vellum ends a player's oldest session
+  once they have `server.maxSessionsPerPlayer` open, and all of them when they leave.
+- Messages are parsed strictly (no `NaN`, comments or trailing text), nest at most `server.maxMessageDepth` deep,
+  and come with the real sending player. A client can't reach another player's sessions or one that has closed.
+- Don't build inline HTML from text players wrote. A name or chat line put into `openInline` markup, `innerHTML` or
+  `v-html` can add elements with `onclick` handlers, which run in the viewer's page and can send messages as that
+  player. Pass such text in `vellum.data` and show it with `{{ }}` or `textContent`, which never parse HTML.
+
+On the client:
+
+- `VellumScreens.onPageLoad` hooks run for server pages too. Check `driver.serverSession()` before giving the page
+  data the server shouldn't have.
+- Don't put secrets in pages or `vellum.data`. A resource pack can replace any page's scripts.
+
+### Settings
+
+`config/vellum.properties` is read on both sides when the game starts. The first start writes it with every key,
+its default and a comment, and later starts add keys it lacks. A missing, malformed or out-of-range value falls back
+to its default with a warning in the log; Vellum never fails to start over it. `server.` keys matter on a server
+(a dedicated one, or the one inside a singleplayer world), `client.` keys on a client.
+
+| Key | Default | Range | |
+|---|---|---|---|
+| `server.maxInlineHtmlChars` | 200000 | 1 to 200000 | Largest page `openInline` sends; larger ones throw. |
+| `server.maxDataChars` | 100000 | 1 to 100000 | Largest `vellum.data` `open` and `push` send, as JSON; larger throws. |
+| `server.maxMessageChars` | 8192 | 1 to 8192 | Longest message accepted from a page; longer ones are dropped. |
+| `server.maxMessageDepth` | 32 | 1 to 255 | Deepest nesting of arrays and objects in a message. |
+| `server.messageBurst` | 40 | 1 to 10000 | Messages a session takes at once. |
+| `server.messagesPerSecond` | 20 | 0.1 to 10000 | Messages a session takes per second after the burst. |
+| `server.maxSessionsPerPlayer` | 8 | 1 to 1024 | Open sessions per player; one more ends the oldest. |
+| `client.serverPages` | `allow` | `allow`, `ask`, `block` | Whether pages a server opens show. `ask` asks once per visit. |
+| `client.maxInlineHtmlChars` | 200000 | 1 to 200000 | Largest inline page shown. |
+| `client.maxDataChars` | 100000 | 1 to 100000 | Largest data accepted from a server. |
+| `client.maxDataDepth` | 64 | 1 to 512 | Deepest nesting accepted in data from a server. |
+| `client.openBurst` | 5 | 1 to 1000 | Pages a server may open at once. |
+| `client.opensPerSecond` | 1 | 0.01 to 1000 | Pages a server may open per second after the burst. |
+| `client.messageBurst` | 20 | 1 to 10000 | Messages a server's page may send at once, per screen. |
+| `client.messagesPerSecond` | 20 | 0.1 to 10000 | Messages a server's page may send per second, per screen, across reloads. |
+| `client.forceCloseKey` | `key.keyboard.escape` | a key name | With Shift, closes any Vellum screen. Names as in `options.txt`. |
+| `client.forceClosePresses` | 3 | 2 to 10 | Escapes within 1.5 s that close a page which keeps Escape. |
+| `client.reopenStrikes` | 3 | 1 to 100 | Reopens in a row that stop a server's pages. |
+| `client.reopenBlockSeconds` | 30 | 1 to 3600 | How long they stay stopped. |
+| `client.soundsPerSecond` | 8 | 0 to 1000 | Sounds a page may play per second (and at once); 0 mutes pages. |
+| `client.maxSoundVolume` | 1 | 0 to 1 | Loudest volume a page may ask for. |
+| `client.webLinks` | `ask` | `ask`, `block` | Web links: confirm first (after a click or key press), or never open. |
+| `client.typingNotice` | `true` | `true`, `false` | The notice while typing into a server's page. |
+| `client.reducedMotion` | `false` | `true`, `false` | Pages see `prefers-reduced-motion: reduce`. |
+
+The engine's own caps (script budgets, string, array, DOM and canvas sizes) are `limits.<name>` keys in the same
+file, one per field of the engine's `Limits` record. They apply wherever pages run.
+
+`client.serverPages` defaults to `allow`. Server UIs are what Vellum is for, vanilla lets servers open container
+screens without asking, and the protections above work without the player's help. Players who want a say can set
+`ask`.
+
 ## Commands and development
 
 | Command | Side | |
@@ -519,7 +646,8 @@ takes no room in the box.
   `/vellum reload` tries again.
 - In a development environment Vellum reads pages from `common/src/main/resources/assets` directly and reloads open
   pages when a file they were read from is saved.
-- `config/vellum-client.properties`: `reducedMotion=true` makes pages match `@media (prefers-reduced-motion: reduce)`.
+- `config/vellum.properties`: `client.reducedMotion=true` makes pages match `@media (prefers-reduced-motion: reduce)`.
+  The file holds every other setting too ([Settings](#settings)).
 
 ## Dev automation
 
@@ -624,7 +752,7 @@ whose hovered button the overlay narrates. It ends by logging how many of its ch
 
 ## Stability
 
-The API is `dev.vellum.mod.server.VellumServer`, `VellumSession`, and `dev.vellum.mod.client.VellumScreens`,
+The API is `dev.vellum.mod.server.VellumServer`, `VellumSession`, the settings file's keys, and `dev.vellum.mod.client.VellumScreens`,
 `VellumScreen`, `VellumContainerScreen`, `VellumHud`, `VellumEntities`, `VellumAutomation` and `DocumentDriver`'s
 public methods. Other classes are
 internal. Vellum is at 0.x: expect changes, which will be listed in the changelog.

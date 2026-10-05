@@ -67,7 +67,8 @@ public final class VellumServer {
     private static VellumSession open(ServerPlayer player, String url, String html, @Nullable JsonElement data) {
         String json = json(data);
         endOldestBeyondCap(player);
-        VellumSession session = new VellumSession(nextId++, player);
+        VellumSession session = new VellumSession(nextId, player);
+        nextId = nextId == Integer.MAX_VALUE ? 1 : nextId + 1; // ids stay positive: the client takes negative ones for its own pages
         SESSIONS.put(session.id(), session);
         if (!VellumNetwork.sendToPlayer(player, new OpenPayload(session.id(), url, html, json))) {
             Constants.LOG.debug("Vellum: {} cannot show {} (no Vellum on the client)", player.getGameProfile().name(), url);
