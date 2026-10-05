@@ -10,6 +10,8 @@ import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.TokenBucket;
+import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.client.render.McFontMetrics;
 import dev.vellum.mod.client.render.McImages;
 import dev.vellum.mod.client.render.McSurface;
@@ -35,6 +37,8 @@ import java.util.function.Function;
 final class McHost implements Host {
     private final DocumentDriver driver;
     private final Set<String> reported = new HashSet<>();
+    private @Nullable TokenBucket sounds;
+    private double soundRate;
 
     McHost(DocumentDriver driver) {
         this.driver = driver;
@@ -101,12 +105,29 @@ final class McHost implements Host {
         driver.setCursor(cursor);
     }
 
+    /**
+     * Plays a sound the game knows (registered, or defined by a resource pack's sounds.json), at most
+     * {@code client.soundsPerSecond} per page and no louder than {@code client.maxSoundVolume}. Unknown ids are
+     * dropped: vanilla would log a warning for each.
+     */
     @Override
     public void playSound(String id, float volume, float pitch) {
         Identifier sound = Identifier.tryParse(id);
-        if (sound == null) return;
+        var manager = Minecraft.getInstance().getSoundManager();
+        if (sound == null || manager.getSoundEvent(sound) == null || !(volume > 0) || !sounds().tryTake()) return;
         SoundEvent event = BuiltInRegistries.SOUND_EVENT.getOptional(sound).orElseGet(() -> SoundEvent.createVariableRangeEvent(sound));
-        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(event, pitch, volume));
+        float loudest = VellumConfig.CLIENT_MAX_SOUND_VOLUME.get().floatValue();
+        manager.play(SimpleSoundInstance.forUI(event, Float.isFinite(pitch) ? Math.clamp(pitch, 0.5f, 2f) : 1f, Math.min(volume, loudest)));
+    }
+
+    private TokenBucket sounds() {
+        double rate = VellumConfig.CLIENT_SOUNDS_PER_SECOND.get();
+        if (sounds == null || soundRate != rate) {
+            sounds = new TokenBucket(Math.max(1, rate), rate);
+            soundRate = rate;
+            if (rate == 0) sounds = new TokenBucket(0, 0);
+        }
+        return sounds;
     }
 
     @Override
@@ -136,7 +157,7 @@ final class McHost implements Host {
 
     @Override
     public boolean prefersReducedMotion() {
-        return VellumConfig.reducedMotion;
+        return VellumConfig.CLIENT_REDUCED_MOTION.get();
     }
 
     @Override

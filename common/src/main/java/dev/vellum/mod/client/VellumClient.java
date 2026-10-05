@@ -8,10 +8,8 @@ import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.DataPayload;
 import dev.vellum.mod.net.OpenPayload;
 import dev.vellum.mod.server.VellumDemos;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
-import org.jspecify.annotations.Nullable;
 
 import java.util.function.Consumer;
 
@@ -31,7 +29,6 @@ public final class VellumClient {
     /** Called by the loader's client entrypoint with its way of sending serverbound payloads. */
     public static void init(Consumer<CustomPacketPayload> sender) {
         serverSender = sender;
-        VellumConfig.load();
         VellumResources.init();
         VellumScreens.registerContainer(VellumDemos.CHEST, VellumDemos.CHEST_PAGE);
         VellumHud.register(DEMO_HUD, "vellum:vellum/demo/hud.html");
@@ -43,21 +40,12 @@ public final class VellumClient {
         serverSender.accept(payload);
     }
 
-    /** Handles every clientbound payload in {@code VellumNetwork.CLIENTBOUND}. */
+    /** Handles every clientbound payload in {@code VellumNetwork.CLIENTBOUND}; {@link ServerPages} decides what servers may show. */
     public static void handle(CustomPacketPayload payload) {
         switch (payload) {
-            case OpenPayload p -> VellumScreens.openSession(p);
-            case DataPayload p -> {
-                VellumScreen screen = sessionScreen(p.session());
-                if (screen != null) screen.driver().pushData(p.data());
-            }
-            case ClosePayload p -> {
-                VellumScreen screen = sessionScreen(p.session());
-                if (screen != null) {
-                    screen.driver().closedByServer();
-                    screen.onClose();
-                }
-            }
+            case OpenPayload p -> ServerPages.open(p);
+            case DataPayload p -> ServerPages.data(p);
+            case ClosePayload p -> ServerPages.close(p);
             default -> Constants.LOG.warn("Vellum: unhandled payload {}", payload.type().id());
         }
     }
@@ -71,10 +59,7 @@ public final class VellumClient {
 
     /** Called by the loaders at the end of every client tick. */
     public static void tick() {
+        ServerPages.tick();
         Mobdex.tick();
-    }
-
-    private static @Nullable VellumScreen sessionScreen(int session) {
-        return Minecraft.getInstance().gui.screen() instanceof VellumScreen s && s.driver().session() == session ? s : null;
     }
 }

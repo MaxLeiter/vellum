@@ -2,8 +2,12 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.VellumConfig;
+import dev.vellum.mod.server.VellumServer;
+import dev.vellum.mod.server.VellumSession;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Options;
@@ -11,6 +15,7 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.renderer.entity.state.ArmorStandRenderState;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Rotations;
@@ -146,6 +151,7 @@ public final class DevAutopilot {
             return;
         }
         guiScale(mc, 2);
+        serverPages(mc);
         shoot(mc, "canvastest", () -> mc.gui.setScreen(new CanvasTestScreen()));
         guiScale(mc, 3);
         shoot(mc, "canvastest_gui3", () -> {});
@@ -589,6 +595,125 @@ public final class DevAutopilot {
         checks++;
         failures++;
         Constants.LOG.error("Vellum autopilot: " + message, args);
+    }
+
+    // ---- Server pages (ServerPages, DocumentDriver's close keys) ----
+
+    /** The integrated server's opens and closes of the autopilot's sessions, and the keys its pages saw. */
+    private static final List<String> serverLog = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Whether the server reopens its page whenever the player closes it, as a hostile server would. */
+    private static volatile boolean reopen;
+
+    /** A page that keeps Escape, reports the keys it sees, and pushes nothing. */
+    private static final String STUBBORN_PAGE = """
+            <body style="background:#203040"><p>Stubborn page</p><input id="name">
+            <script>addEventListener('keydown', e => { vellum.send('key', e.key); if (e.key === 'Escape') e.preventDefault() })</script>
+            </body>""";
+
+    /**
+     * What a hostile server can and can't do with pages: a page that keeps Escape still closes on Shift+Escape and
+     * on Escape pressed three times; a page opened while chat is open waits for chat to close; a server that reopens
+     * its page as the player closes it is stopped; a script can't open a web link without a click; data nested
+     * deeper than {@code client.maxDataDepth} is dropped.
+     */
+    private static void serverPages(Minecraft mc) {
+        Supplier<Integer> session = () -> mc.gui.screen() instanceof VellumScreen s ? s.driver().session() : -1;
+        // Shift+Escape: closes at once, and the page never sees it.
+        steps.add(() -> serverOpen(mc, STUBBORN_PAGE));
+        until("the server's page is shown", ticks -> session.get() >= 0);
+        steps.add(() -> pressEscape(mc, true));
+        until("Shift+Escape closed the server's page", ticks -> mc.gui.screen() == null && serverLog.contains("closed"));
+        steps.add(() -> check(serverLog.stream().noneMatch(e -> e.startsWith("key")), "the page never saw Shift+Escape",
+                "the page saw Shift+Escape: {}", serverLog));
+        // Escape three times: the page keeps the first two. (Waits between closing and opening, so the reopen
+        // guard doesn't count these.)
+        steps.add(() -> wait = 30);
+        steps.add(serverLog::clear);
+        steps.add(() -> serverOpen(mc, STUBBORN_PAGE));
+        until("the server's page is shown again", ticks -> session.get() >= 0);
+        steps.add(() -> pressEscape(mc, false));
+        steps.add(() -> pressEscape(mc, false));
+        steps.add(() -> check(session.get() >= 0, "the page kept two Escapes", "two Escapes closed the page"));
+        steps.add(() -> pressEscape(mc, false));
+        until("three Escapes closed the page", ticks -> mc.gui.screen() == null);
+        steps.add(() -> wait = 30);
+        // A page the server opens while chat is open waits until chat closes.
+        steps.add(() -> mc.gui.setScreen(new ChatScreen("", false)));
+        steps.add(() -> serverOpen(mc, "<p>After chat</p>"));
+        steps.add(() -> wait = 10);
+        steps.add(() -> check(mc.gui.screen() instanceof ChatScreen, "a server page waits while chat is open",
+                "a server page replaced chat"));
+        steps.add(() -> mc.gui.setScreen(null));
+        until("the waiting page is shown once chat closed", ticks -> session.get() >= 0);
+        // A script can't open a web link by itself.
+        steps.add(() -> serverOpen(mc, "<script>setTimeout(() => location.href = 'https://example.com/', 50)</script><p>Link</p>"));
+        steps.add(() -> wait = 20);
+        steps.add(() -> check(session.get() >= 0, "a script's web link without a click was ignored",
+                "a script opened {} without a click", mc.gui.screen()));
+        // Data nested past client.maxDataDepth is dropped.
+        steps.add(() -> serverRun(mc, player -> {
+            VellumSession s = VellumServer.openInline(player, "<p>Data</p>", JsonParser.parseString("{\"ok\": 1}"));
+            s.push(JsonParser.parseString("[".repeat(100) + "]".repeat(100)));
+        }));
+        until("the data page is shown", ticks -> mc.gui.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject);
+        steps.add(() -> wait = 5);
+        steps.add(() -> check(mc.gui.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject o && o.has("ok"),
+                "deeply nested data was dropped", "deeply nested data reached the page"));
+        // Typing into a server's page shows Vellum's notice over it.
+        steps.add(() -> serverOpen(mc, "<body style='background:#2a2a40;padding:20px'><p>Sign in</p><input autofocus></body>"));
+        until("the sign-in page is shown", ticks -> session.get() >= 0 && mc.gui.screen() instanceof VellumScreen v && v.driver().typing());
+        onPage("the sign-in page", page -> page.type("hunter2"));
+        grab(mc, "server_page_typing", 5);
+        // A server that reopens its page whenever it is closed is stopped after client.reopenStrikes reopens.
+        steps.add(() -> {
+            reopen = true;
+            serverLog.clear();
+            serverOpen(mc, "<p>Again</p>");
+        });
+        for (int i = 0; i <= VellumConfig.CLIENT_REOPEN_STRIKES.get(); i++) {
+            until("the reopened page is shown, or the server is stopped", ticks -> session.get() >= 0 || ServerPages.blocked());
+            steps.add(() -> {
+                if (session.get() >= 0) pressEscape(mc, false);
+            });
+            steps.add(() -> wait = 2);
+        }
+        steps.add(() -> {
+            reopen = false;
+            check(mc.gui.screen() == null && ServerPages.blocked(), "the reopen loop was stopped after {} opens",
+                    "the reopen loop went on: {} opens", serverLog.stream().filter("opened"::equals).count());
+        });
+    }
+
+    private static void serverOpen(Minecraft mc, String html) {
+        serverRun(mc, player -> open(player, html));
+    }
+
+    private static void open(ServerPlayer player, String html) {
+        serverLog.add("opened");
+        VellumServer.openInline(player, html, null)
+                .onMessage("key", (p, key) -> serverLog.add("key " + key))
+                .onClose(() -> {
+                    serverLog.add("closed");
+                    if (reopen) player.level().getServer().execute(() -> open(player, html));
+                });
+    }
+
+    private static void serverRun(Minecraft mc, Consumer<ServerPlayer> action) {
+        IntegratedServer server = mc.getSingleplayerServer();
+        if (server == null || mc.player == null) return;
+        UUID id = mc.player.getUUID();
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(id);
+            if (player != null) action.accept(player);
+        });
+    }
+
+    /** Escape through Minecraft's keyboard handler, as the player presses it. */
+    private static void pressEscape(Minecraft mc, boolean shift) {
+        KeyEvent event = new KeyEvent(InputConstants.KEY_ESCAPE, 0, shift ? InputConstants.MOD_SHIFT : 0);
+        long window = mc.getWindow().handle();
+        mc.keyboardHandler.keyPress(window, InputConstants.PRESS, event);
+        mc.keyboardHandler.keyPress(window, InputConstants.RELEASE, event);
     }
 
     // ---- World ----

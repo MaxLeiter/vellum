@@ -4,7 +4,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.vellum.engine.host.Urls;
 import dev.vellum.mod.Constants;
-import dev.vellum.mod.net.OpenPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -130,12 +129,6 @@ public final class VellumScreens {
     static void pageLoading(String url, DocumentDriver driver) {
         Consumer<DocumentDriver> hook = PAGE_HOOKS.get(Urls.withoutQuery(url));
         if (hook != null) hook.accept(driver);
-    }
-
-    /** A server session's page; replacing another session's screen tells that server it was closed. */
-    static void openSession(OpenPayload p) {
-        VellumScreen screen = new VellumScreen(p.html().isEmpty() ? p.url() : "", p.html().isEmpty() ? null : p.html(), p.session());
-        show(screen, p.data());
     }
 
     private static VellumScreen show(VellumScreen screen, @Nullable String data) {

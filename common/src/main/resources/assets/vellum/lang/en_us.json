@@ -5,5 +5,11 @@
   "vellum.narrate.link": "%s link",
   "vellum.narration.radio": "Radio button: %s",
   "vellum.narration.checkbox.usage.focused.check": "Press Space to check",
-  "vellum.narration.checkbox.usage.focused.uncheck": "Press Space to uncheck"
+  "vellum.narration.checkbox.usage.focused.uncheck": "Press Space to uncheck",
+  "vellum.serverPages.typing": "This page is from the server. Never type your Microsoft password here.",
+  "vellum.serverPages.blocked": "Vellum: this server kept reopening pages after you closed them. Its pages are blocked for %s seconds.",
+  "vellum.serverPages.ask.title": "This server wants to show you a page",
+  "vellum.serverPages.ask.message": "Pages are made by the server and can look like any screen. Allow pages from this server until you leave?",
+  "vellum.serverPages.ask.allow": "Allow",
+  "vellum.serverPages.ask.deny": "Don't allow"
 }
