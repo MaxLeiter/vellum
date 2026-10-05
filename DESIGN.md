@@ -58,7 +58,7 @@ Packages in `engine/` (`dev.vellum.engine.*`):
 | `css` | Tokenizer, parser, selectors, cascade (`StyleEngine`), the user-agent stylesheet |
 | `html` | `HtmlParser`, `HtmlSerializer` |
 | `layout` | `LayoutEngine`, `Box`, `LineBox`, `Fragment`; block, inline, flex, grid, positioning |
-| `paint` | `Painter` (paint order + hit testing), `Canvas` (backend contract), `Shapes` (tessellation) |
+| `paint` | `Painter` (paint order + hit testing), `Canvas` (backend contract), `Shapes` (tessellation), `ScissorStack` (clips for scissor-based hosts) |
 | `replaced` | The engine's replaced elements (`img`, `sprite`, `canvas`), the registry that adds the host's, `ImageSources` (image sizes, `canvas:` images), `Context2D` (the canvas 2D context) |
 | `anim` | `AnimationEngine`: transitions, @keyframes animations, `element.animate()` |
 | `input` | `InputHandler` (pointer, wheel, keyboard, focus), form controls, smooth scrolling |
@@ -456,7 +456,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 ## 11. Minecraft integration (`common/`)
 
 - **McCanvas** implements `Canvas` over `GuiGraphicsExtractor`: own affine matrix stack set into the pose (the pose
-  stack is only 16 deep); clip stack → `enableScissor`; alpha stack multiplied into colours; `fillRect` → `fill`
+  stack is only 16 deep); clips → `enableScissor` through `paint.ScissorStack` (intersected with the area the
+  renderer draws, the framebuffer at its GUI scale, which for a frame after `Window.setWindowed` is smaller than the
+  GUI; empty clips are never pushed and hide their content); alpha stack multiplied into colours; `fillRect` → `fill`
   (sub-pixel via pose translate); `fillQuads` → a custom `GuiElementRenderState` with `RenderPipelines.GUI`
   (submitted through a mixin accessor for `guiRenderState`/scissor); `drawText` → `Font` with a `Style` (font,
   bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi reordering only when
