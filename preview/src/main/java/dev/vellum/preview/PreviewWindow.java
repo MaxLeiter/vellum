@@ -114,7 +114,7 @@ final class PreviewWindow {
 
     private void updateTitle() {
         String name = page != null ? page.url() : "canvas test";
-        frame.setTitle("Vellum Preview — " + name + " — GUI scale " + scale + (inspecting ? " — inspector" : ""));
+        frame.setTitle("Vellum Preview - " + name + " - GUI scale " + scale + (inspecting ? " - inspector" : ""));
     }
 
     private void saveScreenshot() {
