@@ -80,7 +80,7 @@ final class EntityContent extends TurnableContent {
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Entity entity = entity();
         if (entity == null) return;
-        ComputedStyle style = style();
+        ComputedStyle style = element.computedStyle();
         EntityPortrait.Framing framing = new EntityPortrait.Framing(style.entityFocus, style.objectPositionX, style.objectPositionY);
         EntityPortrait.draw(canvas, entity, pose(canvas, framing, x, y, width, height), framing, tint(), x, y, width, height);
     }
@@ -101,7 +101,7 @@ final class EntityContent extends TurnableContent {
             float gazeYaw = 0, gazePitch = 0;
             if (canvas.mouseX() >= 0) {
                 // As vanilla's inventory, unless -mc-gaze-reach and -mc-gaze-limit soften or cap it.
-                ComputedStyle style = style();
+                ComputedStyle style = element.computedStyle();
                 float[] eyes = EntityPortrait.gazeOrigin(framing, x, y, width, height);
                 gazeYaw = style.gazeYaw(canvas.mouseX() - eyes[0]);
                 gazePitch = style.gazePitch(eyes[1] - canvas.mouseY());

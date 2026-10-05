@@ -64,8 +64,8 @@ final class ModelContent extends TurnableContent {
         float size = Math.min(width, height) * modelScale();
         if (size <= 0) return;
         // Its centre's offset from the box's, in blocks (a block is the square's side).
-        float dx = (style().objectX(width - size) - (width - size) / 2) / size;
-        float dy = (style().objectY(height - size) - (height - size) / 2) / size;
+        float dx = (element.computedStyle().objectX(width - size) - (width - size) / 2) / size;
+        float dy = (element.computedStyle().objectY(height - size) - (height - size) / 2) / size;
         Scene scene = scene(dx, dy);
         if (scene != null) canvas.drawScene(scene, size, tint, x, y, width, height);
     }

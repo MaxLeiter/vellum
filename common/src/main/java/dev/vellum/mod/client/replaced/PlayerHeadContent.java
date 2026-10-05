@@ -42,9 +42,9 @@ final class PlayerHeadContent extends McReplaced {
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Identifier skin = Minecraft.getInstance().playerSkinRenderCache().getOrDefault(profile).playerSkin().body().texturePath();
         float size = Math.min(width, height);
-        x += style().objectX(width - size);
-        y += style().objectY(height - size);
-        int tint = style().tint;
+        x += element.computedStyle().objectX(width - size);
+        y += element.computedStyle().objectY(height - size);
+        int tint = element.computedStyle().tint;
         canvas.blit(skin, x, y, size, size, 8 * PX, 8 * PX, 16 * PX, 16 * PX, tint, false);
         canvas.blit(skin, x, y, size, size, 40 * PX, 8 * PX, 48 * PX, 16 * PX, tint, false);
     }

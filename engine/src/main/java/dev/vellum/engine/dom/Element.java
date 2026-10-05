@@ -101,6 +101,14 @@ public class Element extends Node {
         return tagName.equals("template");
     }
 
+    /**
+     * The style used for layout and paint ({@link #style}), or the initial style before the first restyle and for
+     * elements outside a document (content painted on its own, as the canvas tests do).
+     */
+    public ComputedStyle computedStyle() {
+        return style != null ? style : ComputedStyle.INITIAL;
+    }
+
     // ---- Attributes ----
 
     public String getAttribute(String name) {

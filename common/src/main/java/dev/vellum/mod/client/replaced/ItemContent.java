@@ -52,6 +52,6 @@ final class ItemContent extends McReplaced {
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         float size = Math.min(width, height);
-        canvas.drawItem(stack, x + style().objectX(width - size), y + style().objectY(height - size), size, true);
+        canvas.drawItem(stack, x + element.computedStyle().objectX(width - size), y + element.computedStyle().objectY(height - size), size, true);
     }
 }

@@ -30,9 +30,9 @@ final class ReplacedElements {
         return Map.of(
                 "item", element -> new Item(element, assets, fonts),
                 "slot", element -> new Fixed(18, 18, (canvas, x, y, w, h) -> {}),
-                "entity", element -> new Fixed(48, 48, (canvas, x, y, w, h) -> paintSilhouette(canvas, style(element), x, y, w, h)),
+                "entity", element -> new Fixed(48, 48, (canvas, x, y, w, h) -> paintSilhouette(canvas, element.computedStyle(), x, y, w, h)),
                 "model", element -> new Fixed(32, 32, (canvas, x, y, w, h) -> paintModel(canvas, element, assets, x, y, w, h)),
-                "player-head", element -> new Fixed(16, 16, (canvas, x, y, w, h) -> paintFace(canvas, style(element), x, y, w, h)));
+                "player-head", element -> new Fixed(16, 16, (canvas, x, y, w, h) -> paintFace(canvas, element.computedStyle(), x, y, w, h)));
     }
 
     private interface Paint {
@@ -74,8 +74,8 @@ final class ReplacedElements {
         @Override
         public void paint(Canvas canvas, float x, float y, float width, float height) {
             float size = Math.min(width, height);
-            x += style(element).objectX(width - size);
-            y += style(element).objectY(height - size);
+            x += element.computedStyle().objectX(width - size);
+            y += element.computedStyle().objectY(height - size);
             canvas.drawImage(flatTexture(assets, element.getAttribute("id")), x, y, size, size, 0, 0, 1, 1, WHITE, false);
             String count = element.getAttribute("count");
             if (count == null || count.isBlank() || count.equals("1")) return;
@@ -84,11 +84,6 @@ final class ReplacedElements {
             if (countFont.size() != 8 * s) countFont = new FontSpec(MinecraftFont.NATIVE.families(), 8 * s, false, false);
             canvas.drawText(count, x + 17 * s - fonts.width(count, countFont), y + 9 * s, countFont, WHITE, 0, true);
         }
-    }
-
-    /** The element's style, or the initial one for content painted outside a page (the canvas test). */
-    private static ComputedStyle style(Element element) {
-        return element.style != null ? element.style : ComputedStyle.INITIAL;
     }
 
     /** The flat item texture, else the block texture of the same name (the missing texture if neither exists). */
@@ -105,7 +100,7 @@ final class ReplacedElements {
     private static void paintModel(Canvas canvas, Element element, MinecraftAssets assets, float x, float y, float width, float height) {
         String block = element.getAttribute("block");
         String id = block != null ? block.split("\\[", 2)[0].strip() : element.getAttribute("item");
-        ComputedStyle s = style(element);
+        ComputedStyle s = element.computedStyle();
         float square = Math.min(width, height) * s.modelScale, size = square * (block != null ? 0.625f : 1);
         float cx = x + s.objectX(width - square) + square / 2, cy = y + s.objectY(height - square) + square / 2;
         canvas.drawImage(flatTexture(assets, id), cx - size / 2, cy - size / 2, size, size, 0, 0, 1, 1, WHITE, false);

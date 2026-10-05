@@ -15,21 +15,21 @@ abstract class TurnableContent extends McReplaced {
 
     /** Degrees; positive turns the front to the right. */
     protected final float yaw() {
-        return element.style.modelYaw + Turntable.yaw(element);
+        return element.computedStyle().modelYaw + Turntable.yaw(element);
     }
 
     /** Degrees; positive views from above. */
     protected final float pitch() {
-        return element.style.modelPitch + Turntable.pitch(element);
+        return element.computedStyle().modelPitch + Turntable.pitch(element);
     }
 
     /** Multiplies the size that fits the box. */
     protected final float modelScale() {
-        return element.style.modelScale;
+        return element.computedStyle().modelScale;
     }
 
     /** {@code -mc-tint}: multiplies the picture (ARGB). */
     protected final int tint() {
-        return element.style.tint;
+        return element.computedStyle().tint;
     }
 }
