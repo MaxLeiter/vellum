@@ -65,6 +65,8 @@ model { display: inline-block; width: 32px; height: 32px; }
 entity[rotatable], model[rotatable] { cursor: grab; }
 entity[rotatable]:active, model[rotatable]:active { cursor: grabbing; }
 player-head { display: inline-block; width: 8px; height: 8px; }
+/* Items and faces are square: in any box, the largest square that fits, placed by object-position. */
+item, player-head { object-fit: contain; }
 sprite { display: inline-block; }
 mc-text { display: inline; }
 

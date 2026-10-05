@@ -351,6 +351,15 @@ public final class ComputedStyle implements Cloneable {
     }
 
     /**
+     * A square as wide as the shorter side of the box {@code (x, y, width, height)} times {@code scale}, placed in it
+     * by {@code object-position}, as {@code {x, y, size}}: where a {@code <model>} draws its model.
+     */
+    public float[] objectSquare(float x, float y, float width, float height, float scale) {
+        float size = Math.min(width, height) * scale;
+        return new float[] {x + objectX(width - size), y + objectY(height - size), size};
+    }
+
+    /**
      * How far a {@code follow-mouse} entity's head turns toward a pointer {@code dx} px right of its eyes, in degrees
      * (positive to the right): {@code 40° × atan(dx / reach)}, as vanilla's inventory turns the player's head (the
      * body takes half), so at most about 63°, then capped by the yaw limit.

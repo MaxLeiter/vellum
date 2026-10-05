@@ -303,8 +303,9 @@ keeps it spinning for a moment. A `mousedown` listener that calls `preventDefaul
 ### Placing entities and models
 
 `object-position` places every Minecraft element in its box as it places an image: one to four values, keywords,
-lengths and percentages (`right 4px bottom`, `25% 75%`). Items, heads and models take a square as wide as the box's
-shorter side; models times `-mc-model-scale`.
+lengths and percentages (`right 4px bottom`, `25% 75%`). Items and heads have `object-fit: contain` from the default
+stylesheet, so they take a square as wide as the box's shorter side. Models take that square too, times
+`-mc-model-scale`.
 
 An `<entity>` is fitted one of two ways:
 

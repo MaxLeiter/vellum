@@ -17,7 +17,9 @@ import java.util.function.Function;
 /**
  * The previewer's stand-ins for the Minecraft elements, at the game's sizes: items and models as their flat item (or
  * block) texture (items with the stack size), player heads as the default skin's face, entities as a silhouette,
- * and slots as nothing (CSS draws the slot). Models, heads and silhouettes are placed by object-position. Attributes are read when painting, so edits show up without reloading.
+ * and slots as nothing (CSS draws the slot). Items and heads fill the square {@code object-fit: contain} gives them;
+ * models and silhouettes place themselves by object-position, as in game. Attributes are read when painting, so
+ * edits show up without reloading.
  */
 final class ReplacedElements {
     private static final int WHITE = 0xFFFFFFFF;
@@ -32,7 +34,7 @@ final class ReplacedElements {
                 "slot", element -> new Fixed(18, 18, (canvas, x, y, w, h) -> {}),
                 "entity", element -> new Fixed(48, 48, (canvas, x, y, w, h) -> paintSilhouette(canvas, element.computedStyle(), x, y, w, h)),
                 "model", element -> new Fixed(32, 32, (canvas, x, y, w, h) -> paintModel(canvas, element, assets, x, y, w, h)),
-                "player-head", element -> new Fixed(16, 16, (canvas, x, y, w, h) -> paintFace(canvas, element.computedStyle(), x, y, w, h)));
+                "player-head", element -> new Fixed(16, 16, ReplacedElements::paintFace));
     }
 
     private interface Paint {
@@ -70,12 +72,10 @@ final class ReplacedElements {
             return element.hasAttribute("tooltip") && id != null && !id.isBlank();
         }
 
-        /** A square as wide as the box's shorter side, placed by object-position, as in game. */
+        /** Fills the box, which {@code object-fit: contain} makes a square placed by object-position, as in game. */
         @Override
         public void paint(Canvas canvas, float x, float y, float width, float height) {
             float size = Math.min(width, height);
-            x += element.computedStyle().objectX(width - size);
-            y += element.computedStyle().objectY(height - size);
             canvas.drawImage(flatTexture(assets, element.getAttribute("id")), x, y, size, size, 0, 0, 1, 1, WHITE, false);
             String count = element.getAttribute("count");
             if (count == null || count.isBlank() || count.equals("1")) return;
@@ -101,18 +101,16 @@ final class ReplacedElements {
         String block = element.getAttribute("block");
         String id = block != null ? block.split("\\[", 2)[0].strip() : element.getAttribute("item");
         ComputedStyle s = element.computedStyle();
-        float square = Math.min(width, height) * s.modelScale, size = square * (block != null ? 0.625f : 1);
-        float cx = x + s.objectX(width - square) + square / 2, cy = y + s.objectY(height - square) + square / 2;
+        float[] square = s.objectSquare(x, y, width, height, s.modelScale);
+        float size = square[2] * (block != null ? 0.625f : 1);
+        float cx = square[0] + square[2] / 2, cy = square[1] + square[2] / 2;
         canvas.drawImage(flatTexture(assets, id), cx - size / 2, cy - size / 2, size, size, 0, 0, 1, 1, WHITE, false);
     }
 
-    /** The default skin's face and hat layer, a square placed by object-position. */
-    private static void paintFace(Canvas canvas, ComputedStyle s, float x, float y, float width, float height) {
-        float size = Math.min(width, height);
-        x += s.objectX(width - size);
-        y += s.objectY(height - size);
-        canvas.drawImage(STEVE, x, y, size, size, 8 / 64f, 8 / 64f, 16 / 64f, 16 / 64f, WHITE, false);
-        canvas.drawImage(STEVE, x, y, size, size, 40 / 64f, 8 / 64f, 48 / 64f, 16 / 64f, WHITE, false);
+    /** The default skin's face and hat layer, filling the box (a square placed by object-position, as in game). */
+    private static void paintFace(Canvas canvas, float x, float y, float width, float height) {
+        canvas.drawImage(STEVE, x, y, width, height, 8 / 64f, 8 / 64f, 16 / 64f, 16 / 64f, WHITE, false);
+        canvas.drawImage(STEVE, x, y, width, height, 40 / 64f, 8 / 64f, 48 / 64f, 16 / 64f, WHITE, false);
     }
 
     /**

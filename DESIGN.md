@@ -198,11 +198,11 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 
 | Element | Behaviour |
 |---|---|
-| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover, with the lines of the `title` that applies after it. |
+| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size and kept square (`object-fit: contain`). `tooltip` attribute shows the vanilla item tooltip on hover, with the lines of the `title` that applies after it. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
 | `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse` (softened by `-mc-gaze-reach` and `-mc-gaze-limit`), `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
 | `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box (or placed by `object-position`): at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
-| `<player-head name="..." uuid="...">` | A player's face from their skin. |
+| `<player-head name="..." uuid="...">` | A player's face from their skin, kept square like an item. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
 | `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated (`Host.translate`) or component text (`Host.formatText` gives styled runs, which become spans), as a normal inline element. Expanded by the engine when the element is parsed or inserted and when those attributes change, so templates and scripts can use it. |
 
@@ -302,6 +302,8 @@ a replaced element with `rotatable` that no `mousedown` listener cancelled drive
 - Vanilla-looking controls via sprites (`minecraft:widget/button`, `_highlighted`, `_disabled`,
   `widget/text_field`, `widget/text_field_highlighted`, `widget/checkbox*`, `widget/slider*`), with
   `text-shadow: minecraft` on button text.
+- Minecraft elements: `item` 16×16, `player-head` 8×8, `entity` 32×48 and `model` 32×32, all `inline-block`;
+  `item, player-head { object-fit: contain }`, so they stay square in any box. `slot` is the vanilla grey well.
 - Utility classes prefixed `mc-`: `.mc-panel` (the vanilla grey container panel with bevel border), `.mc-inset`
   (a sunken slot bevel), `.mc-tooltip` (tooltip background and frame), `.mc-dark` (translucent dark panel used by
   vanilla menus), `.mc-label` (`#404040`, no shadow: container labels).
@@ -371,9 +373,10 @@ Per box:
    Minecraft bevel: `border: 2px outset #c6c6c6`); `dashed`/`dotted` as segments.
 5. Form control painting (`input.Controls.paint`).
 6. Replaced content (`ReplacedContent.paint`), sized by `object-fit` and placed by `object-position`
-   (`ComputedStyle.objectX/objectY`). Content that fits itself inside that box (items, heads and models in a square,
-   entities) places itself with the same methods. Minecraft content draws through the Minecraft canvas, which its
-   paint finds in one documented place (`McReplaced`).
+   (`ComputedStyle.objectX/objectY`). Items and heads are `object-fit: contain` in the UA stylesheet, so the box they
+   are given is already their square. Content that fits itself inside its box places itself with the same methods:
+   models in a square (`ComputedStyle.objectSquare`), entities by `style.EntityFraming`. Minecraft content draws
+   through the Minecraft canvas, which its paint finds in one documented place (`McReplaced`).
 7. Children: clip to the padding box if `overflow` is not visible (rectangular clip; rounded clip is not supported),
    translate by `-scroll`, paint children and line fragments.
 8. Scrollbars (overlay), outline (`outline`, `outline-offset`; focus rings), and `::after` order handled by the box

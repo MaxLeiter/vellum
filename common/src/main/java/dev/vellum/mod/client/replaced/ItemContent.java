@@ -10,7 +10,8 @@ import java.util.List;
 
 /**
  * {@code <item id="minecraft:diamond_sword" count="1" components="{...}" tooltip>}: an item stack drawn scaled from
- * 16 px to the content box's shorter side (placed by {@code object-position}), with count and durability. {@code components} is SNBT for the stack's data components
+ * 16 px to the square {@code object-fit: contain} fits in the content box (placed by {@code object-position}), with
+ * count and durability. {@code components} is SNBT for the stack's data components
  * ({@link ItemStacks#of}). With the {@code tooltip} attribute, hovering shows the vanilla item tooltip, with the lines
  * of the {@code title} that applies after the item's own ({@link ItemTooltips}).
  */
@@ -49,9 +50,9 @@ final class ItemContent extends McReplaced {
         return true;
     }
 
+    /** Fills the box, which {@code object-fit: contain} (the UA's) makes a square placed by {@code object-position}. */
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
-        float size = Math.min(width, height);
-        canvas.drawItem(stack, x + element.computedStyle().objectX(width - size), y + element.computedStyle().objectY(height - size), size, true);
+        canvas.drawItem(stack, x, y, Math.min(width, height), true);
     }
 }

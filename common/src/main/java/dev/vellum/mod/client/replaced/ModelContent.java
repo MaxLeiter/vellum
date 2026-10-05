@@ -19,10 +19,11 @@ import org.jspecify.annotations.Nullable;
 /**
  * {@code <model block="minecraft:oak_stairs[facing=east]">} or {@code <model item="minecraft:diamond_sword">}: a
  * block (any block state, in {@code /setblock} syntax) or an item ({@code count} and {@code components} as on
- * {@code <item>}) drawn in 3D, centred in the content box (or where {@code object-position} puts it). At {@code -mc-yaw}/{@code -mc-pitch} 0 it looks as in the
- * inventory (blocks in the three-quarter view, flat items face on, at the size an item fills its slot);
- * {@code -mc-yaw} turns it, {@code -mc-pitch} views it from further above, {@code -mc-model-scale} sizes it, and
- * {@code rotatable} lets the pointer turn it. Blocks without a model (fluids, air) draw nothing.
+ * {@code <item>}) drawn in 3D, centred in the content box (or where {@code object-position} puts it). At
+ * {@code -mc-yaw}/{@code -mc-pitch} 0 it looks as in the inventory (blocks in the three-quarter view, flat items face
+ * on, at the size an item fills its slot); {@code -mc-yaw} turns it, {@code -mc-pitch} views it from further above,
+ * {@code -mc-model-scale} sizes it, and {@code rotatable} lets the pointer turn it. Blocks without a model (fluids,
+ * air) draw nothing.
  */
 final class ModelContent extends TurnableContent {
     private static final BlockDisplayContext DISPLAY = BlockDisplayContext.create();
@@ -61,11 +62,11 @@ final class ModelContent extends TurnableContent {
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         int tint = tint();
         if (!canvas.sceneVisible(tint, x, y, width, height)) return;
-        float size = Math.min(width, height) * modelScale();
+        float[] square = element.computedStyle().objectSquare(x, y, width, height, modelScale());
+        float size = square[2];
         if (size <= 0) return;
         // Its centre's offset from the box's, in blocks (a block is the square's side).
-        float dx = (element.computedStyle().objectX(width - size) - (width - size) / 2) / size;
-        float dy = (element.computedStyle().objectY(height - size) - (height - size) / 2) / size;
+        float dx = (square[0] - x - (width - size) / 2) / size, dy = (square[1] - y - (height - size) / 2) / size;
         Scene scene = scene(dx, dy);
         if (scene != null) canvas.drawScene(scene, size, tint, x, y, width, height);
     }
