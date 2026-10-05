@@ -65,13 +65,13 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   them reaches your `onMessage` handlers first.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
 - `screen.driver().onKey(handler)` gives your mod the key presses the page leaves alone, before the screen's own keys
-  (Escape, a container screen's inventory key). Use it for your own key mappings, which a page can't know. A key the
-  page uses never reaches the handler: one a `keydown` listener cancelled with `preventDefault()`, one a focused
-  control acted on (Enter on a button), and every key but Escape while a text field has focus, so typing "j" in an
-  `<input>` stays text. Return true to consume the key. Handlers run in the order they were added until one returns
-  true, and stay through navigation and reloads.
-- A page follows the pointer from its first frame, as vanilla screens do. One opened under a resting cursor shows
-  `:hover` there at once, and its `title` tooltip half a second later, without the mouse moving.
+  (Escape, a container screen's inventory key). Use it for your own key mappings; the page doesn't know about them. A
+  key the page uses never reaches the handler: one a `keydown` listener cancelled with `preventDefault()`, one a
+  focused control acted on (Enter on a button), and every key but Escape while a text field has focus, so typing "j"
+  in an `<input>` stays text. Return true to consume the key. Handlers run in the order they were added until one
+  returns true, and stay through navigation and reloads.
+- A page opened under a resting cursor shows `:hover` there from its first frame, as vanilla screens do, and its
+  `title` tooltip half a second later, without the mouse moving.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
   a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
@@ -255,8 +255,8 @@ widget tooltip. Add `title-nowrap` to the element to keep its lines whole; they 
 nearest title from the hovered element up wins, and a container slot's item tooltip wins over it. See SCRIPTING.md.
 
 Over an `<item tooltip>`, the item's own tooltip shows at once, and the title that applies (the nearest one from the
-item up) adds its lines after the item's, in the same box. Neither the item's lines nor the title's wrap. A shop row
-gets the vanilla merchant look this way: the item, then the price and a note.
+item up) adds its lines after the item's, in the same box. Neither the item's lines nor the title's wrap. This gives a
+shop row the vanilla merchant layout: the item, then the price and a note.
 
 ```html
 <div class="row" title-json='{"text":"","extra":[{"text":"Buy for 6 emeralds","color":"green"},
@@ -265,7 +265,7 @@ gets the vanilla merchant look this way: the item, then the price and a note.
 </div>
 ```
 
-This is the default because a title on a row that holds an item describes that row's item. To show the item's
+This is the default because a title on a row that holds an item usually describes that item. To show the item's
 tooltip alone, give the item an empty title: `<item id="minecraft:iron_sword" tooltip title="">`. Elsewhere in the row
 the title shows alone after the usual delay, wrapped unless the row has `title-nowrap`. On NeoForge the item's stack
 goes along to NeoForge's tooltip events, as for any item tooltip.

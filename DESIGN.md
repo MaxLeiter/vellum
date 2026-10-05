@@ -457,8 +457,8 @@ the scrollbar).
   tooltip's element. Its lines wrap at the host's width unless the element has `title-nowrap`. When the hover target
   is replaced content that shows its own tooltip (`ReplacedContent.showsTooltip`: an `<item tooltip>`), that
   tooltip shows instead, at once and through presses, and the title that applies adds its lines after the content's,
-  never wrapped. Hovering a titled row that holds an item almost always means "this item, and this about it", so
-  that composition is the default; an empty `title` on the item opts out (D-013). The engine only decides; hosts ask
+  never wrapped. A titled row that holds an item usually means "this item, and this about it", so the composition
+  is the default; an empty `title` on the item opts out (D-013). The engine only decides; hosts ask
   `InputHandler.tooltip()` each frame after painting (a `Tooltip` record: the title's element, text and JSON, the
   pointer position, the content element when there is one, and whether to wrap) and draw it, so scripts can change
   the attributes live. `needsFrame` covers the moment the delay ends; a content tooltip has no delay to wait out.
@@ -583,11 +583,11 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows). Minecraft tells a screen about the pointer only when it moves, and drops the first move after a
-  screen opens, so each frame the screen also hands the driver the render's pointer
+  screen opens, so each frame the screen also passes the driver the pointer position it was rendered with
   (`DocumentDriver.followPointer`, in `VellumContainerScreen` too). The page gets a move when it has had no pointer
   since it loaded, or when the render's pointer changed since the last frame and is not where the page last had it.
   A page opened under a resting cursor is hovered from its first frames, as vanilla widgets are, and a move sent from
-  code without moving the mouse stands until the mouse moves. `VellumAutomation` moves the mouse handler along with
+  code stays in effect until the real mouse moves. `VellumAutomation` moves the mouse handler along with
   its events (so `leave()` stays off the page), and HUD overlays poll the pointer themselves.
 - `VellumContainerScreen` (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
@@ -635,8 +635,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (Minecraft's ASCII glyph widths, the Rhino runtime, in-memory resources and canvases, recorded logs, errors,
   sounds and cursors); `TestHost.load(html)` parses, sets the viewport and runs the first frame, and returns a
   `testing/Page`: frames at chosen times, input at viewport points through the real hit test (`click(element)`
-  aims where `Document.pointerTarget` does, the centre of the part that shows, and fails when something covers it), and painting onto `testing/RecordingCanvas` (every
-  call with its transform, alpha and clip, or as a string trace). Pages are styled by the real CSS engine; hand-built
+  aims where `Document.pointerTarget` does, at the centre of the part that shows, and fails when something covers
+  it), and painting onto `testing/RecordingCanvas` (every call with its transform, alpha and clip, or as a string
+  trace). Pages are styled by the real CSS engine; hand-built
   boxes, styles and hit testers are not used. The layout suite includes ~1250 Chrome-generated fixtures from Taffy,
   run as HTML pages with Taffy's Chrome setup as a stylesheet and Ahem metrics.
 - `preview` snapshot tests render the canvas test sheet, `preview/src/test/resources/pages` and the demo UIs

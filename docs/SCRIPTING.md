@@ -205,10 +205,9 @@ Inline handlers (`<button onclick="buy(this.dataset.item, event)">`) run with `t
 scope; returning `false` cancels the event, and so does returning `false` from an `on<event>` property handler.
 Unlike browsers, inline handlers do not see the element's properties as variables: write `this.value`, not `value`.
 
-Pressing Escape closes the screen unless a `keydown` listener calls `preventDefault()`. The mod showing the page may
-act on other keys the page leaves alone (its own key mappings, such as the key that opened the screen). To keep a
-key for the page, cancel it in a `keydown` listener; while a text field has focus, keys are typing and never reach
-the mod.
+Pressing Escape closes the screen unless a `keydown` listener calls `preventDefault()`. The mod showing the page can
+handle any key the page leaves alone, such as the key that opened the screen. To keep a key for the page, cancel it
+in a `keydown` listener. While a text field has focus, keys other than Escape are typing and never reach the mod.
 
 The `title` attribute shows a tooltip, as in browsers but drawn like Minecraft's: when the pointer has rested on an
 element for half a second, the nearest `title` from the hovered element up shows at the pointer. A newline in the
@@ -220,7 +219,7 @@ attribute from a script changes the tooltip while it shows.
 
 Over an `<item tooltip>` the item's tooltip shows at once, as in vanilla screens, and the title that applies adds its
 lines after the item's in the same box, unwrapped: a shop row's price under the item. An empty `title` on the item
-leaves its tooltip alone.
+shows the item's tooltip by itself.
 
 ## Animations
 
