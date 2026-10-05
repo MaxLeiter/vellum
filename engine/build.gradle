@@ -1,0 +1,45 @@
+// Pure-Java web engine: DOM, HTML/CSS parsing, cascade, layout, animation, events, scripting and the display list.
+// MUST NOT depend on Minecraft or any loader. Compiled straight into each loader jar (like Chronicle's sim-core).
+plugins {
+    id 'java-library'
+}
+
+repositories { mavenCentral() }
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+dependencies {
+    // Provided by Minecraft at runtime.
+    compileOnly("com.google.code.gson:gson:${gson_version}")
+    compileOnly('org.jspecify:jspecify:1.0.0')
+    // Relocated Rhino: compileOnly here because consumers copy its classes into their own output.
+    compileOnly(project(path: ':rhino', configuration: 'relocated'))
+    testImplementation(project(path: ':rhino', configuration: 'relocated'))
+    testImplementation("com.google.code.gson:gson:${gson_version}")
+    testImplementation(platform("org.junit:junit-bom:${junit_version}"))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    testLogging { events 'failed'; exceptionFormat 'full' }
+    systemProperty('vellum.snapshots', project.file('build/snapshots').absolutePath)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = engine_java_release as int
+    options.compilerArgs += ['-Xlint:all,-serial,-processing,-options', '-Werror']
+}
+
+configurations {
+    engineJava { canBeResolved = false; canBeConsumed = true }
+    engineResources { canBeResolved = false; canBeConsumed = true }
+}
+artifacts {
+    engineJava sourceSets.main.java.sourceDirectories.singleFile
+    engineResources sourceSets.main.resources.sourceDirectories.singleFile
+}

@@ -1,0 +1,67 @@
+package dev.vellum.engine.host;
+
+import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.script.ScriptRuntime;
+import dev.vellum.engine.style.Cursor;
+
+/**
+ * Everything the engine needs from its environment. Minecraft, the test harness and the standalone previewer each
+ * provide one. Only {@link #fonts()} and {@link #loadText} are required; the rest have no-op defaults.
+ */
+public interface Host {
+    FontMetrics fonts();
+
+    /**
+     * Loads a text resource (stylesheet, script, HTML). {@code url} is already resolved against the document URL.
+     * Returns null when missing; the engine reports that through {@link #log}.
+     */
+    String loadText(String url);
+
+    /** Resolves {@code relative} against {@code base}. The default handles {@code ns:path} ids and plain paths. */
+    default String resolveUrl(String base, String relative) {
+        return Urls.resolve(base, relative);
+    }
+
+    /**
+     * Creates replaced content for an element, or null if the host does not handle this element. Called for
+     * {@code img}, {@code canvas}, and any tag the host claims (Minecraft adds {@code item}, {@code slot},
+     * {@code entity}, {@code player-head}...).
+     */
+    default ReplacedContent createReplaced(Element element) { return null; }
+
+    /** Tags whose elements are replaced (and therefore never lay out their children). */
+    default boolean isReplacedTag(String tag) {
+        return tag.equals("img") || tag.equals("canvas");
+    }
+
+    /** Creates the script runtime for a document, or null to disable scripting. */
+    default ScriptRuntime createScriptRuntime(Document document) { return null; }
+
+    default void log(LogLevel level, String message) {
+        (level == LogLevel.ERROR || level == LogLevel.WARN ? System.err : System.out).println("[vellum] " + message);
+    }
+
+    default void reportError(String message, Throwable error) {
+        log(LogLevel.ERROR, message + ": " + error);
+    }
+
+    default void setCursor(Cursor cursor) {}
+
+    default void playSound(String id, float volume, float pitch) {}
+
+    default String getClipboard() { return ""; }
+
+    default void setClipboard(String text) {}
+
+    /** Called for {@code vellum.close()} / {@code window.close()}. */
+    default void close() {}
+
+    /** Called for {@code vellum.send(channel, data)}: forward a JSON message to the server or the owning mod. */
+    default void send(String channel, String json) {}
+
+    /** Called for {@code <a href>} activation and {@code location.href = ...}; hosts may navigate or ignore. */
+    default void navigate(String url) {}
+
+    enum LogLevel { DEBUG, INFO, WARN, ERROR }
+}

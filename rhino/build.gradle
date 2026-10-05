@@ -1,0 +1,34 @@
+// Mozilla Rhino, relocated to dev.vellum.shadow.rhino so it can never clash with another mod's copy (KubeJS's fork
+// lives in its own package, but other mods jar-in-jar plain org.mozilla:rhino). The relocated classes are copied
+// into the engine consumers' outputs (see multiloader-loader.gradle), not nested as a jar.
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.6.1'
+}
+
+repositories { mavenCentral() }
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+dependencies {
+    implementation("org.mozilla:rhino:${rhino_version}")
+}
+
+tasks.named('shadowJar') {
+    archiveClassifier = ''
+    relocate('org.mozilla.javascript', 'dev.vellum.shadow.rhino')
+    relocate('org.mozilla.classfile', 'dev.vellum.shadow.rhino.classfile')
+    mergeServiceFiles()
+    exclude('module-info.class', 'META-INF/versions/*/module-info.class', 'META-INF/maven/**')
+}
+
+tasks.named('jar') { enabled = false }
+
+configurations {
+    relocated { canBeResolved = false; canBeConsumed = true }
+}
+artifacts {
+    relocated(tasks.named('shadowJar'))
+}

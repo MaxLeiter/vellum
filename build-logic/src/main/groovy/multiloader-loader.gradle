@@ -1,0 +1,70 @@
+plugins {
+    id 'multiloader-common'
+}
+
+configurations {
+    commonJava {
+        canBeResolved = true
+    }
+    commonResources {
+        canBeResolved = true
+    }
+    engineJava {
+        canBeResolved = true
+    }
+    engineResources {
+        canBeResolved = true
+    }
+    rhinoRelocated {
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    compileOnly(project(':common')) {
+        def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
+        attributes {
+            attribute(loaderAttribute, 'common')
+        }
+    }
+    commonJava(project(path: ':common', configuration: 'commonJava'))
+    commonResources(project(path: ':common', configuration: 'commonResources'))
+    engineJava(project(path: ':engine', configuration: 'engineJava'))
+    engineResources(project(path: ':engine', configuration: 'engineResources'))
+    rhinoRelocated(project(path: ':rhino', configuration: 'relocated'))
+    compileOnly(project(path: ':rhino', configuration: 'relocated'))
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn(configurations.commonJava)
+    source(configurations.commonJava)
+    dependsOn(configurations.engineJava)
+    source(configurations.engineJava)
+}
+
+processResources {
+    // The relocated Rhino classes ship inside the mod itself (dev and jar), so there is no nested jar to resolve.
+    dependsOn(configurations.rhinoRelocated)
+    from({ configurations.rhinoRelocated.collect { zipTree(it) } }) {
+        exclude('META-INF/MANIFEST.MF')
+    }
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+    dependsOn(configurations.engineResources)
+    from(configurations.engineResources)
+}
+
+tasks.named('javadoc', Javadoc).configure {
+    dependsOn(configurations.commonJava)
+    source(configurations.commonJava)
+    dependsOn(configurations.engineJava)
+    source(configurations.engineJava)
+    failOnError = false
+}
+
+tasks.named('sourcesJar', Jar) {
+    dependsOn(configurations.commonJava)
+    from(configurations.commonJava)
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+}
