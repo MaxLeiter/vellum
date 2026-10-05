@@ -15,9 +15,9 @@ import java.util.Objects;
  * ({@link dev.vellum.engine.dom.Element#style}), so layout and paint always read a stable snapshot.
  *
  * <p>Conventions: lengths that may be percentages or keywords are {@link Length}; border and outline widths are
- * resolved px floats (0 when the style is none); colours are ARGB ints with {@code currentColor} already resolved;
- * relative units (em, rem, vw...) are already converted to px. {@link Prop} lists every property with its metadata
- * and gives generic access for transitions and animations.
+ * resolved px floats (0 when the style is none); colours are ARGB ints with {@code currentColor} already resolved
+ * (in used styles against the animated colour, DESIGN §8); relative units (em, rem, vw...) are already converted to
+ * px. {@link Prop} lists every property with its metadata and gives generic access for transitions and animations.
  */
 public final class ComputedStyle implements Cloneable {
     /** Default font size, in GUI px. Minecraft's font is drawn on an 8px em, so 8px renders at scale 1. */

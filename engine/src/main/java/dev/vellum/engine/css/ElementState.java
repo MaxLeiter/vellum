@@ -95,6 +95,11 @@ final class ElementState {
         return true;
     }
 
+    /** Whether the last computation copied a non-inherited property from the parent ({@code inherit}). */
+    boolean inheritsExplicitly() {
+        return inheritsExplicitly;
+    }
+
     void remember(ComputedStyle parent, ComputedStyle container, int generation, boolean readsAttributes,
                   boolean inheritsExplicitly) {
         this.parent = parent;

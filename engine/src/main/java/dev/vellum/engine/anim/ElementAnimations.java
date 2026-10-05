@@ -2,6 +2,7 @@ package dev.vellum.engine.anim;
 
 import dev.vellum.engine.css.ResolvedKeyframe;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Display;
@@ -14,12 +15,15 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The animations of one element (its {@code Element.animationState}): CSS transitions, CSS animations and scripted
- * animations, and how they combine into {@code element.style}. Later layers win: base, then transitions, then CSS
- * animations in {@code animation-name} order, then scripted animations in creation order.
+ * The animations of one element or one of its ::before/::after pseudo-elements (kept in the element's
+ * {@code Element.animationState}): CSS transitions, CSS animations and scripted animations, and how they combine
+ * into its used style. Later layers win: base, then transitions, then CSS animations in {@code animation-name}
+ * order, then scripted animations in creation order.
  */
 final class ElementAnimations {
     final Element element;
+    /** {@link PseudoElement#NONE} for the element itself. Scripted animations only run on elements. */
+    final PseudoElement which;
     private final AnimationEngine engine;
     private final List<CssTransition> transitions = new ArrayList<>();
     private List<CssAnimation> cssAnimations = new ArrayList<>();
@@ -33,9 +37,10 @@ final class ElementAnimations {
     /** The composed style handed out last ({@code element.style}) and the one the next compose writes. */
     private Composed front = new Composed(), back = new Composed();
 
-    ElementAnimations(AnimationEngine engine, Element element) {
+    ElementAnimations(AnimationEngine engine, Element element, PseudoElement which) {
         this.engine = engine;
         this.element = element;
+        this.which = which;
     }
 
     boolean isEmpty() {
@@ -90,6 +95,23 @@ final class ElementAnimations {
         back = front;
         front = target;
         return target.style;
+    }
+
+    /** Whether a current effect sets color or font-size, which other values are computed from (currentColor, em). */
+    boolean setsComputedFrom() {
+        for (Player p : players) {
+            if (p.hasEffect() && (p.effect.props().contains(Prop.COLOR) || p.effect.props().contains(Prop.FONT_SIZE))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A copy of {@code base} with every current effect applied (outside {@link #compose}'s alternating styles). */
+    ComputedStyle applied(ComputedStyle base) {
+        ComputedStyle s = base.copy();
+        for (Player p : players) p.apply(s);
+        return s;
     }
 
     /** Adds a scripted animation that is (again) playing and marks the element for the next tick. */
@@ -160,7 +182,7 @@ final class ElementAnimations {
         CssTransition next;
         if (running == null) {
             if (spec == null) return;
-            next = CssTransition.start(engine, element, prop, prop.get(oldBase), after, spec, now);
+            next = CssTransition.start(engine, element, which, prop, prop.get(oldBase), after, spec, now);
         } else {
             if (spec != null && Objects.equals(running.to, after)) return; // still heading for the new value
             transitions.remove(running);
@@ -186,9 +208,9 @@ final class ElementAnimations {
             if (animation != null) {
                 animation.update(spec, base, now);
             } else {
-                List<ResolvedKeyframe> keyframes = engine.resolveKeyframes(element, spec.name(), base);
+                List<ResolvedKeyframe> keyframes = engine.resolveKeyframes(element, which, spec.name(), base);
                 if (keyframes.isEmpty()) continue; // no such @keyframes rule: nothing runs
-                animation = new CssAnimation(engine, element, spec, base, keyframes, now);
+                animation = new CssAnimation(engine, element, which, spec, base, keyframes, now);
             }
             matched[i] = animation;
         }

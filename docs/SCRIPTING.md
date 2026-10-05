@@ -183,7 +183,7 @@ see the same event object. By kind:
 | `KeyboardEvent` (`keydown`, `keyup`) | `key` (`"a"`, `"Enter"`, `"ArrowLeft"`, `"Escape"`...), `code` (`"KeyA"`), `keyCode` (the legacy code of the physical key, as browsers report it on a US layout), `repeat`, and the modifier keys |
 | `FocusEvent` (`focus`, `blur`, `focusin`, `focusout`) | `relatedTarget` |
 | `InputEvent` (`beforeinput`, `input`, `change`) | `data`, `inputType` |
-| `TransitionEvent` / `AnimationEvent` | `propertyName`, `animationName`, `elapsedTime` |
+| `TransitionEvent` / `AnimationEvent` | `propertyName`, `animationName`, `elapsedTime`, `pseudoElement` (`"::before"` or `"::after"` when the target's pseudo-element runs it, else `""`) |
 | `CustomEvent` | `detail` |
 
 Make your own with `new Event(type, {bubbles, cancelable})` or `new CustomEvent(type, {detail, bubbles, cancelable})`

@@ -2,8 +2,8 @@ package dev.vellum.engine.css;
 
 import dev.vellum.engine.css.Decl.Keyword;
 import dev.vellum.engine.css.RuleIndex.Entry;
-import dev.vellum.engine.css.Selector.PseudoElement;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Prop;
@@ -93,10 +93,11 @@ final class Cascade {
     /**
      * The style of {@code element} (or of one of its pseudo-elements) from its matched rules, sorted in cascade order,
      * and its inline declarations. {@code container} is the style of the box's parent for blockification (flex and
-     * grid items), null for the root.
+     * grid items), null for the root. When {@code own} is given, its font-size and color replace the computed ones
+     * before anything else is computed from them (em, currentColor): its animated values, at used-value time.
      */
     ComputedStyle compute(Element element, ComputedStyle parent, ComputedStyle container, float rem,
-                          List<Entry> matched, PseudoElement pseudo, List<Decl> inline) {
+                          List<Entry> matched, PseudoElement pseudo, List<Decl> inline, ComputedStyle own) {
         clear();
         for (Longhand l : WITH_INITIAL) win(l.initial);
         for (Entry e : matched) if (e.selector().pseudoElement == pseudo) put(e.decls(), false);
@@ -104,7 +105,7 @@ final class Cascade {
         for (Entry e : matched) if (e.selector().pseudoElement == pseudo && !e.userAgent()) put(e.decls(), true);
         if (inline != null) put(inline, true);
         for (Entry e : matched) if (e.selector().pseudoElement == pseudo && e.userAgent()) put(e.decls(), true);
-        ComputedStyle s = computeWinners(element, parent, ComputedStyle.inheritFrom(parent), rem);
+        ComputedStyle s = computeWinners(element, parent, ComputedStyle.inheritFrom(parent), rem, own);
         boolean outOfFlow = s.position.isOutOfFlow();
         if (container != null && (container.display.isFlex() || container.display.isGrid()) && !outOfFlow) {
             s.isFlexOrGridItemHint = true;
@@ -125,7 +126,7 @@ final class Cascade {
         for (Decl d : decls) {
             if (d.property != null) props.add(d.property.prop != null ? d.property.prop : d.property.group.prop);
         }
-        return computeWinners(element, parent, base.copy(), rem);
+        return computeWinners(element, parent, base.copy(), rem, null);
     }
 
     private void clear() {
@@ -151,11 +152,16 @@ final class Cascade {
         }
     }
 
-    private ComputedStyle computeWinners(Element element, ComputedStyle parent, ComputedStyle s, float rem) {
+    private ComputedStyle computeWinners(Element element, ComputedStyle parent, ComputedStyle s, float rem,
+                                         ComputedStyle own) {
         ctx.element(element, parent, rem);
         if (!customWinners.isEmpty()) s.customProperties = customProperties(s.customProperties, parent);
         applyLonghand(FONT_SIZE, s, parent);
         applyLonghand(COLOR, s, parent);
+        if (own != null) {
+            s.fontSize = own.fontSize;
+            s.color = own.color;
+        }
         ctx.own(s);
         for (int i = 0; i < declaredCount; i++) {
             Longhand l = LONGHANDS.get(declared[i]);

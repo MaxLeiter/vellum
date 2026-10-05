@@ -1,6 +1,7 @@
 package dev.vellum.engine.anim;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.event.TransitionEvent;
 import dev.vellum.engine.style.ComputedStyle;
 
@@ -20,7 +21,9 @@ abstract class Player {
     enum Kind { RUN, START, ITERATION, END, CANCEL }
 
     final AnimationEngine engine;
+    /** The element animated, or whose {@link #pseudo} pseudo-element is; its events go to the element. */
     final Element element;
+    final PseudoElement pseudo;
     Timing timing;
     KeyframeEffect effect;
 
@@ -36,9 +39,10 @@ abstract class Player {
     private Timing.Phase reportedPhase;
     private double reportedIteration;
 
-    Player(AnimationEngine engine, Element element, Timing timing, KeyframeEffect effect) {
+    Player(AnimationEngine engine, Element element, PseudoElement pseudo, Timing timing, KeyframeEffect effect) {
         this.engine = engine;
         this.element = element;
+        this.pseudo = pseudo;
         this.timing = timing;
         this.effect = effect;
     }
@@ -201,7 +205,7 @@ abstract class Player {
         String type = eventType(kind);
         if (type == null) return;
         String name = eventName();
-        engine.post(() -> element.dispatchEvent(new TransitionEvent(type, name, (float) (elapsedMs / 1000))));
+        engine.post(() -> element.dispatchEvent(new TransitionEvent(type, name, pseudo.cssName, (float) (elapsedMs / 1000))));
     }
 
     /** {@code prefix} followed by the lower-case kind: "transition" and START make "transitionstart". */

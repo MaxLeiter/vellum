@@ -3,6 +3,7 @@ package dev.vellum.engine.css;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.dom.Text;
 
 import java.util.ArrayList;
@@ -17,8 +18,6 @@ import java.util.Map;
  * trailing pseudo-element. Matching runs right to left. Parsed by {@link SelectorParser}.
  */
 final class Selector {
-    enum PseudoElement { NONE, BEFORE, AFTER, PLACEHOLDER }
-
     /** Compounds from left to right. */
     final Compound[] compounds;
     /** {@code combinators[i]} joins {@code compounds[i]} and {@code compounds[i + 1]}: ' ', '>', '+' or '~'. */

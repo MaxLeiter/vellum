@@ -1,6 +1,7 @@
 package dev.vellum.engine.anim;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +16,7 @@ final class ScriptAnimation extends Player implements Animation {
     private final List<Runnable> cancelCallbacks = new ArrayList<>(1);
 
     ScriptAnimation(AnimationEngine engine, Element element, KeyframeEffect effect, Timing timing) {
-        super(engine, element, timing, effect);
+        super(engine, element, PseudoElement.NONE, timing, effect);
     }
 
     @Override

@@ -1,13 +1,14 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.anim.AnimationEngine;
 import dev.vellum.engine.css.RuleIndex.Entry;
 import dev.vellum.engine.css.RuleIndex.Source;
 import dev.vellum.engine.css.Selector.MatchContext;
-import dev.vellum.engine.css.Selector.PseudoElement;
 import dev.vellum.engine.css.Stylesheet.Keyframe;
 import dev.vellum.engine.css.Stylesheet.KeyframesRule;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.dom.Text;
 import dev.vellum.engine.host.Host;
@@ -48,6 +49,8 @@ public final class StyleEngine {
     private final Host host;
     private final Cascade cascade = new Cascade();
     private final List<Entry> matched = new ArrayList<>();
+    /** Scratch for {@link #computeUsed}, which runs while a restyle's {@link #matched} is still in use. */
+    private final List<Entry> usedMatches = new ArrayList<>();
     private RuleIndex index;
     private List<Source> sources;
     /** The {@link Document#domVersion} the last restyle ran at (and {@link #sources} were collected at). */
@@ -111,18 +114,18 @@ public final class StyleEngine {
             index.match(el, mc, matched);
             sameMatches = state.updateMatches(matched, mc.interactionRead);
         }
-        ComputedStyle old = el.baseStyle;
+        ComputedStyle old = el.baseStyle, oldBefore = el.beforeBaseStyle, oldAfter = el.afterBaseStyle;
         ComputedStyle base = old;
         if (old == null || !sameMatches || !state.sameInputs(parent, container, generation)) {
             if (!rematch) state.matchesInto(matched);
             float rem = parent == null ? ComputedStyle.DEFAULT_FONT_SIZE : rootFontSize;
             base = reuseIfEqual(old, cascade.compute(el, parent, container, rem, matched, PseudoElement.NONE,
-                    state.inline));
+                    state.inline, null));
             boolean inheritsExplicitly = cascade.inheritedExplicitly();
             boolean readsAttributes = cascade.readAttributes();
-            el.beforeStyle = pseudo(el, base, rem, PseudoElement.BEFORE, el.beforeStyle);
+            el.beforeBaseStyle = pseudo(el, base, rem, PseudoElement.BEFORE, oldBefore);
             readsAttributes |= cascade.readAttributes();
-            el.afterStyle = pseudo(el, base, rem, PseudoElement.AFTER, el.afterStyle);
+            el.afterBaseStyle = pseudo(el, base, rem, PseudoElement.AFTER, oldAfter);
             readsAttributes |= cascade.readAttributes();
             el.placeholderStyle = el.isTextControl()
                     ? pseudo(el, base, rem, PseudoElement.PLACEHOLDER, el.placeholderStyle) : null;
@@ -133,7 +136,10 @@ public final class StyleEngine {
             generation++;
         }
         el.baseStyle = base;
-        document.animations().styleChanged(el, old, base);
+        AnimationEngine animations = document.animations();
+        animations.styleChanged(el, PseudoElement.NONE, old, base);
+        animations.styleChanged(el, PseudoElement.BEFORE, oldBefore, el.beforeBaseStyle);
+        animations.styleChanged(el, PseudoElement.AFTER, oldAfter, el.afterBaseStyle);
         ComputedStyle childContainer = base.display == Display.CONTENTS ? container : base;
         for (int i = 0, n = el.childCount(); i < n; i++) {
             if (el.childAt(i) instanceof Element child) restyle(child, base, childContainer, mc);
@@ -145,7 +151,7 @@ public final class StyleEngine {
         ComputedStyle s = null;
         for (Entry e : matched) {
             if (e.selector().pseudoElement != which) continue;
-            s = cascade.compute(el, style, style, rem, matched, which, null);
+            s = cascade.compute(el, style, style, rem, matched, which, null, null);
             if (which != PseudoElement.PLACEHOLDER && s.content == null) s = null;
             break;
         }
@@ -168,6 +174,45 @@ public final class StyleEngine {
             return fresh;
         }
         return old.sameAs(fresh) ? old : fresh;
+    }
+
+    // ---- Used styles ----
+
+    /**
+     * The style {@code el} (or its {@code which} pseudo-element) has at used-value time: computed from its parent's
+     * used style instead of its base style, so animated inherited values pass down, and with the font-size and
+     * color of {@code own} (its animated values, or null), which {@code em} and {@code currentColor} resolve
+     * against. The base style itself when that computes the same. The animation engine calls this after a restyle,
+     * parents first.
+     */
+    public ComputedStyle computeUsed(Element el, PseudoElement which, ComputedStyle own) {
+        ComputedStyle base = switch (which) {
+            case BEFORE -> el.beforeBaseStyle;
+            case AFTER -> el.afterBaseStyle;
+            default -> el.baseStyle;
+        };
+        if (base == null) return null;
+        Element from = which == PseudoElement.NONE ? el.parentElement() : el;
+        ComputedStyle parent = from == null ? null : from.style, parentBase = from == null ? null : from.baseStyle;
+        ElementState state = ElementState.of(el);
+        boolean parentAnimated = parent != parentBase && parent != null && parentBase != null
+                && !(state.inheritsExplicitly() ? parent.sameAs(parentBase) : parent.sameInherited(parentBase));
+        boolean ownAnimated = own != null && (own.color != base.color || Float.compare(own.fontSize, base.fontSize) != 0);
+        if (!parentAnimated && !ownAnimated) return base;
+        usedMatches.clear();
+        state.matchesInto(usedMatches);
+        float rem = from == null ? ComputedStyle.DEFAULT_FONT_SIZE : rootFontSize;
+        ComputedStyle container = which == PseudoElement.NONE ? container(el) : el.baseStyle;
+        return cascade.compute(el, parent, container, rem, usedMatches, which,
+                which == PseudoElement.NONE ? state.inline : null, own);
+    }
+
+    /** The style blockification reads for {@code el}: its nearest ancestor's that is not {@code display: contents}. */
+    private static ComputedStyle container(Element el) {
+        for (Element p = el.parentElement(); p != null; p = p.parentElement()) {
+            if (p.baseStyle == null || p.baseStyle.display != Display.CONTENTS) return p.baseStyle;
+        }
+        return null;
     }
 
     // ---- Stylesheets ----
@@ -233,11 +278,12 @@ public final class StyleEngine {
     // ---- Keyframes and script-provided declarations ----
 
     /**
-     * The keyframes of the {@code @keyframes} rule named {@code name}, computed for {@code element} on top of
-     * {@code base}, sorted by offset. Missing 0% / 100% keyframes are NOT synthesised (the animation engine uses the
+     * The keyframes of the {@code @keyframes} rule named {@code name}, computed for {@code element} (or its
+     * {@code which} pseudo-element) on top of {@code base}, sorted by offset. Missing 0% / 100% keyframes are NOT synthesised (the animation engine uses the
      * base value there). Returns an empty list when no such rule exists.
      */
-    public List<ResolvedKeyframe> resolveKeyframes(Element element, String name, ComputedStyle base) {
+    public List<ResolvedKeyframe> resolveKeyframes(Element element, PseudoElement which, String name,
+                                                   ComputedStyle base) {
         KeyframesRule rule = index == null ? null : index.keyframes.get(name);
         if (rule == null) return List.of();
         // Blocks with the same offset merge in order (later declarations win).
@@ -246,7 +292,7 @@ public final class StyleEngine {
             for (Float offset : k.offsets()) byOffset.computeIfAbsent(offset, o -> new ArrayList<>()).addAll(k.decls());
         }
         List<ResolvedKeyframe> out = new ArrayList<>(byOffset.size());
-        byOffset.forEach((offset, decls) -> out.add(keyframe(element, base, offset, decls)));
+        byOffset.forEach((offset, decls) -> out.add(keyframe(element, which, base, offset, decls)));
         return out;
     }
 
@@ -256,14 +302,16 @@ public final class StyleEngine {
      * Returns the new style and the set of properties the declarations set, as a keyframe at offset 0.
      */
     public ResolvedKeyframe computeDeclarations(Element element, String declarations, ComputedStyle base) {
-        return keyframe(element, base, 0, Stylesheet.declarations(declarations, document.url(), host, log(document.url())));
+        return keyframe(element, PseudoElement.NONE, base, 0,
+                Stylesheet.declarations(declarations, document.url(), host, log(document.url())));
     }
 
     /**
      * A keyframe: {@code animation-timing-function} becomes the keyframe's easing; other animation and transition
      * properties are ignored, as in CSS.
      */
-    private ResolvedKeyframe keyframe(Element element, ComputedStyle base, float offset, List<Decl> decls) {
+    private ResolvedKeyframe keyframe(Element element, PseudoElement which, ComputedStyle base, float offset,
+                                      List<Decl> decls) {
         TimingFunction timing = null;
         List<Decl> applied = new ArrayList<>(decls.size());
         Longhand easing = Properties.longhand("animation-timing-function");
@@ -275,9 +323,9 @@ public final class StyleEngine {
                 applied.add(d);
             }
         }
-        Element parentElement = element.parentElement();
-        ComputedStyle parent = parentElement == null ? null : parentElement.baseStyle;
-        float rem = parentElement == null ? ComputedStyle.DEFAULT_FONT_SIZE : rootFontSize;
+        Element from = which == PseudoElement.NONE ? element.parentElement() : element;
+        ComputedStyle parent = from == null ? null : from.baseStyle;
+        float rem = from == null ? ComputedStyle.DEFAULT_FONT_SIZE : rootFontSize;
         Set<Prop> props = EnumSet.noneOf(Prop.class);
         ComputedStyle style = cascade.apply(element, parent, rem, base, applied, props);
         return new ResolvedKeyframe(offset, timing, style, Collections.unmodifiableSet(props));

@@ -77,7 +77,7 @@ host: frame(nowMs)                   every frame:
         scheduler.run      timers, requestAnimationFrame
         input.tick         scrolling (smooth scrolls, scroll events), caret blink
         scripts.beforeRestyle  template bindings re-render if any script entry ran since the last frame
-        updateStyle        if style dirty: cascade → element.baseStyle; animations.styleChanged → element.style
+        updateStyle        if style dirty: cascade → baseStyle; animations.styleChanged → used style (element.style)
         animations.tick    advance transitions/animations → element.style; invalidates layout if needed
         updateLayout       if layout dirty: box tree → element.box
         input.afterLayout  after any layout (also one a script flushed): caret in view, autofocus, re-target hover
@@ -118,17 +118,20 @@ Restyles are incremental in effect: elements whose inputs are unchanged keep the
 hover/active/focus changed (`Document.domVersion` is unchanged) elements whose selector matching did not read that
 state skip matching.
 
-Per-element results live on `Element`: `baseStyle` (cascade), `style` (after animations, used by layout and paint),
-`beforeStyle`/`afterStyle`, `box`, `replaced`, scroll state, and opaque slots for subsystem state
+Per-element results live on `Element`: `baseStyle` (cascade) and `style` (the used style: after animations, read by
+layout and paint), the same pair for the pseudo-elements (`beforeBaseStyle`/`beforeStyle`,
+`afterBaseStyle`/`afterStyle`), `box`, `replaced`, scroll state, and opaque slots for subsystem state
 (`animationState`, `controlState`, `parsedInlineStyle`, `scriptWrapper`). The animation engine is the only writer
-of `style`; when a change moves paint order without a relayout (z-index, opacity or a transform starting a stacking
-context) it bumps `Document.stackingVersion()`.
+of used styles (§8); when a change moves paint order without a relayout (z-index, opacity or a transform starting a
+stacking context) it bumps `Document.stackingVersion()`.
 
 ### Contracts between subsystems
-- **css → anim**: after computing an element's base style the style engine calls
-  `document.animations().styleChanged(el, oldBase, newBase)`; the animation engine sets `el.style`.
-  For keyframes the animation engine calls `StyleEngine.resolveKeyframes(el, name, base)` which returns
-  `List<ResolvedKeyframe(offset, timing, style, props)>`, each keyframe's declarations computed for that element.
+- **css → anim**: after computing an element's base styles the style engine calls
+  `document.animations().styleChanged(el, which, oldBase, newBase)` for the element and for its ::before and
+  ::after (`dom.PseudoElement`), parents first; the animation engine sets the used styles. It computes them with
+  `StyleEngine.computeUsed(el, which, own)` (the cascade at used-value time, §8). For keyframes it calls
+  `StyleEngine.resolveKeyframes(el, which, name, base)` which returns
+  `List<ResolvedKeyframe(offset, timing, style, props)>`, each keyframe's declarations computed for that target.
 - **layout ← style**: layout reads only `element.style` / `beforeStyle` / `afterStyle` and `Host.fonts()` (through
   `TextMeasure`).
   Boxes use the coordinate rules in `Box`'s javadoc.
@@ -351,8 +354,24 @@ the scrollbar).
   ints (rounded), colours (premultiplied), shadow lists (pairwise, padding with transparent zero shadows), transform
   lists (pairwise by function type when lists match; otherwise decompose both to matrices and interpolate
   translate/rotate/scale/skew), discrete for everything else.
+- Pseudo-elements animate like elements: `::before` and `::after` have their own transitions and animations, whose
+  events go to the element with `pseudoElement` set.
+- **Used values.** A used style is the base style with the target's effects applied, computed at used-value time:
+  what a target inherits follows its parent's *used* values (a pseudo-element's parent is its element), and what it
+  computes from `color` or `font-size` follows its own animated ones: `currentColor` anywhere (border colours,
+  which default to it, `background-color`, `-mc-tint`, shadows and gradients without a colour, `color-mix()`) and
+  `em`. The cascade itself does this (`StyleEngine.computeUsed`): when a target's parent's used inherited values
+  differ from its base ones, or its effects set `color` or `font-size`, it is computed again from the used inputs and
+  its effects apply on top. So animating `color` recolours the element's borders and its children's text. Base styles
+  stay the cascade's alone (inheriting base values), which is what transitions compare: a change an ancestor's
+  animation causes never starts a transition. currentColor is resolved by recomputing rather than kept symbolic in
+  colour fields (a sentinel would need resolving in every reader of every colour, inside shadows, gradients and
+  `color-mix()` too); the cost is a cascade per frame for each target under an animated inherited value. A target
+  with nothing animated in it or above it keeps its base style object as its used style. (Like the rest of the
+  cascade, `currentColor` in an inherited property such as `-mc-tint` inherits as the colour it resolved to.)
 - Layout-affecting animated properties invalidate layout each frame; paint-only ones (opacity, transform, colours)
-  do not.
+  do not, for elements: their boxes paint with the element's live style. Pseudo-element boxes and their generated
+  text paint with the style they were laid out with, so a pseudo-element whose used style changes is laid out again.
 - `element.animate(keyframes, options)` from scripts creates the same animation objects (Web Animations subset:
   `finished` promise-like callback, `cancel()`, `pause()`, `play()`, `reverse()`).
 - `prefers-reduced-motion` media query reflects a host setting.
