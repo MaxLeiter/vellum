@@ -1,5 +1,6 @@
 package dev.vellum.mod.client;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
@@ -8,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -22,29 +24,55 @@ import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * Dev-only visual check ({@code ./gradlew :neoforge:runClient -Pautopilot} or {@code :fabric:runClient -Pautopilot},
  * i.e. {@code -Dvellum.autopilot=true}):
  * creates a superflat creative world, opens the canvas test, every showcase page and demo, screenshots each to
  * {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas test and the 3D pages also at 3),
- * logs the frame rate of each (and of benchmark pages of 3D content), hovers the title screen's first button for a
- * burst of screenshots a tick apart (hover effects and animations), drives the templates demo with
- * {@link VellumAutomation} (clicks, typing, Enter) and checks its state, and quits.
+ * logs the frame rate of each (and of benchmark pages of 3D content), and quits. It drives pages with
+ * {@link VellumAutomation}: hovers the title screen's first button for a burst of screenshots a tick apart (hover
+ * effects and animations), fills in the templates demo (clicks, typing, Enter), clicks a Mobdex row scrolled out of
+ * its list and scrolls the list back, and answers the demo toast overlay through chat; it checks each result, and
+ * waits for pages to settle rather than for a fixed time.
  */
 public final class DevAutopilot {
     public static final boolean ENABLED = Boolean.getBoolean("vellum.autopilot");
-    /** Ticks to let a screen load, animate in and render before its screenshot. */
+    /**
+     * The fewest ticks before a page's screenshot, so the frame rate logged with it (counted over a second) is the
+     * page's own; and how long to wait for a screen that is not a Vellum page.
+     */
     private static final int SETTLE = 20;
+    /** The most ticks to wait for a condition ({@link #until}) before going on without it. */
+    private static final int MAX_POLL = 200;
+    /**
+     * The most ticks to wait for a page to settle. Some never do: the showcase HUD's timers keep starting transitions
+     * and animations, as a game's HUD would.
+     */
+    private static final int MAX_SETTLE = 60;
+    /** The demo toast's Allow button. */
+    private static final String ALLOW = ".actions button:first-child";
 
     private static boolean started, loaded, finished;
     private static final Deque<Runnable> steps = new ArrayDeque<>();
     private static int wait;
+    /**
+     * What the steps wait for, polled once a tick: what it means when it holds, what to log instead after
+     * {@link #untilMax} ticks (and whether that is a warning), and the ticks polled so far.
+     */
+    private static @Nullable BooleanSupplier until;
+    private static String untilWhat = "", untilGaveUp = "";
+    private static boolean untilWarns;
+    private static int polled, untilMax;
 
     private DevAutopilot() {}
 
@@ -80,6 +108,7 @@ public final class DevAutopilot {
             wait--;
             return;
         }
+        if (until != null && !poll()) return;
         Runnable step = steps.poll();
         if (step == null) {
             finished = true;
@@ -92,6 +121,24 @@ public final class DevAutopilot {
         } catch (RuntimeException e) {
             Constants.LOG.error("Vellum autopilot step failed", e);
         }
+    }
+
+    /** Polls {@link #until}: true once it holds or the autopilot gave up on it. */
+    private static boolean poll() {
+        polled++;
+        boolean done;
+        try {
+            done = until.getAsBoolean();
+        } catch (RuntimeException e) {
+            Constants.LOG.error("Vellum autopilot: waiting until {} failed", untilWhat, e);
+            done = true;
+        }
+        if (!done && polled < untilMax) return false;
+        if (done) Constants.LOG.info("Vellum autopilot: {} ({} ticks)", untilWhat, polled);
+        else if (untilWarns) Constants.LOG.warn("Vellum autopilot: {} after {} ticks", untilGaveUp, polled);
+        else Constants.LOG.info("Vellum autopilot: {} after {} ticks", untilGaveUp, polled);
+        until = null;
+        return true;
     }
 
     private static void plan(Minecraft mc) {
@@ -122,11 +169,12 @@ public final class DevAutopilot {
         guiScale(mc, 2);
         shoot(mc, "showcase_mobdex_unseen", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("mobdex"),
                 JsonParser.parseString("{\"start\": {\"mob\": \"warden\"}}")));
+        mobdexList(mc);
         // Dragging the Turntable's big model (rotatable): it turns and tilts, and keeps turning when let go.
         steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
-        steps.add(() -> wait = SETTLE);
+        settle("the models page", VellumAutomation::screen, 0);
         drag(mc, "model[rotatable]", 60, 20);
-        shoot(mc, "showcase_models_dragged", () -> mc.gui.screen().mouseMoved(10, 10));
+        shoot(mc, "showcase_models_dragged", () -> VellumAutomation.screen().ifPresent(VellumAutomation::leave));
         // What 3D content costs: the logged fps of 48 spinning entities, models and items (2D, for comparison).
         for (String bench : List.of("entity type='minecraft:zombie'", "model block='minecraft:chest'", "item id='minecraft:chest'")) {
             String tag = bench.split(" ")[0];
@@ -136,42 +184,169 @@ public final class DevAutopilot {
             shoot(mc, "bench_" + tag, () -> VellumScreens.openInline(page, null));
         }
         steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("title")));
-        steps.add(() -> wait = SETTLE);
+        settle("the title screen", VellumAutomation::screen, 0);
         hover(".panel button");
         for (int i = 0; i < 4; i++) grab(mc, "showcase_title_hover_" + i, 0);
+        steps.add(() -> VellumAutomation.screen().ifPresent(VellumAutomation::leave)); // or the next pages open hovered
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
         }
         steps.add(() -> VellumClientCommands.demo("templates"));
-        steps.add(() -> wait = SETTLE);
+        settle("the templates demo", VellumAutomation::screen, 0);
         steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
             page.click(".counter button:last-child");
             page.click(".counter button:last-child");
             page.click(".add input");
             page.type("Mine diamonds");
             page.key("Enter");
+            page.leave(); // no hover or tooltip in the screenshot
             String state = page.eval("[state.count, state.todos.length]").map(Object::toString).orElse("none");
             if (state.equals("[2,3]")) Constants.LOG.info("Vellum autopilot: templates demo input works");
             else Constants.LOG.error("Vellum autopilot: templates demo state is {}, expected [2,3]", state);
-            wait = 2; // the page re-renders at its next frame
         }));
+        settle("the filled-in templates demo", VellumAutomation::screen, 0);
         grab(mc, "templates_input", 5);
         shoot(mc, "chest", () -> {
             mc.gui.setScreen(null);
             command(mc, "vellum demo chest");
         });
-        shoot(mc, "hud", () -> {
+        // The demo HUD's card fades in and out over four seconds, then closes: shoot it a second in, not settled.
+        steps.add(() -> {
             mc.gui.setScreen(null);
             VellumHud.show(VellumClient.DEMO_HUD);
         });
+        steps.add(() -> wait = SETTLE);
+        grab(mc, "hud", 5);
         steps.add(() -> VellumHud.hide(VellumClient.DEMO_HUD));
+        toast(mc);
     }
 
-    /** Runs {@code open}, lets it settle, and saves a screenshot named {@code vellum_<name>.png}. */
+    /**
+     * In the open Mobdex: clicks the list's last row, which is scrolled out of the list, so the click has to scroll it
+     * into view to land; then turns the wheel over the list and scrolls its first row back into view.
+     */
+    private static void mobdexList(Minecraft mc) {
+        String last = "#list .row:last-child";
+        steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
+            float[] list = page.rect("#list").orElse(null), row = page.rect(last).orElse(null);
+            boolean hidden = list != null && row != null && row[1] >= list[1] + list[3];
+            boolean clicked = page.click(last);
+            page.leave();
+            boolean selected = page.eval("state.sel === filtered()[filtered().length - 1].id")
+                    .map(JsonElement::getAsBoolean).orElse(false);
+            if (hidden && clicked && selected) Constants.LOG.info("Vellum autopilot: clicking a scrolled-out row works");
+            else Constants.LOG.error("Vellum autopilot: Mobdex row click: scrolled out {}, clicked {}, selected {}",
+                    hidden, clicked, selected);
+        }));
+        settle("the Mobdex selection", VellumAutomation::screen, 0);
+        grab(mc, "showcase_mobdex_last", 0);
+        steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
+            if (!page.wheel("#list", -2)) Constants.LOG.error("Vellum autopilot: no wheel over the Mobdex list");
+            page.leave();
+        }));
+        settle("the Mobdex list's scroll", VellumAutomation::screen, 0);
+        steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
+            double wheeled = scrollTop(page);
+            boolean shown = page.scrollIntoView("#list .row:first-child");
+            double top = scrollTop(page);
+            if (wheeled < listMax(page) && shown && top == 0) {
+                Constants.LOG.info("Vellum autopilot: wheel and scrollIntoView work (list scrolled to {}, then 0)", wheeled);
+            } else {
+                Constants.LOG.error("Vellum autopilot: Mobdex list at {} after the wheel, {} after scrollIntoView ({})",
+                        wheeled, top, shown);
+            }
+        }));
+    }
+
+    private static double scrollTop(VellumAutomation page) {
+        return page.eval("document.getElementById('list').scrollTop").map(JsonElement::getAsDouble).orElse(-1.0);
+    }
+
+    /** How far the Mobdex list scrolls: where clicking its last row left it. */
+    private static double listMax(VellumAutomation page) {
+        return page.eval("document.getElementById('list').scrollHeight - document.getElementById('list').clientHeight")
+                .map(JsonElement::getAsDouble).orElse(-1.0);
+    }
+
+    /**
+     * The demo toast overlay takes the pointer only while chat is open: hovers and clicks its Allow button through
+     * {@link VellumAutomation#hud} with chat open (and checks that it takes none without), screenshots the hover and
+     * its tooltip, and checks the answer arrives and the toast closes.
+     */
+    private static void toast(Minecraft mc) {
+        Supplier<Optional<VellumAutomation>> toast = () -> VellumAutomation.hud(VellumClient.DEMO_TOAST);
+        String[] answer = new String[1];
+        steps.add(() -> {
+            mc.gui.setScreen(null);
+            VellumHud.show(VellumClient.DEMO_TOAST).onMessage("answer", value -> answer[0] = value.getAsString());
+        });
+        settle("the toast", toast, 0);
+        steps.add(() -> {
+            if (toast.get().map(page -> page.hover(ALLOW)).orElse(false)) {
+                Constants.LOG.error("Vellum autopilot: the toast took the pointer with no screen open");
+            }
+            mc.gui.setScreen(new ChatScreen("", false));
+        });
+        until("the toast took the pointer over chat", () -> toast.get().map(page -> page.hover(ALLOW)).orElse(false));
+        settle("the toast's hover and tooltip", toast, 0);
+        steps.add(() -> {
+            boolean hovered = toast.get().flatMap(page -> page.eval("document.querySelector('" + ALLOW + "').matches(':hover')"))
+                    .map(JsonElement::getAsBoolean).orElse(false);
+            if (!hovered) Constants.LOG.error("Vellum autopilot: the toast's Allow button is not hovered");
+        });
+        grab(mc, "toast_hover", 0);
+        steps.add(() -> {
+            if (!toast.get().map(page -> page.click(ALLOW)).orElse(false)) {
+                Constants.LOG.error("Vellum autopilot: could not click the toast's Allow button");
+            }
+        });
+        until("the toast closed", () -> !VellumHud.isShown(VellumClient.DEMO_TOAST));
+        steps.add(() -> {
+            if ("once".equals(answer[0])) Constants.LOG.info("Vellum autopilot: HUD overlay input works");
+            else Constants.LOG.error("Vellum autopilot: the toast answered {}, expected once", answer[0]);
+            if (VellumHud.isShown(VellumClient.DEMO_TOAST)) VellumHud.hide(VellumClient.DEMO_TOAST);
+            mc.gui.setScreen(null);
+        });
+    }
+
+    /**
+     * Runs {@code open}, waits for the open page to settle (at least {@link #SETTLE} ticks), and saves a screenshot
+     * named {@code vellum_<name>.png}.
+     */
     private static void shoot(Minecraft mc, String name, Runnable open) {
         steps.add(open);
-        steps.add(() -> wait = SETTLE);
+        settle(name, VellumAutomation::screen, SETTLE);
         grab(mc, name, 5);
+    }
+
+    /**
+     * Waits, polling once a tick, until {@code page} has settled ({@link VellumAutomation#settled}) and at least
+     * {@code minTicks} have passed. With no such page after {@link #SETTLE} ticks (a screen that is not a Vellum
+     * page) it goes on, and so it does after {@link #MAX_SETTLE} ticks of a page that keeps changing.
+     */
+    private static void settle(String what, Supplier<Optional<VellumAutomation>> page, int minTicks) {
+        until(what + " settled", () -> polled >= minTicks
+                && page.get().map(VellumAutomation::settled).orElse(polled >= SETTLE),
+                Math.max(minTicks, MAX_SETTLE), what + " is still changing, going on", false);
+    }
+
+    /**
+     * Waits until {@code condition} holds, asking once a tick, and logs {@code what} (which says what holding means)
+     * with the ticks it took; goes on with a warning after {@link #MAX_POLL} ticks.
+     */
+    private static void until(String what, BooleanSupplier condition) {
+        until(what, condition, MAX_POLL, "gave up waiting until " + what, true);
+    }
+
+    private static void until(String what, BooleanSupplier condition, int maxTicks, String gaveUp, boolean warns) {
+        steps.add(() -> {
+            until = condition;
+            untilWhat = what;
+            untilGaveUp = gaveUp;
+            untilWarns = warns;
+            untilMax = maxTicks;
+            polled = 0;
+        });
     }
 
     /** Saves a screenshot of the last frame as {@code vellum_<name>.png}, then waits {@code ticks}. */
@@ -191,8 +366,8 @@ public final class DevAutopilot {
             if (!VellumAutomation.screen().map(page -> page.hover(selector)).orElse(false)) {
                 Constants.LOG.warn("Vellum autopilot: nothing to hover at {}", selector);
             }
-            wait = SETTLE;
         });
+        settle("the hover over " + selector, VellumAutomation::screen, 0);
     }
 
     /**

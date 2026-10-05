@@ -601,6 +601,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each showcase page and demo UI in a real
   client (the 3D pages at GUI scales 2 and 3), screenshots it to `neoforge/runs/client/screenshots/`, and logs each
   page's frame rate, plus benchmark pages of 48 spinning entities, models and items. It drives pages through `VellumAutomation`
-  (docs/API.md), the public client API for dev automation: it hovers the showcase title screen's first button for a
-  burst of screenshots a tick apart, and fills in the templates demo and checks its state.
+  (docs/API.md), the public client API for dev automation: it waits for pages to settle, hovers the showcase title
+  screen's first button for a burst of screenshots a tick apart, fills in the templates demo, clicks a Mobdex row
+  scrolled out of its list, and answers the demo toast overlay through chat, checking each result.
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.
