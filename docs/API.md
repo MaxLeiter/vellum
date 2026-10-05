@@ -64,6 +64,12 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
   them reaches your `onMessage` handlers first.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
+- `screen.driver().onKey(handler)` gives your mod the key presses the page leaves alone, before the screen's own keys
+  (Escape, a container screen's inventory key). Use it for your own key mappings, which a page can't know. A key the
+  page uses never reaches the handler: one a `keydown` listener cancelled with `preventDefault()`, one a focused
+  control acted on (Enter on a button), and every key but Escape while a text field has focus, so typing "j" in an
+  `<input>` stays text. Return true to consume the key. Handlers run in the order they were added until one returns
+  true, and stay through navigation and reloads.
 - A page follows the pointer from its first frame, as vanilla screens do. One opened under a resting cursor shows
   `:hover` there at once, and its `title` tooltip half a second later, without the mouse moving.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
@@ -76,6 +82,20 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 VellumScreens.open("mymod:vellum/notes.html", notesJson).driver()
         .onMessage("save", value -> Notes.save(value.getAsJsonObject()))   // the page saves in its unload listener
         .onClose(Notes::flush);
+
+// The book closes on the mod's own key, as E closes the inventory, and M opens the map:
+VellumScreen book = VellumScreens.open("chronicle:vellum/book.html");
+book.driver().onKey(e -> {
+    if (ChronicleKeys.OPEN.matches(e)) {   // a KeyMapping
+        book.onClose();
+        return true;
+    }
+    if (ChronicleKeys.MAP.matches(e)) {
+        VellumScreens.open("chronicle:vellum/map.html");
+        return true;
+    }
+    return false;
+});
 ```
 
 ## Opening a page from the server

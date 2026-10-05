@@ -46,8 +46,8 @@ import java.util.function.Predicate;
 /**
  * Hosts one Vellum document in Minecraft, for whatever shows it ({@link VellumScreen}, {@link VellumContainerScreen}
  * or a HUD overlay): loads the page, keeps its viewport in sync with the GUI-scaled window, runs frame and paint,
- * shows tooltips, forwards input (SDL to DOM), switches SDL text input on while a text field has focus, routes
- * messages, and reloads.
+ * shows tooltips, forwards input (SDL to DOM; keys the page leaves alone go on to the mod's {@link #onKey} handlers),
+ * switches SDL text input on while a text field has focus, routes messages, and reloads.
  *
  * <p>The document is its own error boundary ({@link Document#error()}): once the engine fails, the page is replaced
  * by an {@link ErrorPanel} until it is reloaded. Render thread only.
@@ -81,6 +81,7 @@ public final class DocumentDriver {
     private final int session;
     private final Map<String, List<Consumer<JsonElement>>> listeners = new HashMap<>();
     private final List<Runnable> closeHandlers = new ArrayList<>();
+    private final List<Predicate<KeyEvent>> keyHandlers = new ArrayList<>();
     private String url;
     private @Nullable String html;
     private @Nullable String data;
@@ -408,13 +409,38 @@ public final class DocumentDriver {
     }
 
     /**
-     * Key down. Also true for any key but Escape while a text field has focus, so screen shortcuts (the inventory
-     * key, hotbar swaps) don't fire while typing.
+     * Key down: the page first, then the {@link #onKey} handlers with a key it left alone. Also true for any key but
+     * Escape while a text field has focus, so screen shortcuts (the inventory key, hotbar swaps) and the handlers
+     * don't fire while typing.
      */
     public boolean keyPressed(KeyEvent e) {
         String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
         return input(in -> in.keyDown(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers()))
-                || (in.wantsKeyboard() && !e.isEscape()));
+                || (in.wantsKeyboard() && !e.isEscape())) || keyHandled(e);
+    }
+
+    /**
+     * Asks {@code handler} about each key press the page leaves alone, before the screen's own keys (Escape, a
+     * container screen's inventory key): for a mod's key mappings, which a page can't know. Keys the page uses never
+     * reach it: one a {@code keydown} listener cancelled, one a focused control acted on (Enter on a button, arrows on
+     * a slider), and every key but Escape while a text field has focus. Returning true consumes the key. Handlers are
+     * asked in the order they were added until one returns true, and stay through navigation and reloads, as
+     * {@link #onMessage} handlers do.
+     */
+    public DocumentDriver onKey(Predicate<KeyEvent> handler) {
+        keyHandlers.add(handler);
+        return this;
+    }
+
+    private boolean keyHandled(KeyEvent e) {
+        for (Predicate<KeyEvent> handler : List.copyOf(keyHandlers)) {
+            try {
+                if (handler.test(e)) return true;
+            } catch (RuntimeException ex) {
+                Constants.LOG.error("Vellum: an onKey handler of {} failed", name(), ex);
+            }
+        }
+        return false;
     }
 
     public boolean keyReleased(KeyEvent e) {

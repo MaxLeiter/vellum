@@ -539,6 +539,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (`Screen.getTooltipFromItem`), then the title's, with the item's tooltip image, style and the gap after its name.
   NeoForge's client entry installs the overload that passes the stack on, so its tooltip events (gather components,
   colour, pre) see the item as for vanilla item tooltips.
+  `onKey(Predicate<KeyEvent>)` handlers get key presses the page left alone (not cancelled, not used by a focused
+  control, no text field focused), in order until one consumes it, before the screen's own keys: a mod's key
+  mappings (close on the key that opened the screen, switch pages) work on a page that can't know them.
   `onClose(Runnable)` handlers run once when the owner closes the page for good (screen removed, overlay hidden),
   after the page's `unload`; not on navigation, reload or while suspended (link confirmation).
 - 3D content: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
@@ -597,7 +600,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
   tick and the page is updated when its result or a stack changed. The page's tooltip (an `<item tooltip>`'s or a
   title) is shown after vanilla's slot tooltip (in `extractTooltip`), and only without one, so a hovered slot's item
-  wins.
+  wins. Keys go to the page, then the driver's `onKey` handlers, then vanilla (the inventory key closes).
 - HUD layers: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
   `register(id, url, Predicate<Screen> interactiveOver)` (or `Input.WHEN_CHAT_OPEN`, `Input.WHEN_CURSOR_FREE`: any
   screen) makes it interactive over the screens the predicate accepts, asked each frame and pointer event with the
