@@ -82,6 +82,25 @@ class PointerTargetTest {
     }
 
     @Test
+    void revealingWholeScrollsAHalfShownElementAllTheWayIn() {
+        Element half = page.byId("half");
+        s.scrollTo(0, 30);
+        assertArrayEquals(new float[] {0, 30, 100, 20}, page.doc.reveal(half, false), 1e-3f);
+        assertEquals(30, s.scrollTop(), "part of it shows: left as it is");
+        assertArrayEquals(new float[] {0, 10, 100, 40}, page.doc.reveal(half, true), 1e-3f);
+        assertEquals(50, s.scrollTop(), "the least scroll that shows all of it");
+    }
+
+    @Test
+    void geometryIsReadAfterLayingOut() {
+        Element below = page.byId("below");
+        below.setAttribute("style", "height: 20px; margin-top: 5px");
+        assertArrayEquals(new float[] {0, 55, 320, 20}, below.getBoundingClientRect(), 1e-3f, "no frame ran");
+        page.byId("s").setAttribute("style", "display: none");
+        assertArrayEquals(new float[] {0, 5, 320, 20}, below.visibleRect(), 1e-3f);
+    }
+
+    @Test
     void nothingToReachWithoutABox() {
         Element gone = page.byId("half");
         gone.setAttribute("style", "display: none");

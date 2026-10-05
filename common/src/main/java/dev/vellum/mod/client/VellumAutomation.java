@@ -83,8 +83,8 @@ public final class VellumAutomation {
     public Optional<float[]> rect(String selector) {
         Element e = find(selector);
         if (e == null) return Optional.empty();
-        e.ownerDocument().flushLayout();
-        return e.box == null ? Optional.empty() : Optional.of(e.getBoundingClientRect());
+        float[] rect = e.getBoundingClientRect();
+        return e.box == null ? Optional.empty() : Optional.of(rect);
     }
 
     /** The {@code textContent} of the first element matching {@code selector}. */
@@ -189,14 +189,7 @@ public final class VellumAutomation {
      */
     public boolean scrollIntoView(String selector) {
         Element e = find(selector);
-        if (e == null) return false;
-        Document doc = e.ownerDocument();
-        return doc.guard(() -> {
-            doc.flushLayout();
-            if (e.box == null) return false;
-            e.scrollIntoView(Element.ScrollAlign.NEAREST, Element.ScrollAlign.NEAREST, Element.ScrollBehavior.INSTANT);
-            return e.visibleRect() != null;
-        });
+        return e != null && e.ownerDocument().reveal(e, true) != null;
     }
 
     /**

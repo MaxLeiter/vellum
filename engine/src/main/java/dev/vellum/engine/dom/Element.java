@@ -396,7 +396,7 @@ public class Element extends Node {
     /** Fires a synthetic click and, unless cancelled, its default action, as {@code HTMLElement.click()} does. */
     public void click() {
         if (isDisabled()) return;
-        float[] r = getBoundingClientRect();
+        float[] r = paintedRect();
         float cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
         MouseEvent e = new MouseEvent("click", true, true, cx, cy, 0, 0, Modifiers.NONE, 1, null);
         if (dispatchEvent(e)) ownerDocument.input().activate(this, e);
@@ -631,18 +631,26 @@ public class Element extends Node {
 
     /**
      * {@code getBoundingClientRect()}: {x, y, width, height} in viewport px of the bounding box of the border box as
-     * painted, transforms included; zeros without a box.
+     * painted, transforms included; zeros without a box. Lays out first if the document has changed, as browsers do.
      */
     public float[] getBoundingClientRect() {
+        ownerDocument.flushLayout();
+        return paintedRect();
+    }
+
+    /** {@link #getBoundingClientRect()} of the current layout, without laying out: for paint and input. */
+    private float[] paintedRect() {
         return box == null ? new float[4] : Coordinates.boundingRect(box);
     }
 
     /**
      * The part of the border box that can show, {x, y, width, height} in viewport px: {@link #getBoundingClientRect()}
      * cut to the viewport and to the scroll containers and other overflow clips it is in. Null without a box or when
-     * none of it can show. Content painted over it still counts as showing.
+     * none of it can show. Content painted over it still counts as showing. Lays out first, as
+     * {@link #getBoundingClientRect()} does.
      */
     public float[] visibleRect() {
+        ownerDocument.flushLayout();
         return box == null ? null
                 : Coordinates.visibleRect(box, ownerDocument.viewportWidth(), ownerDocument.viewportHeight());
     }

@@ -364,20 +364,35 @@ public final class Document extends Node {
      */
     public float[] pointerTarget(Element element) {
         return guarded(() -> {
-            if (element.ownerDocument() != this || !element.isConnected()) return null;
-            flushLayout();
-            float[] r = element.visibleRect();
-            if (r == null && element.box != null) {
-                // Scroll offsets apply when geometry is read, so no layout is needed before reading it again.
-                element.scrollIntoView(Element.ScrollAlign.NEAREST, Element.ScrollAlign.NEAREST,
-                        Element.ScrollBehavior.INSTANT);
-                r = element.visibleRect();
-            }
+            float[] r = revealed(element, false);
             if (r == null) return null;
             float x = r[0] + r[2] / 2, y = r[1] + r[3] / 2;
             HitResult hit = painter.hitTest(x, y);
             return hit != null && element.contains(hit.element()) ? new float[] {x, y} : null;
         }, null);
+    }
+
+    /**
+     * Scrolls {@code element} into view for automation and returns the part of it that shows
+     * ({@link Element#visibleRect}). Lays out first, then scrolls the scroll containers it is in instantly and by
+     * the least scroll ({@link Element#scrollIntoView} with {@code NEAREST}): when {@code whole}, so that all of it
+     * shows if it fits; otherwise only when none of it shows, as {@link #pointerTarget} does. Null when it is not in
+     * this document, has no box, or a clip that no scroll container moves still hides it.
+     */
+    public float[] reveal(Element element, boolean whole) {
+        return guarded(() -> revealed(element, whole), null);
+    }
+
+    private float[] revealed(Element element, boolean whole) {
+        if (element.ownerDocument() != this || !element.isConnected()) return null;
+        float[] r = element.visibleRect();
+        if (element.box != null && (whole || r == null)) {
+            // Scroll offsets apply when geometry is read, so no layout is needed before reading it again.
+            element.scrollIntoView(Element.ScrollAlign.NEAREST, Element.ScrollAlign.NEAREST,
+                    Element.ScrollBehavior.INSTANT);
+            r = element.visibleRect();
+        }
+        return r;
     }
 
     /**
