@@ -19,11 +19,16 @@ class ScrollbarsTest {
         scroller(box, Overflow.AUTO, 0, 0, 98, 200);
     }
 
+    private float[] track(boolean vertical, boolean hovered) {
+        float[] r = new float[4];
+        return Scrollbars.track(box, vertical, hovered, r) ? r : null;
+    }
+
     @Test
     void verticalTrackRunsDownThePaddingBoxEdge() {
-        assertArrayEquals(new float[] {97, 1, 2, 48}, Scrollbars.track(box, true, false), 1e-5f);
-        assertArrayEquals(new float[] {95, 1, 4, 48}, Scrollbars.track(box, true, true), 1e-5f);
-        assertNull(Scrollbars.track(box, false, false), "no horizontal overflow");
+        assertArrayEquals(new float[] {97, 1, 2, 48}, track(true, false), 1e-5f);
+        assertArrayEquals(new float[] {95, 1, 4, 48}, track(true, true), 1e-5f);
+        assertNull(track(false, false), "no horizontal overflow");
     }
 
     @Test
@@ -45,18 +50,18 @@ class ScrollbarsTest {
     @Test
     void thinAndNoneWidths() {
         style(box).scrollbarWidth = 1;
-        assertEquals(1, Scrollbars.track(box, true, false)[2], 1e-5);
-        assertEquals(2, Scrollbars.track(box, true, true)[2], 1e-5);
+        assertEquals(1, track(true, false)[2], 1e-5);
+        assertEquals(2, track(true, true)[2], 1e-5);
         style(box).scrollbarWidth = 0;
-        assertNull(Scrollbars.track(box, true, false));
+        assertNull(track(true, false));
         assertEquals(0, Scrollbars.scrollPerThumbPixel(box, true));
     }
 
     @Test
     void bothBarsLeaveTheCornerFree() {
         box.scrollWidth = 300;
-        assertArrayEquals(new float[] {97, 1, 2, 46}, Scrollbars.track(box, true, false), 1e-5f);
-        assertArrayEquals(new float[] {1, 47, 96, 2}, Scrollbars.track(box, false, false), 1e-5f);
+        assertArrayEquals(new float[] {97, 1, 2, 46}, track(true, false), 1e-5f);
+        assertArrayEquals(new float[] {1, 47, 96, 2}, track(false, false), 1e-5f);
     }
 
     @Test

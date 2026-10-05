@@ -31,10 +31,6 @@ public final class TextMeasure {
         this.fonts = fonts;
     }
 
-    public FontMetrics fonts() {
-        return fonts;
-    }
-
     public float glyphHeight(FontSpec font) {
         return fonts.glyphHeight(font);
     }
@@ -119,7 +115,7 @@ public final class TextMeasure {
     }
 
     /** The characters word-spacing applies to. */
-    public static boolean isWordSeparator(int codePoint) {
+    private static boolean isWordSeparator(int codePoint) {
         return codePoint == ' ' || codePoint == 0xA0;
     }
 }

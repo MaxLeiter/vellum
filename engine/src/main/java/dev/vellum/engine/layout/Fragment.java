@@ -38,9 +38,7 @@ public sealed interface Fragment {
      * edges (left/right border and padding) are on this line.
      */
     record InlineBox(Box box, float x, float y, float width, float height, boolean first, boolean last, int end)
-            implements Fragment {
-        public Element element() { return box.element; }
-    }
+            implements Fragment {}
 
     /**
      * An atomic inline (inline-block, inline-flex, inline-grid, replaced inline). The box is also in the block's
