@@ -701,8 +701,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   - `McHost.playSound` plays only ids the sound manager knows, through a per-driver token bucket, with volume capped
     and pitch clamped.
 - Settings: `VellumConfig` reads `config/vellum.properties` on both sides in `VellumCommon.init`, typed settings
-  with defaults, ranges and comments, written to the file when missing. A record of caps from another module (the
-  engine's `Limits`) is mapped to `<prefix>.<component>` keys by `VellumConfig.section`, rebuilt on every load.
+  with defaults, ranges and comments, written to the file when missing, under a heading per group. Each of the
+  engine's `Limits` is a `limits.<name>` key, made from `Limits.names()`, `get()`, `with()` (which checks the value)
+  and `describe()` (the comment); every load builds a `Limits` from them and installs it with `Limits.setCurrent`.
 - Resources and hot reload: documents load through the resource manager and reload with resources (F3+T). In a
   dev environment pages are read from `src/main/resources`, and the files they were read from are polled
   (`FileStamps`) so saving one reloads open documents.
@@ -756,7 +757,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 A multiplayer server can send a client any page: inline HTML, CSS and JS, or a bundled page with data it chooses
 (D-010). The player's game must stay safe whatever the page does. Scripts must not run code outside the sandbox,
 touch files or the network, or read other client state, and no page may crash the game or freeze it for more than a
-moment. Every cap below is a field of `engine/Limits` (a record with a one-line javadoc per field and its default);
+moment. Every cap below is a field of `engine/Limits` (a record; `Limits.describe` says what each field guards);
 hosts pass their limits with `Host.limits()`, which defaults to `Limits.current()`, and the mod builds them from
 `limits.<name>` keys in `config/vellum.properties`.
 

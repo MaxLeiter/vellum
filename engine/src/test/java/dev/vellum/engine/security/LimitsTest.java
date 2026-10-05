@@ -21,6 +21,12 @@ class LimitsTest {
     }
 
     @Test
+    void everyFieldIsDescribed() {
+        for (String name : Limits.names()) assertTrue(Limits.describe(name).endsWith("."), name);
+        assertThrows(IllegalArgumentException.class, () -> Limits.describe("nope"));
+    }
+
+    @Test
     void badValuesAreRefused() {
         assertThrows(IllegalArgumentException.class, () -> Limits.DEFAULTS.with("nope", 1));
         assertThrows(IllegalArgumentException.class, () -> Limits.DEFAULTS.with("maxNodes", 0));

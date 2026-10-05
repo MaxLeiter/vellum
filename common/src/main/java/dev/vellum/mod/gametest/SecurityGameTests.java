@@ -2,6 +2,7 @@ package dev.vellum.mod.gametest;
 
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import dev.vellum.engine.Limits;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.net.JsonLimits;
@@ -21,7 +22,6 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.function.Consumer;
 
@@ -158,17 +158,8 @@ public final class SecurityGameTests {
         h.succeed();
     }
 
-    public record SampleLimits(int maxNodes, long budget, double ratio, boolean strict) {}
-
-    /** Registered when the test first runs, so normal starts never see these keys. */
-    private static final class Sample {
-        static final VellumConfig.Section<SampleLimits> SECTION = VellumConfig.section("test.sample",
-                new SampleLimits(100, 5000L, 0.5, true), Map.of("maxNodes", "Nodes per page."));
-    }
-
-    /** Bad values fall back to defaults with a warning; good ones apply; record sections are built from their keys. */
+    /** Bad values fall back to defaults with a warning; good ones apply; limits.* keys make the engine's Limits. */
     private static void config(GameTestHelper h) {
-        VellumConfig.Section<SampleLimits> sample = Sample.SECTION;
         try {
             Properties p = new Properties();
             p.setProperty("server.messageBurst", "-5");
@@ -178,9 +169,12 @@ public final class SecurityGameTests {
             p.setProperty("client.typingNotice", "yes");
             p.setProperty("server.maxMessageDepth", "12");
             p.setProperty("server.bogus", "1");
-            p.setProperty("limits.notYetWired", "7");
-            p.setProperty("test.sample.maxNodes", "42");
-            p.setProperty("test.sample.ratio", "-1");
+            p.setProperty("limits.bogus", "7");
+            p.setProperty("limits.maxNodes", "42");
+            p.setProperty("limits.maxDepth", "0");
+            p.setProperty("limits.heapLimitPercent", "101");
+            p.setProperty("limits.maxCanvasSize", "1e9");
+            p.setProperty("limits.maxTimers", "99999999999");
             List<String> warnings = VellumConfig.apply(p);
             h.assertValueEqual(VellumConfig.SERVER_MESSAGE_BURST.get(), 40, "out of range falls back");
             h.assertValueEqual(VellumConfig.SERVER_MAX_SESSIONS.get(), 8, "not a number falls back");
@@ -188,11 +182,11 @@ public final class SecurityGameTests {
             h.assertValueEqual(VellumConfig.CLIENT_MAX_SOUND_VOLUME.get(), 1.0, "NaN falls back");
             h.assertValueEqual(VellumConfig.CLIENT_TYPING_NOTICE.get(), true, "only true/false are booleans");
             h.assertValueEqual(VellumConfig.SERVER_MAX_MESSAGE_DEPTH.get(), 12, "valid values apply");
-            h.assertValueEqual(sample.get(), new SampleLimits(42, 5000L, 0.5, true), "a record section takes its keys");
-            h.assertValueEqual(VellumConfig.unreadLimits(), Map.of("limits.notYetWired", "7"), "unread limits are kept");
-            h.assertValueEqual(warnings.size(), 6, "one warning per bad value or unknown key: " + warnings);
+            h.assertValueEqual(Limits.current(), Limits.DEFAULTS.with("maxNodes", 42), "valid limits apply, invalid ones keep their default");
+            h.assertValueEqual(warnings.size(), 10, "one warning per bad value or unknown key: " + warnings);
+            h.assertTrue(warnings.contains("limits.heapLimitPercent=101 must be at most 100; using 90"), "limit warnings say why: " + warnings);
         } finally {
-            VellumConfig.load(); // back to the file (this also writes the test's keys into the test server's copy)
+            VellumConfig.load(); // back to the file's settings
         }
         h.succeed();
     }

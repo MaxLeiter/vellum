@@ -1,5 +1,6 @@
 package dev.vellum.mod;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.mod.net.MessagePayload;
 import dev.vellum.mod.net.OpenPayload;
 import dev.vellum.mod.platform.Services;
@@ -7,13 +8,11 @@ import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.lang.reflect.RecordComponent;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -27,7 +26,8 @@ import java.util.function.Function;
  * out-of-range value falls back to its default with a warning in the log, and loading never fails.
  *
  * <p>Keys starting {@code server.} matter on a server (a dedicated one, or the integrated server of a singleplayer
- * world), {@code client.} keys on a client, {@code limits.} keys wherever pages run (the engine's caps).
+ * world), {@code client.} keys on a client, {@code limits.} keys wherever pages run: one per field of the engine's
+ * {@link Limits}, installed with {@link Limits#setCurrent} on every load.
  */
 public final class VellumConfig {
     public static final String FILE_NAME = "vellum.properties";
@@ -39,7 +39,6 @@ public final class VellumConfig {
     public enum WebLinks { ASK, BLOCK }
 
     private static final Map<String, Setting<?>> SETTINGS = new LinkedHashMap<>();
-    private static final List<Section<?>> SECTIONS = new ArrayList<>();
 
     // ---- Server ----
 
@@ -95,7 +94,17 @@ public final class VellumConfig {
     public static final Setting<Boolean> CLIENT_REDUCED_MOTION = bool("client.reducedMotion", false,
             "Pages see prefers-reduced-motion: reduce and should skip or shorten animations.");
 
-    private static final Map<String, String> unknown = new LinkedHashMap<>();
+    // ---- Limits ----
+
+    static {
+        for (String name : Limits.names()) limit(name);
+    }
+
+    /** The heading written above each group of keys, by key prefix. */
+    private static final Map<String, String> GROUPS = Map.of(
+            "server", "What this server sends to clients and accepts from them. Read by dedicated servers and by the server inside a singleplayer world.",
+            "client", "What this client lets pages do, and which of a server's pages it shows.",
+            "limits", "The engine's caps on every page, a mod's or a server's. Each must be at least 1. They apply to pages opened after the game starts.");
 
     private VellumConfig() {}
 
@@ -124,52 +133,70 @@ public final class VellumConfig {
             if (missing.isEmpty()) return;
             Files.createDirectories(file.toAbsolutePath().getParent());
             boolean fresh = !Files.exists(file);
-            String text = (fresh ? "# Vellum settings. Delete a line to get its default back.\n" : "\n") + missing;
+            String text = (fresh ? HEADER : "\n") + missing;
             Files.writeString(file, text, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             Constants.LOG.warn("Vellum: cannot write {}: {}", file, e.toString());
         }
     }
 
+    private static final String HEADER = comment("Vellum settings, read when the game starts. A missing or invalid value "
+            + "falls back to its default with a warning in the log. Delete a line to get its default back.") + "\n";
+
     /**
-     * Sets every setting from {@code p}, its default where {@code p} lacks it or has a bad value, and returns a
-     * warning for each bad value and unknown key.
+     * Sets every setting from {@code p}, its default where {@code p} lacks it or has a bad value, installs the
+     * engine's limits they make, and returns a warning for each bad value and unknown key.
      */
     public static synchronized List<String> apply(Properties p) {
         List<String> warnings = new ArrayList<>();
-        unknown.clear();
         for (Setting<?> s : SETTINGS.values()) {
             String raw = p.getProperty(s.key);
             String error = s.set(raw);
             if (error != null) warnings.add(s.key + "=" + raw + " " + error + "; using " + s.defaultText());
         }
-        for (String key : p.stringPropertyNames()) {
-            if (SETTINGS.containsKey(key)) continue;
-            unknown.put(key, p.getProperty(key));
-            if (!key.startsWith("limits.")) warnings.add("unknown key " + key);
-        }
-        for (Section<?> section : SECTIONS) section.rebuild();
+        for (String key : p.stringPropertyNames()) if (!SETTINGS.containsKey(key)) warnings.add("unknown key " + key);
+        Limits limits = Limits.DEFAULTS;
+        for (String name : Limits.names()) limits = limits.with(name, (Long) SETTINGS.get(LIMITS + name).get());
+        Limits.setCurrent(limits);
         return warnings;
     }
 
-    /** The lines to add for the settings {@code p} lacks: a comment and {@code key=default} each. */
+    /**
+     * The lines to add for the settings {@code p} lacks: a comment and {@code key=default} each, under the heading of
+     * their group when {@code p} has no key of that group yet.
+     */
     private static String missing(Properties p) {
         StringBuilder out = new StringBuilder();
+        String group = null;
         for (Setting<?> s : SETTINGS.values()) {
             if (p.containsKey(s.key)) continue;
-            if (!s.comment.isEmpty()) out.append("# ").append(s.comment).append('\n');
+            String g = s.key.substring(0, s.key.indexOf('.'));
+            if (!g.equals(group)) {
+                group = g;
+                boolean started = p.stringPropertyNames().stream().anyMatch(k -> k.startsWith(g + "."));
+                if (!started && GROUPS.containsKey(g)) {
+                    out.append("# ==== ").append(g.substring(0, 1).toUpperCase(Locale.ROOT)).append(g.substring(1)).append(" ====\n")
+                            .append(comment(GROUPS.get(g))).append('\n');
+                }
+            }
+            if (!s.comment.isEmpty()) out.append(comment(s.comment));
             out.append(s.key).append('=').append(s.defaultText()).append("\n\n");
         }
         return out.toString();
     }
 
-    /** {@code limits.*} keys the file has that no section reads, for engine caps not wired in yet. */
-    public static synchronized Map<String, String> unreadLimits() {
-        Map<String, String> limits = new LinkedHashMap<>();
-        unknown.forEach((k, v) -> {
-            if (k.startsWith("limits.")) limits.put(k, v);
-        });
-        return Collections.unmodifiableMap(limits);
+    /** {@code text} as comment lines of at most 100 characters. */
+    private static String comment(String text) {
+        StringBuilder out = new StringBuilder();
+        StringBuilder line = new StringBuilder("#");
+        for (String word : text.split(" ")) {
+            if (line.length() > 1 && line.length() + 1 + word.length() > 100) {
+                out.append(line).append('\n');
+                line.setLength(1);
+            }
+            line.append(' ').append(word);
+        }
+        return out.append(line).append('\n').toString();
     }
 
     // ---- Settings ----
@@ -242,19 +269,6 @@ public final class VellumConfig {
         }, String::valueOf));
     }
 
-    public static Setting<Long> longInteger(String key, long def, long min, long max, String comment) {
-        return add(new Setting<>(key, def, comment, raw -> {
-            long v;
-            try {
-                v = Long.parseLong(raw);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("is not a whole number");
-            }
-            if (v < min || v > max) throw new IllegalArgumentException("is outside " + min + ".." + max);
-            return v;
-        }, String::valueOf));
-    }
-
     public static Setting<Double> decimal(String key, double def, double min, double max, String comment) {
         return add(new Setting<>(key, def, comment, raw -> {
             double v;
@@ -293,73 +307,28 @@ public final class VellumConfig {
         }, e -> e.name().toLowerCase(Locale.ROOT)));
     }
 
+    private static final String LIMITS = "limits.";
+
+    /** {@code limits.<name>}: a whole number that {@link Limits#with} accepts for {@code name}. */
+    private static Setting<Long> limit(String name) {
+        return add(new Setting<>(LIMITS + name, Limits.DEFAULTS.get(name), Limits.describe(name), raw -> {
+            long v;
+            try {
+                v = Long.parseLong(raw);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("is not a whole number");
+            }
+            try {
+                Limits.DEFAULTS.with(name, v);
+            } catch (IllegalArgumentException e) {
+                String why = String.valueOf(e.getMessage());
+                throw new IllegalArgumentException(why.startsWith(name + " ") ? why.substring(name.length() + 1) : why);
+            }
+            return v;
+        }, String::valueOf));
+    }
+
     private static String fmt(double d) {
         return d == Math.rint(d) && Math.abs(d) < 1e15 ? String.valueOf((long) d) : String.valueOf(d);
-    }
-
-    // ---- Record sections ----
-
-    /**
-     * A record whose components are settings {@code prefix.<component>}, with {@code defaults} as their defaults:
-     * for a block of caps another module defines (the engine's {@code Limits}). Components may be int, long, double
-     * or boolean, and numbers must not be negative. Register sections before {@link #load()} (in a static field here).
-     */
-    public static <R extends Record> Section<R> section(String prefix, R defaults, Map<String, String> comments) {
-        Section<R> section = new Section<>(prefix, defaults, comments);
-        SECTIONS.add(section);
-        return section;
-    }
-
-    /** The settings of a record, and the record they currently make. */
-    public static final class Section<R extends Record> {
-        private final R defaults;
-        private final List<Setting<?>> settings = new ArrayList<>();
-        private final RecordComponent[] components;
-        private volatile R value;
-
-        private Section(String prefix, R defaults, Map<String, String> comments) {
-            this.defaults = defaults;
-            this.value = defaults;
-            this.components = defaults.getClass().getRecordComponents();
-            for (RecordComponent c : components) {
-                Object def = read(c, defaults);
-                String key = prefix + "." + c.getName(), comment = comments.getOrDefault(c.getName(), "");
-                settings.add(switch (def) {
-                    case Integer i -> integer(key, i, 0, Integer.MAX_VALUE, comment);
-                    case Long l -> longInteger(key, l, 0, Long.MAX_VALUE, comment);
-                    case Double d -> decimal(key, d, 0, Double.MAX_VALUE, comment);
-                    case Boolean b -> bool(key, b, comment);
-                    default -> throw new IllegalArgumentException("Unsupported setting type " + c.getType() + " for " + key);
-                });
-            }
-        }
-
-        public R get() {
-            return value;
-        }
-
-        @SuppressWarnings("unchecked")
-        private void rebuild() {
-            Object[] args = new Object[components.length];
-            Class<?>[] types = new Class<?>[components.length];
-            for (int i = 0; i < components.length; i++) {
-                args[i] = settings.get(i).get();
-                types[i] = components[i].getType();
-            }
-            try {
-                value = (R) defaults.getClass().getDeclaredConstructor(types).newInstance(args);
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                Constants.LOG.warn("Vellum: settings for {} were refused ({}); using defaults", defaults.getClass().getSimpleName(), e.toString());
-                value = defaults;
-            }
-        }
-
-        private static Object read(RecordComponent c, Record r) {
-            try {
-                return c.getAccessor().invoke(r);
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException(e);
-            }
-        }
     }
 }

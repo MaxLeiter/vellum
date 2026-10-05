@@ -651,8 +651,8 @@ What a client lets pages do:
 | `client.reducedMotion` | `false` | `true`, `false` | Pages see `prefers-reduced-motion: reduce`. |
 
 The engine's caps on every page, a mod's or a server's. Each must be at least 1, and `heapLimitPercent` at most
-100 (100 turns the heap check off). `dev.vellum.engine.Limits` has them all; a host can return its own from
-`Host.limits()`.
+100 (100 turns the heap check off). They are fields of `dev.vellum.engine.Limits`, whose `describe` gives each
+key's comment; a host can return its own from `Host.limits()`.
 
 | Key | Default | Meaning |
 |---|---|---|

@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -20,36 +21,7 @@ import java.util.Objects;
  * often {@code vellum.send} and {@code vellum.playSound} go through ({@link dev.vellum.engine.host.Host#send} may
  * refuse), and how large a page a server may send.
  *
- * @param instructionBudget   script instructions one entry (a script, a listener, a timer...) may run; 50M
- * @param timeBudgetMs        wall-clock ms one entry may take; 1000
- * @param loadTimeBudgetMs    wall-clock ms an entry may take while the page loads (cold JVM); 10000
- * @param maxStackDepth       nested script calls, beyond which an InternalError is thrown; 1000
- * @param maxBudgetOverruns   entries stopped by the CPU or memory budget before the whole page is stopped; 3
- * @param frameScriptTimeMs   ms of timers and animation-frame callbacks per frame; the rest wait a frame; 100
- * @param slowFrameMs         a frame (scripts, style, layout, paint) slower than this counts as slow; 200
- * @param maxSlowFrames       slow frames in a row before the page is stopped; 25
- * @param entryAllocation     bytes one entry may allocate (where the JVM can count them); 256 MiB
- * @param heapLimitPercent    a script entry stops its page when the heap is fuller than this after a GC (100: off); 90
- * @param maxStringLength     characters a string built by repeat(), padStart() or padEnd() may have; 16M
- * @param maxArrayLength      length of an array that built-ins may iterate or create, and arguments to apply(); 1M
- * @param maxBufferBytes      bytes of an ArrayBuffer or typed array; 16 MiB (a 2048 px square canvas's image data)
- * @param maxBigIntBits       bits of a BigInt that arithmetic or parsing produces (process-wide); 65536
- * @param maxTimers           pending timers plus animation-frame callbacks of a page; 10000
- * @param maxMarkupLength     characters innerHTML, outerHTML, insertAdjacentHTML and v-html take; 1M
- * @param storageQuota        characters (keys plus values) in each of localStorage and sessionStorage; 256K
- * @param maxLogLength        characters of one console message; longer ones are cut; 4096
- * @param logRate             console messages and script errors logged per second (also the burst); 50
- * @param maxForItems         items one v-for renders; 10000
- * @param maxTemplatePasses   template update passes per frame before giving up on a binding that keeps changing; 10
- * @param maxNodes            nodes in a page's document; inserting more fails; 100000
- * @param maxDepth            element nesting depth; the parser flattens deeper markup, scripts get an error; 512
- * @param maxCssNesting       nesting of CSS functions and blocks ({@code calc(}, {@code :is(}, rules); 32
- * @param maxSelectorParts    simple selectors in one complex selector, counting those inside :is() and friends; 256
- * @param maxListItems        items of a CSS list value (shadows); longer lists are invalid; 64
- * @param maxGridTracks       grid tracks a track list may expand to with repeat(); 100000
- * @param maxVarLength        characters a value may have after var() substitution; 65536
- * @param maxCanvasSize       pixels a canvas may have on each side; 2048
- * @param maxCanvasPixels     pixels of all canvases of a page together; 16M (four 2048 px squares)
+ * <p>{@link #describe} says what each field guards, in the words the config file's comments use.
  */
 public record Limits(
         long instructionBudget,
@@ -114,6 +86,45 @@ public record Limits(
     /** Installs the limits that hosts use by default, for documents created from now on. */
     public static void setCurrent(Limits limits) {
         current = Objects.requireNonNull(limits);
+    }
+
+    private static final Map<String, String> DESCRIPTIONS = Map.ofEntries(
+            Map.entry("instructionBudget", "Script instructions one entry (a script, a listener, a timer...) may run."),
+            Map.entry("timeBudgetMs", "Milliseconds one entry may take."),
+            Map.entry("loadTimeBudgetMs", "Milliseconds an entry may take while the page loads, when a game that has just started is slow."),
+            Map.entry("maxStackDepth", "Nested script calls; one more throws an InternalError the script can catch."),
+            Map.entry("maxBudgetOverruns", "Entries stopped by the CPU or memory budget before the whole page is stopped."),
+            Map.entry("frameScriptTimeMs", "Milliseconds of timers and animation-frame callbacks per frame; the rest wait a frame."),
+            Map.entry("slowFrameMs", "A frame (scripts, style, layout and paint) slower than this many milliseconds counts as slow."),
+            Map.entry("maxSlowFrames", "Slow frames in a row before the page is stopped."),
+            Map.entry("entryAllocation", "Bytes one entry may allocate, where the JVM can count them (256 MiB)."),
+            Map.entry("heapLimitPercent", "A script stops its page when the heap is fuller than this percentage after a collection. 100 turns it off."),
+            Map.entry("maxStringLength", "Characters a string from repeat(), padStart(), padEnd(), replace() or join() may have (16M)."),
+            Map.entry("maxArrayLength", "Length of an array built-ins may iterate or create, of apply() arguments, and pieces of split() or match() (1M)."),
+            Map.entry("maxBufferBytes", "Bytes of an ArrayBuffer or typed array (16 MiB, the image data of a 2048 px square canvas)."),
+            Map.entry("maxBigIntBits", "Bits of a BigInt that arithmetic or parsing produces. One value for the whole game."),
+            Map.entry("maxTimers", "Pending timers and animation-frame callbacks of a page."),
+            Map.entry("maxMarkupLength", "Characters innerHTML, outerHTML, insertAdjacentHTML and v-html take (1M)."),
+            Map.entry("storageQuota", "Characters (keys plus values) in each of localStorage and sessionStorage (256K)."),
+            Map.entry("maxLogLength", "Characters of one console message; longer ones are cut."),
+            Map.entry("logRate", "Console messages and script errors a page may log per second, and at once."),
+            Map.entry("maxForItems", "Items one v-for renders."),
+            Map.entry("maxTemplatePasses", "Template update passes per frame before giving up on a binding that keeps changing."),
+            Map.entry("maxNodes", "Nodes in a page's document; inserting more throws."),
+            Map.entry("maxDepth", "Element nesting; the parser flattens deeper markup and scripts get an error. Also the deepest JSON.parse() reads."),
+            Map.entry("maxCssNesting", "Nesting of CSS functions and blocks (calc(), :is(), nested rules)."),
+            Map.entry("maxSelectorParts", "Simple selectors in one selector, counting those inside :is() and the like."),
+            Map.entry("maxListItems", "Items of a CSS list value (shadows); longer lists are invalid."),
+            Map.entry("maxGridTracks", "Grid tracks a track list may expand to with repeat()."),
+            Map.entry("maxVarLength", "Characters a value may have after var() substitution."),
+            Map.entry("maxCanvasSize", "Pixels a canvas may have on each side."),
+            Map.entry("maxCanvasPixels", "Pixels of all of a page's canvases together (16M, four 2048 px squares)."));
+
+    /** What the field {@code name} guards, in one sentence: the comment above its key in the config file. */
+    public static String describe(String name) {
+        String d = DESCRIPTIONS.get(name);
+        if (d == null) throw new IllegalArgumentException("Unknown limit: " + name);
+        return d;
     }
 
     /** The field names, in order: the keys a config file uses. */
