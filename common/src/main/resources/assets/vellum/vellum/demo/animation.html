@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <title>Animation</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      50% { transform: scale(1.2); opacity: 0.6; }
+    }
+
+    @keyframes slide-in {
+      from { transform: translateX(-24px); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .stage {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      height: 56px;
+      background: var(--soft);
+      border-radius: 4px;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      animation: spin 3s linear infinite;
+    }
+
+    .bobber {
+      width: 24px;
+      height: 24px;
+      animation: bob 1.2s ease-in-out infinite;
+    }
+
+    .badge {
+      padding: 2px 6px;
+      color: #000;
+      background: mc-yellow;
+      border-radius: 8px;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .panels {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .panel {
+      padding: 4px 6px;
+      background: var(--soft);
+      border-left: 2px solid var(--accent);
+      border-radius: 2px;
+      animation: slide-in 400ms ease-out both;
+    }
+
+    .panel:nth-child(2) { animation-delay: 120ms; }
+    .panel:nth-child(3) { animation-delay: 240ms; }
+
+    .buttons button {
+      transition: transform 150ms ease-out;
+    }
+
+    .buttons button:hover {
+      transform: translateY(-2px) scale(1.05);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner, .bobber, .badge, .panel { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header>
+      <a class="back" href="index.html">‹ Back</a>
+      <h1>Animation</h1>
+      <span class="badge">NEW</span>
+    </header>
+
+    <div class="stage">
+      <item class="spinner" id="minecraft:nether_star"></item>
+      <item class="bobber" id="minecraft:totem_of_undying"></item>
+      <item class="spinner" id="minecraft:compass" style="animation-direction: reverse"></item>
+    </div>
+
+    <h2>Slide in</h2>
+    <div class="panels">
+      <div class="panel">Panels slide in one after another</div>
+      <div class="panel">with animation-delay</div>
+      <div class="panel">and a shared @keyframes rule.</div>
+    </div>
+
+    <h2>Hover</h2>
+    <div class="row buttons">
+      <button>Lift</button>
+      <button>Me</button>
+      <button>Too</button>
+    </div>
+  </main>
+</body>
+</html>

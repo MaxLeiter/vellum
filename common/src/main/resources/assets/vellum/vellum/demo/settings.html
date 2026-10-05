@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <title>Settings</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    /* Unstyled controls already look vanilla; this page only arranges them. */
+    .form {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
+      align-items: center;
+    }
+
+    .form > label {
+      color: mc-gray;
+    }
+
+    .form input[type=text],
+    .form select,
+    .form input[type=range] {
+      width: 100%;
+    }
+
+    .checks {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+
+    .actions {
+      justify-content: flex-end;
+    }
+
+    .actions button {
+      width: 80px;
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header>
+      <a class="back" href="index.html">‹ Back</a>
+      <h1>Settings</h1>
+    </header>
+
+    <div class="form">
+      <label for="name">Name</label>
+      <input id="name" type="text" placeholder="Steve" maxlength="16">
+
+      <label for="difficulty">Difficulty</label>
+      <select id="difficulty">
+        <option>Peaceful</option>
+        <option>Easy</option>
+        <option selected>Normal</option>
+        <option>Hard</option>
+      </select>
+
+      <label for="fov">FOV: <span id="fov-value">70</span></label>
+      <input id="fov" type="range" min="30" max="110" step="1" value="70">
+
+      <div class="checks">
+        <label><input type="checkbox" checked> Smooth lighting</label>
+        <label><input type="checkbox"> Show coordinates</label>
+        <label><input type="radio" name="clouds" checked> Fancy clouds</label>
+        <label><input type="radio" name="clouds"> Fast clouds</label>
+      </div>
+    </div>
+
+    <div class="row actions">
+      <button type="button" onclick="vellum.close()">Cancel</button>
+      <button type="button" id="done">Done</button>
+    </div>
+  </main>
+
+  <script>
+    const fov = document.getElementById('fov');
+    fov.addEventListener('input', () => {
+      document.getElementById('fov-value').textContent = fov.value;
+    });
+
+    document.getElementById('done').addEventListener('click', () => {
+      vellum.send('settings', {
+        name: document.getElementById('name').value,
+        difficulty: document.getElementById('difficulty').value,
+        fov: Number(fov.value)
+      });
+      vellum.close();
+    });
+  </script>
+</body>
+</html>

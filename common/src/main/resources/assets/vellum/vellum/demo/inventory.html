@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <title>Inventory</title>
+  <link rel="stylesheet" href="demo.css">
+  <style>
+    /* Every <slot index="n"> is menu slot n: vanilla draws its item and handles clicks, the page does the rest. */
+    .chest {
+      width: auto;
+      gap: 6px;
+    }
+
+    .search {
+      width: 72px;
+    }
+
+    .slots {
+      display: grid;
+      grid-template-columns: repeat(9, 18px);
+      gap: 1px;
+    }
+
+    .hotbar {
+      margin-top: 3px;
+    }
+
+    slot {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      transition: border-color 150ms, background-color 150ms;
+    }
+
+    slot:hover {
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    slot.hit {
+      background: rgba(255, 210, 80, 0.3);
+      border-color: mc-yellow;
+    }
+  </style>
+</head>
+<body>
+  <main class="window chest">
+    <header>
+      <item id="minecraft:chest"></item>
+      <h1>{{ title }}</h1>
+      <input class="search" type="search" placeholder="Search..." v-model="query">
+    </header>
+
+    <section class="slots">
+      <slot v-for="i in range(0, 27)" :index="i" :class="hit(i) ? 'hit' : ''"></slot>
+    </section>
+
+    <div class="row">
+      <h2>{{ inventory }}</h2>
+      <span class="spacer"></span>
+      <span class="muted">{{ count(0, 27) }} items in the chest</span>
+    </div>
+
+    <section class="slots">
+      <slot v-for="i in range(27, 54)" :index="i" :class="hit(i) ? 'hit' : ''"></slot>
+    </section>
+    <section class="slots hotbar">
+      <slot v-for="i in range(54, 63)" :index="i" :class="hit(i) ? 'hit' : ''"></slot>
+    </section>
+  </main>
+
+  <script>
+    // vellum.data.slots lists every slot's {id, count, name}; it updates as items move.
+    const state = vellum.state({ query: '' });
+
+    function range(from, to) {
+      const out = [];
+      for (let i = from; i < to; i++) out.push(i);
+      return out;
+    }
+
+    function hit(i) {
+      const q = state.query.trim().toLowerCase();
+      const slot = (vellum.data.slots || [])[i];
+      return q !== '' && slot && slot.name.toLowerCase().indexOf(q) >= 0;
+    }
+
+    function count(from, to) {
+      let total = 0;
+      for (let slot of (vellum.data.slots || []).slice(from, to)) total += slot.count;
+      return total;
+    }
+  </script>
+</body>
+</html>
