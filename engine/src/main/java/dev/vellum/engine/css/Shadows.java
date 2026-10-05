@@ -1,5 +1,6 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.css.Token.Type;
 import dev.vellum.engine.style.Shadow;
 
@@ -15,7 +16,7 @@ final class Shadows {
         List<Shadow> out = new ArrayList<>(1);
         do {
             Shadow s = !box && r.ident("minecraft") ? Shadow.MINECRAFT : shadow(r, ctx, box);
-            if (s == null) return null;
+            if (s == null || out.size() >= Limits.current().maxListItems()) return null;
             out.add(s);
         } while (r.comma());
         return List.copyOf(out);

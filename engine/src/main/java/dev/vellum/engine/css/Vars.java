@@ -1,5 +1,6 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.css.ComponentValue.Block;
 import dev.vellum.engine.css.ComponentValue.Func;
 import dev.vellum.engine.css.Token.Type;
@@ -21,8 +22,15 @@ final class Vars {
         return append(values, lookup, sb) ? sb.toString().trim() : null;
     }
 
+    /**
+     * Appends the substituted values; false when a reference is undefined, or when the text grows past
+     * {@link Limits#maxVarLength} (variables that each use the previous one twice double at every
+     * step, so a few lines of CSS could otherwise ask for gigabytes).
+     */
     private static boolean append(List<ComponentValue> values, Function<String, String> lookup, StringBuilder sb) {
+        int max = Limits.current().maxVarLength();
         for (ComponentValue v : values) {
+            if (sb.length() > max) return false;
             if (v instanceof Func f && f.name().equals("var")) {
                 if (!var(f, lookup, sb)) return false;
             } else if (v instanceof Func f && Decl.containsVar(f.args())) {
@@ -50,6 +58,7 @@ final class Vars {
         }
         String value = lookup.apply(t.value);
         if (value != null) {
+            if (sb.length() + value.length() > Limits.current().maxVarLength()) return false;
             sb.append(value);
             return true;
         }

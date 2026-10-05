@@ -105,7 +105,7 @@ class SandboxTest {
                 for (;;) { b.setAttribute('onclick', big + 'n++'); b.click(); big += ' ' }""");
         assertEquals(1, page.host.errors.size(), page.host.errors.toString());
         assertTrue(page.host.errors.getFirst().contains("budget"), page.host.errors.getFirst());
-        assertTrue(Integer.parseInt(page.eval("n")) < Sandbox.INSTRUCTION_BUDGET / 100000, page.eval("n"));
+        assertTrue(Integer.parseInt(page.eval("n")) < dev.vellum.engine.Limits.DEFAULTS.instructionBudget() / 100000, page.eval("n"));
     }
 
     /**

@@ -1,5 +1,6 @@
 package dev.vellum.engine.testing;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Viewport;
@@ -41,6 +42,8 @@ public class TestHost implements Host {
     public boolean closed;
     /** Factory for the script runtime, as in game; null disables scripting. */
     public Function<Document, ScriptRuntime> scripting = Scripting.rhino();
+    /** The limits of pages this host loads. */
+    public Limits limits = Limits.DEFAULTS;
     private final FontMetrics fonts = new TestFonts();
 
     public TestHost resource(String url, String text) {
@@ -63,8 +66,17 @@ public class TestHost implements Host {
         return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(width, height, 2))).frame(0);
     }
 
+    /** Loads pages with {@code limits} instead of the defaults. */
+    public TestHost limits(Limits limits) {
+        this.limits = limits;
+        return this;
+    }
+
     @Override
     public FontMetrics fonts() { return fonts; }
+
+    @Override
+    public Limits limits() { return limits; }
 
     @Override
     public Map<String, Function<Element, ReplacedContent>> replacedElements() { return replaced; }

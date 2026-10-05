@@ -1,5 +1,6 @@
 package dev.vellum.engine.host;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.script.ScriptRuntime;
@@ -57,6 +58,12 @@ public interface Host {
 
     /** Creates the script runtime for a document, or null to disable scripting. */
     default ScriptRuntime createScriptRuntime(Document document) { return null; }
+
+    /**
+     * The caps on the pages this host shows ({@link Limits}): read once when a document is created. By default the
+     * installed {@link Limits#current()}.
+     */
+    default Limits limits() { return Limits.current(); }
 
     default void log(LogLevel level, String message) {
         (level == LogLevel.ERROR || level == LogLevel.WARN ? System.err : System.out).println("[vellum] " + message);

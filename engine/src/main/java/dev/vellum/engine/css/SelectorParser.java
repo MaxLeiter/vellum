@@ -1,5 +1,6 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.css.ComponentValue.Block;
 import dev.vellum.engine.css.ComponentValue.Func;
 import dev.vellum.engine.css.Selector.AttributeSelector;
@@ -22,17 +23,39 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Parses selector lists (Selectors 4 subset, see DESIGN §5). Errors throw {@link IllegalArgumentException}. */
+/**
+ * Parses selector lists (Selectors 4 subset, see DESIGN §5). Errors throw {@link IllegalArgumentException}. A complex
+ * selector may have at most {@link Limits#maxSelectorParts} compound and simple selectors, those in its
+ * {@code :is()}, {@code :not()}, {@code :where()}, {@code :has()} and {@code :nth-child(of)} lists included, and, as
+ * the spec says, {@code :has()} cannot be nested: each would multiply the work of matching.
+ */
 final class SelectorParser {
     private static final Pattern AN_PLUS_B = Pattern.compile("([+-]?\\d*)n([+-]\\d+)?|([+-]?\\d+)");
 
     private final List<ComponentValue> in;
+    /** Parts of the outermost complex selector so far; nested parsers share it. */
+    private final int[] parts;
+    /** Whether this list is inside a :has(). */
+    private final boolean inHas;
     private int pos;
     /** The pseudo-element of the complex selector being parsed. */
     private PseudoElement pseudo;
 
     private SelectorParser(List<ComponentValue> in) {
+        this(in, null, false);
+    }
+
+    private SelectorParser(List<ComponentValue> in, int[] parts, boolean inHas) {
         this.in = in;
+        this.parts = parts;
+        this.inHas = inHas;
+    }
+
+    /** Counts {@code n} parts against the outermost complex selector. */
+    private void count(int[] budget, int n) {
+        if ((budget[0] += n) > Limits.current().maxSelectorParts()) {
+            throw error("Selector has more than " + Limits.current().maxSelectorParts() + " parts");
+        }
     }
 
     static List<Selector> parse(String text) {
@@ -63,7 +86,7 @@ final class SelectorParser {
         while (true) {
             int start = pos;
             try {
-                out.add(complex(relative));
+                out.add(complex(relative, parts != null ? parts : new int[1]));
             } catch (IllegalArgumentException ex) {
                 if (!forgiving) throw ex;
                 pos = start;
@@ -78,7 +101,7 @@ final class SelectorParser {
         return out;
     }
 
-    private Selector complex(boolean relative) {
+    private Selector complex(boolean relative, int[] budget) {
         List<Compound> compounds = new ArrayList<>();
         StringBuilder combinators = new StringBuilder();
         pseudo = PseudoElement.NONE;
@@ -90,7 +113,7 @@ final class SelectorParser {
         }
         while (true) {
             if (pseudo != PseudoElement.NONE) throw error("Pseudo-element must be last");
-            compounds.add(compound());
+            compounds.add(compound(budget));
             boolean ws = skipWhitespace();
             if (pos >= in.size() || isToken(peek(), Type.COMMA)) break;
             char c = explicitCombinator();
@@ -111,7 +134,7 @@ final class SelectorParser {
         return 0;
     }
 
-    private Compound compound() {
+    private Compound compound(int[] budget) {
         String tag = null, id = null, firstClass = null;
         List<Simple> simples = new ArrayList<>();
         int start = pos;
@@ -146,13 +169,14 @@ final class SelectorParser {
                     PseudoElement legacy = p instanceof Token pt && pt.is(Type.IDENT)
                             && (pt.lower.equals("before") || pt.lower.equals("after")) ? pseudoElement(p, false) : null;
                     if (legacy != null) pseudo = legacy;
-                    else simples.add(pseudoClass(p));
+                    else simples.add(pseudoClass(p, budget));
                 }
             } else {
                 break;
             }
         }
         if (pos == start) throw error(pos < in.size() ? "Unexpected " + peek().text() : "Expected a selector");
+        count(budget, 1 + simples.size());
         return new Compound(tag, id, firstClass, simples.toArray(Simple[]::new));
     }
 
@@ -168,7 +192,7 @@ final class SelectorParser {
         throw error("Unknown pseudo-element " + (v == null ? "" : v.text()));
     }
 
-    private Simple pseudoClass(ComponentValue v) {
+    private Simple pseudoClass(ComponentValue v, int[] budget) {
         if (v instanceof Token t && t.is(Type.IDENT)) {
             String name = t.lower.equals("link") ? "any-link" : t.lower;
             try {
@@ -179,25 +203,28 @@ final class SelectorParser {
         }
         if (v instanceof Func f) {
             return switch (f.name()) {
-                case "not" -> new Logical(true, false, nested(f, false, false));
-                case "is", "matches", "any" -> new Logical(false, false, nested(f, false, true));
-                case "where" -> new Logical(false, true, nested(f, false, true));
-                case "has" -> new Has(nested(f, true, false));
-                case "nth-child" -> nth(f, false, false);
-                case "nth-last-child" -> nth(f, true, false);
-                case "nth-of-type" -> nth(f, false, true);
-                case "nth-last-of-type" -> nth(f, true, true);
+                case "not" -> new Logical(true, false, nested(f, false, false, budget));
+                case "is", "matches", "any" -> new Logical(false, false, nested(f, false, true, budget));
+                case "where" -> new Logical(false, true, nested(f, false, true, budget));
+                case "has" -> {
+                    if (inHas) throw error(":has() cannot be nested");
+                    yield new Has(nested(f, true, false, budget));
+                }
+                case "nth-child" -> nth(f, false, false, budget);
+                case "nth-last-child" -> nth(f, true, false, budget);
+                case "nth-of-type" -> nth(f, false, true, budget);
+                case "nth-last-of-type" -> nth(f, true, true, budget);
                 default -> throw error("Unknown pseudo-class :" + f.name() + "()");
             };
         }
         throw error("Expected a pseudo-class");
     }
 
-    private static List<Selector> nested(Func f, boolean relative, boolean forgiving) {
-        return new SelectorParser(f.args()).list(relative, forgiving);
+    private List<Selector> nested(Func f, boolean relative, boolean forgiving, int[] budget) {
+        return new SelectorParser(f.args(), budget, inHas || relative).list(relative, forgiving);
     }
 
-    private Nth nth(Func f, boolean last, boolean ofType) {
+    private Nth nth(Func f, boolean last, boolean ofType, int[] budget) {
         List<ComponentValue> args = f.args();
         int of = -1;
         for (int i = 0; i < args.size(); i++) if (args.get(i) instanceof Token t && t.isIdent("of")) of = i;
@@ -219,7 +246,8 @@ final class SelectorParser {
                 b = m.group(2) == null ? 0 : Integer.parseInt(m.group(2).replace("+", ""));
             }
         }
-        List<Selector> ofList = of < 0 ? null : new SelectorParser(args.subList(of + 1, args.size())).list(false, false);
+        List<Selector> ofList = of < 0 ? null
+                : new SelectorParser(args.subList(of + 1, args.size()), budget, inHas).list(false, false);
         return new Nth(a, b, last, ofType, ofList);
     }
 

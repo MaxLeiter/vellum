@@ -16,8 +16,6 @@ import java.util.List;
  * where a rendered value changed, and repeats until nothing changes.
  */
 final class Templates {
-    static final int MAX_PASSES = 10;
-
     private final RhinoScriptRuntime rt;
     private final TemplateScope scope;
     private final List<Element> cloaked = new ArrayList<>();
@@ -69,8 +67,8 @@ final class Templates {
         if (installed) {
             int passes = 1;
             while (root.update(cx)) {
-                if (++passes > MAX_PASSES) {
-                    rt.document.host().log(Host.LogLevel.WARN, "Templates still changing after " + MAX_PASSES
+                if (++passes > rt.limits.maxTemplatePasses()) {
+                    rt.document.host().log(Host.LogLevel.WARN, "Templates still changing after " + rt.limits.maxTemplatePasses()
                             + " passes: an expression changes state each time it is evaluated");
                     break;
                 }

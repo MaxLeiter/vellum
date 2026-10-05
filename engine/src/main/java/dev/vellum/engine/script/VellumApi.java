@@ -1,5 +1,6 @@
 package dev.vellum.engine.script;
 
+import dev.vellum.engine.dom.RateLimit;
 import dev.vellum.engine.host.Host;
 import dev.vellum.shadow.rhino.Callable;
 import dev.vellum.shadow.rhino.LambdaFunction;
@@ -19,20 +20,19 @@ import java.util.Map;
  * templates next render).
  */
 final class VellumApi {
-    /** Messages per second a document may send; bursts up to the same count are allowed. */
-    static final int SEND_RATE = 20;
 
     private final RhinoScriptRuntime rt;
     private final Host host;
     private final Map<String, List<Callable>> listeners = new HashMap<>();
     private Object data;
-    private double sendTokens = SEND_RATE;
-    private double sendClock;
-    private boolean throttled;
+    /** Messages and sounds a second ({@link dev.vellum.engine.Limits#sendRate}, {@code soundRate}). */
+    private final RateLimit sends, sounds;
 
     VellumApi(RhinoScriptRuntime rt) {
         this.rt = rt;
         this.host = rt.document.host();
+        sends = new RateLimit(rt.limits.sendRate());
+        sounds = new RateLimit(rt.limits.soundRate());
         data = rt.js.newObject();
         ScriptableObject vellum = (ScriptableObject) rt.js.newObject();
         rt.global.defineProperty("vellum", vellum, ScriptableObject.DONTENUM | ScriptableObject.READONLY);
@@ -42,7 +42,9 @@ final class VellumApi {
                 .method("on", (v, a) -> v.on(a.str(0), a.fn(1)))
                 .action("off", (v, a) -> v.off(a.str(0), a.get(1)))
                 .action("close", (v, a) -> host.close())
-                .action("playSound", (v, a) -> host.playSound(a.str(0), (float) a.num(1, 1), (float) a.num(2, 1)))
+                .action("playSound", (v, a) -> {
+                    if (sounds.take(rt.document.scheduler().now())) host.playSound(a.str(0), (float) a.num(1, 1), (float) a.num(2, 1));
+                })
                 .method("t", (v, a) -> host.translate(a.str(0), Arrays.stream(a.from(1)).map(Js::str).toArray(String[]::new)))
                 .action("open", (v, a) -> host.navigate(rt.document.resolveUrl(a.str(0))))
                 .method("state", (v, a) -> rt.templates.state(a.has(0) ? a.get(0) : rt.js.newObject()))
@@ -71,16 +73,11 @@ final class VellumApi {
 
     /** Sends {@code JSON.stringify(value)}; returns false when dropped by the rate limit. */
     private boolean send(String channel, Object value) {
-        double now = rt.document.scheduler().now();
-        sendTokens = Math.min(SEND_RATE, sendTokens + (now - sendClock) * SEND_RATE / 1000);
-        sendClock = now;
-        if (sendTokens < 1) {
-            if (!throttled) host.log(Host.LogLevel.WARN, "vellum.send: over " + SEND_RATE + " messages per second, dropping");
-            throttled = true;
+        boolean warned = sends.wasRefused();
+        if (!sends.take(rt.document.scheduler().now())) {
+            if (!warned) host.log(Host.LogLevel.WARN, "vellum.send: over " + sends.rate() + " messages per second, dropping");
             return false;
         }
-        sendTokens--;
-        throttled = false;
         String json = rt.js.stringify(value);
         host.send(channel, json == null ? "null" : json);
         return true;

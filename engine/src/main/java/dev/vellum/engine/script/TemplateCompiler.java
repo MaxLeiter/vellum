@@ -101,7 +101,7 @@ final class TemplateCompiler {
             block.add(new Binding.Value<>(cx -> display(text.eval(cx, scope)), el::setTextContent));
         } else if (name.equals("v-html")) {
             Expr html = value(value, where);
-            block.add(new Binding.Value<>(cx -> DomBindings.markup(html.eval(cx, scope)), el::setInnerHTML));
+            block.add(new Binding.Value<>(cx -> DomBindings.markup(rt, html.eval(cx, scope)), el::setInnerHTML));
         } else if (name.equals("v-cloak")) {
             cloaked.add(el); // stays until the first digest has run
             return false;

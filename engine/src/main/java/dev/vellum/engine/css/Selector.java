@@ -55,33 +55,48 @@ final class Selector {
 
     /** Whether {@code element} matches, ignoring the pseudo-element (the caller decides what that applies to). */
     boolean matches(Element element, MatchContext ctx) {
-        return matchAt(element, compounds.length - 1, ctx);
+        return matchAt(element, compounds.length - 1, ctx) == MATCHED;
     }
 
-    private boolean matchAt(Element e, int i, MatchContext ctx) {
-        if (!compounds[i].matches(e, ctx)) return false;
-        if (i == 0) return true;
-        switch (combinators[i - 1]) {
+    // Results of matching the selector's compounds up to i against an element. Failures say how far back the caller
+    // must go before trying again, as in WebKit and Servo: without that, descendant combinators backtrack through
+    // every combination of ancestors, so "div div div ... x" against a deep tree takes exponential time.
+    private static final int MATCHED = 0;
+    /** This element failed; a later sibling or a higher ancestor may still match. */
+    private static final int RESTART_FROM_SIBLING = 1;
+    /** No sibling of this element can match; a higher ancestor may. */
+    private static final int RESTART_FROM_DESCENDANT = 2;
+    /** Ran out of ancestors: nothing higher up can match either. */
+    private static final int NOT_MATCHED_GLOBALLY = 3;
+
+    private int matchAt(Element e, int i, MatchContext ctx) {
+        if (!compounds[i].matches(e, ctx)) return RESTART_FROM_SIBLING;
+        if (i == 0) return MATCHED;
+        char combinator = combinators[i - 1];
+        switch (combinator) {
             case '>' -> {
                 Element p = e.parentElement();
-                return p != null && matchAt(p, i - 1, ctx);
+                if (p == null) return NOT_MATCHED_GLOBALLY;
+                int r = matchAt(p, i - 1, ctx);
+                return r == MATCHED || r == NOT_MATCHED_GLOBALLY ? r : RESTART_FROM_DESCENDANT;
             }
             case ' ' -> {
                 for (Element p = e.parentElement(); p != null; p = p.parentElement()) {
-                    if (matchAt(p, i - 1, ctx)) return true;
+                    int r = matchAt(p, i - 1, ctx);
+                    if (r == MATCHED || r == NOT_MATCHED_GLOBALLY) return r;
                 }
-                return false;
+                return NOT_MATCHED_GLOBALLY;
             }
             default -> {
                 // Sibling combinators: walk the preceding element siblings ('+' only looks at the nearest one).
                 Siblings siblings = ctx.siblings(e);
-                if (siblings == null) return false;
-                boolean adjacent = combinators[i - 1] == '+';
+                if (siblings == null) return RESTART_FROM_DESCENDANT;
+                boolean adjacent = combinator == '+';
                 for (int k = ctx.position(e) - 1; k >= 0; k--) {
-                    if (matchAt(siblings.elements[k], i - 1, ctx)) return true;
-                    if (adjacent) return false;
+                    int r = matchAt(siblings.elements[k], i - 1, ctx);
+                    if (adjacent || r != RESTART_FROM_SIBLING) return r;
                 }
-                return false;
+                return RESTART_FROM_DESCENDANT;
             }
         }
     }

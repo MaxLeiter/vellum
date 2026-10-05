@@ -1,5 +1,6 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.css.ComponentValue.Block;
 import dev.vellum.engine.css.ComponentValue.Func;
 import dev.vellum.engine.css.Token.Type;
@@ -54,6 +55,7 @@ final class Grids {
         List<GridTrack> tracks = tracks(new ValueReader(args.get(1)), ctx, false);
         if (!countReader.atEnd() || tracks == null || (auto == null && (count == null || count < 1))) return false;
         if (auto != null) out.add(new GridTrack.Repeat(auto, 0, tracks, List.of()));
+        else if ((long) count * tracks.size() + out.size() > Limits.current().maxGridTracks()) return false;
         else for (int i = 0; i < count; i++) out.addAll(tracks);
         return true;
     }

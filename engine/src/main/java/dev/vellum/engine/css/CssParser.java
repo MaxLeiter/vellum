@@ -1,9 +1,11 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.css.ComponentValue.Block;
 import dev.vellum.engine.css.ComponentValue.Func;
 import dev.vellum.engine.css.Token.Type;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -118,10 +120,16 @@ final class CssParser {
         return List.copyOf(values.subList(from, to));
     }
 
-    /** Groups tokens into functions and blocks (§5.4.7–5.4.9). */
+    /**
+     * Groups tokens into functions and blocks (§5.4.7–5.4.9). Functions and blocks nested deeper than
+     * {@link Limits#maxCssNesting} come out empty, their contents skipped, so no later stage
+     * (calc(), :is(), nested rules) recurses without bound.
+     */
     private static final class TreeBuilder {
         private final List<Token> tokens;
+        private final int maxNesting = Limits.current().maxCssNesting();
         private int pos;
+        private int depth;
 
         TreeBuilder(List<Token> tokens) {
             this.tokens = tokens;
@@ -141,7 +149,7 @@ final class CssParser {
         private ComponentValue value(Token t) {
             return switch (t.type) {
                 case FUNCTION -> {
-                    List<ComponentValue> args = list(Type.CLOSE_PAREN);
+                    List<ComponentValue> args = nested(Type.CLOSE_PAREN);
                     yield new Func(t.lower, args, t.source(), t.start(), end(t), t.line());
                 }
                 case OPEN_PAREN -> block(t, '(', Type.CLOSE_PAREN);
@@ -152,8 +160,39 @@ final class CssParser {
         }
 
         private Block block(Token open, char c, Type close) {
-            List<ComponentValue> body = list(close);
+            List<ComponentValue> body = nested(close);
             return new Block(c, body, open.source(), open.start(), end(open), open.line());
+        }
+
+        /** The contents of a function or block up to {@code close}; empty, and skipped, when nested too deep. */
+        private List<ComponentValue> nested(Type close) {
+            if (depth >= maxNesting) {
+                skip(close);
+                return List.of();
+            }
+            depth++;
+            try {
+                return list(close);
+            } finally {
+                depth--;
+            }
+        }
+
+        /** Skips to the token closing the current function or block, without recursing. */
+        private void skip(Type close) {
+            ArrayDeque<Type> closes = new ArrayDeque<>();
+            closes.push(close);
+            while (pos < tokens.size() && !closes.isEmpty()) {
+                Token t = tokens.get(pos++);
+                switch (t.type) {
+                    case FUNCTION, OPEN_PAREN -> closes.push(Type.CLOSE_PAREN);
+                    case OPEN_SQUARE -> closes.push(Type.CLOSE_SQUARE);
+                    case OPEN_CURLY -> closes.push(Type.CLOSE_CURLY);
+                    default -> {
+                        if (t.type == closes.peek()) closes.pop();
+                    }
+                }
+            }
         }
 
         /** End offset of a function or block just consumed: after its closing token, or the last token at EOF. */

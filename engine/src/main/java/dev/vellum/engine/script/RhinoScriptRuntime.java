@@ -1,5 +1,6 @@
 package dev.vellum.engine.script;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.Event;
@@ -28,11 +29,17 @@ import java.util.function.Supplier;
  * microtasks (promise jobs, {@code queueMicrotask}). Each outermost entry marks the templates for re-rendering,
  * which happens once per frame in {@link #beforeRestyle}: the DOM reflects state changes at the next frame, as with
  * Vue's {@code nextTick} ({@code vellum.nextTick(fn)} runs {@code fn} after that update).
+ *
+ * <p>An entry that runs out of budget, or overflows the Java stack, is reported and the page keeps going; after
+ * {@link Limits#maxBudgetOverruns} such entries the document is stopped, so a page whose timers keep running out of
+ * budget cannot hold the game at one frame a second. An entry that finds the heap nearly full stops the document at
+ * once, which lets go of what the page built.
  */
 final class RhinoScriptRuntime implements ScriptRuntime {
     private static final int INLINE_HANDLER_CACHE = 256;
 
     final Document document;
+    final Limits limits;
     final ScriptableObject global;
     final Js js;
     final EventBindings events;
@@ -50,15 +57,19 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         }
     };
     private int depth;
+    private int overruns;
+    private boolean memoryOverrun;
     private boolean disposed;
 
     static RhinoScriptRuntime create(Document document) {
-        return Sandbox.run(cx -> new RhinoScriptRuntime(document, cx));
+        return Sandbox.run(document.limits(), true, cx -> new RhinoScriptRuntime(document, cx));
     }
 
     private RhinoScriptRuntime(Document document, Context cx) {
         this.document = document;
+        this.limits = document.limits();
         global = cx.initSafeStandardObjects();
+        Builtins.install(global, limits);
         js = new Js(this);
         events = new EventBindings(this);
         dom = new DomBindings(this);
@@ -160,21 +171,43 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     Object enter(String what, Function<Context, Object> action) {
         if (disposed) return Undefined.instance;
         boolean loading = !document.readyState().equals("complete");
-        return Sandbox.run(loading ? Sandbox.LOAD_TIME_BUDGET_MS : Sandbox.TIME_BUDGET_MS, cx -> {
+        return Sandbox.run(limits, loading, cx -> {
             if (depth > 0) return attempt(what, cx, action);
             depth++;
             templates.invalidate(); // any entry may change what templates show
             try {
                 Object result = attempt(what, cx, action);
                 attempt(what, cx, this::settle);
+                Sandbox.checkMemory();
                 return result;
             } catch (Sandbox.BudgetExceeded e) {
-                report(what, e);
+                overrun(what, e, e.memory);
+                return Undefined.instance;
+            } catch (StackOverflowError e) {
+                // Recursion through host calls (a listener that clicks its own element, toString calling String())
+                // grows the Java stack, which the interpreter's depth limit does not see.
+                overrun(what, new IllegalStateException("too much recursion", e), false);
+                return Undefined.instance;
+            } catch (Sandbox.HeapExhausted e) {
+                document.stop(what + ": " + e.getMessage(), new OutOfMemoryError(e.getMessage()));
                 return Undefined.instance;
             } finally {
                 depth--;
             }
         });
+    }
+
+    /**
+     * Reports an entry stopped by its budget, and stops the document once that has happened too often. When the
+     * memory budget was among the overruns, the stop lets go of the page's memory, as running out of it would.
+     */
+    private void overrun(String what, Throwable error, boolean memory) {
+        report(what, error);
+        memoryOverrun |= memory;
+        if (++overruns >= limits.maxBudgetOverruns()) {
+            String message = "The page stopped: its scripts ran out of budget " + overruns + " times";
+            document.stop(message, memoryOverrun ? new OutOfMemoryError(message) : error);
+        }
     }
 
     private Object attempt(String what, Context cx, Function<Context, Object> action) {
