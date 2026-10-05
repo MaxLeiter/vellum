@@ -7,6 +7,7 @@ import com.mojang.blaze3d.platform.cursor.CursorType;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.Viewport;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
@@ -144,13 +145,17 @@ public final class DocumentDriver {
             fail("Page not found: " + url, null);
             return;
         }
-        Document doc = Document.parse(host, url, source, data);
-        document = doc;
-        if (width > 0) applyViewport(doc);
+        document = Document.parse(host, url, source, data, viewport());
     }
 
     private void applyViewport(@Nullable Document doc) {
-        if (doc != null) doc.setViewport(width, height, Minecraft.getInstance().getWindow().getGuiScale());
+        Viewport v = viewport();
+        if (doc != null) doc.setViewport(v.width(), v.height(), v.devicePixelRatio());
+    }
+
+    /** The GUI-scaled window, which pages are laid out in. */
+    private Viewport viewport() {
+        return new Viewport(width, height, Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void disposeDocument() {

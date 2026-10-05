@@ -69,8 +69,9 @@ Packages in `engine/` (`dev.vellum.engine.*`):
 `Document` drives everything on one thread (the render thread in Minecraft):
 
 ```
-host: Document.parse(host, url, html, initialData)   parse, deliver initialData as vellum.data, run scripts,
-                                                     bind templates (ScriptRuntime.documentLoaded), DOMContentLoaded, load
+host: Document.parse(host, url, html, initialData, viewport)   parse, deliver initialData as vellum.data, run
+                                     scripts (they see the viewport), bind templates (ScriptRuntime.documentLoaded),
+                                     DOMContentLoaded, load
 host: setViewport(w, h, guiScale)    on resize
 host: input.mouseMove/mouseDown/...  on input  → DOM events, hover/active/focus flags, default actions
 host: frame(nowMs)                   every frame:

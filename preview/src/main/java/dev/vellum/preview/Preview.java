@@ -1,5 +1,6 @@
 package dev.vellum.preview;
 
+import dev.vellum.engine.dom.Viewport;
 import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
@@ -86,7 +87,8 @@ public final class Preview {
         MinecraftFont font = new MinecraftFont(assets);
         PreviewHost host = new PreviewHost(assets, font);
         Scene scene = options.canvasTest() ? new CanvasTest(host) : new PageScene(host, PreviewHost.pageUrl(options.page()),
-                options.data() == null ? null : Files.readString(options.data()));
+                options.data() == null ? null : Files.readString(options.data()),
+                new Viewport(options.width(), options.height(), options.scale()));
 
         if (options.snapshot() != null) {
             System.exit(snapshot(scene, new FrameRenderer(assets, font), options));

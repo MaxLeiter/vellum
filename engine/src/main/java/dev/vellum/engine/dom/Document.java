@@ -60,8 +60,7 @@ public final class Document extends Node {
     private boolean closed;
     private Throwable error;
 
-    private float viewportWidth = 320, viewportHeight = 240;
-    private float devicePixelRatio = 1;
+    private float viewportWidth, viewportHeight, devicePixelRatio;
     boolean styleDirty = true, layoutDirty = true;
     /** Something that is painted changed without needing a restyle or relayout (a scroll offset, canvas pixels). */
     private boolean repaint = true;
@@ -74,11 +73,14 @@ public final class Document extends Node {
 
     private Element focused;
 
-    private Document(Host host, String url, String initialData) {
+    private Document(Host host, String url, String initialData, Viewport viewport) {
         super(null);
         this.host = host;
         this.url = url == null ? "" : url;
         this.initialData = initialData;
+        this.viewportWidth = viewport.width();
+        this.viewportHeight = viewport.height();
+        this.devicePixelRatio = viewport.devicePixelRatio();
         this.styleEngine = new StyleEngine(this);
         this.layoutEngine = new LayoutEngine(this);
         this.animationEngine = new AnimationEngine(this);
@@ -87,27 +89,31 @@ public final class Document extends Node {
         this.replacedElements = new ReplacedElements(host);
     }
 
-    /** Creates an empty document with {@code <html><head></head><body></body></html>}, without loading it. */
+    /**
+     * Creates an empty document with {@code <html><head></head><body></body></html>}, without loading it, on the
+     * {@link Viewport#DEFAULT default viewport}.
+     */
     public static Document create(Host host, String url) {
-        Document doc = new Document(host, url, null);
+        Document doc = new Document(host, url, null, Viewport.DEFAULT);
         Element html = doc.appendChild(doc.createElement("html"));
         html.appendChild(doc.createElement("head"));
         html.appendChild(doc.createElement("body"));
         return doc;
     }
 
-    /** {@link #parse(Host, String, String, String)} without initial data. */
+    /** {@link #parse(Host, String, String, String, Viewport)} without initial data, on the default viewport. */
     public static Document parse(Host host, String url, String html) {
-        return parse(host, url, html, null);
+        return parse(host, url, html, null, Viewport.DEFAULT);
     }
 
     /**
-     * Parses HTML into a new document, then loads it: runs its scripts (after delivering {@code initialData}, a JSON
-     * value or null, as {@code vellum.data}), then fires {@code DOMContentLoaded} and {@code load}. Stylesheets are
-     * found on the first restyle. Never throws for engine errors: the document comes back stopped ({@link #error()}).
+     * Parses HTML into a new document shown in {@code viewport}, then loads it: runs its scripts (after delivering
+     * {@code initialData}, a JSON value or null, as {@code vellum.data}), then fires {@code DOMContentLoaded} and
+     * {@code load}. Stylesheets are found on the first restyle. Never throws for engine errors: the document comes
+     * back stopped ({@link #error()}).
      */
-    public static Document parse(Host host, String url, String html, String initialData) {
-        Document doc = new Document(host, url, initialData);
+    public static Document parse(Host host, String url, String html, String initialData, Viewport viewport) {
+        Document doc = new Document(host, url, initialData, viewport);
         doc.run(() -> {
             HtmlParser.parseInto(doc, html);
             doc.load();
