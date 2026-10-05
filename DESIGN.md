@@ -377,6 +377,11 @@ the scrollbar).
 - Layout-affecting animated properties invalidate layout each frame; paint-only ones (opacity, transform, colours)
   do not, for elements: their boxes paint with the element's live style. Pseudo-element boxes and their generated
   text paint with the style they were laid out with, so a pseudo-element whose used style changes is laid out again.
+- A common trap (standard CSS): animations override normal declarations, and one that fills forwards
+  (`animation-fill-mode: both` or `forwards`) keeps applying its last keyframe after it ends. So an entrance
+  animation of `transform` with `both` pins the transform for good, and a later `:hover { transform: ... }` does
+  nothing. Give entrances `backwards` (the first keyframe applies during the delay, then the animation lets go), or
+  have them animate a property the hover does not.
 - `element.animate(keyframes, options)` from scripts creates the same animation objects (Web Animations subset:
   `finished` promise-like callback, `cancel()`, `pause()`, `play()`, `reverse()`).
 - `prefers-reduced-motion` media query reflects a host setting.

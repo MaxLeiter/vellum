@@ -44,13 +44,20 @@ These do **not** work. Each is a syntax error unless noted:
 | `import` / `export` | several `<script>` elements; they share one global scope |
 | `Intl` (it is undefined) | format numbers and dates yourself |
 
-Two semantic differences matter. **A `const` declared in a loop body is bound once**: later iterations keep the first
-value, so declare per-iteration values with `let`:
+Two semantic differences matter. **`const` belongs to the enclosing function (or script), not to its block.** So a
+`const` in a loop body is initialised once and keeps its first value in every later iteration, and two `const`s
+with the same name in sibling blocks of one function or script (two loops, two `if` branches) are a
+`SyntaxError: redeclaration of const`, which stops the whole script. Use `let` for anything declared inside a
+block:
 
 ```js
 for (let i = 0; i < 3; i++) { const b = i * 2; out.push(b); }  // pushes 0, 0, 0
 for (let i = 0; i < 3; i++) { let b = i * 2; out.push(b); }    // pushes 0, 2, 4
+for (let x of a) { const n = x.name; }
+for (let y of b) { const n = y.name; }                         // SyntaxError: redeclaration of const n
 ```
+
+A `const` in a callback (`list.forEach(x => { const n = ... })`) is fine: every call is a new function.
 
 And **`let` in a loop head is one binding for the whole loop**, not one per iteration. Closures created in the loop
 all see the final value:
@@ -267,6 +274,12 @@ The server sends `{"title": "Armorer", "items": [...]}` as data, and the page fo
 Assigning to a name (`@click="count++"`) writes to whichever of those objects has it, or creates a global. In
 handler statements `this` is the element. Methods are called as methods: in `@click="shop.buy"`, and in
 `@click="buy"` for a method of a `vellum.state()` object, `this.stock` inside `buy` reads that object's `stock`.
+
+Because `vellum.data` comes first, **a data key hides state and globals of the same name**: if the page is opened
+with `{"count": 3}`, `{{ count }}` always reads the data, and `count++` writes into `vellum.data` (which the next
+data update replaces) instead of your state; a data key named like one of your functions breaks the handlers that
+call it. Keep the data a page is opened with under one key, `{"options": {"title": "Shop"}}` read as
+`{{ options.title }}`, so its names never collide with the page's own.
 
 ```html
 <button @click="count++">Clicked {{ count }} times</button>
