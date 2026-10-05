@@ -1,0 +1,51 @@
+// Standalone previewer: renders Vellum documents with Java2D using Minecraft's real font and GUI sprites (read from
+// the user's Minecraft client jar), reloads on save, and has an inspector. Also the snapshot-test harness.
+// A development tool: never shipped in the mod, so it may use the full toolchain release.
+plugins {
+    id 'application'
+}
+
+repositories { mavenCentral() }
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+dependencies {
+    implementation(project(':engine'))
+    implementation(project(path: ':rhino', configuration: 'relocated'))
+    // The engine only compiles against Gson (Minecraft provides it in game).
+    implementation("com.google.code.gson:gson:${gson_version}")
+    testImplementation(platform("org.junit:junit-bom:${junit_version}"))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+application {
+    mainClass = 'dev.vellum.preview.Preview'
+}
+
+tasks.named('run', JavaExec) {
+    // Page paths in --args are typed relative to the repository root.
+    workingDir = rootProject.projectDir
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    testLogging { events 'failed', 'skipped'; exceptionFormat 'full' }
+    systemProperty('java.awt.headless', 'true')
+    systemProperty('vellum.goldens', file('src/test/snapshots').absolutePath)
+    inputs.dir('src/test/snapshots').withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty('vellum.snapshots', layout.buildDirectory.dir('snapshots').get().asFile.absolutePath)
+    // -Dvellum.updateSnapshots=true rewrites goldens; -Dvellum.mcJar=... picks the Minecraft jar.
+    ['vellum.updateSnapshots', 'vellum.mcJar'].each { key ->
+        String value = System.getProperty(key)
+        if (value != null) systemProperty(key, value)
+    }
+    if (System.getProperty('vellum.updateSnapshots') != null) outputs.upToDateWhen { false }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all,-serial,-processing,-options', '-Werror']
+}

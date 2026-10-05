@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<style>
+  body { display: flex; justify-content: center; align-items: center; height: 100vh; }
+  .mc-panel { width: 220px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  h1 { margin: 0; text-align: center; }
+  .row { display: flex; gap: 4px; }
+  .row button { flex: 1; }
+  .grid { display: grid; grid-template-columns: repeat(6, 18px); }
+  .note { color: mc-yellow; text-shadow: minecraft; }
+</style>
+</head>
+<body>
+  <div class="mc-panel">
+    <h1 class="mc-label">Vellum</h1>
+    <p class="mc-label">A <b>small</b> web engine for <i>Minecraft</i> GUIs.</p>
+    <div class="row">
+      <button>Play</button>
+      <button disabled>Options</button>
+    </div>
+    <input type="text" placeholder="Search...">
+    <div class="grid">
+      <slot index="0"></slot>
+      <slot index="1"></slot>
+      <slot index="2"></slot>
+      <slot index="3"></slot>
+      <slot index="4"></slot>
+      <slot index="5"></slot>
+    </div>
+    <div class="row">
+      <item id="minecraft:diamond" count="64"></item>
+      <item id="minecraft:stone"></item>
+      <player-head></player-head>
+      <sprite src="minecraft:icon/checkmark"></sprite>
+    </div>
+    <span class="note">Ünïcödé and <u>underlined</u> text</span>
+  </div>
+</body>
+</html>

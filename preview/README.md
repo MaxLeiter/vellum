@@ -1,0 +1,61 @@
+# Vellum previewer
+
+Renders a Vellum page in a window without launching Minecraft. It uses the engine, Java2D, and Minecraft's own font
+glyphs and GUI sprites, which it reads from your Minecraft jar. It is also where the snapshot tests live.
+
+## Running it
+
+```sh
+./gradlew :preview:run --args="path/to/page.html"
+./gradlew :preview:run --args="path/to/page.html --scale 3 --size 427x240 --data data.json"
+./gradlew :preview:run --args="--canvas-test"
+```
+
+Paths are relative to the repository root. In the window:
+
+| Key | Does |
+|---|---|
+| F5 | Reload (the page also reloads when it or a file it loaded changes) |
+| F12 | Inspector: hover an element to see its margin, border, padding and content boxes |
+| 1-4 | GUI scale (ignored while a text field has focus) |
+| Ctrl/Cmd+S | Save a PNG of the window to the working directory |
+
+`--data` pushes a JSON file to the page as its data after loading.
+
+Headless snapshot: `--snapshot out.png [--frames N]` renders N frames, 16 ms apart, and writes the last one. The
+exit code is 1 if the page failed. `--canvas-test` draws a fixed sheet of canvas primitives without the engine
+(text styles, nine-sliced sprites, textures, items, gradients, clipping, rotation, alpha), to check the renderer
+against the game.
+
+If the engine throws, the window shows the exception instead of the page and keeps running. Save a fix to reload.
+
+On macOS the JDK checks for file changes every two seconds, so reloads can lag by up to that long.
+
+## Minecraft assets
+
+Assets are read straight from a Minecraft 26.3 client jar and never copied into the repository. The jar is looked up
+in this order:
+
+1. `-Dvellum.mcJar=/path/to/client.jar` or the `VELLUM_MC_JAR` environment variable;
+2. `vanilla-26.3-*.jar` in `common/build/moddev/artifacts/` (this repository after a build, or a parent directory's),
+   then in `~/Documents/mod/common/build/moddev/artifacts/`;
+3. the launcher's `versions/26.3/26.3.jar` in `~/Library/Application Support/minecraft`, `~/.minecraft` or
+   `%APPDATA%/.minecraft`.
+
+Without a jar, text uses a Java2D font with Minecraft's ASCII advances (layout matches the game), and textures and
+sprites draw as the magenta and black missing texture.
+
+A page under `<root>/assets/<ns>/...` is addressed as `ns:path`, and `<root>` is searched before the jar, so the
+page's `ns:` stylesheets, scripts and textures resolve as they do in game. Other pages use plain file paths.
+
+## Snapshot tests
+
+```sh
+./gradlew :preview:test                                 # compare with the goldens in src/test/snapshots
+./gradlew :preview:test -Dvellum.updateSnapshots=true   # accept the current output as the new goldens
+```
+
+On a mismatch, the actual image and a diff (differing pixels in red) are written to `preview/build/snapshots/`.
+Tests that need Minecraft's assets are skipped when no jar is found. Page snapshots cover
+`src/test/resources/pages/*.html` and the demo UIs, and they are skipped while the engine still throws
+`UnsupportedOperationException`.
