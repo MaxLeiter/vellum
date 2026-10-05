@@ -1,0 +1,1241 @@
+<!doctype html>
+<html>
+<head>
+  <title>Chronicle Journal</title>
+  <style>
+    /*
+     * A Chronicle-style journal: a leather book open on a two-page spread, with ribbon tabs on the side.
+     * Paper is layered gradients (a warm vignette plus a gutter shadow per page), the stacked page edges are
+     * box-shadows, and the page turn is two overlay "leaves" animated with scaleX/skewY from a script.
+     */
+    :root {
+      --paper: #f1e3bf;
+      --paper-lo: #dcc48e;
+      --ink: #3b2716;
+      --ink-soft: #7a5c3c;
+      --ink-faint: rgba(59, 39, 22, 0.35);
+      --oxblood: #7d1f12;
+      --gold: #b9842c;
+      --gold-hi: #f1cf74;
+      --leather: #5b3820;
+      --leather-lo: #3a2112;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 4px 26px 4px 4px;
+    }
+
+    /* A flex column so the cover fills the book's height (a % height inside a flex item does not resolve). */
+    .book {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 440px;
+      height: 100%;
+      max-height: 250px;
+      animation: book-in 600ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    }
+
+    @keyframes book-in {
+      from { transform: translateY(16px) scale(0.94); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    /* ---------------------------------------------------------------- the leather cover */
+
+    .cover {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      padding: 6px 7px;
+      background:
+        repeating-linear-gradient(35deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 5px),
+        linear-gradient(to bottom, #6e4528, var(--leather) 50%, var(--leather-lo));
+      border: 1px solid #24130a;
+      border-radius: 5px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Stitching around the cover. */
+    .cover::before {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      border: 1px dashed rgba(232, 190, 120, 0.45);
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    /* Brass corner caps: border triangles. */
+    .cap {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 6px solid transparent;
+    }
+
+    .cap.tl { left: -1px; top: -1px; border-top-color: var(--gold); border-left-color: var(--gold); }
+    .cap.tr { right: -1px; top: -1px; border-top-color: var(--gold); border-right-color: var(--gold); }
+    .cap.bl { left: -1px; bottom: -1px; border-bottom-color: var(--gold); border-left-color: var(--gold); }
+    .cap.br { right: -1px; bottom: -1px; border-bottom-color: var(--gold); border-right-color: var(--gold); }
+
+    /* ---------------------------------------------------------------- the paper */
+
+    .spread {
+      position: relative;
+      display: flex;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      padding: 7px 10px 6px;
+      color: var(--ink);
+      line-height: 10px;
+      overflow: hidden;
+    }
+
+    /* Vignette + gutter shadow; the shadow sits on the inner edge of each page. */
+    .page.left {
+      background:
+        linear-gradient(to right, rgba(110, 70, 20, 0) 82%, rgba(110, 70, 20, 0.28)),
+        radial-gradient(ellipse at 45% 45%, #f6ead0 0%, var(--paper) 55%, var(--paper-lo) 100%);
+      /* The stacked page edges: hard-edged shadows in alternating paper tones. */
+      box-shadow: -1px 1px 0 #cdb27a, -2px 2px 0 #eedcb2, -3px 3px 0 #c2a46a;
+      border-radius: 3px 0 0 3px;
+      padding-right: 12px;
+    }
+
+    .page.right {
+      background:
+        linear-gradient(to left, rgba(110, 70, 20, 0) 82%, rgba(110, 70, 20, 0.28)),
+        radial-gradient(ellipse at 55% 45%, #f6ead0 0%, var(--paper) 55%, var(--paper-lo) 100%);
+      box-shadow: 1px 1px 0 #cdb27a, 2px 2px 0 #eedcb2, 3px 3px 0 #c2a46a;
+      border-radius: 0 3px 3px 0;
+      padding-left: 12px;
+    }
+
+    /* The fold itself: a thin dark crease. */
+    .crease {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      margin-left: -1px;
+      background: linear-gradient(to right, rgba(80, 50, 15, 0.45), rgba(80, 50, 15, 0.1));
+      pointer-events: none;
+    }
+
+    /* Each section's content enters with a soft fade once the page has turned. */
+    .content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      animation: ink-in 350ms ease-out both;
+    }
+
+    @keyframes ink-in {
+      from { opacity: 0; transform: translateY(2px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .running {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      color: var(--ink-soft);
+      letter-spacing: 1px;
+    }
+
+    .folio {
+      margin-top: auto;
+      flex: none;
+      padding-top: 2px;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 12px;
+      line-height: 14px;
+      font-weight: 400;
+      color: var(--oxblood);
+    }
+
+    h3 {
+      margin: 0 0 2px;
+      font-weight: 400;
+      color: var(--oxblood);
+      letter-spacing: 1px;
+    }
+
+    p { margin: 0 0 4px; }
+
+    .soft { color: var(--ink-soft); }
+
+    /* Ornamental divider: two fading rules and a diamond made of a rotated square. */
+    .orn {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 8px;
+      margin: 2px 0 4px;
+    }
+
+    .orn::before, .orn::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+    }
+
+    .orn::before { background: linear-gradient(to right, rgba(125, 31, 18, 0), var(--oxblood)); }
+    .orn::after { background: linear-gradient(to left, rgba(125, 31, 18, 0), var(--oxblood)); }
+
+    .orn i {
+      width: 4px;
+      height: 4px;
+      background: var(--gold);
+      border: 1px solid var(--oxblood);
+      transform: rotate(45deg);
+    }
+
+    .orn i.dot {
+      width: 2px;
+      height: 2px;
+      border: 0;
+      background: var(--oxblood);
+    }
+
+    /* ---------------------------------------------------------------- quests */
+
+    .quests {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .quest {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 14px;
+      padding: 0 3px;
+      cursor: pointer;
+      transition: background-color 150ms, padding-left 150ms ease-out;
+      animation: ink-in 300ms ease-out both;
+    }
+
+    .quest:hover { background: rgba(185, 132, 44, 0.12); }
+
+    /* The selected quest looks marked with a highlighter. */
+    .quest.sel {
+      padding-left: 6px;
+      background: linear-gradient(to right, rgba(214, 160, 60, 0.45), rgba(214, 160, 60, 0.08));
+    }
+
+    .quest .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .quest.done .t { color: var(--ink-soft); text-decoration: line-through; }
+    .quest item { width: 16px; height: 16px; }
+
+    /* A hand-drawn checkbox: an ink square; the tick is a glyph in red ink that pops in. */
+    .check {
+      position: relative;
+      flex: none;
+      width: 8px;
+      height: 8px;
+      border: 1px solid var(--ink);
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .check b {
+      position: absolute;
+      left: 0;
+      top: -3px;
+      font-weight: 400;
+      color: #b0231a;
+      animation: tick 250ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+    }
+
+    @keyframes tick {
+      from { transform: scale(0) rotate(-30deg); }
+      to { transform: none; }
+    }
+
+    .progress {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      color: var(--ink-soft);
+    }
+
+    /* An ink bar: a hatched fill inside a ruled box. A flex row so the fill takes the bar's height. */
+    .inkbar {
+      display: flex;
+      flex: 1;
+      height: 6px;
+      padding: 1px;
+      border: 1px solid var(--ink);
+    }
+
+    .inkbar div {
+      background: repeating-linear-gradient(45deg, var(--oxblood) 0 1px, rgba(125, 31, 18, 0.35) 1px 3px);
+      transition: width 500ms cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+
+    .giver {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 1px 0 4px;
+      color: var(--ink-soft);
+    }
+
+    .giver player-head {
+      width: 8px;
+      height: 8px;
+      outline: 1px solid var(--ink-faint);
+    }
+
+    .objectives {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      margin-bottom: 4px;
+    }
+
+    .obj {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 16px;
+    }
+
+    .obj item { width: 16px; height: 16px; }
+    .obj .t { flex: 1; }
+    .obj .n { color: var(--ink-soft); }
+    .obj.met .t { color: var(--ink-soft); }
+    .obj.met .n { color: #2f6a2a; }
+
+    .rewards {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .rewards .k {
+      margin-right: 2px;
+      color: var(--ink-soft);
+    }
+
+    /* Item slots drawn as pencil boxes on the paper. */
+    .rslot {
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: 1px solid var(--ink-faint);
+      background: rgba(120, 80, 30, 0.1);
+    }
+
+    .rslot item { width: 16px; height: 16px; }
+
+    .diary {
+      display: flex;
+      gap: 3px;
+      margin-top: auto;
+      padding: 3px 4px 3px 2px;
+      color: var(--ink-soft);
+      background: rgba(255, 250, 230, 0.45);
+      border: 1px dashed var(--ink-faint);
+      box-shadow: 1px 1px 0 rgba(110, 70, 20, 0.15);
+    }
+
+    .diary + .folio { margin-top: 2px; }
+
+    .diary item { flex: none; width: 16px; height: 16px; }
+    .diary p { margin: 0; }
+    .diary b { font-weight: 400; color: var(--oxblood); }
+
+    .hint {
+      margin: 6px 0 0;
+      color: var(--ink-soft);
+    }
+
+    .sealed {
+      position: absolute;
+      right: 42px;
+      bottom: 24px;
+      color: var(--ink-soft);
+      animation: ink-in 300ms ease-out 300ms both;
+    }
+
+    /* The wax seal: a radial gradient blob with a lumpy rim (box-shadows) and an embossed letter. */
+    .seal {
+      position: absolute;
+      right: 10px;
+      bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 13px;
+      background: radial-gradient(circle at 40% 35%, #e04a3a 0%, #a8231a 55%, #6e110b 100%);
+      box-shadow: 1px 1px 0 #6e110b, -1px 0 0 #b52a1f, 0 -1px 0 #c0392b, 2px 2px 3px rgba(0, 0, 0, 0.35);
+      color: #6e110b;
+      font-size: 16px;
+      text-shadow: 1px 1px 0 #e86a58;
+      transform: rotate(-8deg);
+      animation: seal 450ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+    }
+
+    @keyframes seal {
+      from { transform: scale(2.2) rotate(-40deg); opacity: 0; }
+      to { transform: rotate(-8deg); opacity: 1; }
+    }
+
+    /* ---------------------------------------------------------------- lore */
+
+    .opening {
+      display: flex;
+      gap: 4px;
+      align-items: flex-start;
+    }
+
+    /* The illuminated capital: gold leaf, a double frame, and a glint that sweeps across now and then. */
+    .dropcap {
+      position: relative;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 30% 30%, #fff0bf 0%, rgba(255, 240, 191, 0) 45%),
+        linear-gradient(135deg, var(--gold-hi), #d39b36 50%, #9c6618);
+      border: 1px solid #5b2a0a;
+      box-shadow: inset 0 0 0 1px #fce9b2, inset 0 0 0 3px rgba(125, 31, 18, 0.55);
+    }
+
+    .dropcap b {
+      margin: 2px 0 0 2px;
+      font-size: 24px;
+      line-height: 24px;
+      font-weight: 400;
+      color: var(--oxblood);
+      text-shadow: 1px 1px 0 #f9dc8c;
+    }
+
+    .dropcap .glint {
+      position: absolute;
+      top: -10px;
+      left: -20px;
+      width: 8px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.55);
+      transform: rotate(30deg);
+      animation: glint 4s ease-in-out 800ms infinite;
+    }
+
+    @keyframes glint {
+      0% { transform: translateX(0) rotate(30deg); }
+      25%, 100% { transform: translateX(64px) rotate(30deg); }
+    }
+
+    .opening p { margin: 0; }
+
+    .runes {
+      margin: 2px 0 1px;
+      font-family: minecraft:alt;
+      color: #4b6fa0;
+      letter-spacing: 1px;
+    }
+
+    .quote {
+      padding-left: 6px;
+      border-left: 2px solid var(--gold);
+      color: var(--ink-soft);
+      font-style: italic;
+    }
+
+    .timeline {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding-left: 2px;
+    }
+
+    /* The spine of the timeline: a dotted ink line behind the markers. */
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 9px;
+      top: 8px;
+      bottom: 8px;
+      border-left: 1px dashed var(--ink-soft);
+    }
+
+    .era {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      animation: ink-in 350ms ease-out both;
+    }
+
+    .era .mark {
+      position: relative;
+      flex: none;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      background: var(--paper);
+      border: 1px solid var(--ink-soft);
+      border-radius: 8px;
+    }
+
+    .era .mark item {
+      position: absolute;
+      left: -1px;
+      top: -1px;
+    }
+
+    .era.now .mark {
+      border-color: var(--oxblood);
+      animation: now 1.6s ease-in-out infinite;
+    }
+
+    @keyframes now {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(125, 31, 18, 0.6); }
+      50% { box-shadow: 0 0 0 3px rgba(125, 31, 18, 0); }
+    }
+
+    .era .yr {
+      width: 34px;
+      color: var(--oxblood);
+    }
+
+    .era .what { flex: 1; }
+    .era .what small { display: block; color: var(--ink-soft); }
+
+    /* ---------------------------------------------------------------- bestiary */
+
+    .plate {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 92px;
+      margin: 2px 8px 2px;
+      background: radial-gradient(ellipse at 50% 60%, rgba(70, 110, 120, 0.35), rgba(70, 110, 120, 0) 70%);
+      border: 1px solid var(--ink);
+      outline: 1px solid var(--gold);
+      outline-offset: 1px;
+    }
+
+    .plate entity {
+      width: 80px;
+      height: 84px;
+    }
+
+    .plate .fig {
+      position: absolute;
+      left: 3px;
+      bottom: 2px;
+      color: var(--ink-soft);
+    }
+
+    .facts {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      row-gap: 1px;
+      margin-top: 3px;
+    }
+
+    .facts .k { color: var(--ink-soft); }
+    .facts .drops { display: flex; gap: 1px; margin-top: -4px; }
+    .facts .drops item { width: 16px; height: 16px; }
+
+    .sightings {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      row-gap: 1px;
+      margin-bottom: 4px;
+    }
+    .skulls { color: var(--oxblood); letter-spacing: 1px; }
+    .skulls span { color: var(--ink-faint); }
+
+    .specimens {
+      display: flex;
+      gap: 2px;
+      margin: 2px 0 4px;
+    }
+
+    /* Dot leaders: the dots are a flex filler with a dotted bottom border. */
+    .toc {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .toc div {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      cursor: pointer;
+    }
+
+    .toc div:hover { color: var(--oxblood); }
+
+    .toc i {
+      flex: 1;
+      height: 6px;
+      border-bottom: 1px dotted var(--ink-soft);
+    }
+
+    /* ---------------------------------------------------------------- map */
+
+    .mapframe {
+      position: relative;
+      align-self: center;
+      padding: 2px;
+      border: 1px solid var(--ink);
+      outline: 1px solid var(--ink-faint);
+      outline-offset: 1px;
+    }
+
+    /* The terrain: a CSS grid of tiles, one div each, coloured by a tiny noise function in the script. */
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(18, 9px);
+      grid-auto-rows: 9px;
+    }
+
+    .poi {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      color: var(--ink);
+      text-align: center;
+      line-height: 9px;
+      text-shadow: 1px 1px 0 rgba(255, 240, 200, 0.6);
+      transition: transform 150ms ease-out;
+    }
+
+    .poi.hot {
+      color: var(--oxblood);
+      transform: scale(1.6);
+    }
+
+    /* "You are here": a red dot with a ring that pings outward. */
+    .you {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      margin: 2px;
+      background: #c0261b;
+      border: 1px solid #fff2d0;
+      border-radius: 3px;
+    }
+
+    .you::after {
+      content: "";
+      position: absolute;
+      left: -5px;
+      top: -5px;
+      width: 13px;
+      height: 13px;
+      border: 1px solid #c0261b;
+      border-radius: 7px;
+      animation: ping 1.4s ease-out infinite;
+    }
+
+    @keyframes ping {
+      from { transform: scale(0.3); opacity: 1; }
+      to { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* The trail from you to the quest: a dashed line, rotated into place. */
+    .trail {
+      position: absolute;
+      height: 0;
+      border-top: 1px dashed #8a2a1a;
+      transform-origin: left center;
+      pointer-events: none;
+    }
+
+    /* Compass rose: a circle with a needle made of two border triangles. */
+    .rose {
+      position: absolute;
+      right: 4px;
+      top: 4px;
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--ink);
+      border-radius: 9px;
+      background: rgba(241, 227, 191, 0.8);
+    }
+
+    .rose .n, .rose .s {
+      position: absolute;
+      left: 5px;
+      width: 0;
+      height: 0;
+      border-left: 3px solid transparent;
+      border-right: 3px solid transparent;
+    }
+
+    .rose .n { top: 1px; border-bottom: 7px solid var(--oxblood); }
+    .rose .s { top: 8px; border-top: 7px solid var(--ink); }
+
+    .rose b {
+      position: absolute;
+      left: 6px;
+      top: -10px;
+      font-weight: 400;
+      color: var(--oxblood);
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px 6px;
+      margin-bottom: 4px;
+    }
+
+    .legend div {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .legend i {
+      width: 7px;
+      height: 7px;
+      border: 1px solid var(--ink-faint);
+    }
+
+    .waypoints {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .wp {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 12px;
+      padding: 0 2px;
+      cursor: pointer;
+      transition: background-color 120ms;
+    }
+
+    .wp:hover, .wp.hot { background: rgba(214, 160, 60, 0.3); }
+    .wp .g { width: 8px; color: var(--oxblood); text-align: center; }
+    .wp .nm { flex: 1; }
+    .wp .d { color: var(--ink-soft); }
+
+    .here {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 4px 0 0 2px;
+      color: var(--ink-soft);
+    }
+
+    .you-key {
+      position: relative;
+      width: 5px;
+      height: 5px;
+      margin: 0 2px 0 1px;
+      background: #c0261b;
+      border: 1px solid #fff2d0;
+      border-radius: 3px;
+      outline: 1px solid #c0261b;
+    }
+
+    .scale {
+      width: 96px;
+      margin: 5px 0 0 2px;
+    }
+
+    .scale .bar {
+      height: 4px;
+      border: 1px solid var(--ink);
+      background: repeating-linear-gradient(to right, var(--ink) 0 23px, var(--paper) 23px 46px);
+    }
+
+    .scale .ticks {
+      display: flex;
+      justify-content: space-between;
+      color: var(--ink-soft);
+    }
+
+    /* ---------------------------------------------------------------- the page-turn leaves */
+
+    /* Hidden until a script animates them: a leaf of paper, darker towards the edge that is lifting. */
+    .leaf {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .leaf.r {
+      left: 50%;
+      transform-origin: left center;
+      background: linear-gradient(to right, #e9d6a8, var(--paper) 30%, #c9ad74);
+      border-radius: 0 3px 3px 0;
+    }
+
+    .leaf.l {
+      left: 0;
+      transform-origin: right center;
+      background: linear-gradient(to left, #e9d6a8, var(--paper) 30%, #c9ad74);
+      border-radius: 3px 0 0 3px;
+    }
+
+    /* ---------------------------------------------------------------- ribbon tabs */
+
+    .ribbons {
+      position: absolute;
+      left: 100%;
+      top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: -4px;
+    }
+
+    .ribbon {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 22px;
+      height: 22px;
+      padding-left: 5px;
+      background: linear-gradient(to bottom, var(--hi), var(--c));
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      transform: translateX(-4px);
+      transition: transform 180ms ease-out;
+    }
+
+    .ribbon:hover { transform: translateX(-1px); }
+    .ribbon.on { transform: translateX(2px); }
+
+    /* The swallowtail: two border triangles in the ribbon colour leave a V-shaped notch between them. */
+    .ribbon::after {
+      content: "";
+      position: absolute;
+      left: 100%;
+      top: 0;
+      width: 0;
+      height: 0;
+      border-top: 11px solid var(--c);
+      border-bottom: 11px solid var(--c);
+      border-right: 5px solid transparent;
+    }
+
+    .ribbon item { width: 16px; height: 16px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .you::after, .dropcap .glint, .era.now .mark { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="book">
+    <div class="cover">
+      <div class="cap tl"></div><div class="cap tr"></div><div class="cap bl"></div><div class="cap br"></div>
+      <div class="spread">
+
+        <!-- ============================================================== LEFT PAGE -->
+        <section class="page left">
+          <!-- Keyed by section: a fresh element per turn, so the ink-in animations replay. -->
+          <div class="content" v-for="k in [left]" :key="k">
+
+            <div v-if="k === 'quests'" class="content">
+              <div class="running"><span>CHAPTER III</span><span>QUESTS</span></div>
+              <h1>The Sunken Archive</h1>
+              <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
+              <div class="quests">
+                <div v-for="(q, i) in QUESTS" :key="q.id" class="quest"
+                     :class="{ sel: q.id === questId, done: q.done }"
+                     :style="{ animationDelay: (i * 60 + 100) + 'ms' }" @click="pickQuest(q.id)">
+                  <div class="check" @click.stop="toggleQuest(q)"><b v-if="q.done">✔</b></div>
+                  <span class="t">{{ q.title }}</span>
+                  <item :id="q.icon"></item>
+                </div>
+              </div>
+              <div class="progress">
+                <span>{{ doneCount() }}/{{ QUESTS.length }}</span>
+                <div class="inkbar"><div :style="{ width: (doneCount() / QUESTS.length * 100) + '%' }"></div></div>
+              </div>
+              <p class="soft" style="margin-top: 4px">Tick a box to complete a quest; pick one to read it.</p>
+              <!-- A diary line pinned at the bottom of the page. -->
+              <div class="diary">
+                <item id="minecraft:feather"></item>
+                <p><b>Day 203.</b> Wren swears the ledger is bound in blue leather. Mind the guardians.</p>
+              </div>
+              <div class="folio">~ 41 ~</div>
+            </div>
+
+            <div v-if="k === 'lore'" class="content">
+              <div class="running"><span>THE FIRST AGE</span><span>LORE</span></div>
+              <h1>Of the Builders</h1>
+              <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
+              <!-- No floats in Vellum: the capital and the first lines share a flex row. -->
+              <div class="opening">
+                <div class="dropcap"><b>B</b><div class="glint"></div></div>
+                <p>efore the villages, before the roads, the Builders raised stone where there was none.</p>
+              </div>
+              <p>They spoke to no one and wrote in a tongue of angles. What they left behind still stands in the jungles and under the sea.</p>
+              <div class="runes">builders were here</div>
+              <p class="quote">"Every ruin is a letter. Read slowly." ~ Wren</p>
+              <div class="orn" style="margin-top: 4px"><i class="dot"></i><i></i><i class="dot"></i></div>
+              <p class="soft" style="text-align: center">Copied from a tablet in the Sunken Archive.</p>
+              <div class="folio">~ 12 ~</div>
+            </div>
+
+            <div v-if="k === 'bestiary'" class="content">
+              <div class="running"><span>DEEP WATER</span><span>BESTIARY</span></div>
+              <h1>The Elder Guardian</h1>
+              <div class="plate">
+                <entity type="minecraft:elder_guardian" follow-mouse></entity>
+                <span class="fig">Fig. 7</span>
+              </div>
+              <div class="facts">
+                <span class="k">Threat</span><span class="skulls">☠☠☠☠<span>☠</span></span>
+                <span class="k">Lair</span><span>Ocean monuments</span>
+                <span class="k">Health</span><span>40 hearts</span>
+                <span class="k">Drops</span>
+                <span class="drops">
+                  <item id="minecraft:tide_armor_trim_smithing_template"></item>
+                  <item id="minecraft:prismarine_shard"></item>
+                  <item id="minecraft:cod"></item>
+                </span>
+              </div>
+              <div class="folio">~ 77 ~</div>
+            </div>
+
+            <div v-if="k === 'map'" class="content">
+              <div class="running"><span>SURVEYED</span><span>MAP</span></div>
+              <h1>The Western Reach</h1>
+              <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
+              <div class="mapframe">
+                <div class="tiles">
+                  <div class="tile" v-for="t in TILES" :key="t.i" :style="{ background: t.color }"></div>
+                </div>
+                <div class="trail" :style="trailStyle()"></div>
+                <div class="poi" v-for="p in POIS" :key="p.id" :class="{ hot: p.id === hotPoi }"
+                     :style="{ left: (p.x * 9 + 2) + 'px', top: (p.y * 9 + 2) + 'px' }">{{ p.glyph }}</div>
+                <div class="you" :style="{ left: (YOU.x * 9 + 2) + 'px', top: (YOU.y * 9 + 2) + 'px' }"></div>
+                <div class="rose"><div class="n"></div><div class="s"></div></div>
+              </div>
+              <div class="folio">~ 88 ~</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== RIGHT PAGE -->
+        <section class="page right">
+          <div class="content" v-for="k in [right]" :key="k">
+
+            <div v-if="k === 'quests'" class="content">
+              <div class="running"><span>{{ quest().where.toUpperCase() }}</span><span>{{ quest().done ? 'DONE' : 'ACTIVE' }}</span></div>
+              <!-- Keyed by quest, so switching quests re-inks the page. -->
+              <div class="content" v-for="qid in [questId]" :key="qid">
+                <h1>{{ quest().title }}</h1>
+                <div class="giver"><player-head :name="quest().giver"></player-head><span>from {{ quest().giver }}</span></div>
+                <p>{{ quest().text }}</p>
+                <div class="objectives">
+                  <div class="obj" v-for="o in quest().objectives" :key="o.text" :class="{ met: quest().done || o.have >= o.need }">
+                    <item :id="o.item"></item>
+                    <span class="t">{{ o.text }}</span>
+                    <span class="n">{{ quest().done ? o.need : o.have }}/{{ o.need }}</span>
+                  </div>
+                </div>
+                <div class="rewards">
+                  <span class="k">Reward</span>
+                  <div class="rslot" v-for="r in quest().rewards" :key="r.item"><item :id="r.item" :count="r.count"></item></div>
+                </div>
+                <p class="hint" v-if="!quest().done">ⓘ {{ quest().hint }}</p>
+              </div>
+              <div class="sealed" v-if="quest().done">Sealed on Day {{ quest().sealed }}</div>
+              <div class="seal" v-for="s in [questId]" :key="s" v-if="quest().done">C</div>
+              <div class="folio">~ 42 ~</div>
+            </div>
+
+            <div v-if="k === 'lore'" class="content">
+              <div class="running"><span>A SHORT HISTORY</span><span>LORE</span></div>
+              <h3>THE AGES OF THE REACH</h3>
+              <div class="timeline">
+                <div class="era" v-for="(e, i) in ERAS" :key="e.year" :class="{ now: i === ERAS.length - 1 }"
+                     :style="{ animationDelay: (i * 90 + 150) + 'ms' }">
+                  <div class="mark"><item :id="e.item"></item></div>
+                  <span class="yr">Yr {{ e.year }}</span>
+                  <span class="what">{{ e.title }}<small>{{ e.note }}</small></span>
+                </div>
+              </div>
+              <div class="folio">~ 13 ~</div>
+            </div>
+
+            <div v-if="k === 'bestiary'" class="content">
+              <div class="running"><span>FIELD NOTES</span><span>BESTIARY</span></div>
+              <p>Seen twice off Gull Point. It does not chase; it waits, and its gaze tires the hands until no pick will bite.</p>
+              <h3>SPECIMENS</h3>
+              <div class="specimens">
+                <div class="rslot"><item id="minecraft:prismarine_shard" count="9"></item></div>
+                <div class="rslot"><item id="minecraft:prismarine_crystals" count="3"></item></div>
+                <div class="rslot"><item id="minecraft:cod" count="2"></item></div>
+                <div class="rslot"><item id="minecraft:milk_bucket"></item></div>
+              </div>
+              <h3>SIGHTINGS</h3>
+              <div class="sightings">
+                <span class="soft">Day 188</span><span>Gull Point, at dusk</span>
+                <span class="soft">Day 201</span><span>Deep monument, twice</span>
+              </div>
+              <h3>ALSO IN THIS VOLUME</h3>
+              <div class="toc">
+                <div><span>Drowned</span><i></i><span>p.71</span></div>
+                <div><span>Phantom</span><i></i><span>p.74</span></div>
+                <div><span>Breeze</span><i></i><span>p.80</span></div>
+              </div>
+              <div class="folio">~ 78 ~</div>
+            </div>
+
+            <div v-if="k === 'map'" class="content">
+              <div class="running"><span>KEY</span><span>MAP</span></div>
+              <div class="legend">
+                <div v-for="b in BIOMES" :key="b.name"><i :style="{ background: b.color }"></i>{{ b.name }}</div>
+              </div>
+              <h3>WAYPOINTS</h3>
+              <div class="waypoints">
+                <div class="wp" v-for="p in POIS" :key="p.id" :class="{ hot: p.id === hotPoi }"
+                     @mouseenter="hotPoi = p.id" @mouseleave="hotPoi = null">
+                  <span class="g">{{ p.glyph }}</span>
+                  <span class="nm">{{ p.name }}</span>
+                  <span class="d">{{ distance(p) }}m</span>
+                </div>
+              </div>
+              <div class="here">
+                <div class="you-key"></div>
+                <span>You, at 576 / 70 / -448</span>
+              </div>
+              <!-- A surveyor's scale bar: alternating ink and paper blocks. -->
+              <div class="scale">
+                <div class="bar"></div>
+                <div class="ticks"><span>0</span><span>128</span><span>256 m</span></div>
+              </div>
+              <div class="folio">~ 89 ~</div>
+            </div>
+          </div>
+        </section>
+
+        <div class="crease"></div>
+        <div class="leaf l" id="leafL"></div>
+        <div class="leaf r" id="leafR"></div>
+      </div>
+    </div>
+
+    <!-- Ribbon tabs on the fore-edge. -->
+    <nav class="ribbons">
+      <div class="ribbon" v-for="s in SECTIONS" :key="s.id" :class="{ on: s.id === right }"
+           :style="{ '--c': s.color, '--hi': s.hi }" @click="turnTo(s.id)">
+        <item :id="s.icon"></item>
+      </div>
+    </nav>
+  </main>
+
+  <script>
+    // ---- Content. Chronicle would send this as data; here it is inline.
+    const SECTIONS = [
+      { id: 'quests', name: 'Quests', icon: 'minecraft:writable_book', color: '#8e2a20', hi: '#c0453a' },
+      { id: 'lore', name: 'Lore', icon: 'minecraft:enchanted_book', color: '#2b5582', hi: '#4b7cb0' },
+      { id: 'bestiary', name: 'Bestiary', icon: 'minecraft:bone', color: '#3d6e34', hi: '#5c9a50' },
+      { id: 'map', name: 'Map', icon: 'minecraft:filled_map', color: '#9a6d1f', hi: '#cf9c3e' }
+    ];
+
+    const QUESTS = [
+      { id: 'torches', title: 'Light the Old Road', icon: 'minecraft:torch', done: true, sealed: 188, giver: 'Bram', where: 'Old Mine Road',
+        text: 'The mine road is dark and the miners are scared. Light it every twenty blocks.',
+        objectives: [{ item: 'minecraft:torch', text: 'Torches placed', have: 16, need: 16 }],
+        rewards: [{ item: 'minecraft:emerald', count: 4 }, { item: 'minecraft:bread', count: 6 }],
+        hint: 'Bram keeps spare coal by the mine cart.' },
+      { id: 'archive', title: 'The Sunken Archive', icon: 'minecraft:prismarine_shard', done: false, giver: 'Wren', where: 'Gull Point',
+        text: 'A librarian drowned off Gull Point with her ledger. Bring it home before the tide does.',
+        objectives: [
+          { item: 'minecraft:map', text: 'Find the ruins', have: 1, need: 1 },
+          { item: 'minecraft:prismarine_shard', text: 'Prismarine shards', have: 7, need: 12 },
+          { item: 'minecraft:written_book', text: 'Recover the ledger', have: 0, need: 1 }
+        ],
+        rewards: [{ item: 'minecraft:experience_bottle', count: 8 }, { item: 'minecraft:enchanted_book', count: 1 }, { item: 'minecraft:emerald', count: 12 }],
+        hint: 'Bring a door: air pockets save lives down there.' },
+      { id: 'bees', title: 'Bees Before Bread', icon: 'minecraft:honeycomb', done: false, giver: 'Odile', where: 'Oakhollow',
+        text: 'The orchard will not fruit without bees. Move a hive without angering it.',
+        objectives: [
+          { item: 'minecraft:campfire', text: 'Smoke the hive', have: 1, need: 1 },
+          { item: 'minecraft:honeycomb', text: 'Honeycomb', have: 2, need: 6 }
+        ],
+        rewards: [{ item: 'minecraft:honey_bottle', count: 3 }, { item: 'minecraft:emerald', count: 6 }],
+        hint: 'A campfire under the hive keeps the bees calm.' },
+      { id: 'rider', title: 'The Pale Rider', icon: 'minecraft:bone', done: false, giver: 'Mott', where: 'Ashfield',
+        text: 'Farmers speak of a skeleton on horseback in storms. Learn where it rides.',
+        objectives: [
+          { item: 'minecraft:spyglass', text: 'Witnesses asked', have: 1, need: 3 },
+          { item: 'minecraft:lightning_rod', text: 'Rods raised', have: 0, need: 2 }
+        ],
+        rewards: [{ item: 'minecraft:saddle', count: 1 }, { item: 'minecraft:emerald', count: 9 }],
+        hint: 'It only rides when lightning strikes a horse.' },
+      { id: 'survey', title: 'Mapping the Reach', icon: 'minecraft:filled_map', done: true, sealed: 196, giver: 'Wren', where: 'Western Reach',
+        text: 'Chart the coast from Gull Point to the Ashfield cliffs.',
+        objectives: [{ item: 'minecraft:filled_map', text: 'Regions charted', have: 6, need: 6 }],
+        rewards: [{ item: 'minecraft:spyglass', count: 1 }, { item: 'minecraft:emerald', count: 5 }],
+        hint: 'Maps lock in a cartography table.' }
+    ];
+
+    const ERAS = [
+      { year: 1, item: 'minecraft:wooden_pickaxe', title: 'The First Night', note: 'A dirt hut. Zombies.' },
+      { year: 40, item: 'minecraft:flint_and_steel', title: 'The Nether Gate', note: 'Fire, gold and ghasts.' },
+      { year: 112, item: 'minecraft:ender_eye', title: 'The Ender War', note: 'Twelve eyes, one dragon.' },
+      { year: 150, item: 'minecraft:snowball', title: 'The Long Winter', note: 'Snow for a hundred days.' },
+      { year: 203, item: 'minecraft:writable_book', title: 'The Chronicle', note: 'This book is begun.' }
+    ];
+
+    // ---- The map: 18x14 tiles from a cheap value-noise height map. Deterministic, so it is the same every visit.
+    const BIOMES = [
+      { name: 'Deep sea', color: '#6f8fa6', max: 0.3 },
+      { name: 'Shallows', color: '#9db6bd', max: 0.38 },
+      { name: 'Beach', color: '#e3cf9a', max: 0.43 },
+      { name: 'Plains', color: '#b9c288', max: 0.58 },
+      { name: 'Forest', color: '#869a5c', max: 0.72 },
+      { name: 'Hills', color: '#a89878', max: 0.84 },
+      { name: 'Peaks', color: '#efe8d8', max: 2 }
+    ];
+    const COLS = 18, ROWS = 14;
+    function hash(x, y) {
+      const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+      return s - Math.floor(s);
+    }
+    function smooth(x, y, size) {
+      const gx = Math.floor(x / size), gy = Math.floor(y / size), fx = x / size - gx, fy = y / size - gy;
+      const a = hash(gx, gy), b = hash(gx + 1, gy), c = hash(gx, gy + 1), d = hash(gx + 1, gy + 1);
+      const top = a + (b - a) * fx, bottom = c + (d - c) * fx;
+      return top + (bottom - top) * fy;
+    }
+    const TILES = [];
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        // Land rises towards the east; the west is open sea. (`let`, not `const`: Rhino keeps a const declared
+        // in a loop body at its first value.)
+        let h = smooth(x, y, 5) * 0.55 + smooth(x + 40, y, 2) * 0.2 + x / COLS * 0.45 - 0.1;
+        TILES.push({ i: y * COLS + x, color: BIOMES.find(b => h < b.max).color });
+      }
+    }
+
+    const YOU = { x: 9, y: 7 };
+    const POIS = [
+      { id: 'archive', glyph: '★', name: 'Sunken Archive', x: 2, y: 9 },
+      { id: 'oak', glyph: '⌂', name: 'Oakhollow', x: 12, y: 4 },
+      { id: 'gull', glyph: '⚓', name: 'Gull Point', x: 5, y: 11 },
+      { id: 'ash', glyph: '†', name: 'Ashfield Barrow', x: 15, y: 10 }
+    ];
+
+    function distance(p) {
+      return Math.round(Math.hypot(p.x - YOU.x, p.y - YOU.y) * 64);
+    }
+
+    // A dashed line from you to the quest marker: its length and angle, applied as width + rotate.
+    function trailStyle() {
+      const p = POIS[0];
+      const dx = (p.x - YOU.x) * 9, dy = (p.y - YOU.y) * 9;
+      return {
+        left: (YOU.x * 9 + 6) + 'px',
+        top: (YOU.y * 9 + 6) + 'px',
+        width: Math.round(Math.hypot(dx, dy)) + 'px',
+        transform: 'rotate(' + (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1) + 'deg)'
+      };
+    }
+
+    // ---- State. `left` and `right` are what each page shows; they differ for half a turn.
+    // Opening options sit under one data key: template expressions see vellum.data's keys before state and
+    // globals, so a top-level `quest` in the data would shadow the quest() function.
+    const opening = vellum.data.start || {};
+    const state = vellum.state({
+      left: opening.section || 'quests',
+      right: opening.section || 'quests',
+      questId: opening.quest || 'archive',
+      hotPoi: null,
+      turning: false
+    });
+
+    // A mod can open the journal and flip to a section with an animated turn: data {start: {flipTo: 'map'}}.
+    if (opening.flipTo) setTimeout(() => turnTo(opening.flipTo), 400);
+
+    function quest() { return QUESTS.find(q => q.id === state.questId); }
+    function doneCount() { return QUESTS.filter(q => q.done).length; }
+
+    function pickQuest(id) {
+      if (id !== state.questId) vellum.playSound('minecraft:item.book.page_turn', 0.5, 1.4);
+      state.questId = id;
+    }
+
+    function toggleQuest(q) {
+      q.done = !q.done;
+      q.sealed = 203;
+      state.questId = q.id;
+      vellum.playSound(q.done ? 'minecraft:ui.cartography_table.take_result' : 'minecraft:item.book.page_turn', 0.6, 1);
+    }
+
+    // ---- The page turn. The right page's leaf lifts off (scaleX 1 -> 0 around the spine), revealing the new
+    // right page; then it lands on the left (scaleX 0 -> 1), the left page swaps under it, and the leaf fades.
+    function turnTo(id) {
+      if (id === state.right || state.turning) return;
+      state.turning = true;
+      state.right = id;
+      vellum.playSound('minecraft:item.book.page_turn', 0.8, 1);
+      const leafR = document.getElementById('leafR'), leafL = document.getElementById('leafL');
+      let land = null;
+      leafR.animate([
+        { opacity: 1, transform: 'scaleX(1) skewY(0deg)' },
+        { opacity: 1, transform: 'scaleX(0) skewY(-4deg)' }
+      ], { duration: 260, easing: 'ease-in' }).finished.then(() => {
+        // fill: forwards holds the leaf over the left page until the fade below takes over.
+        land = leafL.animate([
+          { opacity: 1, transform: 'scaleX(0) skewY(4deg)' },
+          { opacity: 1, transform: 'scaleX(1) skewY(0deg)' }
+        ], { duration: 240, easing: 'ease-out', fill: 'forwards' });
+        return land.finished;
+      }).then(() => {
+        // The leaf covers the left page: swap the page underneath (it lands next frame), then fade the leaf.
+        state.left = id;
+        return leafL.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, delay: 32 }).finished;
+      }).then(() => {
+        land.cancel();
+        state.turning = false;
+      });
+    }
+  </script>
+</body>
+</html>
