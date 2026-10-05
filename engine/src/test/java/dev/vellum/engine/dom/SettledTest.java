@@ -1,5 +1,7 @@
 package dev.vellum.engine.dom;
 
+import dev.vellum.engine.host.ReplacedContent;
+import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
@@ -100,6 +102,24 @@ class SettledTest {
         assertFalse(page.doc.settled());
         assertTrue(framesToSettle(page) > 3, "eased over several frames");
         assertEquals(200, page.byId("s").scrollTop());
+    }
+
+    @Test
+    void contentStillLoadingIsNotSettled() {
+        boolean[] loading = {true};
+        TestHost host = new TestHost();
+        host.replaced.put("skin", element -> new ReplacedContent() {
+            @Override public float intrinsicWidth() { return 16; }
+            @Override public float intrinsicHeight() { return 16; }
+            @Override public void paint(Canvas canvas, float x, float y, float width, float height) {}
+            @Override public boolean loading() { return loading[0]; }
+        });
+        Page page = host.load("<skin></skin>");
+        page.paint();
+        assertFalse(page.doc.settled(), "a skin is loading");
+        assertTrue(page.doc.needsFrame(16), "and frames keep coming until it has");
+        loading[0] = false;
+        assertTrue(settledAfterFrame(page));
     }
 
     @Test

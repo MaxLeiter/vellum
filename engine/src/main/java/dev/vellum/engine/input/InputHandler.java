@@ -351,7 +351,7 @@ public final class InputHandler {
     /** Whether {@link #tick} has work every frame: a drag, a spinning turntable, or a focused text field's caret. */
     public boolean isActive() {
         Element focused = document.focusedElement();
-        return pointer.drag() != null || !turntables.isEmpty() || focused != null && focused.isTextControl();
+        return moving() || focused != null && focused.isTextControl();
     }
 
     /**
@@ -359,7 +359,12 @@ public final class InputHandler {
      * spinning, or a tooltip waiting out its delay. Not the caret's blink, which never stops.
      */
     public boolean isSettling() {
-        return pointer.drag() != null || !turntables.isEmpty() || pointer.known() && tooltips.pending();
+        return moving() || pointer.known() && tooltips.pending();
+    }
+
+    /** A drag held or a turntable spinning: what moves the page every frame until it ends. */
+    private boolean moving() {
+        return pointer.drag() != null || !turntables.isEmpty();
     }
 
     /** Called after each relayout: keeps the caret in view, autofocus, re-hit-tests hover. */

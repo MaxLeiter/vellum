@@ -308,30 +308,41 @@ public final class Document extends Node {
     }
 
     /**
-     * Whether a frame at {@code nowMs} would change what is painted: a pending restyle, relayout or repaint, due
-     * timers or animation-frame callbacks, running animations, smooth scrolls or scroll events, drags, a blinking
-     * caret, a tooltip coming up, or template updates. Hosts that can idle (the previewer) skip frames otherwise,
-     * and render after their own input.
+     * Whether a frame at {@code nowMs} would change what is painted: {@link #dirty pending work}, due timers or
+     * animation-frame callbacks, running animations, drags, a blinking caret, or a tooltip coming up. Hosts that can
+     * idle (the previewer) skip frames otherwise, and render after their own input.
      */
     public boolean needsFrame(double nowMs) {
         if (error != null || closed) return false;
-        return styleDirty || layoutDirty || laidOut || repaint || scheduler.hasWork(nowMs)
-                || animationEngine.isAnimating() || scrolling.isActive() || input.isActive() || input.tooltipDue(nowMs)
-                || scripts != null && scripts.needsFrame();
+        return dirty() || scheduler.hasWork(nowMs) || animationEngine.isAnimating() || input.isActive()
+                || input.tooltipDue(nowMs);
     }
 
     /**
-     * Whether the page has stopped changing by itself, for automation that waits for it before looking: no restyle,
-     * relayout or repaint pending, no smooth scroll or {@code scroll} event, no template update or
-     * {@code vellum.nextTick} callback, no transition or finite animation running (or its events waiting), no drag
-     * or spinning turntable, and no tooltip waiting out its delay. What never ends does not count: infinite
-     * animations, timers ({@code setTimeout}, {@code setInterval}), animation-frame callbacks and the caret's blink.
-     * A stopped or closed document is settled.
+     * Whether the page has stopped changing by itself, for automation that waits for it before looking: no
+     * {@link #dirty pending work}, no transition or finite animation running (or its events waiting), no drag or
+     * spinning turntable, and no tooltip waiting out its delay. What never ends does not count: infinite animations,
+     * timers ({@code setTimeout}, {@code setInterval}), animation-frame callbacks and the caret's blink. A stopped or
+     * closed document is settled.
      */
     public boolean settled() {
         if (error != null || closed) return true;
-        return !(styleDirty || layoutDirty || laidOut || repaint || scrolling.isActive() || animationEngine.isSettling()
-                || input.isSettling() || scripts != null && scripts.needsFrame());
+        return !(dirty() || animationEngine.isSettling() || input.isSettling());
+    }
+
+    /**
+     * Work that both {@link #needsFrame} and {@link #settled} wait for: a pending restyle, relayout or repaint, the
+     * work after a layout, a smooth scroll or {@code scroll} event, a template update or {@code vellum.nextTick}
+     * callback, or replaced content still loading ({@link ReplacedContent#loading}).
+     */
+    private boolean dirty() {
+        return styleDirty || layoutDirty || laidOut || repaint || scrolling.isActive()
+                || scripts != null && scripts.needsFrame() || loading();
+    }
+
+    private boolean loading() {
+        for (int i = 0; i < replaced.size(); i++) if (replaced.get(i).loading()) return true;
+        return false;
     }
 
     /** Something painted changed that restyle and relayout do not track (a scroll offset, canvas pixels). */
