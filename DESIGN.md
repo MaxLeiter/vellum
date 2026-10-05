@@ -508,15 +508,16 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
   slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
 - **HUD layers**: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
-  With `Input.WHEN_CURSOR_FREE` an overlay is interactive while a screen is open: the loaders draw it after the
-  screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
+  `register(id, url, Predicate<Screen> interactiveOver)` (or `Input.WHEN_CHAT_OPEN`, `Input.WHEN_CURSOR_FREE`: any
+  screen) makes it interactive over the screens the predicate accepts, asked each frame and pointer event with the
+  open screen. Over such a screen the loaders draw it after the screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
   stratum, flushing its own deferred tooltip (`extractDeferredElements`: the screen's pass is over), and route
   pointer events to it first (NeoForge `ScreenEvent.Mouse*.Pre`, cancelled when taken; Fabric
   `ScreenMouseEvents.allowMouse*`). Hover follows the mouse position, polled each frame. A press goes to the topmost
   overlay with content under the pointer (`DocumentDriver.contentAt`: not `html`/`body`), which then gets its
   release and drags; otherwise the screen gets it. The wheel goes to the same overlay and falls through when unused.
-  Without a screen the overlay is drawn in the HUD layer without a pointer (`mouseLeave` on the way). Keys stay with
-  the screen.
+  Without a screen, or under one the predicate rejects, the overlay is drawn in the HUD layer without a pointer
+  (`mouseLeave` on the way). Keys stay with the screen.
 - **Networking**: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
   `vellum:data` (server → client: JSON for a session), `vellum:message` (client → server: session, channel, JSON),
   `vellum:close`. Server API: `VellumServer.open(player, url, data)` returns a session handle with `push(data)`,
