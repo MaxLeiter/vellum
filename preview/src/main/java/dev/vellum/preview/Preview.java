@@ -16,17 +16,17 @@ import java.util.Optional;
 /** The standalone previewer: a window that renders a page live, or a headless snapshot to PNG. */
 public final class Preview {
     private static final String USAGE = """
-            Usage: preview <page.html> [--scale N] [--size WxH] [--data data.json] [--snapshot out.png [--frames N]]
-                   preview <page.html> --actions actions.txt [--out dir] [--snapshot out.png] [--scale N] [--size WxH]
+            Usage: preview <page.html> [--scale N] [--size WxH] [--data data.json] [--snapshot out.png [--frames N]] [--narrate]
+                   preview <page.html> --actions actions.txt [--out dir] [--snapshot out.png] [--scale N] [--size WxH] [--narrate]
                    preview --canvas-test [--scale N] [--size WxH] [--snapshot out.png]
             The GUI size defaults to 427x240 (1280x720 at GUI scale 3), the scale to 2.""";
 
     /** Command line options. Sizes are GUI px. */
     record Options(Path page, boolean canvasTest, int scale, int width, int height, Path data, Path snapshot, int frames,
-                   Path actions, Path out) {
+                   Path actions, Path out, boolean narrate) {
         static Options parse(String... args) {
             Path page = null, data = null, snapshot = null, actions = null, out = null;
-            boolean canvasTest = false;
+            boolean canvasTest = false, narrate = false;
             int scale = 2, width = CanvasTest.WIDTH, height = CanvasTest.HEIGHT, frames = 1;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
@@ -38,6 +38,7 @@ public final class Preview {
                     case "--snapshot" -> snapshot = Path.of(value(args, ++i, arg));
                     case "--actions" -> actions = Path.of(value(args, ++i, arg));
                     case "--out" -> out = Path.of(value(args, ++i, arg));
+                    case "--narrate" -> narrate = true;
                     case "--size" -> {
                         String[] size = value(args, ++i, arg).split("x");
                         if (size.length != 2) throw new IllegalArgumentException("--size takes WxH, e.g. 427x240");
@@ -51,8 +52,10 @@ public final class Preview {
                 }
             }
             if (canvasTest == (page != null)) throw new IllegalArgumentException("Give either a page or --canvas-test");
-            if (actions != null && canvasTest) throw new IllegalArgumentException("--actions needs a page");
-            return new Options(page, canvasTest, scale, width, height, data, snapshot, frames, actions, out);
+            if ((actions != null || narrate) && canvasTest) {
+                throw new IllegalArgumentException((narrate ? "--narrate" : "--actions") + " needs a page");
+            }
+            return new Options(page, canvasTest, scale, width, height, data, snapshot, frames, actions, out, narrate);
         }
 
         /** Runs without a window: a snapshot or a script of actions. */
@@ -106,6 +109,7 @@ public final class Preview {
         Scene scene = options.canvasTest() ? new CanvasTest(host) : new PageScene(host, PreviewHost.pageUrl(options.page()),
                 options.data() == null ? null : Files.readString(options.data()),
                 new Viewport(options.width(), options.height(), options.scale()));
+        if (options.narrate()) ((PageScene) scene).narrateTo(System.out);
 
         if (options.actions() != null) {
             System.exit(actions((PageScene) scene, new FrameRenderer(assets, font), options));

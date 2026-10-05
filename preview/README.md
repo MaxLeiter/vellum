@@ -22,6 +22,11 @@ Paths are relative to the repository root. In the window:
 
 `--data` pushes a JSON file to the page as its data after loading.
 
+`--narrate` prints what Minecraft's narrator would be given, after each frame: the page's title once it loads, what
+its live regions announce (`live:`, or `at once:` for assertive ones), and the focused and hovered elements when what
+they read changes, in plain English (`pointer: Reply 1: About the letter, button`). The game phrases them as vanilla
+phrases its widgets and waits for the pointer to rest; the previewer prints at once.
+
 Headless snapshot: `--snapshot out.png [--frames N]` renders N frames, 16 ms apart, and writes the last one. The
 exit code is 1 if the page failed. `--canvas-test` draws a fixed sheet of canvas primitives without the engine
 (text styles, nine-sliced sprites, textures, items, gradients, clipping, rotation, alpha), to check the renderer
