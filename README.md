@@ -26,6 +26,18 @@ LLMs were used extensively in the development of Vellum.
 
 Vellum is in development. Other mods (Chronicle, claudemons) use it as a library, and a server can send a page to its players.
 
+## Goals
+
+- Write Minecraft UIs the way you'd write a web page, and lean on what you already know about the web. Where Vellum behaves differently from a browser, the docs say so.
+- Look vanilla by default. Buttons, inputs, panels, slots and tooltips use the game's own sprites, so an unstyled page already fits in.
+- Make inventories easy. Put `<slot index="0">` where you want a slot and vanilla's clicking, dragging, shift-clicking and tooltips keep working. Items, entities, sprites, translations and player heads have their own elements too.
+- Let servers open pages, push JSON to them and get messages back. That's why scripts are sandboxed.
+- Stay pure Java with the JS engine relocated, so it won't clash with anything in a big modpack.
+- Be fast enough that you never think about it. A few hundred elements restyle and relayout in well under a millisecond.
+- Build and check UIs without launching the game, using the previewer and snapshot tests.
+
+It isn't trying to be a browser.
+
 ## Try it
 
 Start a dev client (see Building) and run these in a world:
@@ -61,7 +73,7 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 | `neoforge/`, `fabric/` | Loader entrypoints |
 | `preview/` | The standalone previewer |
 
-[`DESIGN.md`](DESIGN.md) covers the architecture and which HTML, CSS and JS work. [`DECISIONS.md`](DECISIONS.md) has the reasons behind the choices. For mod authors, [`docs/API.md`](docs/API.md) is the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) a guide to porting hand-drawn screens.
+For mod authors, [`docs/API.md`](docs/API.md) is the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) a guide to porting hand-drawn screens.
 
 ## Building
 You need JDK 25 or newer; Gradle provisions the toolchain.

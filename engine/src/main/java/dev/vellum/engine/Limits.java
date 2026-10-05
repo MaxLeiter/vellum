@@ -9,7 +9,7 @@ import java.util.Objects;
 
 /**
  * Every cap the engine puts on a page: script CPU and memory, DOM and CSS size, canvases and logging. Pages
- * can come from servers (DESIGN.md, "Security"), so each cap is set well above what a real page needs and well below
+ * can come from servers, so each cap is set well above what a real page needs and well below
  * what would freeze or crash the game.
  *
  * <p>A document reads its limits from {@link dev.vellum.engine.host.Host#limits()}, which defaults to

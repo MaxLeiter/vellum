@@ -16,7 +16,7 @@ import java.util.Objects;
  *
  * <p>Conventions: lengths that may be percentages or keywords are {@link Length}; border and outline widths are
  * resolved px floats (0 when the style is none); colours are ARGB ints with {@code currentColor} already resolved
- * (in used styles against the animated colour, DESIGN §8); relative units (em, rem, vw...) are already converted to
+ * (in used styles against the animated colour); relative units (em, rem, vw...) are already converted to
  * px. {@link Prop} lists every property with its metadata and gives generic access for transitions and animations.
  */
 public final class ComputedStyle implements Cloneable {

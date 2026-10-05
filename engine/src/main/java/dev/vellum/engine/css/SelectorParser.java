@@ -24,7 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Parses selector lists (Selectors 4 subset, see DESIGN §5). Errors throw {@link IllegalArgumentException}. A complex
+ * Parses selector lists (a Selectors 4 subset). Errors throw {@link IllegalArgumentException}. A complex
  * selector may have at most {@link Limits#maxSelectorParts} compound and simple selectors, those in its
  * {@code :is()}, {@code :not()}, {@code :where()}, {@code :has()} and {@code :nth-child(of)} lists included, and, as
  * the spec says, {@code :has()} cannot be nested: each would multiply the work of matching.

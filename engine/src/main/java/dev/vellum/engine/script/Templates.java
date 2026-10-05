@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Templates (D-009): Vue-style syntax bound by dirty checking. When the document has loaded it is compiled once into
+ * Templates: Vue-style syntax bound by dirty checking. When the document has loaded it is compiled once into
  * {@link Binding}s ({@link TemplateCompiler}) and rendered. Every entry then marks the templates {@link #invalidate
  * dirty}, and once per frame the runtime runs {@link #digest}, which re-evaluates the bindings, touches the DOM only
  * where a rendered value changed, and repeats until nothing changes.

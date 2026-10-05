@@ -48,7 +48,7 @@ public class Element extends Node {
     public ComputedStyle baseStyle;
     /**
      * Style used for layout and paint: {@link #baseStyle} with running transitions and animations applied, and the
-     * animated values it inherits or computes from (DESIGN §8).
+     * animated values it inherits or computes from.
      */
     public ComputedStyle style;
     /** The cascade's styles for the ::before and ::after pseudo-elements, or null when they have no content. */

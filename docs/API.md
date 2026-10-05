@@ -2,8 +2,7 @@
 
 Vellum shows HTML, CSS and JavaScript pages as Minecraft screens, inventories and HUD overlays. This page covers the
 Java side: depending on Vellum, opening pages from the client or the server, exchanging data and messages, container
-screens and HUD overlays, the Minecraft elements pages can use, and how your entities are drawn in them. The
-engine's HTML and CSS support is described in `DESIGN.md`.
+screens and HUD overlays, the Minecraft elements pages can use, and how your entities are drawn in them.
 
 The API is loader-independent: the same calls work on NeoForge and Fabric.
 

@@ -1,8 +1,7 @@
 # Moving a mod's GUI to Vellum
 
 How to port a hand-drawn screen (a custom `Screen` subclass with layout math, manual text wrapping, hit testing and
-scroll state) to a Vellum page. Read `docs/API.md` (the Java side) first, and skim `DESIGN.md` §4–§5 (what HTML and CSS
-work) and `docs/SCRIPTING.md` (the JavaScript dialect and templates).
+scroll state) to a Vellum page. Read `docs/API.md` (the Java side) first, then `docs/SCRIPTING.md` (the JavaScript dialect and templates).
 
 ## 1. Set up the dependency
 
@@ -83,8 +82,8 @@ stylesheet linked from every page.
   fine too). Design for ~427×240 GUI px (GUI scale 2 on 1080p) and check scale 3.
 - Live entities cost frame time. A handful per screen is fine. In long lists use spawn eggs or `<item>` icons.
 - Unsupported CSS is dropped and logged at debug level, with no visible error: floats, tables (use
-  grid), 3D transforms, rounded `overflow: hidden` clipping. When something looks wrong, check `DESIGN.md` §5–§7 and
-  the previewer's inspector.
+  grid), 3D transforms, rounded `overflow: hidden` clipping. When something looks wrong, check the previewer's
+  inspector.
 
 ## 6. When Vellum is the problem
 

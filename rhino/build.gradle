@@ -5,7 +5,7 @@
 // Before relocation, Rhino's BigInt code is patched (patchRhino): BigInteger multiplications, powers, shifts and
 // parses in ScriptRuntime, NativeBigInt and TokenStream call VellumBigInts first, which refuses results over a size
 // limit. One BigInteger operation runs in Java, out of the script budget's sight, so without this a page could
-// freeze the game with a few lines of BigInt arithmetic (DESIGN.md, "Security").
+// freeze the game with a few lines of BigInt arithmetic.
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter

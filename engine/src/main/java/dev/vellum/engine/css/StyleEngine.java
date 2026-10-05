@@ -36,7 +36,7 @@ import java.util.function.Consumer;
  * {@code <link rel="stylesheet">}), matches rules, and computes {@code baseStyle} (plus ::before/::after and
  * ::placeholder styles) for every element.
  *
- * <p>Restyles are full-document (DESIGN D-008) but incremental in effect: an element whose matched rules, parent
+ * <p>Restyles are full-document but incremental in effect: an element whose matched rules, parent
  * style and container style are unchanged keeps its previous style objects, so identity comparison is enough
  * downstream, and a changed style is compared property by property to decide whether layout must run again. When
  * only hover, active or focus state changed since the last restyle ({@link Document#domVersion} is unchanged),

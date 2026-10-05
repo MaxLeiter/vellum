@@ -15,7 +15,7 @@ import java.util.List;
  * it, so what you click is what you see: the painter draws each step, the hit tester keeps the last step under the
  * point (the topmost one).
  *
- * <p>The order is CSS 2 Appendix E, simplified as in DESIGN §7. For each stacking context: the root's background
+ * <p>The order is CSS 2 Appendix E, simplified. For each stacking context: the root's background
  * and border; descendants with negative z-index; the backgrounds and borders of in-flow, non-positioned block
  * descendants in tree order; then their inline content (inline box decorations before the text they contain, text
  * runs, and atomic inlines painted whole in line order); positioned descendants with {@code z-index: auto | 0} in

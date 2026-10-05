@@ -5,7 +5,7 @@ Vue-style templates that bind HTML to data without writing any script at all. Th
 use, how templates work, and where Vellum differs from a browser.
 
 Scripts run in [Mozilla Rhino](https://github.com/mozilla/rhino) 1.9 inside a sandbox, because pages can come from
-servers (see DECISIONS.md D-005 and D-010).
+servers.
 
 - [The language](#the-language)
 - [How scripts run](#how-scripts-run)

@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * Paints {@code background-color} and the {@code background-image} layers bottom to top, with background-size,
  * -position, -repeat and -clip. The positioning area is the padding box. Colours and gradients are clipped to the
- * rounded border shape; images and sprites to the clip box's rectangle only (DESIGN §7).
+ * rounded border shape; images and sprites to the clip box's rectangle only.
  *
  * <p>Repeated textures and canvases are one {@link Canvas#drawImage} with UVs beyond 0..1 (Minecraft samples png
  * textures with REPEAT); sprites, gradients and {@code space}d tiles are drawn tile by tile. Natural sizes come from
