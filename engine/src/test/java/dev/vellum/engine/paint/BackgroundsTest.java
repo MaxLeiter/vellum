@@ -151,6 +151,28 @@ class BackgroundsTest {
     }
 
     @Test
+    void radialGradientsHonourTheirSize() {
+        // The ending shape (blue) is where the size says, on the 40x20 box centred at (20, 10).
+        assertBlueAt("radial-gradient(ellipse 40px 10px at 50% 50%, red, blue)", 20, 20);
+        assertBlueAt("radial-gradient(circle 5px, red, blue)", 20, 15);
+        assertBlueAt("radial-gradient(closest-side at 10px 5px, red, blue)", 10, 10);
+        assertBlueAt("radial-gradient(circle farthest-side at 10px 5px, red, blue)", 40, 5);
+        assertBlueAt("radial-gradient(10px 50%, red, blue)", 20, 20);
+    }
+
+    /** Every vertex the gradient has at (x, y) is blue, and it has one. */
+    private static void assertBlueAt(String background, float x, float y) {
+        int[] found = {0};
+        paint("background: " + background).forEachVertex((vx, vy, color) -> {
+            if (Math.abs(vx - x) < 1e-3 && Math.abs(vy - y) < 1e-3) {
+                assertEquals(BLUE, color, background + " at " + x + "," + y);
+                found[0]++;
+            }
+        });
+        assertTrue(found[0] > 0, "no vertex at " + x + "," + y + " for " + background);
+    }
+
+    @Test
     void sizedGradientsTile() {
         RecordingCanvas c = paint("background: linear-gradient(90deg, red, blue) 0 0 / 10px 10px");
         assertEquals(800, c.quadArea(), 1e-2);

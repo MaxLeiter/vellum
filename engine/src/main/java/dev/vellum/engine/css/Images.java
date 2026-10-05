@@ -7,6 +7,8 @@ import dev.vellum.engine.style.Length;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Image values ({@code url()}, {@code sprite()}, linear and radial gradients) and {@code <position>} values (for
@@ -86,43 +88,67 @@ final class Images {
     }
 
     /**
-     * {@code radial-gradient([circle | ellipse] [<size>] [at <position>], stops)}. Sizes are accepted but the
-     * gradient always uses farthest-corner.
+     * {@code radial-gradient([<shape> || <size>] [at <position>], stops)} (CSS Images 3 §3.2): the shape
+     * {@code circle} or {@code ellipse}; the size an extent keyword, one length (a circle) or two lengths or
+     * percentages (an ellipse). Without a shape, one length makes a circle and anything else an ellipse.
      */
     private static Image radial(Func f, ValueContext ctx) {
         List<List<ComponentValue>> parts = ValueReader.splitCommas(f.args());
         ValueReader r = new ValueReader(parts.get(0));
-        boolean circle = false, shape = false;
-        Length[] center = {Length.PERCENT_50, Length.PERCENT_50};
+        String shape = null;
+        Image.RadialSize size = null;
+        int radii = 0;
         while (!r.atEnd() && !"at".equals(r.peekIdent())) {
             String id = r.peekIdent();
-            if ("circle".equals(id) || "ellipse".equals(id)) {
-                circle = id.equals("circle");
+            Image.RadialSize.Extent extent = id == null ? null : EXTENTS.get(id);
+            if (shape == null && ("circle".equals(id) || "ellipse".equals(id))) {
+                shape = id;
                 r.next();
-            } else if (id != null && id.matches("(closest|farthest)-(side|corner)")) {
+            } else if (size == null && extent != null) {
+                size = new Image.RadialSize(extent, null, null);
                 r.next();
-            } else if (Numeric.length(r, ctx, false) == null) {
-                break;
+            } else if (size == null) {
+                Length rx = Numeric.length(r, ctx, false);
+                if (rx == null) break; // not a shape or size: the first part is a colour stop
+                Length ry = Numeric.length(r, ctx, false);
+                radii = ry == null ? 1 : 2;
+                size = new Image.RadialSize(null, rx, ry == null ? rx : ry);
+            } else {
+                return null;
             }
-            shape = true;
         }
+        boolean prelude = shape != null || size != null;
+        boolean circle = shape == null ? radii == 1 : shape.equals("circle");
+        if (radii == 1 && (!circle || size.radiusX().hasPercent()) || radii == 2 && circle) return null;
+        Length[] center = {Length.PERCENT_50, Length.PERCENT_50};
         if (r.ident("at")) {
             center = position(r.rest(), ctx);
             if (center == null) return null;
-            shape = true;
+            prelude = true;
         }
-        if (shape && !r.atEnd()) return null;
-        List<Image.ColorStop> stops = stops(parts.subList(shape ? 1 : 0, parts.size()), ctx);
-        return stops == null ? null : new Image.RadialGradient(circle, center[0], center[1], stops);
+        if (prelude && !r.atEnd()) return null;
+        List<Image.ColorStop> stops = stops(parts.subList(prelude ? 1 : 0, parts.size()), ctx);
+        return stops == null ? null : new Image.RadialGradient(circle, center[0], center[1], stops,
+                size == null ? Image.RadialSize.FARTHEST_CORNER : size);
     }
 
-    /** Colour stops ({@code color [pos [pos]]}); transition hints (a bare position) are ignored. */
+    private static final Map<String, Image.RadialSize.Extent> EXTENTS = Map.of(
+            "closest-side", Image.RadialSize.Extent.CLOSEST_SIDE, "farthest-side", Image.RadialSize.Extent.FARTHEST_SIDE,
+            "closest-corner", Image.RadialSize.Extent.CLOSEST_CORNER,
+            "farthest-corner", Image.RadialSize.Extent.FARTHEST_CORNER);
+
+    /**
+     * Colour stops ({@code color [pos [pos]]}); transition hints (a bare position between two stops) are ignored.
+     */
     private static List<Image.ColorStop> stops(List<List<ComponentValue>> parts, ValueContext ctx) {
         List<Image.ColorStop> stops = new ArrayList<>();
-        for (List<ComponentValue> part : parts) {
-            ValueReader r = new ValueReader(part);
+        for (int i = 0; i < parts.size(); i++) {
+            ValueReader r = new ValueReader(parts.get(i));
             Length hint = Numeric.length(r, ctx, true);
-            if (hint != null && r.atEnd()) continue;
+            if (hint != null && r.atEnd()) {
+                if (stops.isEmpty() || i == parts.size() - 1) return null;
+                continue;
+            }
             Integer color = CssColors.read(r, ctx);
             if (color == null) return null;
             Length p1 = Numeric.length(r, ctx, true);
@@ -213,9 +239,17 @@ final class Images {
             case Image.Canvas c -> "url(" + CssText.string(Image.CANVAS_SCHEME + c.id()) + ")";
             case Image.LinearGradient g -> (g.repeating() ? "repeating-" : "") + "linear-gradient("
                     + CssText.deg(g.angleDeg()) + ", " + stops(g.stops()) + ")";
-            case Image.RadialGradient g -> "radial-gradient(" + (g.circle() ? "circle" : "ellipse") + " at "
-                    + g.centerX() + " " + g.centerY() + ", " + stops(g.stops()) + ")";
+            case Image.RadialGradient g -> "radial-gradient(" + (g.circle() ? "circle " : "ellipse ") + size(g)
+                    + "at " + g.centerX() + " " + g.centerY() + ", " + stops(g.stops()) + ")";
         };
+    }
+
+    /** A radial gradient's size followed by a space, or nothing for the default (farthest-corner). */
+    private static String size(Image.RadialGradient g) {
+        Image.RadialSize size = g.size();
+        if (size.extent() == Image.RadialSize.Extent.FARTHEST_CORNER) return "";
+        if (size.extent() != null) return size.extent().name().toLowerCase(Locale.ROOT).replace('_', '-') + " ";
+        return size.radiusX() + (g.circle() ? "" : " " + size.radiusY()) + " ";
     }
 
     private static String stops(List<Image.ColorStop> stops) {

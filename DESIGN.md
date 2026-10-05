@@ -221,7 +221,9 @@ descendant/child only), `:placeholder-shown`, `:open` (details/dialog/select), a
   (CSS list), `transparent`, `currentColor`, and Minecraft's chat colours as names: `mc-black mc-dark-blue
   mc-dark-green mc-dark-aqua mc-dark-red mc-dark-purple mc-gold mc-gray mc-dark-gray mc-blue mc-green mc-aqua mc-red
   mc-light-purple mc-yellow mc-white`. `color-mix(in srgb, a p%, b)`.
-- Images: `url(...)`, `sprite(ns:path)`, `linear-gradient()`, `repeating-linear-gradient()`, `radial-gradient()`.
+- Images: `url(...)`, `sprite(ns:path)`, `linear-gradient()`, `repeating-linear-gradient()`, `radial-gradient()`
+  (`circle`/`ellipse`, a size keyword `closest-side`/`farthest-side`/`closest-corner`/`farthest-corner` or explicit
+  radii, `at <position>`).
 - Timing: `ease`, `linear`, `ease-in`, `ease-out`, `ease-in-out`, `cubic-bezier()`, `steps()`, `step-start`,
   `step-end`.
 
