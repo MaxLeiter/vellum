@@ -2,7 +2,9 @@ package dev.vellum.engine.style;
 
 /**
  * One layer of {@code background-image} with its size, position, repeat and clip. Layers are painted
- * last-to-first, over {@code background-color}.
+ * last-to-first, over {@code background-color}, which is clipped like the last layer.
+ *
+ * @param image       null for {@code none}: the layer draws nothing, but its clip still applies to the colour
  *
  * @param sizeKeyword {@code null} for explicit {@code width}/{@code height} (each may be {@link Length#AUTO}),
  *                    or {@code "cover"} / {@code "contain"}

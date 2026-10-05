@@ -67,9 +67,9 @@ class ComputedValueTest {
         assertEquals("opacity 0.2s linear 0s, transform 1s ease 0.05s", computedValue(s, "transition"));
         assertEquals("0.2s, 1s", computedValue(s, "transition-duration"));
         assertEquals("spin 2s ease 0s infinite normal none running", computedValue(s, "animation"));
-        assertEquals("url(\"test:a.png\") 50% 50% / cover no-repeat no-repeat border-box rgb(255, 0, 0)",
-                computedValue(s, "background"));
-        assertEquals("url(\"test:a.png\")", computedValue(s, "background-image"));
+        assertEquals("url(\"test:a.png\") 50% 50% / cover no-repeat no-repeat border-box, "
+                + "none 0px 0px / auto auto repeat repeat border-box rgb(255, 0, 0)", computedValue(s, "background"));
+        assertEquals("url(\"test:a.png\"), none", computedValue(s, "background-image"));
         ComputedStyle none = styleOf("color: red");
         assertEquals("all 0s ease 0s", computedValue(none, "transition"));
         assertEquals("none", computedValue(none, "background-image"));

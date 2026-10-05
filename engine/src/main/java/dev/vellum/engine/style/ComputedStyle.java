@@ -115,7 +115,7 @@ public final class ComputedStyle implements Cloneable {
 
     // ---- Background, border decorations, effects ----
     public int backgroundColor = Colors.TRANSPARENT;
-    /** Background image layers, topmost first. */
+    /** Background layers, topmost first ({@code none} layers too: the last one clips the colour). */
     public List<BackgroundLayer> backgroundLayers = List.of();
     public List<Shadow> boxShadow = List.of();
     public float outlineWidth;
@@ -339,6 +339,12 @@ public final class ComputedStyle implements Cloneable {
 
     /** Set by the style engine for children of flex and grid containers, where z-index applies without position. */
     public boolean isFlexOrGridItemHint;
+
+    /** Whether a background layer has an image (a {@code background-image} other than {@code none}). */
+    public boolean hasBackgroundImage() {
+        for (BackgroundLayer layer : backgroundLayers) if (layer.image() != null) return true;
+        return false;
+    }
 
     public boolean hasBorder() {
         return borderTopWidth > 0 || borderRightWidth > 0 || borderBottomWidth > 0 || borderLeftWidth > 0;

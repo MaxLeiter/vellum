@@ -181,7 +181,8 @@ class ValuesTest {
 
         ComputedStyle colorOnly = styleOf("background: #00f");
         assertEquals(0xFF0000FF, colorOnly.backgroundColor);
-        assertTrue(colorOnly.backgroundLayers.isEmpty());
+        assertEquals(1, colorOnly.backgroundLayers.size(), "a layer without an image");
+        assertFalse(colorOnly.hasBackgroundImage());
         assertEquals(0, styleOf("background: red url(a.png), blue").backgroundColor, "colour only in the last layer");
     }
 

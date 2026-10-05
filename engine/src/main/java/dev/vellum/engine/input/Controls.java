@@ -138,7 +138,7 @@ public final class Controls {
 
     /** The UA stylesheet draws checkboxes and radios with sprites; without a background, draw a plain mark. */
     private static void paintCheck(Canvas canvas, Box box, ComputedStyle s, Element el) {
-        if (!s.backgroundLayers.isEmpty() || !el.checked()) return;
+        if (s.hasBackgroundImage() || !el.checked()) return;
         float inset = Math.max(1, Math.min(box.contentWidth(), box.contentHeight()) / 4);
         float x = box.contentX() + inset, y = box.contentY() + inset;
         float w = box.contentWidth() - 2 * inset, h = box.contentHeight() - 2 * inset;

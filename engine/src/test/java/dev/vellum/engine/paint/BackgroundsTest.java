@@ -42,6 +42,15 @@ class BackgroundsTest {
     }
 
     @Test
+    void colourWithoutAnImageKeepsItsClip() {
+        // background-image: none is still a layer, whose clip is the colour's (the bottom layer's).
+        RecordingCanvas c = paint("border: 2px solid transparent; background-clip: padding-box; background-color: #333");
+        assertEquals("rect 2,2 36x16 #ff333333", c.trace("rect").getFirst());
+        c = paint("border: 2px solid transparent; background: #333 content-box; padding: 3px");
+        assertEquals("rect 5,5 30x10 #ff333333", c.trace("rect").getFirst());
+    }
+
+    @Test
     void repeatedTexturesAreOneDrawWithWrappingUvs() {
         RecordingCanvas c = paint("background: url(a.png)", 16, 16);
         assertEquals(1, c.ops("drawImage").size());
