@@ -33,7 +33,9 @@ import java.util.UUID;
  * i.e. {@code -Dvellum.autopilot=true}):
  * creates a superflat creative world, opens the canvas test, every showcase page and demo, screenshots each to
  * {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas test and the 3D pages also at 3),
- * logs the frame rate of each (and of benchmark pages of 3D content), and quits.
+ * logs the frame rate of each (and of benchmark pages of 3D content), hovers the title screen's first button for a
+ * burst of screenshots a tick apart (hover effects and animations), drives the templates demo with
+ * {@link VellumAutomation} (clicks, typing, Enter) and checks its state, and quits.
  */
 public final class DevAutopilot {
     public static final boolean ENABLED = Boolean.getBoolean("vellum.autopilot");
@@ -133,9 +135,27 @@ public final class DevAutopilot {
                     + cell.repeat(48);
             shoot(mc, "bench_" + tag, () -> VellumScreens.openInline(page, null));
         }
+        steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("title")));
+        steps.add(() -> wait = SETTLE);
+        hover(".panel button");
+        for (int i = 0; i < 4; i++) grab(mc, "showcase_title_hover_" + i, 0);
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
         }
+        steps.add(() -> VellumClientCommands.demo("templates"));
+        steps.add(() -> wait = SETTLE);
+        steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
+            page.click(".counter button:last-child");
+            page.click(".counter button:last-child");
+            page.click(".add input");
+            page.type("Mine diamonds");
+            page.key("Enter");
+            String state = page.eval("[state.count, state.todos.length]").map(Object::toString).orElse("none");
+            if (state.equals("[2,3]")) Constants.LOG.info("Vellum autopilot: templates demo input works");
+            else Constants.LOG.error("Vellum autopilot: templates demo state is {}, expected [2,3]", state);
+            wait = 2; // the page re-renders at its next frame
+        }));
+        grab(mc, "templates_input", 5);
         shoot(mc, "chest", () -> {
             mc.gui.setScreen(null);
             command(mc, "vellum demo chest");
@@ -151,12 +171,27 @@ public final class DevAutopilot {
     private static void shoot(Minecraft mc, String name, Runnable open) {
         steps.add(open);
         steps.add(() -> wait = SETTLE);
+        grab(mc, name, 5);
+    }
+
+    /** Saves a screenshot of the last frame as {@code vellum_<name>.png}, then waits {@code ticks}. */
+    private static void grab(Minecraft mc, String name, int ticks) {
         steps.add(() -> {
             mc.gui.hud.getChat().clearMessages(false);
             Constants.LOG.info("Vellum autopilot: {} at {} fps", name, mc.getFps());
             Screenshot.grab(mc.gameDirectory, "vellum_" + name + ".png", mc.gameRenderer.mainRenderTarget(), 1,
                     msg -> Constants.LOG.info("Vellum autopilot: {}", msg.getString()));
-            wait = 5;
+            wait = ticks;
+        });
+    }
+
+    /** Hovers the first element of the open Vellum screen matching {@code selector} and lets hover effects settle. */
+    private static void hover(String selector) {
+        steps.add(() -> {
+            if (!VellumAutomation.screen().map(page -> page.hover(selector)).orElse(false)) {
+                Constants.LOG.warn("Vellum autopilot: nothing to hover at {}", selector);
+            }
+            wait = SETTLE;
         });
     }
 

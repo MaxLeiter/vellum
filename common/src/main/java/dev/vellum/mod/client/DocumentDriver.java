@@ -9,6 +9,7 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.Urls;
+import dev.vellum.engine.dom.Viewport;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.HitResult;
@@ -108,6 +109,12 @@ public final class DocumentDriver {
         this.session = session;
     }
 
+    /** The driver showing its page in {@code screen}, or null. */
+    static @Nullable DocumentDriver of(Screen screen) {
+        for (DocumentDriver d : LIVE) if (d.owner.screen() == screen) return d;
+        return null;
+    }
+
     /** Reloads every loaded document: after a resource reload, {@code /vellum reload}, or a saved source file in dev. */
     public static void reloadAll() {
         for (DocumentDriver d : List.copyOf(LIVE)) d.reload();
@@ -188,14 +195,18 @@ public final class DocumentDriver {
             fail("Page not found: " + url, null);
             return;
         }
-        Document doc = Document.parse(host, url, source, data);
-        document = doc;
-        if (width > 0) applyViewport(doc);
+        document = Document.parse(host, url, source, data, viewport());
     }
 
     private void applyViewport(@Nullable Document doc) {
+        Viewport v = viewport();
+        if (doc != null) doc.setViewport(v.width(), v.height(), v.devicePixelRatio());
+    }
+
+    /** The GUI-scaled window, which pages are laid out in. */
+    private Viewport viewport() {
         // A minimised or mid-resize window can report 0x0; a page laid out at zero size has nothing to show anyway.
-        if (doc != null) doc.setViewport(Math.max(1, width), Math.max(1, height), Minecraft.getInstance().getWindow().getGuiScale());
+        return new Viewport(Math.max(1, width), Math.max(1, height), Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void disposeDocument() {

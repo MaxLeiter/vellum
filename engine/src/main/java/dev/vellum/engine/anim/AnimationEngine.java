@@ -1,8 +1,10 @@
 package dev.vellum.engine.anim;
 
 import dev.vellum.engine.css.ResolvedKeyframe;
+import dev.vellum.engine.css.StyleEngine;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.TimingFunction;
 
@@ -11,15 +13,24 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * CSS transitions and keyframe animations, plus the Web Animations-style {@code element.animate()} used by scripts.
+ * CSS transitions and keyframe animations, plus the Web Animations-style {@code element.animate()} used by scripts,
+ * and the used styles they make: {@code Element.style}, {@code beforeStyle} and {@code afterStyle}.
  *
  * <p>All three are players of keyframe effects (see {@code Player}) sharing the Web Animations timing model. Each
- * animated element keeps its players in {@code Element.animationState}; elements without any have no state, are
- * never visited by {@link #tick}, and keep {@code element.style == element.baseStyle}.
+ * animated target, an element or its ::before or ::after pseudo-element, keeps its players in an
+ * {@code ElementAnimations}, one per target in {@code Element.animationState}; only targets with one are visited by
+ * {@link #tick}.
+ *
+ * <p>A used style is the base style with the target's effects applied, computed at used-value time
+ * ({@code StyleEngine.computeUsed}): what the target inherits follows its parent's used values (a pseudo-element's
+ * parent is its element), and what it computes from {@code color} or {@code font-size} ({@code currentColor},
+ * {@code em}) follows its own animated ones. So animating {@code color} recolours the element's borders, its
+ * {@code currentColor} backgrounds and its children's text. A target with nothing animated in it or above it keeps
+ * its base style object as its used style.
  *
  * <p>Timing events ({@code transitionrun/start/end/cancel}, {@code animationstart/iteration/end/cancel}) and script
  * callbacks are queued while styles update and dispatched at the end of {@link #tick}, so listeners always see
- * consistent styles.
+ * consistent styles. A pseudo-element's events go to its element, naming it in {@code pseudoElement}.
  *
  * <p>Reduced motion ({@link dev.vellum.engine.host.Host#prefersReducedMotion}): transitions do not run (properties
  * change at once, without transition events), and keyframe animations, CSS or scripted, run with no delay and no
@@ -27,7 +38,7 @@ import java.util.List;
  */
 public final class AnimationEngine {
     private final Document document;
-    /** States of the elements with animations, in the order they got them. */
+    /** States of the animated targets, in the order they got them. */
     private final List<ElementAnimations> animated = new ArrayList<>();
     /** Events and callbacks waiting for the end of the tick. */
     private List<Runnable> queued = new ArrayList<>();
@@ -39,36 +50,32 @@ public final class AnimationEngine {
     }
 
     /**
-     * Called by the style engine after computing an element's base style. Starts, retargets or cancels
-     * transitions (comparing {@code oldBase} with {@code newBase} for properties listed in {@code transition}),
-     * starts or stops keyframe animations when {@code animation-name} changes, and sets {@code element.style}.
-     * {@code oldBase} is null the first time an element is styled (no transitions then).
+     * Called by the style engine after computing the base style of an element ({@code which} is
+     * {@link PseudoElement#NONE}) or of its ::before or ::after pseudo-element, the element first and parents before
+     * children. Starts, retargets or cancels transitions (comparing {@code oldBase} with {@code newBase} for
+     * properties listed in {@code transition}), starts or stops keyframe animations when {@code animation-name}
+     * changes, and sets the target's used style. {@code oldBase} is null the first time a target is styled (no
+     * transitions then); {@code newBase} is null when it is not rendered.
      */
-    public void styleChanged(Element element, ComputedStyle oldBase, ComputedStyle newBase) {
-        ElementAnimations state = stateOf(element);
-        if (oldBase == newBase) { // the style engine kept the style: nothing to start or stop
-            if (state == null) setStyle(element, newBase);
-            return;
-        }
-        if (state == null) {
+    public void styleChanged(Element element, PseudoElement which, ComputedStyle oldBase, ComputedStyle newBase) {
+        ElementAnimations state = stateOf(element, which);
+        if (oldBase != newBase) { // else the style engine kept the style: nothing to start or stop
             boolean mayAnimate = newBase != null
                     && (!newBase.animations.isEmpty() || oldBase != null && !newBase.transitions.isEmpty());
-            if (!mayAnimate) {
-                setStyle(element, newBase);
-                return;
+            if (state == null && mayAnimate) state = new ElementAnimations(this, element, which);
+            if (state != null) {
+                state.styleChanged(oldBase, newBase, now());
+                if (state.isEmpty()) release(state);
+                else register(state);
             }
-            state = new ElementAnimations(this, element);
         }
-        state.styleChanged(oldBase, newBase, now());
-        if (state.isEmpty()) release(state);
-        else register(state);
-        update(state, newBase);
+        update(element, which);
     }
 
     /**
-     * Advances running transitions and animations to {@code nowMs}, recomputing {@code element.style} for animated
-     * elements, firing transition/animation events, and invalidating layout when a layout-affecting property moved.
-     * Elements that left the document lose their animations.
+     * Advances running transitions and animations to {@code nowMs}, recomputing the used styles of animated targets
+     * and of whatever inherits from them, firing transition/animation events, and invalidating layout when a
+     * layout-affecting property moved. Elements that left the document lose their animations.
      */
     public void tick(double nowMs) {
         boolean treeChanged = document.domVersion() != connectedVersion;
@@ -78,11 +85,11 @@ public final class AnimationEngine {
             if (treeChanged && !state.element.isConnected()) state.cancelAll();
             else if (state.needsTick()) state.tick(nowMs);
             else continue;
-            update(state, state.element.baseStyle);
             if (state.isEmpty()) {
                 it.remove();
-                state.element.animationState = null;
+                clearSlot(state);
             }
+            if (update(state.element, state.which)) updateInheritors(state.element, state.which);
         }
         dispatchQueued();
     }
@@ -125,8 +132,8 @@ public final class AnimationEngine {
         return reducedMotion() ? timing.instant() : timing;
     }
 
-    List<ResolvedKeyframe> resolveKeyframes(Element element, String name, ComputedStyle base) {
-        return document.styleEngine().resolveKeyframes(element, name, base);
+    List<ResolvedKeyframe> resolveKeyframes(Element element, PseudoElement which, String name, ComputedStyle base) {
+        return document.styleEngine().resolveKeyframes(element, which, name, base);
     }
 
     /** Queues an event dispatch or callback for the end of the current (or next) tick. */
@@ -136,51 +143,89 @@ public final class AnimationEngine {
 
     /** A script changed {@code animation}'s playback: attach it to its element, which the next tick restyles. */
     void changed(ScriptAnimation animation) {
-        ElementAnimations state = stateOf(animation.element);
+        ElementAnimations state = stateOf(animation.element, PseudoElement.NONE);
         if (state == null) {
             if (animation.isIdle()) return; // not attached, nothing to remove
-            register(state = new ElementAnimations(this, animation.element));
+            register(state = new ElementAnimations(this, animation.element, PseudoElement.NONE));
         }
         state.attach(animation);
     }
 
     // ---- Internals ----
 
-    private static ElementAnimations stateOf(Element element) {
-        return element.animationState instanceof ElementAnimations state ? state : null;
+    private static ElementAnimations stateOf(Element element, PseudoElement which) {
+        return element.animationState instanceof ElementAnimations[] states ? states[which.ordinal()] : null;
     }
 
     private void register(ElementAnimations state) {
-        if (state.element.animationState == state) return;
-        state.element.animationState = state;
+        Element element = state.element;
+        ElementAnimations[] states = element.animationState instanceof ElementAnimations[] s
+                ? s : new ElementAnimations[PseudoElement.values().length];
+        if (states[state.which.ordinal()] == state) return;
+        states[state.which.ordinal()] = state;
+        element.animationState = states;
         animated.add(state);
     }
 
     private void release(ElementAnimations state) {
-        if (state.element.animationState != state) return;
-        state.element.animationState = null;
-        animated.remove(state);
+        if (animated.remove(state)) clearSlot(state);
     }
 
-    /** Recomposes the element's style on {@code base}, invalidating layout if a layout property moved. */
-    private void update(ElementAnimations state, ComputedStyle base) {
-        ComputedStyle before = state.element.style, after = state.compose(base);
-        setStyle(state.element, after);
-        if (!document.needsLayout() && layoutMoved(before, after)) document.invalidateLayout();
+    private static void clearSlot(ElementAnimations state) {
+        ElementAnimations[] states = (ElementAnimations[]) state.element.animationState;
+        states[state.which.ordinal()] = null;
+        for (ElementAnimations s : states) if (s != null) return;
+        state.element.animationState = null;
     }
 
     /**
-     * Sets {@code element.style}, the only place it is written, telling the document when paint order moved without
-     * a relayout (the cascade invalidates layout itself; animations through {@link #update}).
+     * Recomputes a target's used style (see the class comment) and stores it, telling the document when paint order
+     * moved or layout must run again. Returns whether values its inheritors read changed.
      */
-    private void setStyle(Element element, ComputedStyle style) {
-        ComputedStyle before = element.style;
-        element.style = style;
-        if (before != null && style != null && !before.sameStacking(style)) document.invalidateStacking();
+    private boolean update(Element element, PseudoElement which) {
+        StyleEngine styles = document.styleEngine();
+        ElementAnimations state = stateOf(element, which);
+        ComputedStyle style = styles.computeUsed(element, which, null);
+        if (state != null && style != null) {
+            if (state.setsComputedFrom()) style = styles.computeUsed(element, which, state.applied(style));
+            style = state.compose(style);
+        }
+        ComputedStyle before = switch (which) {
+            case BEFORE -> element.beforeStyle;
+            case AFTER -> element.afterStyle;
+            default -> element.style;
+        };
+        if (style == before) return false;
+        switch (which) {
+            case BEFORE -> element.beforeStyle = style;
+            case AFTER -> element.afterStyle = style;
+            default -> element.style = style;
+        }
+        if (before == null || style == null) {
+            if (!document.needsLayout()) document.invalidateLayout();
+            return true;
+        }
+        if (!before.sameStacking(style)) document.invalidateStacking();
+        // Element boxes paint with the element's live style; pseudo-element boxes and their text keep the style they
+        // were laid out with, so any change to theirs lays out again.
+        boolean relayout = which == PseudoElement.NONE ? !before.sameLayout(style) : !before.sameAs(style);
+        if (relayout && !document.needsLayout()) document.invalidateLayout();
+        return !before.sameInherited(style);
     }
 
-    private static boolean layoutMoved(ComputedStyle before, ComputedStyle after) {
-        return before == null || after == null ? before != after : !before.sameLayout(after);
+    /**
+     * After an element's inherited values changed outside a restyle: updates its pseudo-elements and children, and
+     * theirs while their inherited values change too. (A restyle reaches every target itself.)
+     */
+    private void updateInheritors(Element element, PseudoElement which) {
+        if (which != PseudoElement.NONE) return;
+        update(element, PseudoElement.BEFORE);
+        update(element, PseudoElement.AFTER);
+        for (int i = 0, n = element.childCount(); i < n; i++) {
+            if (element.childAt(i) instanceof Element child && update(child, PseudoElement.NONE)) {
+                updateInheritors(child, PseudoElement.NONE);
+            }
+        }
     }
 
     private void dispatchQueued() {

@@ -2,6 +2,7 @@ package dev.vellum.engine.anim;
 
 import dev.vellum.engine.css.ResolvedKeyframe;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.TimingFunction;
@@ -21,9 +22,9 @@ final class CssAnimation extends Player {
     private ComputedStyle keyframesBase;
     private TimingFunction easing;
 
-    CssAnimation(AnimationEngine engine, Element element, AnimationSpec spec, ComputedStyle base,
-                 List<ResolvedKeyframe> keyframes, double now) {
-        super(engine, element, engine.effective(Timing.of(spec)), null);
+    CssAnimation(AnimationEngine engine, Element element, PseudoElement pseudo, AnimationSpec spec,
+                 ComputedStyle base, List<ResolvedKeyframe> keyframes, double now) {
+        super(engine, element, pseudo, engine.effective(Timing.of(spec)), null);
         this.name = spec.name();
         this.keyframes = keyframes;
         this.keyframesBase = base;
@@ -35,7 +36,7 @@ final class CssAnimation extends Player {
     void update(AnimationSpec spec, ComputedStyle base, double now) {
         timing = engine.effective(Timing.of(spec));
         if (base != keyframesBase) {
-            keyframes = engine.resolveKeyframes(element, name, base);
+            keyframes = engine.resolveKeyframes(element, pseudo, name, base);
             keyframesBase = base;
             effect = null;
         }

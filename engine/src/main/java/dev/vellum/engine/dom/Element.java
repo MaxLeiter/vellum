@@ -46,9 +46,14 @@ public class Element extends Node {
 
     /** Style from the cascade, before animations. Null until the first restyle or when not rendered. */
     public ComputedStyle baseStyle;
-    /** Style used for layout and paint: {@link #baseStyle} with running transitions and animations applied. */
+    /**
+     * Style used for layout and paint: {@link #baseStyle} with running transitions and animations applied, and the
+     * animated values it inherits or computes from (DESIGN §8).
+     */
     public ComputedStyle style;
-    /** Styles for the ::before and ::after pseudo-elements, or null when they have no content. */
+    /** The cascade's styles for the ::before and ::after pseudo-elements, or null when they have no content. */
+    public ComputedStyle beforeBaseStyle, afterBaseStyle;
+    /** The ::before and ::after styles used for layout and paint, as {@link #style} is for the element. */
     public ComputedStyle beforeStyle, afterStyle;
     /** Style of the ::placeholder pseudo-element for text controls, or null. */
     public ComputedStyle placeholderStyle;

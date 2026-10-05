@@ -33,8 +33,24 @@ public sealed interface Image {
     /** {@code linear-gradient(<angle>, stops...)}. Angle in degrees, CSS convention (0 = to top, 90 = to right). */
     record LinearGradient(float angleDeg, List<ColorStop> stops, boolean repeating) implements Image {}
 
-    /** {@code radial-gradient(circle|ellipse at x y, stops...)}, farthest-corner sizing. */
-    record RadialGradient(boolean circle, Length centerX, Length centerY, List<ColorStop> stops) implements Image {}
+    /** {@code radial-gradient(circle|ellipse <size> at x y, stops...)}. */
+    record RadialGradient(boolean circle, Length centerX, Length centerY, List<ColorStop> stops, RadialSize size)
+            implements Image {
+        /** A farthest-corner gradient, CSS's default size. */
+        public RadialGradient(boolean circle, Length centerX, Length centerY, List<ColorStop> stops) {
+            this(circle, centerX, centerY, stops, RadialSize.FARTHEST_CORNER);
+        }
+    }
+
+    /**
+     * The size of a radial gradient's ending shape: an {@link Extent} keyword (then the radii are null), or explicit
+     * radii, equal lengths for a circle, lengths or percentages of the box's width and height for an ellipse.
+     */
+    record RadialSize(Extent extent, Length radiusX, Length radiusY) {
+        public enum Extent { CLOSEST_SIDE, FARTHEST_SIDE, CLOSEST_CORNER, FARTHEST_CORNER }
+
+        public static final RadialSize FARTHEST_CORNER = new RadialSize(Extent.FARTHEST_CORNER, null, null);
+    }
 
     /** A colour stop; {@code position} is a length or percentage along the gradient line, or null if unspecified. */
     record ColorStop(int color, Length position) {}

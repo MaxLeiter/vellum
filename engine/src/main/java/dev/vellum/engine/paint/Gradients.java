@@ -86,26 +86,32 @@ final class Gradients {
         float left = Math.abs(centerX - x), right = Math.abs(x + w - centerX);
         float top = Math.abs(centerY - y), bottom = Math.abs(y + h - centerY);
         float fx = Math.max(left, right), fy = Math.max(top, bottom);
+        Image.RadialSize size = g.size();
         float rx, ry;
-        if (g.circle()) {
-            rx = ry = (float) Math.hypot(fx, fy);
+        if (size.extent() == null) {
+            rx = size.radiusX().resolve(w);
+            ry = g.circle() ? rx : size.radiusY().resolve(h);
         } else {
-            // farthest-corner ellipse: the aspect ratio closest-side would give, scaled through the farthest corner
-            float csx = Math.min(left, right), csy = Math.min(top, bottom);
-            if (csx > 0 && csy > 0) {
-                float k = csx / csy;
-                ry = (float) Math.hypot(fx / k, fy);
-                rx = k * ry;
+            // The distances to the sides the extent names; a corner extent passes through the corner they meet at.
+            boolean closest = size.extent() == Image.RadialSize.Extent.CLOSEST_SIDE
+                    || size.extent() == Image.RadialSize.Extent.CLOSEST_CORNER;
+            boolean corner = size.extent() == Image.RadialSize.Extent.CLOSEST_CORNER
+                    || size.extent() == Image.RadialSize.Extent.FARTHEST_CORNER;
+            float sx = closest ? Math.min(left, right) : fx, sy = closest ? Math.min(top, bottom) : fy;
+            if (g.circle()) {
+                rx = ry = corner ? (float) Math.hypot(sx, sy) : closest ? Math.min(sx, sy) : Math.max(sx, sy);
             } else {
-                rx = fx * (float) Math.sqrt(2);
-                ry = fy * (float) Math.sqrt(2);
+                // An ellipse keeps the sides' aspect ratio; through their corner, that scales both by √2.
+                float k = corner ? (float) Math.sqrt(2) : 1;
+                rx = sx * k;
+                ry = sy * k;
             }
         }
         if (!(rx > 0) || !(ry > 0) || !resolveStops(g.stops(), rx)) return;
         yScale = ry / rx;
         int last = stopCount - 1;
-        // The ending shape passes through the farthest corner, so radius rx covers the tile.
-        float outer = Math.max(rx, stopPos[last]) + 1;
+        // The last ring reaches the farthest corner, so the last colour covers the rest of the tile.
+        float outer = Math.max((float) Math.hypot(fx, fy / yScale), stopPos[last]) + 1;
         ringSegments = Math.clamp(4L * Shapes.segments(Math.max(outer, outer * yScale), dp), 8, 64);
         for (int j = 0; j <= ringSegments; j++) {
             double a = 2 * Math.PI * j / ringSegments;

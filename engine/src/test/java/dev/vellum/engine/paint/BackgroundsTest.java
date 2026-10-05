@@ -42,6 +42,15 @@ class BackgroundsTest {
     }
 
     @Test
+    void colourWithoutAnImageKeepsItsClip() {
+        // background-image: none is still a layer, whose clip is the colour's (the bottom layer's).
+        RecordingCanvas c = paint("border: 2px solid transparent; background-clip: padding-box; background-color: #333");
+        assertEquals("rect 2,2 36x16 #ff333333", c.trace("rect").getFirst());
+        c = paint("border: 2px solid transparent; background: #333 content-box; padding: 3px");
+        assertEquals("rect 5,5 30x10 #ff333333", c.trace("rect").getFirst());
+    }
+
+    @Test
     void repeatedTexturesAreOneDrawWithWrappingUvs() {
         RecordingCanvas c = paint("background: url(a.png)", 16, 16);
         assertEquals(1, c.ops("drawImage").size());
@@ -139,6 +148,28 @@ class BackgroundsTest {
         c.forEachVertex((x, y, color) -> {
             if (x == 20 && y == 10) assertEquals(RED, color);
         });
+    }
+
+    @Test
+    void radialGradientsHonourTheirSize() {
+        // The ending shape (blue) is where the size says, on the 40x20 box centred at (20, 10).
+        assertBlueAt("radial-gradient(ellipse 40px 10px at 50% 50%, red, blue)", 20, 20);
+        assertBlueAt("radial-gradient(circle 5px, red, blue)", 20, 15);
+        assertBlueAt("radial-gradient(closest-side at 10px 5px, red, blue)", 10, 10);
+        assertBlueAt("radial-gradient(circle farthest-side at 10px 5px, red, blue)", 40, 5);
+        assertBlueAt("radial-gradient(10px 50%, red, blue)", 20, 20);
+    }
+
+    /** Every vertex the gradient has at (x, y) is blue, and it has one. */
+    private static void assertBlueAt(String background, float x, float y) {
+        int[] found = {0};
+        paint("background: " + background).forEachVertex((vx, vy, color) -> {
+            if (Math.abs(vx - x) < 1e-3 && Math.abs(vy - y) < 1e-3) {
+                assertEquals(BLUE, color, background + " at " + x + "," + y);
+                found[0]++;
+            }
+        });
+        assertTrue(found[0] > 0, "no vertex at " + x + "," + y + " for " + background);
     }
 
     @Test

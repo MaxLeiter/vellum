@@ -6,6 +6,8 @@ import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DomBindingsTest {
@@ -182,6 +184,14 @@ const b = document.getElementById('b');
                 + "location.href, document.readyState].join(' ')"));
         page.run("location.href = 'other.html'; vellum.open('third.html')");
         assertEquals("[test:other.html, test:third.html]", page.host.navigations.toString());
+    }
+
+    @Test
+    void scriptsSeeTheViewportFromTheStart() {
+        // The host passes the viewport when it creates the document: scripts read it while the page loads.
+        Page page = new TestHost().load("<script>console.log([innerWidth, innerHeight, devicePixelRatio].join(' '))</script>",
+                200, 100);
+        assertEquals(List.of("INFO: 200 100 2"), page.host.logs);
     }
 
     @Test

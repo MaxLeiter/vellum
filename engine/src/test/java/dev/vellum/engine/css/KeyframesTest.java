@@ -1,6 +1,7 @@
 package dev.vellum.engine.css;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.Length;
 import dev.vellum.engine.style.Prop;
@@ -38,7 +39,7 @@ class KeyframesTest {
     void resolvesKeyframesForTheElement() {
         Page page = new TestHost().load(PAGE.replace("@keyframes grow { 50% { opacity: 1 } }", ""));
         Element a = page.query("#a");
-        List<ResolvedKeyframe> frames = page.doc.styleEngine().resolveKeyframes(a, "grow", a.baseStyle);
+        List<ResolvedKeyframe> frames = page.doc.styleEngine().resolveKeyframes(a, PseudoElement.NONE, "grow", a.baseStyle);
         assertEquals(List.of(0f, 0.5f, 0.75f, 1f), frames.stream().map(ResolvedKeyframe::offset).toList());
 
         ResolvedKeyframe first = frames.get(0);
@@ -66,7 +67,7 @@ class KeyframesTest {
     void laterRuleWithTheSameNameWins() {
         Page page = new TestHost().load(PAGE);
         Element a = page.query("#a");
-        List<ResolvedKeyframe> frames = page.doc.styleEngine().resolveKeyframes(a, "grow", a.baseStyle);
+        List<ResolvedKeyframe> frames = page.doc.styleEngine().resolveKeyframes(a, PseudoElement.NONE, "grow", a.baseStyle);
         assertEquals(1, frames.size());
         assertEquals(0.5f, frames.get(0).offset());
     }
@@ -75,8 +76,8 @@ class KeyframesTest {
     void unknownOrInactiveRulesGiveNothing() {
         Page page = new TestHost().load(PAGE);
         Element a = page.query("#a");
-        assertTrue(page.doc.styleEngine().resolveKeyframes(a, "nope", a.baseStyle).isEmpty());
-        assertTrue(page.doc.styleEngine().resolveKeyframes(a, "hidden", a.baseStyle).isEmpty(), "@media does not match");
+        assertTrue(page.doc.styleEngine().resolveKeyframes(a, PseudoElement.NONE, "nope", a.baseStyle).isEmpty());
+        assertTrue(page.doc.styleEngine().resolveKeyframes(a, PseudoElement.NONE, "hidden", a.baseStyle).isEmpty(), "@media does not match");
     }
 
     @Test

@@ -97,6 +97,7 @@ final class EventBindings {
         transitionEvent.members()
                 .get("propertyName", e -> e.name)
                 .get("animationName", e -> e.name)
+                .get("pseudoElement", e -> e.pseudoElement)
                 .get("elapsedTime", e -> e.elapsedSeconds);
     }
 

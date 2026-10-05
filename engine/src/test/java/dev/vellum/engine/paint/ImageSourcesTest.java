@@ -43,4 +43,18 @@ class ImageSourcesTest {
         assertEquals(10, page.byId("s").box.height, 1e-4);
         assertEquals(20, page.byId("t").box.height, 1e-4, "a resized sprite keeps its ratio");
     }
+
+    @Test
+    void replacedImagesTakeTheTint() {
+        Page page = host.load("""
+                <sprite src='minecraft:icon/x' style='-mc-tint: red'></sprite>
+                <img src='sprite:minecraft:icon/y' style='-mc-tint: #00f'>
+                <canvas width=4 height=4 style='-mc-tint: lime'></canvas>
+                <div style='-mc-tint: red'><sprite src='minecraft:icon/z'></sprite></div>
+                """);
+        RecordingCanvas c = page.paint();
+        assertEquals(List.of(0xFFFF0000, 0xFF0000FF, 0xFFFF0000), c.ops("drawSprite").stream().map(RecordingCanvas.Call::color).toList(),
+                "sprites, img sprites, and inherited tints");
+        assertEquals(0xFF00FF00, c.ops("drawImage").getFirst().color(), "canvases");
+    }
 }

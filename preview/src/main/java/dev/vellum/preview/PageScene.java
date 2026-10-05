@@ -1,6 +1,7 @@
 package dev.vellum.preview;
 
 import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.dom.Viewport;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.engine.input.Tooltip;
@@ -23,11 +24,15 @@ final class PageScene implements Scene {
     private Document document;
     /** Why there is no document (the page was not found), or null. */
     private Throwable loadError;
+    /** The viewport of the last frame (the window's size and scale), which a reload starts the page in. */
+    private Viewport viewport;
 
-    PageScene(PreviewHost host, String url, String data) {
+    /** Loads the page shown in {@code viewport}, so its scripts see that viewport from the start. */
+    PageScene(PreviewHost host, String url, String data, Viewport viewport) {
         this.host = host;
         this.url = url;
         this.data = data;
+        this.viewport = viewport;
         reload();
     }
 
@@ -51,7 +56,7 @@ final class PageScene implements Scene {
         String html = host.loadText(url);
         if (html != null) {
             loadError = null;
-            document = Document.parse(host, url, html, data);
+            document = Document.parse(host, url, html, data, viewport);
         } else {
             loadError = new IllegalArgumentException("Page not found: " + url);
             host.log(Host.LogLevel.ERROR, loadError.getMessage());
@@ -60,6 +65,7 @@ final class PageScene implements Scene {
 
     @Override
     public void frame(double nowMs, float width, float height, float scale) {
+        viewport = new Viewport(width, height, scale);
         if (document == null) return;
         document.setViewport(width, height, scale);
         document.frame(nowMs);

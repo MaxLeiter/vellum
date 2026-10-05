@@ -2,6 +2,7 @@ package dev.vellum.engine.css;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
@@ -150,9 +151,9 @@ class SelectorsTest {
     @Test
     void pseudoElements() {
         List<Selector> s = SelectorParser.parse("p::before, a:after, input::placeholder");
-        assertEquals(Selector.PseudoElement.BEFORE, s.get(0).pseudoElement);
-        assertEquals(Selector.PseudoElement.AFTER, s.get(1).pseudoElement);
-        assertEquals(Selector.PseudoElement.PLACEHOLDER, s.get(2).pseudoElement);
+        assertEquals(PseudoElement.BEFORE, s.get(0).pseudoElement);
+        assertEquals(PseudoElement.AFTER, s.get(1).pseudoElement);
+        assertEquals(PseudoElement.PLACEHOLDER, s.get(2).pseudoElement);
         // Pseudo-element selectors never match elements themselves.
         assertNull(doc().querySelector("p::before"));
     }

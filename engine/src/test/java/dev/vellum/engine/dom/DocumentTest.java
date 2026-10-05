@@ -72,6 +72,37 @@ class DocumentTest {
     }
 
     @Test
+    void onlyAttributesStylesReadRestyle() {
+        Document doc = new TestHost().load("""
+                <style>
+                  [data-on] { color: red }
+                  .x:has(> [data-deep]) { color: blue }
+                  :is(#y) span::before { content: attr(data-label) }
+                </style>
+                <div id=d><span id=s></span></div><div id=y><span id=l data-label=a></span></div>""").doc;
+        Element d = doc.getElementById("d"), span = doc.getElementById("s"), l = doc.getElementById("l");
+        clean(doc);
+        d.setAttribute("rotate", "45");
+        d.setAttribute("aria-label", "no rule reads it");
+        assertFalse(doc.styleDirty || doc.layoutDirty);
+        assertTrue(doc.needsFrame(0), "it still repaints: replaced content and controls draw attributes");
+        for (String name : List.of("data-on", "class", "style", "id", "hidden", "data-deep", "data-label")) {
+            clean(doc);
+            span.setAttribute(name, "1");
+            assertTrue(doc.styleDirty, name + " is read by a selector, attr() or the cascade");
+        }
+        clean(doc);
+        l.setAttribute("data-label", "b");
+        doc.frame(16);
+        assertEquals("b", l.beforeStyle.content, "attr() follows");
+        // A stylesheet added later makes its attributes count.
+        doc.body().appendChild(doc.createElement("style")).appendChild(doc.createTextNode("[rotate] { color: lime }"));
+        clean(doc);
+        d.setAttribute("rotate", "90");
+        assertTrue(doc.styleDirty);
+    }
+
+    @Test
     void templateContentsAreInert() {
         TestHost host = new TestHost();
         Document doc = Document.parse(host, "test:x.html",

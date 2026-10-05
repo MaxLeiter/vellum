@@ -1,6 +1,7 @@
 package dev.vellum.engine.anim;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.style.Prop;
 import dev.vellum.engine.style.TransitionSpec;
 
@@ -14,9 +15,9 @@ final class CssTransition extends Player {
     private final Object reversingAdjustedStart;
     private final double shorteningFactor;
 
-    CssTransition(AnimationEngine engine, Element element, Prop prop, Object from, Object to,
+    CssTransition(AnimationEngine engine, Element element, PseudoElement pseudo, Prop prop, Object from, Object to,
                   Object reversingAdjustedStart, double shorteningFactor, TransitionSpec spec, double now) {
-        super(engine, element, Timing.transition(
+        super(engine, element, pseudo, Timing.transition(
                         spec.delayMs() < 0 ? spec.delayMs() * shorteningFactor : spec.delayMs(),
                         spec.durationMs() * shorteningFactor, spec.timing()),
                 KeyframeEffect.between(prop, from, to));
@@ -29,9 +30,10 @@ final class CssTransition extends Player {
     }
 
     /** A transition from {@code from} to {@code to}, or null when the values are equal or cannot interpolate. */
-    static CssTransition start(AnimationEngine engine, Element element, Prop prop, Object from, Object to,
-                               TransitionSpec spec, double now) {
-        return changes(prop, from, to) ? new CssTransition(engine, element, prop, from, to, from, 1, spec, now) : null;
+    static CssTransition start(AnimationEngine engine, Element element, PseudoElement pseudo, Prop prop, Object from,
+                               Object to, TransitionSpec spec, double now) {
+        return changes(prop, from, to)
+                ? new CssTransition(engine, element, pseudo, prop, from, to, from, 1, spec, now) : null;
     }
 
     /**
@@ -45,11 +47,11 @@ final class CssTransition extends Player {
         cancel();
         if (spec == null || !changes(prop, current, after)) return null;
         if (!Objects.equals(after, reversingAdjustedStart)) {
-            return new CssTransition(engine, element, prop, current, after, current, 1, spec, now);
+            return new CssTransition(engine, element, pseudo, prop, current, after, current, 1, spec, now);
         }
         // Reversing: go back over the distance covered so far, in proportionally less time.
         double factor = Math.min(Math.abs(progress * shorteningFactor + 1 - shorteningFactor), 1);
-        return new CssTransition(engine, element, prop, current, after, to, factor, spec, now);
+        return new CssTransition(engine, element, pseudo, prop, current, after, to, factor, spec, now);
     }
 
     /** The value at {@code now}: interpolated while running, the end value once done. */

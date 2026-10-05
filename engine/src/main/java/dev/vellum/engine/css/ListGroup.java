@@ -69,11 +69,11 @@ enum ListGroup {
 
     private Object entry(Object[] v) {
         return switch (this) {
-            case BACKGROUND -> {
-                if (!(v[0] instanceof Image image)) yield null;
+            case BACKGROUND -> { // a "none" layer stays: its clip is still the colour's when it is the bottom one
                 BackgroundSize size = (BackgroundSize) v[3];
                 BackgroundRepeat repeat = (BackgroundRepeat) v[4];
-                yield new BackgroundLayer(image, size.keyword(), size.width(), size.height(), (Length) v[1],
+                yield new BackgroundLayer(v[0] instanceof Image image ? image : null, size.keyword(), size.width(),
+                        size.height(), (Length) v[1],
                         (Length) v[2], repeat.x(), repeat.y(), (BackgroundLayer.Box) v[5]);
             }
             // Entries that never run (a combined duration that is not positive) stay: the last entry naming a
@@ -109,7 +109,7 @@ enum ListGroup {
             case BACKGROUND -> {
                 BackgroundLayer l = (BackgroundLayer) entry;
                 yield switch (c) {
-                    case 0 -> l.image();
+                    case 0 -> l.image() != null ? l.image() : Longhand.None.VALUE;
                     case 1 -> l.positionX();
                     case 2 -> l.positionY();
                     case 3 -> new BackgroundSize(l.sizeKeyword(), l.width(), l.height());

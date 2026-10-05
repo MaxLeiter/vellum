@@ -148,6 +148,30 @@ class ValuesTest {
         assertEquals(Length.px(10), r.centerX());
         assertEquals(Length.ZERO, r.centerY());
         assertTrue(styleOf("background-image: linear-gradient(red)").backgroundLayers.isEmpty(), "one stop is invalid");
+        assertEquals(Image.RadialSize.FARTHEST_CORNER, r.size());
+    }
+
+    @Test
+    void radialGradientSizes() {
+        assertEquals(new Image.RadialSize(null, Length.px(40), Length.px(10)),
+                radial("ellipse 40px 10px at 50% 50%").size());
+        Image.RadialGradient circle = radial("circle 20px");
+        assertTrue(circle.circle());
+        assertEquals(new Image.RadialSize(null, Length.px(20), Length.px(20)), circle.size());
+        assertTrue(radial("20px").circle(), "one length is a circle");
+        assertFalse(radial("20px 50%").circle(), "two are an ellipse");
+        assertEquals(Image.RadialSize.Extent.CLOSEST_CORNER, radial("closest-corner circle at top").size().extent());
+        assertFalse(radial("farthest-side").circle());
+        for (String invalid : List.of("circle 10%", "circle 1px 2px", "ellipse 5px", "closest-side 5px", "-5px",
+                "circle circle")) {
+            assertTrue(styleOf("background-image: radial-gradient(" + invalid + ", red, blue)").backgroundLayers.isEmpty(),
+                    invalid);
+        }
+    }
+
+    private static Image.RadialGradient radial(String prelude) {
+        return (Image.RadialGradient) styleOf("background-image: radial-gradient(" + prelude + ", red, blue)")
+                .backgroundLayers.getFirst().image();
     }
 
     @Test
@@ -181,7 +205,8 @@ class ValuesTest {
 
         ComputedStyle colorOnly = styleOf("background: #00f");
         assertEquals(0xFF0000FF, colorOnly.backgroundColor);
-        assertTrue(colorOnly.backgroundLayers.isEmpty());
+        assertEquals(1, colorOnly.backgroundLayers.size(), "a layer without an image");
+        assertFalse(colorOnly.hasBackgroundImage());
         assertEquals(0, styleOf("background: red url(a.png), blue").backgroundColor, "colour only in the last layer");
     }
 

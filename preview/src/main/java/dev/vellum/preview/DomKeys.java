@@ -1,6 +1,7 @@
 package dev.vellum.preview;
 
 import java.awt.event.KeyEvent;
+import java.util.Locale;
 import java.util.Map;
 
 import static java.awt.event.KeyEvent.*;
@@ -61,6 +62,28 @@ final class DomKeys {
         if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) return new Key(typed(e), "Numpad" + (vk - VK_NUMPAD0));
         if (vk >= VK_F1 && vk <= VK_F12) return new Key("F" + (vk - VK_F1 + 1), "F" + (vk - VK_F1 + 1));
         return new Key(typed(e), "Unidentified");
+    }
+
+    /**
+     * The {@code code} a DOM key name ({@code "Enter"}, {@code "a"}, {@code "F5"}) comes from on a US keyboard (the
+     * left one of modifier pairs), for input that names keys rather than pressing them; {@code "Unidentified"} when
+     * no key in the table gives it.
+     */
+    static String codeOf(String key) {
+        for (Key k : KEYS.values()) {
+            if (!key.equals(k.key())) continue;
+            boolean modifier = switch (key) {
+                case "Shift", "Control", "Alt", "Meta" -> true;
+                default -> false;
+            };
+            return modifier ? k.code() + "Left" : k.code();
+        }
+        if (key.length() == 1 && Character.isLetter(key.charAt(0)) && key.charAt(0) < 128) {
+            return "Key" + key.toUpperCase(Locale.ROOT);
+        }
+        if (key.length() == 1 && Character.isDigit(key.charAt(0))) return "Digit" + key;
+        if (key.matches("F([1-9]|1[0-2])")) return key;
+        return "Unidentified";
     }
 
     /** The character the key produces; for letters with Ctrl/Cmd (where AWT reports a control character) the letter. */

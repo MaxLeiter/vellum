@@ -9,9 +9,23 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SandboxTest {
+    @Test
+    void evaluateToJsonGivesTheCompletionValue() {
+        Page page = new TestHost().recordErrors().load("");
+        ScriptRuntime scripts = page.doc.scripts();
+        assertEquals("[1,\"a\",{\"b\":true}]", scripts.evaluateToJson("let n = 1; [n, 'a', {b: true}]", "test"));
+        assertNull(scripts.evaluateToJson("undefined", "test"));
+        assertNull(scripts.evaluateToJson("(function () {})", "test"), "no JSON form");
+        assertTrue(page.host.errors.isEmpty());
+        assertNull(scripts.evaluateToJson("nope(", "test"));
+        assertNull(scripts.evaluateToJson("nope()", "test"));
+        assertEquals(2, page.host.errors.size(), "errors are reported");
+    }
+
     @Test
     void noJavaAccess() {
         Page page = new TestHost().load("");

@@ -106,6 +106,12 @@ public final class VellumHud {
         if (o.driver != null) o.driver.pushData(o.data);
     }
 
+    /** The driver of a shown overlay once it has drawn, or null. */
+    static @Nullable DocumentDriver driver(Identifier id) {
+        Overlay o = OVERLAYS.get(id);
+        return o == null || !o.shown ? null : o.driver;
+    }
+
     private static Overlay overlay(Identifier id) {
         Overlay o = OVERLAYS.get(id);
         if (o == null) throw new IllegalArgumentException("No Vellum HUD overlay registered as " + id);

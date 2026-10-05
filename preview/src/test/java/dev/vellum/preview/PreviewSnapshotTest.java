@@ -1,6 +1,7 @@
 package dev.vellum.preview;
 
 import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.dom.Viewport;
 import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
@@ -53,7 +54,8 @@ class PreviewSnapshotTest {
         assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
         try (MinecraftAssets assets = MinecraftAssets.open(PreviewHost.packRoot(page).stream().toList(), JAR)) {
             MinecraftFont font = new MinecraftFont(assets);
-            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null);
+            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
+                    new Viewport(CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE));
             BufferedImage image = render(scene, assets, font);
             assertNull(scene.error(), () -> page + " failed: " + scene.error());
             String name = page.getFileName().toString().replaceFirst("\\.html$", "");
@@ -68,7 +70,8 @@ class PreviewSnapshotTest {
         Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/tooltip.html").toURI());
         try (MinecraftAssets assets = MinecraftAssets.open(List.of(), JAR)) {
             MinecraftFont font = new MinecraftFont(assets);
-            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null);
+            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
+                    new Viewport(CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE));
             FrameRenderer renderer = new FrameRenderer(assets, font);
             renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 0, null);
             float[] at = scene.document().getElementById("rich").getBoundingClientRect();

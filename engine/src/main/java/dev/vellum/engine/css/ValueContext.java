@@ -6,6 +6,10 @@ import dev.vellum.engine.host.Urls;
 import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.ComputedStyle;
 
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+
 /**
  * What relative values need to compute: font sizes for {@code em}/{@code rem}, the viewport, the GUI scale for
  * {@code dp}, {@code currentColor}, the parent's font weight, the element (for {@code attr()}) and the base URL.
@@ -24,6 +28,8 @@ final class ValueContext {
     boolean dependent;
     /** Set when a value read an attribute ({@code attr()}): such styles must be recomputed on every restyle. */
     boolean attributeRead;
+    /** Every attribute {@code attr()} has read, so a change to one restyles. */
+    final Set<String> attributesRead = new HashSet<>();
 
     float em() { dependent = true; return em; }
     float rem() { dependent = true; return rem; }
@@ -37,6 +43,7 @@ final class ValueContext {
     String attr(String name) {
         dependent = true;
         attributeRead = true;
+        attributesRead.add(name.toLowerCase(Locale.ROOT));
         String v = element == null ? null : element.getAttribute(name);
         return v == null ? "" : v;
     }

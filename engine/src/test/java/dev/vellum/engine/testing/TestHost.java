@@ -2,6 +2,7 @@ package dev.vellum.engine.testing;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.Viewport;
 import dev.vellum.engine.host.ArraySurface;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.Host;
@@ -53,15 +54,13 @@ public class TestHost implements Host {
         return this;
     }
 
-    /** Parses {@code html} as {@code test:page.html} on a 320×240 viewport (GUI scale 2) and runs a frame at t=0. */
+    /** Parses {@code html} as {@code test:page.html} on a 320×240 viewport at GUI scale 2 and runs a frame at t=0. */
     public Page load(String html) {
         return load(html, 320, 240);
     }
 
     public Page load(String html, float width, float height) {
-        Document doc = Document.parse(this, "test:page.html", html);
-        doc.setViewport(width, height, 2);
-        return new Page(this, doc).frame(0);
+        return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(width, height, 2))).frame(0);
     }
 
     @Override

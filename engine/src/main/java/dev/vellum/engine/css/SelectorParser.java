@@ -11,10 +11,10 @@ import dev.vellum.engine.css.Selector.Logical;
 import dev.vellum.engine.css.Selector.MatchContext;
 import dev.vellum.engine.css.Selector.Nth;
 import dev.vellum.engine.css.Selector.PseudoClass;
-import dev.vellum.engine.css.Selector.PseudoElement;
 import dev.vellum.engine.css.Selector.Simple;
 import dev.vellum.engine.css.Token.Type;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.PseudoElement;
 
 import java.util.ArrayList;
 import java.util.List;

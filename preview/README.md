@@ -31,6 +31,46 @@ If the engine throws, the window shows the exception instead of the page and kee
 
 On macOS the JDK checks for file changes every two seconds, so reloads can lag by up to that long.
 
+## Scripted input
+
+`--actions actions.txt` drives the page with a script instead of opening a window, and saves screenshots along the
+way. It is handy for checking hover states, menus, typing and scrolling without clicking through them by hand.
+
+```sh
+./gradlew :preview:run --args="ui/shop.html --actions shop-actions.txt --out build/shots"
+```
+
+The file has one action per line; lines starting with `#` are comments. Frames run 16 ms apart from t = 0, as in a
+snapshot, and every input action is followed by one frame, so the next action and the next shot see its effect.
+A target is a point in GUI pixels (`120 40`) or a CSS selector, which aims at the centre of the first matching
+element as it is painted (after scrolling and transforms).
+
+| Action | Does |
+|---|---|
+| `wait <frames>` | Runs that many frames (timers, animations, transitions). |
+| `move <target>` | Moves the pointer there (hover). |
+| `click <target>` | Moves there, presses and releases the left button. |
+| `wheel <target> <px>` | Turns the wheel over the target; positive scrolls down. A notch is 24 px. |
+| `key <key>` | Presses and releases a key by its DOM name (`Enter`, `ArrowDown`, `Escape`, `a`), with modifiers joined by `+` (`Shift+Tab`, `Ctrl+a`). |
+| `type <text>` | Types the rest of the line, a key press per character. |
+| `shot <name>` | Writes the current frame to `<name>.png`. |
+| `bench <frames>` | Runs that many frames and prints the time a frame took. |
+
+```
+# open the dropdown, pick the second option, and show the result
+wait 30
+click #mode
+shot open
+key ArrowDown
+key Enter
+wait 10
+shot picked
+```
+
+Shots go to `--out`, else next to `--snapshot` (which also gets the last frame), else the working directory. The
+exit code is 1 if the page failed and 2 if the script is malformed or a selector matches nothing shown; the message
+names the line.
+
 ## Minecraft assets
 
 Assets are read straight from a Minecraft 26.3 client jar and never copied into the repository. The jar is looked up

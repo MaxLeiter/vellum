@@ -51,10 +51,11 @@ final class Backgrounds {
     }
 
     private void layer(Canvas canvas, QuadBatch batch, Geometry g, ComputedStyle s, BackgroundLayer layer, float dp) {
+        Image image = layer.image();
+        if (image == null) return;
         g.area(layer.clip(), area, areaRadii);
         g.area(BackgroundLayer.Box.PADDING_BOX, origin, scratchRadii);
         if (area[2] <= 0 || area[3] <= 0) return;
-        Image image = layer.image();
         if (image instanceof Image.Sprite sprite && layer.sizeKeyword() == null
                 && !layer.width().isFixed() && !layer.height().isFixed()) {
             // A sprite scales itself (stretch, tile, nine-slice): by default it simply fills the painting area.
