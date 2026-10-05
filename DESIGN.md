@@ -202,7 +202,10 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 - Cascade: UA sheet < author sheets (document order) < inline style; `!important` reverses origin order; specificity;
   source order. Inheritance via `Prop.inherited`. `inherit`, `initial`, `unset`, `revert` (as unset).
 - Custom properties `--x` and `var(--x, fallback)` anywhere in a value (substituted before parsing the value).
-- `calc()`, `min()`, `max()`, `clamp()` for lengths, percentages and numbers. Mixed `px + %` folds into `Length`.
+- `calc()`, `min()`, `max()`, `clamp()` for lengths, percentages and numbers, nested freely. Lengths fold into
+  `Length`'s `px + %` pair where they can (sums, products with numbers, comparisons of all-px or all-% arguments);
+  a comparison that mixes px and % (`clamp(72px, 25%, 100px)`) stays an expression that layout resolves against
+  the percentage's reference, and serialises as written.
 
 ### Selectors
 Type, universal, `#id`, `.class`, attribute (`[a]`, `=`, `~=`, `|=`, `^=`, `$=`, `*=`, ` i` flag), combinators
@@ -349,10 +352,11 @@ the scrollbar).
 - **Keyframes**: `animation-name` maps to `@keyframes`; keyframes resolved per element via the style engine;
   per-keyframe timing functions; iterations, direction, fill mode, delay, play state; `animationstart/iteration/end`.
   Animated values override the base style; transitions apply under animations as in CSS.
-- **Interpolation** by `Prop.Interp`: lengths (px and % parts separately; keyword ↔ length flips at 50%), floats,
-  ints (rounded), colours (premultiplied), shadow lists (pairwise, padding with transparent zero shadows), transform
-  lists (pairwise by function type when lists match; otherwise decompose both to matrices and interpolate
-  translate/rotate/scale/skew), discrete for everything else.
+- **Interpolation** by `Prop.Interp`: lengths (px and % parts separately; with `min()`/`max()`/`clamp()` terms, as
+  `calc(a × (1 − t) + b × t)`; keyword ↔ length flips at 50%), floats, ints (rounded), colours (premultiplied), shadow
+  lists (pairwise, padding with transparent zero shadows), transform lists (pairwise by function type when lists
+  match; otherwise decompose both to matrices and interpolate translate/rotate/scale/skew), discrete for everything
+  else.
 - Layout-affecting animated properties invalidate layout each frame; paint-only ones (opacity, transform, colours)
   do not.
 - `element.animate(keyframes, options)` from scripts creates the same animation objects (Web Animations subset:

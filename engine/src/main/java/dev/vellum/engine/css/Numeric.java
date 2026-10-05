@@ -5,13 +5,14 @@ import dev.vellum.engine.css.ComponentValue.Func;
 import dev.vellum.engine.css.Token.Type;
 import dev.vellum.engine.style.Length;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Numbers, lengths, angles and times, including {@code calc()}, {@code min()}, {@code max()} and {@code clamp()}.
  * Relative length units become px here (em, rem, vw, vh, vmin, vmax, dp); percentages stay symbolic, and math on
- * lengths folds into a {@link Length}'s {@code px + percent} pair. {@code min/max/clamp} over a mix of px and
- * percentages cannot be folded and are rejected.
+ * lengths is {@link Length}'s: it folds into {@code px + percent} where it can and keeps comparisons that mix px and
+ * percentages for layout to resolve.
  */
 final class Numeric {
     private Numeric() {}
@@ -19,17 +20,27 @@ final class Numeric {
     enum Kind { NUMBER, LENGTH, ANGLE, TIME }
 
     /**
-     * A computed numeric value: {@code value} is the number, px, degrees or milliseconds; lengths may also have a
-     * {@code percent} part (0..100 scale). {@code integer} is the number token's integer type flag.
+     * A computed numeric value: a {@code length} (with px and percentages) for {@link Kind#LENGTH}, otherwise a
+     * {@code value} in plain numbers, degrees or milliseconds. {@code integer} is the number token's integer type flag.
      */
-    record Quantity(Kind kind, float value, float percent, boolean integer) {
+    record Quantity(Kind kind, float value, Length length, boolean integer) {
+        static Quantity of(Length length) {
+            return new Quantity(Kind.LENGTH, 0, length, false);
+        }
+
         /** A plain percentage (or zero length): the only lengths colour channels and opacity accept. */
         boolean isPercentage() {
-            return kind == Kind.LENGTH && value == 0;
+            return kind == Kind.LENGTH && length.isLinear() && length.px == 0;
+        }
+
+        /** The percentage of a {@link #isPercentage} quantity. */
+        float percent() {
+            return length.percent;
         }
 
         Quantity scale(float f) {
-            return new Quantity(kind, value * f, percent * f, integer && f == Math.round(f));
+            if (kind == Kind.LENGTH) return of(length.times(f));
+            return new Quantity(kind, value * f, null, integer && f == Math.round(f));
         }
     }
 
@@ -47,12 +58,8 @@ final class Numeric {
         if (q != null && q.kind == Kind.NUMBER && q.value == 0) {
             result = Length.ZERO;
         } else if (q != null && q.kind == Kind.LENGTH) {
-            boolean negative = q.value < 0 || q.percent < 0;
-            if (allowNegative || !negative) result = Length.of(q.value, q.percent);
-            else if (v instanceof ComponentValue.Func) {
-                boolean mixed = q.value != 0 && q.percent != 0;
-                result = mixed ? Length.of(q.value, q.percent) : Length.ZERO;
-            }
+            if (allowNegative || !q.length.isNegative()) result = q.length;
+            else if (v instanceof Func) result = Length.ZERO;
         }
         if (result == null) r.reset(m);
         return result;
@@ -99,7 +106,7 @@ final class Numeric {
         int m = r.mark();
         Quantity q = of(r.next(), ctx);
         if (q != null && q.kind == Kind.NUMBER) return q.value;
-        if (q != null && q.isPercentage()) return q.percent / 100f;
+        if (q != null && q.isPercentage()) return q.percent() / 100f;
         r.reset(m);
         return null;
     }
@@ -108,7 +115,7 @@ final class Numeric {
     private static Quantity read(ValueReader r, ValueContext ctx, Kind kind) {
         int m = r.mark();
         Quantity q = of(r.next(), ctx);
-        if (q != null && kind == Kind.ANGLE && q.kind == Kind.NUMBER && q.value == 0) return new Quantity(kind, 0, 0, false);
+        if (q != null && kind == Kind.ANGLE && q.kind == Kind.NUMBER && q.value == 0) return new Quantity(kind, 0, null, false);
         if (q != null && q.kind == kind) return q;
         r.reset(m);
         return null;
@@ -124,8 +131,8 @@ final class Numeric {
     private static Quantity token(Token t, ValueContext ctx) {
         float n = (float) t.number;
         return switch (t.type) {
-            case NUMBER -> new Quantity(Kind.NUMBER, n, 0, t.flag);
-            case PERCENTAGE -> new Quantity(Kind.LENGTH, 0, n, false);
+            case NUMBER -> new Quantity(Kind.NUMBER, n, null, t.flag);
+            case PERCENTAGE -> Quantity.of(Length.percent(n));
             case DIMENSION -> dimension(n, t.lower, ctx);
             default -> null;
         };
@@ -141,56 +148,51 @@ final class Numeric {
             case "vmin" -> lengthPx(n * Math.min(ctx.viewportWidth(), ctx.viewportHeight()) / 100f);
             case "vmax" -> lengthPx(n * Math.max(ctx.viewportWidth(), ctx.viewportHeight()) / 100f);
             case "dp" -> lengthPx(n / ctx.devicePixelRatio());
-            case "deg" -> new Quantity(Kind.ANGLE, n, 0, false);
-            case "rad" -> new Quantity(Kind.ANGLE, (float) Math.toDegrees(n), 0, false);
-            case "grad" -> new Quantity(Kind.ANGLE, n * 0.9f, 0, false);
-            case "turn" -> new Quantity(Kind.ANGLE, n * 360f, 0, false);
-            case "s" -> new Quantity(Kind.TIME, n * 1000f, 0, false);
-            case "ms" -> new Quantity(Kind.TIME, n, 0, false);
+            case "deg" -> new Quantity(Kind.ANGLE, n, null, false);
+            case "rad" -> new Quantity(Kind.ANGLE, (float) Math.toDegrees(n), null, false);
+            case "grad" -> new Quantity(Kind.ANGLE, n * 0.9f, null, false);
+            case "turn" -> new Quantity(Kind.ANGLE, n * 360f, null, false);
+            case "s" -> new Quantity(Kind.TIME, n * 1000f, null, false);
+            case "ms" -> new Quantity(Kind.TIME, n, null, false);
             default -> null;
         };
     }
 
     private static Quantity lengthPx(float px) {
-        return new Quantity(Kind.LENGTH, px, 0, false);
+        return Quantity.of(Length.px(px));
     }
 
     // ---- Math functions ----
 
     private static Quantity math(Func f, ValueContext ctx) {
-        List<List<ComponentValue>> args = ValueReader.splitCommas(f.args());
+        List<List<ComponentValue>> parts = ValueReader.splitCommas(f.args());
+        List<Quantity> args = new ArrayList<>(parts.size());
+        for (List<ComponentValue> part : parts) {
+            Quantity q = new Calc(part, ctx).expression();
+            if (q == null || !args.isEmpty() && q.kind != args.getFirst().kind) return null; // arguments agree in kind
+            args.add(q);
+        }
+        if (args.isEmpty()) return null;
         return switch (f.name()) {
-            case "calc" -> args.size() == 1 ? new Calc(args.get(0), ctx).expression() : null;
-            case "min", "max" -> {
-                Quantity best = null;
-                for (List<ComponentValue> arg : args) {
-                    Quantity q = new Calc(arg, ctx).expression();
-                    best = best == null ? q : pick(best, q, f.name().equals("max"));
-                    if (best == null) yield null;
-                }
-                yield best;
-            }
-            case "clamp" -> {
-                if (args.size() != 3) yield null;
-                Quantity lo = new Calc(args.get(0), ctx).expression();
-                Quantity val = new Calc(args.get(1), ctx).expression();
-                Quantity hi = new Calc(args.get(2), ctx).expression();
-                if (lo == null || val == null || hi == null) yield null;
-                Quantity upper = pick(val, hi, false);
-                yield upper == null ? null : pick(lo, upper, true);
-            }
+            case "calc" -> args.size() == 1 ? args.getFirst() : null;
+            case "min", "max" -> compare(f.name().equals("min"), args);
+            case "clamp" -> args.size() != 3 ? null : args.getFirst().kind == Kind.LENGTH
+                    ? Quantity.of(Length.clamp(args.get(0).length, args.get(1).length, args.get(2).length))
+                    : compare(false, List.of(args.get(0), compare(true, args.subList(1, 3))));
             default -> null;
         };
     }
 
-    /** The larger (or smaller) of two comparable quantities; null when they cannot be compared. */
-    private static Quantity pick(Quantity a, Quantity b, boolean max) {
-        if (a == null || b == null || a.kind != b.kind) return null;
-        float av, bv;
-        if (a.percent == 0 && b.percent == 0) { av = a.value; bv = b.value; }
-        else if (a.value == 0 && b.value == 0) { av = a.percent; bv = b.percent; }
-        else return null;
-        return (max ? av >= bv : av <= bv) ? a : b;
+    /** {@code min()} or {@code max()} of quantities of one kind; lengths that mix px and percentages stay symbolic. */
+    private static Quantity compare(boolean min, List<Quantity> args) {
+        if (args.getFirst().kind == Kind.LENGTH) {
+            List<Length> lengths = new ArrayList<>(args.size());
+            for (Quantity q : args) lengths.add(q.length);
+            return Quantity.of(min ? Length.min(lengths) : Length.max(lengths));
+        }
+        Quantity best = args.getFirst();
+        for (Quantity q : args) if (min ? q.value < best.value : q.value > best.value) best = q;
+        return best;
     }
 
     /** Recursive descent over a calc() expression: sums of products of values, parentheses and nested math. */
@@ -241,8 +243,8 @@ final class Numeric {
             if (v instanceof Block b && b.open() == '(') return new Calc(b.body(), ctx).expression();
             if (v instanceof Token t && t.is(Type.IDENT)) {
                 return switch (t.lower) {
-                    case "pi" -> new Quantity(Kind.NUMBER, (float) Math.PI, 0, false);
-                    case "e" -> new Quantity(Kind.NUMBER, (float) Math.E, 0, false);
+                    case "pi" -> new Quantity(Kind.NUMBER, (float) Math.PI, null, false);
+                    case "e" -> new Quantity(Kind.NUMBER, (float) Math.E, null, false);
                     default -> null;
                 };
             }
@@ -251,7 +253,8 @@ final class Numeric {
 
         private static Quantity add(Quantity a, Quantity b, int sign) {
             if (b == null || a.kind != b.kind) return null;
-            return new Quantity(a.kind, a.value + sign * b.value, a.percent + sign * b.percent, a.integer && b.integer);
+            if (a.kind == Kind.LENGTH) return Quantity.of(Length.sum(a.length, b.length.times(sign)));
+            return new Quantity(a.kind, a.value + sign * b.value, null, a.integer && b.integer);
         }
     }
 }

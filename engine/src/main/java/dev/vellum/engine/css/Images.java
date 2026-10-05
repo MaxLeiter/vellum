@@ -201,7 +201,7 @@ final class Images {
         boolean start = r.ident(startKeyword);
         boolean end = !start && r.ident(endKeyword);
         Length offset = Numeric.length(r, ctx, true);
-        if (end) return offset == null ? Length.PERCENT_100 : Length.of(-offset.px, 100 - offset.percent);
+        if (end) return offset == null ? Length.PERCENT_100 : Length.sum(Length.PERCENT_100, offset.times(-1));
         if (start) return offset == null ? Length.ZERO : offset;
         return offset;
     }

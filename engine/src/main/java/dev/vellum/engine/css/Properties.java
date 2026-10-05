@@ -436,7 +436,7 @@ final class Properties {
         if (r.ident("smaller")) return ctx.em() / FONT_SIZE_STEP;
         Length l = Numeric.length(r, ctx, false);
         if (l == null) return null;
-        return l.hasPercent() ? l.px + l.percent * ctx.em() / 100f : l.px;
+        return l.resolve(ctx.em());
     }
 
     /** {@code normal}, {@code bold}, {@code bolder}/{@code lighter} (relative to the parent) or 1–1000. */
@@ -460,7 +460,7 @@ final class Properties {
         if (factor != null) return factor < 0 ? null : new LineHeightFactor(factor);
         Length l = Numeric.length(r, ctx, false);
         if (l == null) return null;
-        return l.hasPercent() ? l.px + l.percent * ctx.em() / 100f : l.px;
+        return l.resolve(ctx.em());
     }
 
     /** A {@code text-decoration-line} value, as whether it contains {@code line}. */

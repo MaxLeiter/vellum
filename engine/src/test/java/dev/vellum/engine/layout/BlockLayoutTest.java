@@ -72,6 +72,19 @@ class BlockLayoutTest {
     }
 
     @Test
+    void mathFunctionsMixingPxAndPercentagesResolveAgainstTheContainingBlock() {
+        Page page = new TestHost().load("""
+                <div style="width: 320px; height: 100px">
+                  <div id=a style="width: clamp(72px, 25%, 100px); height: max(10px, 20%)"></div>
+                </div>
+                <div style="width: 200px"><div id=b style="width: clamp(72px, 25%, 100px); height: 1px"></div></div>
+                <div style="width: 800px"><div id=c style="width: clamp(72px, 25%, 100px); height: 1px"></div></div>""");
+        assertRect(page.byId("a"), 0, 0, 80, 20);
+        assertRect(page.byId("b"), 0, 100, 72, 1);
+        assertRect(page.byId("c"), 0, 101, 100, 1);
+    }
+
+    @Test
     void percentageHeightOfAutoHeightParentIsAuto() {
         Page page = new TestHost().load("<div><div id=a style='height: 50%'><div style='height: 7px'></div></div></div>");
         assertRect(page.byId("a"), 0, 0, 320, 7);
