@@ -94,7 +94,9 @@ final class DevTour {
 
     private void plan() {
         at(() -> {
-            mc.options.guiScale().set(0); // auto: the largest scale that still fits 320x240
+            // The largest scale that leaves 500 GUI px of width: the showcase pages are about 470 wide, and auto
+            // (the largest that fits 320x240) squeezes them into 427x240 at 1280x720 on a retina screen.
+            mc.options.guiScale().set(Math.max(1, mc.getWindow().getWidth() / 500));
             mc.resizeGui();
             mc.getMusicManager().stopPlaying();
             seePolarBear();
