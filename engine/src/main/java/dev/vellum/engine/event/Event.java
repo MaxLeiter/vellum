@@ -18,6 +18,9 @@ public class Event {
     boolean immediatePropagationStopped;
     boolean dispatching;
 
+    /** Slot for the script runtime's wrapper object, so every listener of a dispatch sees the same script object. */
+    public Object scriptWrapper;
+
     public Event(String type, boolean bubbles, boolean cancelable) {
         this.type = type;
         this.bubbles = bubbles;
