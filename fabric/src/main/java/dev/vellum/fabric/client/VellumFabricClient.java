@@ -2,6 +2,7 @@ package dev.vellum.fabric.client;
 
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.DevAutopilot;
+import dev.vellum.mod.client.TourCursor;
 import dev.vellum.mod.client.VellumClient;
 import dev.vellum.mod.client.VellumClientCommands;
 import dev.vellum.mod.client.VellumHud;
@@ -36,6 +37,8 @@ public final class VellumFabricClient implements ClientModInitializer {
         // Interactive HUD overlays: drawn above every screen and given its pointer input first (per-screen events).
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             ScreenEvents.afterExtract(screen).register((s, g, mouseX, mouseY, a) -> VellumHud.extractAboveScreen(g, a));
+            // The dev tour's cursor, over everything: after the screen's tooltips and the overlays above it.
+            if (TourCursor.ENABLED) ScreenEvents.afterExtract(screen).register((s, g, mouseX, mouseY, a) -> TourCursor.extractAboveScreen(g));
             ScreenMouseEvents.allowMouseClick(screen).register((s, e) -> !VellumHud.mouseClicked(e));
             ScreenMouseEvents.allowMouseRelease(screen).register((s, e) -> !VellumHud.mouseReleased(e));
             ScreenMouseEvents.allowMouseDrag(screen).register((s, e, dx, dy) -> !VellumHud.mouseDragged(e));
@@ -50,6 +53,7 @@ public final class VellumFabricClient implements ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> dispatcher.register(VellumClientCommands.create()));
         ClientTickEvents.END_CLIENT_TICK.register(client -> VellumClient.tick());
         if (DevAutopilot.ENABLED) ClientTickEvents.END_CLIENT_TICK.register(DevAutopilot::tick);
+        if (TourCursor.ENABLED) HudElementRegistry.addLast(Constants.id("tour_cursor"), TourCursor::extractHud);
     }
 
     private static <T extends CustomPacketPayload> void register(VellumNetwork.Clientbound<T> c) {

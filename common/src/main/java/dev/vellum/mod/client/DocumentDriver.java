@@ -595,6 +595,11 @@ public final class DocumentDriver {
         this.cursor = cursor;
     }
 
+    /** The cursor the page asks for where its pointer is: the hovered element's {@code cursor}, as it is used. */
+    Cursor cursor() {
+        return cursor;
+    }
+
     // ---- Internals ----
 
     /** Shows {@code error} instead of the page (the document already logged it through its host). */
