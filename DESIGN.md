@@ -514,11 +514,12 @@ the scrollbar).
 ## 10. Scripting
 
 JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The runtime:
-- Blocks all Java access (no `Packages`, no `java.*`, class shutter denies everything), enforces a CPU budget per
-  entry (instruction observer; runaway scripts throw and are reported, the UI keeps working), and caps recursion.
-  The budget is instructions plus a wall clock for slow host calls; the clock leaves out one-off work a cold JVM makes
-  slow: compiling (charged to instructions by source length instead) and loading (a larger allowance while the
-  document loads: scripts, the template install and first render).
+- Blocks all Java access (no `Packages`, no `java.*`, class shutter denies everything), enforces a CPU and memory
+  budget per entry (instruction observer; runaway scripts throw and are reported, the UI keeps working), and caps
+  recursion. The budget is instructions plus a wall clock for slow host calls; the clock leaves out one-off work a
+  cold JVM makes slow: compiling (charged to instructions by source length instead) and loading (a larger allowance
+  while the document loads: scripts, the template install and first render). Section 13 has the whole security
+  model.
 - Globals: `window` (= global), `document`, `console` (log/info/warn/error/debug → host log), `setTimeout`,
   `setInterval`, `clearTimeout`, `clearInterval`, `requestAnimationFrame`, `cancelAnimationFrame`,
   `performance.now()`, `queueMicrotask`, `JSON`, `Math`, `structuredClone` (via JSON), `localStorage` (per-UI,
@@ -725,3 +726,95 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   `Vellum autopilot finished: N checks, M failed` (an error when M is not 0).
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots; `--narrate`
   prints what a narrator would be given.
+
+## 13. Security
+
+A multiplayer server can send a client any page: inline HTML, CSS and JS, or a bundled page with data it chooses
+(D-010). The player's game must stay safe whatever the page does. Scripts must not run code outside the sandbox,
+touch files or the network, or read other client state, and no page may crash the game or freeze it for more than a
+moment. Every cap below is a field of `engine/Limits` (a record with a one-line javadoc per field and its default);
+hosts pass their limits with `Host.limits()`, which defaults to `Limits.current()`, and the mod builds them from
+`limits.<name>` keys in `config/vellum.properties`.
+
+### No way out of the sandbox
+
+- Globals come from `initSafeStandardObjects`: no LiveConnect (`Packages`, `java`, `JavaAdapter`, `JavaImporter`,
+  `getClass`). `Builtins` deletes Rhino's other non-standard globals (`Continuation`, `Script`, `With`, `Call`,
+  `JavaException`, `isXMLName`), and `Sandbox` turns E4X off.
+- Every `Context` comes from `Sandbox`, the only `ContextFactory` in the code: interpreted mode, and a class shutter
+  that denies every class. Rhino attaches `javaException` and `rhinoException` to error objects only for classes the
+  shutter shows, so no error a script catches carries a Java object. No other thread runs scripts.
+- Bindings never hand scripts a Java object. `Js.toJs` is the one conversion and throws for any type it does not
+  know; collections become fresh JS arrays and maps plain objects. Host methods take `this` through `Js.unwrap`, which
+  checks the Java type, so calling `Element.prototype.getAttribute` on a plain object or a style declaration is a
+  TypeError. `SandboxEscapeTest` walks everything a script can reach, reading every property through its getter, and
+  finds no Java wrapper.
+- `eval`, `Function` and string timers are allowed: they compile into the same sandbox.
+
+### CPU
+
+- Each entry (a script, handler, listener, timer, frame callback, message, template update) has an instruction
+  budget and a wall clock (`instructionBudget`, `timeBudgetMs`, `loadTimeBudgetMs`). Rhino's regular expressions
+  count backtracking steps as instructions, so a catastrophic pattern stops like a loop.
+- Built-ins that loop or allocate in Java are invisible to the instruction count, so `Builtins` wraps them with a
+  size check: every `Array.prototype` method and `Array.from` check the length of `this` and of array arguments
+  (`maxArrayLength`), `apply` and `Reflect.apply`/`construct` the argument list, typed arrays and `ArrayBuffer` their
+  bytes (`maxBufferBytes`). `repeat`, `padStart`, `padEnd`, `replace`, `replaceAll` and `join` check the length of
+  their result (`maxStringLength`), and `split`, `match`, `matchAll`, string iteration, `String.raw` and the RegExp
+  symbol methods the number of pieces they would make. `JSON.stringify` checks each array through a replacer (so
+  getters and `toJSON` cannot slip one past), and `JSON.parse` refuses text nested deeper than `maxDepth`.
+- BigInt arithmetic runs in `java.math.BigInteger`, one operation at a time and out of the budget's sight, and
+  operators cannot be wrapped. So the build patches Rhino (`rhino/build.gradle`, `patchRhino`): every BigInteger
+  multiplication, power, shift and parse in `ScriptRuntime`, `NativeBigInt` and `TokenStream` goes through
+  `VellumBigInts` first, which refuses results over `maxBigIntBits`. The task fails if a Rhino upgrade leaves it
+  nothing to rewrite.
+- Timers and frame callbacks run until they have taken `frameScriptTimeMs` in a frame; the rest wait for the next.
+  An entry that runs out of budget is reported and the page goes on, but after `maxBudgetOverruns` of them the page
+  is stopped. A page whose frames (scripts, style, layout and paint together) take longer than `slowFrameMs` for
+  `maxSlowFrames` frames in a row is stopped too, whatever makes it slow.
+- Engine work a page triggers without scripts is bounded by sizes: `maxNodes`, `maxDepth` (the HTML parser flattens
+  deeper markup, as browsers do), `maxCssNesting` (the CSS tree builder empties deeper functions and blocks, so
+  `calc()`, `:is()` and nested rules never recurse further), `maxSelectorParts`, `maxGridTracks`, `maxListItems`
+  and `maxVarLength` (each `var()` that uses the previous one twice doubles the text). Selector matching gives up on
+  an ancestor chain as WebKit and Servo do, so descendant combinators take linear time instead of exponential, and
+  `:has()` cannot be nested. Parsed text is joined once per run, not once per comment.
+
+### Memory
+
+- An entry may allocate `entryAllocation` bytes (counted per thread by the JVM, where it can). Going over stops the
+  entry as the CPU budget does, and a page stopped after memory overruns lets go of what it built.
+- When an entry finds the heap fuller than `heapLimitPercent` after a collection, the page is stopped at once and
+  released. This is what catches a page that keeps a little of each entry's work until the heap fills.
+- Sizes cap what a page holds: nodes, canvases (`maxCanvasSize` a side, `maxCanvasPixels` for all of a page's
+  canvases), markup set by scripts (`maxMarkupLength`), storage (`storageQuota`), pending timers and frame callbacks
+  (`maxTimers`), v-for items (`maxForItems`).
+- An `OutOfMemoryError` stops the page like any engine error, and the document drops its tree and scripts so the
+  memory comes back while the error panel shows. This covers strings built by `+`, which Rhino keeps as ropes and
+  flattens in one Java allocation; that allocation fails without taking the heap, since it never happens.
+
+### Failures stay in the page
+
+- `Document`'s boundary catches every `Throwable`, `StackOverflowError` and `OutOfMemoryError` included: the page
+  stops and shows its error, the game goes on.
+- Recursion through host calls (a listener that clicks its own element, `toString` calling `String()`) grows the
+  Java stack, which the interpreter's depth limit does not count. `RhinoScriptRuntime` catches the overflow at the
+  outermost entry and reports it as that entry's error; it counts as an overrun.
+- Console messages and script errors reach the log at `logRate` lines a second, each cut to `maxLogLength`
+  characters; `vellum.send` and `vellum.playSound` are limited to `sendRate` and `soundRate` a second.
+
+### What is left
+
+- A page can still allocate up to its limits each frame and make the game collect garbage more often.
+- Strings built by concatenation have no cap of their own (Rhino joins them lazily, in Java): the entry allocation
+  budget, the heap check and the error boundary catch them after the fact. Other built-ins not listed above may
+  still make large results from a long string in one call; the same three catch those.
+- The heap check looks at the whole heap. When the game itself has nearly filled it, pages stop until a collection
+  frees room.
+- The per-entry allocation budget needs a JVM that counts allocation per thread (HotSpot and its builds do).
+- Outside the engine: a page can cancel Escape in a `keydown` listener and keep its screen open, and it can
+  navigate or reload itself, or ask to open a link, over and over. The server that sent it can reopen screens
+  anyway, but the client should still let the player leave.
+
+`engine/src/test/java/dev/vellum/engine/security/` holds a test for each attack: escape attempts, built-ins that loop
+or allocate, timer and frame storms, memory exhaustion, deep markup and CSS, selector backtracking, recursion
+through host calls.

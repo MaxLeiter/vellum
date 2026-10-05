@@ -121,7 +121,84 @@ session.close();                  // closes the player's screen
 - `onClose` runs once, when the player closes the screen, opens another session, leaves, or you call `close()`.
 - Limits: inline pages 200,000 characters, data 100,000 characters (as JSON), messages 8,192 characters. `open` and
   `push` throw `IllegalArgumentException` above them.
-- Pages sent by servers run sandboxed: no Java access, no network, no files, a CPU budget per script call.
+- Pages sent by servers run sandboxed: no Java access, no network, no files, and a CPU and memory budget. See
+  [What a server's page can do](#what-a-servers-page-can-do).
+
+## What a server's page can do
+
+A server can send any HTML, CSS and JavaScript it likes, so Vellum treats every page as untrusted. Your own bundled
+pages run under the same rules.
+
+A page can:
+
+- lay out and animate its document, and run scripts in the sandbox described in SCRIPTING.md;
+- read the data the server gave it (`vellum.data`, `vellum.on`) and send messages back to that server only
+  (`vellum.send`, 20 a second);
+- play sounds (20 a second), keep up to 256K characters in `localStorage`, which lives only as long as the page;
+- open another page that the client already has, in the same screen, and ask to open a web link, which shows
+  vanilla's confirmation screen first;
+- write to the log, at most 50 lines a second, each cut to 4096 characters.
+
+A page cannot:
+
+- reach Java, files, the network, other screens or anything about the player that the server did not send it;
+- read the clipboard (only the player's own Ctrl+V into a text field does) or write it (only Ctrl+C or Ctrl+X);
+- keep the game busy: each script call has a budget (50M instructions or 1 s), timers and frame callbacks get 100 ms
+  a frame, and a page that keeps running out of budget, or keeps frames slower than 200 ms, is stopped;
+- fill the game's memory: one call may allocate 256 MiB, a page may have 100,000 nodes nested 512 deep and 16M
+  canvas pixels, built-ins refuse arrays over 1M elements and strings over 16M characters, and a page whose script
+  finds the heap more than 90% full after a collection is stopped and released;
+- crash the game: any error, stack overflow and out-of-memory included, stops only that page, which then shows its
+  error.
+
+What you still have to do:
+
+- Treat every message from a page as input from the player, because it is: a modified client can send anything on
+  any channel. Check types, ranges and permissions on the server, and rate-limit what costs you (Vellum already drops
+  messages over 20 a second and 8,192 characters).
+- Keep secrets out of pages and their data. Whatever you send, the player can read.
+- Keep `push` data small: it is parsed on the client every time.
+- A page can cancel Escape with a `keydown` listener. If your own pages do, give the player another way out.
+
+The limits are in `config/vellum.properties` as `limits.<name>` keys, written with their defaults on first run; a
+missing or invalid value falls back to the default. `dev.vellum.engine.Limits` lists them all, with what each one
+guards. A host can also return its own from `Host.limits()`.
+
+| Key | Default | Guards |
+| --- | --- | --- |
+| `instructionBudget` | 50,000,000 | instructions per script call |
+| `timeBudgetMs` | 1000 | wall-clock time per script call |
+| `loadTimeBudgetMs` | 10000 | the same, while the page loads |
+| `maxStackDepth` | 1000 | nested script calls |
+| `maxBudgetOverruns` | 3 | calls stopped by a budget before the page stops |
+| `frameScriptTimeMs` | 100 | timer and frame-callback time per frame |
+| `slowFrameMs` | 200 | what counts as a slow frame |
+| `maxSlowFrames` | 25 | slow frames in a row before the page stops |
+| `entryAllocation` | 268,435,456 | bytes one script call may allocate |
+| `heapLimitPercent` | 90 | heap use after a collection that stops a running page |
+| `maxStringLength` | 16,777,216 | results of `repeat`, `padStart`, `padEnd`, `replace`, `join` |
+| `maxArrayLength` | 1,048,576 | arrays built-ins iterate, `apply` arguments, pieces of `split` and `match` |
+| `maxBufferBytes` | 16,777,216 | `ArrayBuffer` and typed array bytes |
+| `maxBigIntBits` | 65,536 | bits of a BigInt (for the whole game) |
+| `maxTimers` | 10,000 | pending timers and animation frames |
+| `maxMarkupLength` | 1,048,576 | `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `v-html` |
+| `storageQuota` | 262,144 | characters in each of `localStorage` and `sessionStorage` |
+| `maxLogLength` | 4096 | characters of one console message |
+| `logRate` | 50 | log lines a second |
+| `sendRate` | 20 | `vellum.send` messages a second |
+| `soundRate` | 20 | `vellum.playSound` calls a second |
+| `maxForItems` | 10,000 | items of one `v-for` |
+| `maxTemplatePasses` | 10 | template passes per frame |
+| `maxNodes` | 100,000 | nodes in a page |
+| `maxDepth` | 512 | element nesting, and JSON nesting in `JSON.parse` |
+| `maxCssNesting` | 32 | nested CSS functions and blocks |
+| `maxSelectorParts` | 256 | parts of one selector |
+| `maxListItems` | 64 | items of a shadow list |
+| `maxGridTracks` | 100,000 | tracks of a grid track list |
+| `maxVarLength` | 65,536 | characters of a value after `var()` substitution |
+| `maxCanvasSize` | 2048 | pixels on each side of a canvas |
+| `maxCanvasPixels` | 16,777,216 | pixels of all of a page's canvases |
+| `maxInlinePageLength` | 200,000 | characters of an inline page from a server |
 
 ## Container screens
 
