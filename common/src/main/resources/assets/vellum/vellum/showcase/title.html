@@ -191,7 +191,7 @@
     }
 
     /* Parallax: each range wraps a strip twice the viewport wide holding two identical tiles. Sliding the strip
-       by -50% and repeating loops seamlessly. The script moves the outer .range with the mouse. */
+       by -50% on repeat loops with no visible seam. The script moves the outer .range with the mouse. */
     .range {
       position: absolute;
       inset: 0;
@@ -658,7 +658,7 @@
       return el;
     }
 
-    // Fills one tile with build(tile, random), then appends a copy of it so the strip loops seamlessly.
+    // Fills one tile with build(tile, random), then appends a copy of it so the strip loops without a seam.
     function tile(id, seed, build) {
       const first = document.getElementById(id);
       build(first, seeded(seed));

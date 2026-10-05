@@ -1,8 +1,8 @@
 # Vellum
 
-*A small web engine for Minecraft GUIs (26.3, NeoForge and Fabric).*
+*Minecraft GUIs in HTML, CSS and JavaScript.* A Minecraft 26.3 mod (NeoForge and Fabric) with a small web engine inside. You write a screen, inventory, HUD or map as a web page, and Vellum lays it out, animates it, runs its scripts and paints it with the game's own GUI renderer.
 
-Write screens, inventories, HUDs and maps in HTML, CSS and a little JavaScript. Vellum lays them out with real CSS (block, inline, flexbox, grid, positioning), animates them (transitions, `@keyframes`), runs their scripts in a sandbox, and paints them with Minecraft's own GUI renderer. Text uses the game's font, `<item>`s are real items, and `<slot>`s are real container slots.
+The layout is real CSS: block, inline, flexbox, grid and positioning, plus transitions and `@keyframes`. Text uses the game's font (resource-pack fonts too), `<item>` shows a real item, and `<slot>` is a real container slot, so click, drag, shift-click and tooltips keep working. Scripts run in a Rhino sandbox with no Java access and no network.
 
 ```html
 <div class="mc-panel chest">
@@ -20,21 +20,51 @@ Write screens, inventories, HUDs and maps in HTML, CSS and a little JavaScript. 
 </style>
 ```
 
-Status: in development. See [DESIGN.md](DESIGN.md) for the architecture and the supported HTML/CSS/JS, and [DECISIONS.md](DECISIONS.md) for why it is built this way.
+Vellum is in development. Other mods (Chronicle, claudemons) use it as a library, and a server can send a page to its players.
+
+## Try it
+
+Start a dev client (see Building) and run these in a world:
+
+| Command | What |
+|---|---|
+| `/vellum showcase` | A gallery of six full pages: a title screen, a HUD kit, a trader's market, a mobdex, a journal and a chat console for a robot. `/vellum showcase <name>` opens one directly. |
+| `/vellum demo` | The feature demos: settings, layout, animation, templates, a map and a HUD overlay. `/vellum demo <name>` opens one. |
+| `/vellum demo chest` | A chest-style inventory made of `<slot>`s (operators only) |
+| `/vellum demo live` | A page the server pushes live data to (operators only) |
+| `/vellum open <url>` | Any page, by resource id, for example `vellum:vellum/demo/map.html` |
+| `/vellum reload` | Reload pages without restarting the client |
+
+In a dev environment pages are read from `src/main/resources`, so saving one reloads it in the open screen. F12 inside a Vellum screen toggles an inspector.
+
+## Previewer
+
+You can also build pages without launching Minecraft. The previewer renders a page in a Swing window with the engine and the game's real font and sprites (read from your Minecraft jar), reloads when you save, and has the same F12 inspector.
+
+```bash
+./gradlew :preview:run --args="path/to/page.html --scale 3 --size 427x240"
+./gradlew :preview:run --args="page.html --snapshot out.png --frames 30"   # headless PNG
+```
+
+Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README.md).
 
 ## Layout
 | Module | What |
 |---|---|
-| `engine/` | Pure-Java engine (no Minecraft dependencies, Java 21): DOM, HTML and CSS parsers, cascade, layout, animation, paint to an abstract canvas, input and forms, sandboxed scripting |
+| `engine/` | Pure Java 21 with no Minecraft dependencies: DOM, HTML and CSS parsers, cascade, layout, animation, painting to an abstract canvas, input and forms, sandboxed scripting |
 | `rhino/` | Mozilla Rhino 1.9.1, relocated to `dev.vellum.shadow.rhino` |
-| `common/` | Minecraft integration: the canvas over `GuiGraphicsExtractor`, screens, container screens, HUD overlays, networking, demos |
+| `common/` | Vanilla-only Minecraft code: the canvas over `GuiGraphicsExtractor`, screens, container screens, HUD overlays, networking, the public API, demos |
 | `neoforge/`, `fabric/` | Loader entrypoints |
-| `preview/` | Standalone previewer: renders a page with Minecraft's real font and sprites, reloads on save |
+| `preview/` | The standalone previewer and its snapshot tests |
+
+[`DESIGN.md`](DESIGN.md) covers the architecture and which HTML, CSS and JS work. [`DECISIONS.md`](DECISIONS.md) has the reasons behind the choices. For mod authors, [`docs/API.md`](docs/API.md) is the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) a guide to porting hand-drawn screens.
 
 ## Building
-JDK 25+; Gradle provisions the toolchain.
+You need JDK 25 or newer; Gradle provisions the toolchain.
+
 ```bash
 ./gradlew :engine:test        # engine tests
-./gradlew build               # everything, including Fabric GameTests
-./gradlew :neoforge:runClient # dev client; /vellum demo opens the gallery
+./gradlew build               # everything, including Fabric's headless GameTests
+./gradlew :neoforge:runClient # dev client
+./gradlew :preview:installDist   # previewer, at preview/build/install/preview/bin/preview
 ```

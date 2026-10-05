@@ -1,8 +1,8 @@
 # Moving a mod's GUI to Vellum
 
-This guide is for porting existing hand-drawn screens (custom `Screen` subclasses with layout math, manual text
-wrapping, hit testing and scroll state) to Vellum pages. It assumes you have read `docs/API.md` (the Java side) and
-skimmed `DESIGN.md` §4–§5 (what HTML and CSS work) and `docs/SCRIPTING.md` (the JavaScript dialect and templates).
+How to port a hand-drawn screen (a custom `Screen` subclass with layout math, manual text wrapping, hit testing and
+scroll state) to a Vellum page. Read `docs/API.md` (the Java side) first, and skim `DESIGN.md` §4–§5 (what HTML and CSS
+work) and `docs/SCRIPTING.md` (the JavaScript dialect and templates).
 
 ## 1. Set up the dependency
 
@@ -21,18 +21,18 @@ dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.1.0") }   // or
 ```
 
 If most of your UI moves to Vellum, make it a **required** dependency (`type="required"` in `neoforge.mods.toml`,
-`"depends"` in `fabric.mod.json`) rather than keeping a vanilla fallback for every screen: two UIs for one feature
-is the duplication this is meant to remove.
+`"depends"` in `fabric.mod.json`) rather than keeping a vanilla fallback for every screen. Two UIs for one feature is the
+duplication you are porting to get rid of.
 
 ## 2. The shape of a Vellum screen
 
-Most hand-drawn screens already have the right split: the server (or the client's model) builds a view model, the
-screen draws it, and clicks become actions. Keep that split and replace only the drawing:
+Most hand-drawn screens already split three ways. The server (or the client's model) builds a view model, the screen
+draws it, and clicks become actions. Keep that and replace only the drawing:
 
 | Before | After |
 |---|---|
-| `ViewModel` record → `MyScreen.render(...)` | the same data as JSON → `vellum.data` in a page; templates render it |
-| click hit tests → `sendAction("x", arg)` | `@click="vellum.send('x', arg)"` → `onMessage("x", …)` (client) or `session.onMessage("x", …)` (server) |
+| `ViewModel` record, drawn by `MyScreen.render(...)` | the same data as JSON in `vellum.data`; templates render it |
+| click hit tests calling `sendAction("x", arg)` | `@click="vellum.send('x', arg)"`, received by `onMessage("x", …)` (client) or `session.onMessage("x", …)` (server) |
 | "refresh every N ticks", rebuild widgets, restore focus/scroll | `driver.push(json)` / `session.push(json)`; the DOM updates in place, focus, scroll and drafts survive |
 
 Pages live in your jar at `assets/<modid>/vellum/<name>.html` (plus `.css`/`.js` next to them) and are opened by id
@@ -60,7 +60,7 @@ stylesheet linked from every page.
 
 ## 4. Porting a screen, step by step
 
-1. **Inventory** what the screen shows and every action it sends. Write the view-model JSON shape down (often it
+1. **List** what the screen shows and every action it sends. Write the view-model JSON shape down (often it
    already exists as a payload or record).
 2. **Sketch the page** in the previewer first: `./gradlew :preview:run --args="path/to/page.html --data sample.json"`
    (live reload on save; F12 inspector). Use real sample data.
@@ -81,13 +81,13 @@ stylesheet linked from every page.
   (`{start: {...}}`) rather than spreading them at the top level.
 - **Pixel sizes.** `px` is a GUI pixel; the default font is 8px and stays crisp at multiples of 8 (12 and 16 are
   fine too). Design for ~427×240 GUI px (GUI scale 2 on 1080p) and check scale 3.
-- **Live entities are not free.** A handful per screen is fine; use spawn eggs or `<item>` icons in long lists.
-- **Unsupported CSS** fails quietly (the declaration is dropped and logged at debug level): floats, tables (use
+- **Live entities cost frame time.** A handful per screen is fine. In long lists use spawn eggs or `<item>` icons.
+- **Unsupported CSS** is dropped and logged at debug level, with no visible error: floats, tables (use
   grid), 3D transforms, rounded `overflow: hidden` clipping. When something looks wrong, check `DESIGN.md` §5–§7 and
   the previewer's inspector.
 
 ## 6. When Vellum is the problem
 
-If a port needs something Vellum doesn't do (a missing CSS feature, an element, an API hook) or hits a bug, don't
-work around it in your mod or patch a copy of Vellum: report it to the Vellum maintainers with a minimal page that
-reproduces it, and it gets fixed in Vellum so every mod benefits.
+If a port needs something Vellum doesn't do (a missing CSS feature, an element, an API hook) or hits a bug, report it
+to the Vellum maintainers with a minimal page that reproduces it. Please don't work around it in your mod or patch a
+copy of Vellum. The fix then lands in Vellum for every mod.
