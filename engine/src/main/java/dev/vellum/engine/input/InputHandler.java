@@ -22,7 +22,8 @@ import java.util.Set;
  * <p>The work is split into focused collaborators: {@link Pointer} (hover, active, clicks, capture, cursor),
  * {@link FocusNavigator} (tab order, focus-visible, autofocus), {@link Scroller} (wheel, smooth scrolling,
  * scrollbars), {@link TextField} / {@link RangeControl} / {@link SelectPopup} (per-control behaviour) and
- * {@link Activation} (click default actions). This class routes input between them.
+ * {@link Activation} (click default actions), {@link Tooltips} ({@code title} tooltips). This class routes input
+ * between them.
  *
  * <p>The host methods (pointer, wheel and keys) run inside the document's error boundary
  * ({@link Document#guard}): they return false once the document has stopped.
@@ -35,6 +36,7 @@ public final class InputHandler {
     private final Pointer pointer;
     private final Scroller scroller;
     private final FocusNavigator focus;
+    private final Tooltips tooltips = new Tooltips();
     private SelectPopup popup;
     /** Set when a keydown for a character was cancelled, so its charTyped is dropped (as browsers skip the input). */
     private boolean suppressChar;
@@ -63,12 +65,27 @@ public final class InputHandler {
     }
 
     /**
+     * The pointer left the document: the host stopped giving it the pointer (a HUD overlay whose screen closed). Hover
+     * ends (with mouseout and mouseleave), a drag in progress ends, and no tooltip shows until the pointer is back.
+     */
+    public void mouseLeave() {
+        document.guard(() -> {
+            Drag drag = pointer.releaseCapture();
+            if (drag != null) drag.end();
+            pointer.leave();
+            tooltips.track(null, document.scheduler().now());
+            return true;
+        });
+    }
+
+    /**
      * A mouse button went down. {@code button}: 0 left, 1 middle, 2 right. Returns true if the document is under the
      * pointer (or an open dropdown took the press).
      */
     public boolean mouseDown(float x, float y, int button, Modifiers mods) {
         return document.guard(() -> {
             pointer.moveTo(x, y, mods);
+            tooltips.dismiss();
             if (popup != null) {
                 // Like a native dropdown, an open list swallows presses; one outside it closes it.
                 if (!popup.contains(x, y)) popup = null;
@@ -158,6 +175,7 @@ public final class InputHandler {
         boolean overScrollbar = pointer.captured() == null && scroller.hover(hit);
         pointer.hover(target);
         pointer.updateCursor(target, overScrollbar);
+        tooltips.track(pointer.hoverTarget(), document.scheduler().now());
         return target;
     }
 
@@ -184,6 +202,7 @@ public final class InputHandler {
         return document.guard(() -> {
             boolean repeat = !keysDown.add(keyId(key, code));
             suppressChar = false;
+            tooltips.dismiss();
             if (popup != null && popupKey(key)) return true;
             Element target = keyTarget();
             if (target == null) return false;
@@ -356,6 +375,21 @@ public final class InputHandler {
     }
 
     // ---- Queries ----
+
+    /**
+     * The {@code title} / {@code title-json} tooltip to show now, or null: the nearest element with one, from the
+     * hovered element up, once the pointer has rested on it for half a second (and until a button or key is
+     * pressed). Hosts ask once per frame after painting and draw it on top at the pointer.
+     */
+    public Tooltip tooltip() {
+        if (!pointer.known() || document.error() != null) return null;
+        return tooltips.current(pointer.hoverTarget(), document.scheduler().now(), pointer.x, pointer.y);
+    }
+
+    /** Whether a tooltip becomes visible at {@code nowMs} that {@link #tooltip()} has not returned yet. */
+    public boolean tooltipDue(double nowMs) {
+        return pointer.known() && tooltips.due(nowMs);
+    }
 
     /**
      * True when focus last moved by keyboard (Tab, arrows), false after pointer input. The style engine uses it for

@@ -304,13 +304,13 @@ public final class Document extends Node {
     /**
      * Whether a frame at {@code nowMs} would change what is painted: a pending restyle, relayout or repaint, due
      * timers or animation-frame callbacks, running animations, smooth scrolls or scroll events, drags, a blinking
-     * caret, or template updates. Hosts that can idle (the previewer) skip frames otherwise, and render after their
-     * own input.
+     * caret, a tooltip coming up, or template updates. Hosts that can idle (the previewer) skip frames otherwise,
+     * and render after their own input.
      */
     public boolean needsFrame(double nowMs) {
         if (error != null || closed) return false;
         return styleDirty || layoutDirty || laidOut || repaint || scheduler.hasWork(nowMs)
-                || animationEngine.isAnimating() || scrolling.isActive() || input.isActive()
+                || animationEngine.isAnimating() || scrolling.isActive() || input.isActive() || input.tooltipDue(nowMs)
                 || scripts != null && scripts.needsFrame();
     }
 
@@ -572,10 +572,17 @@ public final class Document extends Node {
         host.reportError(message, error);
     }
 
-    /** Fires {@code unload}, then disposes scripts, timers and replaced content. The document is unusable afterwards. */
+    /**
+     * Fires {@code pagehide} then {@code unload} at the document (where {@code window.addEventListener} listens), with
+     * scripts still running, so a page can save state or {@code vellum.send} a last message; then disposes scripts,
+     * timers and replaced content. The document is unusable afterwards.
+     */
     public void close() {
         if (closed) return;
-        run(() -> dispatchEvent(new Event("unload", false, false)));
+        run(() -> {
+            dispatchEvent(new Event("pagehide", false, false));
+            dispatchEvent(new Event("unload", false, false));
+        });
         closed = true;
         scheduler.clear();
         if (scripts != null) scripts.dispose();
