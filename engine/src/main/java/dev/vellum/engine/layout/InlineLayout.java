@@ -141,7 +141,10 @@ final class InlineLayout {
             if (text.charAt(i) == ' ') {
                 while (j < n && text.charAt(j) == ' ') j++;
                 float w = pass.text.width(" ", font, s) * (j - i);
-                p.collapsible[p.add(SPACE, itemIndex, i, j, w)] = s.whiteSpace.collapsesSpaces();
+                // add() may grow the arrays, so index after it returns (p.collapsible[p.add(...)] would write to the
+                // array as it was before growing).
+                int piece = p.add(SPACE, itemIndex, i, j, w);
+                p.collapsible[piece] = s.whiteSpace.collapsesSpaces();
             } else {
                 // A word, cut further after zero-width spaces and inner hyphens, and between all characters for
                 // break-all (soft opportunities) and break-word (emergency ones).
