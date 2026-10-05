@@ -95,6 +95,14 @@ Hosts that can idle (the previewer) ask `Document.needsFrame(now)`: true while s
 (a pending restyle, relayout or repaint, due timers or animation frames, running animations, smooth scrolls, a
 blinking caret, template updates). Minecraft renders every frame anyway.
 
+Automation asks `Document.settled()` instead: whether the page will still change by itself. It counts what ends
+(pending restyle, relayout or repaint, smooth scrolls and scroll events, template updates and `nextTick` callbacks,
+transitions and finite animations, drags and spinning turntables, a tooltip's delay) and leaves out what never does
+(infinite animations, timers, animation-frame callbacks, the caret), or pages with a clock or a spinner would never
+settle. `Document.pointerTarget(element)` is where automation points: the centre of `Element.visibleRect()` (the
+border box cut to the viewport and to the clips of the content holding it, `Coordinates.visibleRect`), scrolled into
+view when none of it shows, and only if the hit test there finds the element.
+
 Scripts reading styles or geometry call `flushStyle()` / `flushLayout()`, which run the same `updateStyle` /
 `updateLayout` stages and nothing else: no animation tick and no event-producing work, so no script runs inside a
 flush.
@@ -620,6 +628,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   page's frame rate, plus benchmark pages of 48 spinning entities, models and items, and a page of entity portraits
   (body and eyes fits at several sizes, `object-position`) whose armour stands come from a render state the autopilot
   registers (`VellumEntities`: arms, one raised, no base plate). It drives pages through `VellumAutomation`
-  (docs/API.md), the public client API for dev automation: it hovers the showcase title screen's first button for a
-  burst of screenshots a tick apart, and fills in the templates demo and checks its state.
+  (docs/API.md), the public client API for dev automation: it waits for pages to settle, hovers the showcase title
+  screen's first button for a burst of screenshots a tick apart, fills in the templates demo, clicks a Mobdex row
+  scrolled out of its list, and answers the demo toast overlay through chat, checking each result.
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.

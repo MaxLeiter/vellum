@@ -320,6 +320,20 @@ public final class Document extends Node {
                 || scripts != null && scripts.needsFrame();
     }
 
+    /**
+     * Whether the page has stopped changing by itself, for automation that waits for it before looking: no restyle,
+     * relayout or repaint pending, no smooth scroll or {@code scroll} event, no template update or
+     * {@code vellum.nextTick} callback, no transition or finite animation running (or its events waiting), no drag
+     * or spinning turntable, and no tooltip waiting out its delay. What never ends does not count: infinite
+     * animations, timers ({@code setTimeout}, {@code setInterval}), animation-frame callbacks and the caret's blink.
+     * A stopped or closed document is settled.
+     */
+    public boolean settled() {
+        if (error != null || closed) return true;
+        return !(styleDirty || layoutDirty || laidOut || repaint || scrolling.isActive() || animationEngine.isSettling()
+                || input.isSettling() || scripts != null && scripts.needsFrame());
+    }
+
     /** Something painted changed that restyle and relayout do not track (a scroll offset, canvas pixels). */
     public void invalidatePaint() {
         repaint = true;
@@ -328,6 +342,31 @@ public final class Document extends Node {
     /** The topmost element (and box) at a viewport point, as painted; null when nothing is there. */
     public HitResult hitTest(float x, float y) {
         return guarded(() -> painter.hitTest(x, y), null);
+    }
+
+    /**
+     * Where pointer input reaches {@code element}, {x, y} in viewport px: the centre of its
+     * {@link Element#visibleRect() visible part}. When none of it shows, it is first scrolled into view (instantly,
+     * by the least scroll). Null when it is not in this document, has no box or still does not show, or when the
+     * topmost element painted at that point is neither it nor inside it (something covers it, or it has
+     * {@code pointer-events: none}). Lays out first. For automation that sends real input to an element.
+     */
+    public float[] pointerTarget(Element element) {
+        return guarded(() -> {
+            if (element.ownerDocument() != this || !element.isConnected()) return null;
+            flushLayout();
+            float[] r = element.visibleRect();
+            if (r == null && element.box != null) {
+                // Scroll offsets apply when geometry is read, so no layout is needed before reading it again.
+                element.scrollIntoView(Element.ScrollAlign.NEAREST, Element.ScrollAlign.NEAREST,
+                        Element.ScrollBehavior.INSTANT);
+                r = element.visibleRect();
+            }
+            if (r == null) return null;
+            float x = r[0] + r[2] / 2, y = r[1] + r[3] / 2;
+            HitResult hit = painter.hitTest(x, y);
+            return hit != null && element.contains(hit.element()) ? new float[] {x, y} : null;
+        }, null);
     }
 
     /**

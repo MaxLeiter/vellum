@@ -58,6 +58,29 @@ public final class Coordinates {
     }
 
     /**
+     * The part of {@code box}'s border box that can show, {x, y, width, height} in viewport coordinates: its
+     * {@link #boundingRect} cut to the viewport and to the padding box of every box that clips the content holding
+     * it ({@link Box#contentParent()} up the tree, as painting clips it), or null when nothing is left. Transformed
+     * boxes count as their bounding rectangles. Content painted over it is not checked here: hit test for that.
+     */
+    public static float[] visibleRect(Box box, float viewportWidth, float viewportHeight) {
+        float[] r = boundingRect(box);
+        float x0 = Math.max(r[0], 0), y0 = Math.max(r[1], 0);
+        float x1 = Math.min(r[0] + r[2], viewportWidth), y1 = Math.min(r[1] + r[3], viewportHeight);
+        Affine m = new Affine();
+        float[] clip = new float[4];
+        for (Box c = box.contentParent(); c != null && x0 < x1 && y0 < y1; c = c.contentParent()) {
+            if (!StackingOrder.clips(c, StackingOrder.styleOf(c))) continue;
+            toViewport(c, m).mapBounds(c.borderLeft, c.borderTop, c.paddingBoxWidth(), c.paddingBoxHeight(), clip);
+            x0 = Math.max(x0, clip[0]);
+            y0 = Math.max(y0, clip[1]);
+            x1 = Math.min(x1, clip[0] + clip[2]);
+            y1 = Math.min(y1, clip[1] + clip[3]);
+        }
+        return x0 < x1 && y0 < y1 ? new float[] {x0, y0, x1 - x0, y1 - y0} : null;
+    }
+
+    /**
      * Where a page's content is, {x, y, width, height} in viewport coordinates: the union of the border boxes of the
      * elements marked {@value #BOUNDS_ATTRIBUTE}, or when none is, of {@code body}'s in-flow child elements (what a
      * centred panel is); as painted, so after scrolling and transforms. Null when none of them has a box. Hosts tell

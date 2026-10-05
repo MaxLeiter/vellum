@@ -52,6 +52,13 @@ final class ElementAnimations {
         return dirty || advancing;
     }
 
+    /** Whether a change waits for the next tick or a player is heading for an end it will reach. */
+    boolean isSettling() {
+        if (dirty) return true;
+        for (Player p : players) if (p.endsBySelf()) return true;
+        return false;
+    }
+
     /** The base style changed: update transitions and CSS animations from it (see the engine's styleChanged). */
     void styleChanged(ComputedStyle oldBase, ComputedStyle newBase, double now) {
         boolean rendered = newBase != null && newBase.display != Display.NONE;

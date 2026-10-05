@@ -279,6 +279,16 @@ public final class DocumentDriver {
         return tooltipLines;
     }
 
+    /**
+     * Whether the page has stopped changing by itself ({@link Document#settled}). False before it has loaded (a HUD
+     * overlay loads at its first draw) and while a navigation or {@code vellum.close()} waits for the next frame;
+     * true while the error panel shows.
+     */
+    boolean settled() {
+        if (error != null) return true;
+        return document != null && pendingNavigation == null && !closeRequested && document.settled();
+    }
+
     /** The live document, or null while it failed or is not loaded. */
     public @Nullable Document document() {
         return error == null && document != null && document.error() == null ? document : null;
