@@ -31,8 +31,15 @@ loom {
             ideConfigGenerated(true)
             runDir('runs/client')
             // `./gradlew :fabric:runClient -Pautopilot` opens the Vellum demo screens, screenshots them and quits.
-            if (project.hasProperty('autopilot')) {
+            if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
                 property('vellum.autopilot', 'true')
+            }
+            // `-Ptour [-PtourGo=<file>]`: the scripted showcase tour for demo videos, in a 1280x720 window
+            // (tools/record creates the go-file once it is recording).
+            if (project.hasProperty('tour')) {
+                property('vellum.tour', 'true')
+                if (project.hasProperty('tourGo')) property('vellum.tour.go', project.property('tourGo').toString())
+                programArgs('--width', '1280', '--height', '720')
             }
         }
         server {

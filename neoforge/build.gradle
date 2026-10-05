@@ -19,8 +19,15 @@ neoForge {
             client()
             gameDirectory = this.mkdir(this.file('runs/client'))
             // `./gradlew :neoforge:runClient -Pautopilot` opens the Vellum demo screens, screenshots them and quits.
-            if (project.hasProperty('autopilot')) {
+            if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
                 systemProperty('vellum.autopilot', 'true')
+            }
+            // `-Ptour [-PtourGo=<file>]`: the scripted showcase tour for demo videos, in a 1280x720 window
+            // (tools/record creates the go-file once it is recording).
+            if (project.hasProperty('tour')) {
+                systemProperty('vellum.tour', 'true')
+                if (project.hasProperty('tourGo')) systemProperty('vellum.tour.go', project.property('tourGo').toString())
+                programArguments.addAll('--width', '1280', '--height', '720')
             }
         }
         data {
