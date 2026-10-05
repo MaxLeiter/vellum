@@ -407,7 +407,7 @@ widget's tooltip. Anything inside `aria-hidden="true"` is never read.
 | `<input type=range>`, `role="slider"` with `aria-valuetext` or `aria-valuenow` | "Volume: 40 slider" |
 | text inputs, `<textarea>`, `role="textbox"` | "Name edit box: Steve" (a password's text is not read) |
 | `<select>` | "Difficulty: Hard button" |
-| `role="tab"` | "Selected tab 2 out of 3. Quests tab": its place among the tabs of its `role="tablist"` (or its parent), or `aria-posinset` and `aria-setsize` |
+| `role="tab"` | "Quests tab. Selected tab 2 out of 3", in vanilla's order (a title is read before any position): its place among the tabs of its `role="tablist"` (or its parent), or `aria-posinset` and `aria-setsize` |
 | `<item>`, `<slot>` | "Item: Iron Sword"; a labelled slot "Fuel. Item: Coal". An empty slot nothing labels is not read. |
 | anything else | its name |
 
