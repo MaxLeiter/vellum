@@ -38,6 +38,13 @@ public interface ReplacedContent {
     /** Called every frame before layout; return true if the intrinsic size changed (e.g. an image finished loading). */
     default boolean update() { return false; }
 
+    /**
+     * Whether the content is still loading and will change by itself once it has (a player head's skin being
+     * fetched). The document keeps asking for frames and does not count as settled meanwhile
+     * ({@link dev.vellum.engine.dom.Document#settled}). Content that failed to load is not loading.
+     */
+    default boolean loading() { return false; }
+
     /** Called when the element leaves the document or the document is closed. */
     default void dispose() {}
 }

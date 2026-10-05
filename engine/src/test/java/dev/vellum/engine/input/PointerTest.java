@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static dev.vellum.engine.testing.Page.NONE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -45,6 +46,20 @@ class PointerTest {
         assertEquals(List.of(), page.log);
         assertFalse(page.move(300, 300));
         assertEquals(List.of("mouseout:c", "mouseleave:c", "mouseleave:b", "mouseleave:p"), page.log);
+    }
+
+    @Test
+    void thePointerIsWhereTheLastEventPutItUntilItLeaves() {
+        assertNull(page.input.pointer(), "no pointer event since the page loaded");
+        page.move(10, 20);
+        assertArrayEquals(new float[] {10, 20}, page.input.pointer());
+        page.down(30, 5);
+        assertArrayEquals(new float[] {30, 5}, page.input.pointer(), "a press carries the pointer too");
+        page.up(30, 5);
+        page.wheel(60, 8, 0, 24);
+        assertArrayEquals(new float[] {60, 8}, page.input.pointer());
+        page.input.mouseLeave();
+        assertNull(page.input.pointer());
     }
 
     @Test

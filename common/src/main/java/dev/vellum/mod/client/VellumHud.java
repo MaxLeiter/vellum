@@ -236,7 +236,6 @@ public final class VellumHud {
         private int width, height;
         /** Drawn with the pointer last frame (above a screen), so it is hovered and takes clicks. */
         private boolean tracking;
-        private double pointerX = Double.NaN, pointerY = Double.NaN;
         /** Mouse buttons whose press went to this overlay (bit {@code 1 << button}); their release and drags do too. */
         private int buttons;
 
@@ -261,8 +260,8 @@ public final class VellumHud {
         }
 
         /**
-         * Draws the page. With {@code pointer} (above a screen) the page follows the mouse, and a tooltip it asks for
-         * is drawn right away: the screen's deferred pass, which draws tooltips, is over.
+         * Draws the page. With {@code pointer} (above a screen) the page follows the mouse as a screen's does, and a
+         * tooltip it asks for is drawn right away: the screen's deferred pass, which draws tooltips, is over.
          */
         void extract(GuiGraphicsExtractor g, boolean pointer, float partialTick) {
             DocumentDriver page = show();
@@ -276,21 +275,17 @@ public final class VellumHud {
                 page.extract(g, -1, -1);
                 return;
             }
-            Minecraft mc = Minecraft.getInstance();
-            double x = mc.mouseHandler.getScaledXPos(mc.getWindow()), y = mc.mouseHandler.getScaledYPos(mc.getWindow());
-            if (!tracking || x != pointerX || y != pointerY) page.mouseMoved(x, y);
             tracking = true;
-            pointerX = x;
-            pointerY = y;
-            page.extract(g, (int) x, (int) y);
-            if (page.requestedTooltip()) g.extractDeferredElements((int) x, (int) y, partialTick);
+            Minecraft mc = Minecraft.getInstance();
+            int x = (int) mc.mouseHandler.getScaledXPos(mc.getWindow()), y = (int) mc.mouseHandler.getScaledYPos(mc.getWindow());
+            page.extract(g, x, y);
+            if (page.requestedTooltip()) g.extractDeferredElements(x, y, partialTick);
         }
 
         /** The pointer went back to the game (the screen closed): hover and presses end. */
         private void leave() {
             tracking = false;
             buttons = 0;
-            pointerX = pointerY = Double.NaN;
             if (driver != null) driver.mouseLeave();
         }
 

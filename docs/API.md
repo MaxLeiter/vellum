@@ -74,7 +74,9 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   in an `<input>` stays text. Return true to consume the key. Handlers run in the order they were added until one
   returns true, and stay through navigation and reloads.
 - A page opened under a resting cursor shows `:hover` there from its first frame, as vanilla screens do, and its
-  `title` tooltip half a second later, without the mouse moving.
+  `title` tooltip half a second later, without the mouse moving. Every frame the page's pointer follows Minecraft's
+  mouse handler, so code that sends a screen `mouseMoved` must move the mouse handler there as well, or the next
+  frame moves the page's pointer back. `VellumAutomation` does both.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
   a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
@@ -437,13 +439,16 @@ VellumAutomation.screen().filter(VellumAutomation::settled).ifPresent(page -> {
 | `Optional<float[]> rect(String selector)` | `{x, y, width, height}` of the first match's border box as painted (after scrolling and transforms, like `getBoundingClientRect()`). |
 | `Optional<String> text(String selector)` | Its `textContent`. |
 | `boolean hover(String selector)` | Moves the pointer onto the first match (see below). False when a real pointer could not reach it; the pointer stays put then. |
+| `Optional<float[]> pointerTarget(String selector)` | `{x, y}` where `hover` would put the pointer, without moving it; empty when `hover` would return false. For pointer paths of your own, like a glide toward the element. |
 | `boolean click(String selector)`, `click(String selector, int button)` | Hovers it, then presses and releases `button`: 0 left, 1 middle, 2 right. False, sending nothing, when `hover` is. The pointer stays on the element. |
 | `boolean wheel(String selector, double notches)` | Hovers it, then turns the wheel; positive notches scroll down. False when `hover` is. The pointer stays on the element. |
+| `boolean drag(String selector, float dx, float dy)` | Hovers it, presses the left button, moves `(dx, dy)` GUI px in a few steps and releases, all at once (see below). False, sending nothing, when `hover` is. The pointer stays where the drag ended. |
 | `void leave()` | Moves the pointer outside the window, where it hovers nothing: no `:hover` style, `title` tooltip, item tooltip or slot highlight is left in the next frame, on any Vellum page or vanilla screen. Does nothing while no screen is open. |
 | `boolean scrollIntoView(String selector)` | Scrolls the scroll containers the first match is in so it shows, instantly and by the least scroll. True when some of it shows afterwards. |
 | `boolean key(String domKey)` | Presses and releases the key that gives a DOM key name (`"Enter"`, `"ArrowDown"`, `"a"`, `"A"`) on the current layout. False when no key does, or the page takes no input. |
 | `void type(String text)` | Types text. Characters no key gives are sent as text only. |
 | `Optional<JsonElement> eval(String js)` | Runs `js` in the page's script sandbox; its completion value as JSON. Empty for undefined, functions and errors (which are reported like any script error). |
+| `boolean tooltipShown()` | Whether the page's last frame showed a tooltip: a `title` past its delay, or an `<item tooltip>`'s. False while a container screen's slot shows its own item tooltip. |
 | `boolean settled()` | Whether the page has stopped changing by itself (see below). |
 
 `hover`, `click` and `wheel` aim at the centre of the part of the element that shows: its border box cut to the
@@ -456,6 +461,11 @@ elsewhere.
 After `click` or `wheel` the pointer stays where it is, as a real mouse would: the element keeps `:hover`, and half a
 second later its `title` tooltip shows. Call `leave()` before a screenshot. Pages follow the pointer from their first
 frame, so the next page you open is hovered wherever the pointer was left, too.
+
+`drag` sends a press, a few moves with the button held and a release through the mouse handler, all within one call.
+The screen gets the `mouseMoved` and `mouseDragged` calls a real drag brings, so a `rotatable` element turns and
+tilts by the distance and a range slider or a scrollbar thumb follows. No time passes during the drag, so a
+turntable has no speed to keep spinning with when it is let go.
 
 A HUD overlay takes input while it is interactive over the open screen: a screen its `Input` or predicate accepts,
 once a frame has drawn the overlay above that screen. `hover`, `click` and `wheel` then take the same path as on a
@@ -479,7 +489,8 @@ fixed number of ticks. It is false while:
 - a template update or a `vellum.nextTick` callback is waiting;
 - a transition or a finite animation (CSS or `element.animate()`) runs, or its events are waiting;
 - a drag is held, or a `rotatable` element is still spinning;
-- a `title` tooltip is waiting out its delay.
+- a `title` tooltip is waiting out its delay;
+- replaced content is still loading something in the background (`ReplacedContent.loading()`).
 
 Infinite animations don't count, or a title screen would never settle. Timers (`setTimeout`, `setInterval`) and
 `requestAnimationFrame` callbacks don't count either: pages use them for clocks, polling and loops that never end.
@@ -489,10 +500,10 @@ is one), so cap the wait. A HUD overlay is not settled until its page has loaded
 its error panel is settled.
 
 Vellum's own autopilot (`./gradlew :neoforge:runClient -Pautopilot`, or `:fabric:runClient`) uses all of this: it
-waits for each page to settle, hovers the showcase title screen, opens a page under a resting cursor and checks it is
-hovered within its first frames, hovers items and titles for their tooltips, closes a page with a mod's key through
-`onKey`, fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and answers the demo toast
-through chat.
+waits for each page to settle, hovers the showcase title screen, drags a turntable, opens a page under a resting
+cursor and checks it is hovered within its first frames, hovers items and titles for their tooltips, closes a page
+with a mod's key through `onKey`, fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and
+answers the demo toast through chat. It ends by logging how many of its checks failed.
 
 ## Stability
 

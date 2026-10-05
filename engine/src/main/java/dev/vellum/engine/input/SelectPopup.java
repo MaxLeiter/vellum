@@ -4,6 +4,7 @@ import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.paint.Coordinates;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -170,7 +171,8 @@ final class SelectPopup {
      */
     private float[] bounds() {
         Document doc = select.ownerDocument();
-        float[] r = select.getBoundingClientRect();
+        // As painted: paint and the pointer read it, and must agree without laying out.
+        float[] r = select.box == null ? new float[4] : Coordinates.boundingRect(select.box);
         float sx = r[0], sy = r[1], sh = r[3];
         float width = Math.max(r[2], labelWidth + 2 * PAD + 2);
         float height = Math.min(rows.size(), MAX_ROWS) * rowHeight() + 2;

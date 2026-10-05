@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+  <!-- A button under the cursor where it rests when the page opens. The page counts its frames
+       (requestAnimationFrame) and notes the first in which the button matches :hover. -->
+  <style>button:hover { background: #a33; }</style>
+</head>
+<body style="display: flex; align-items: center; justify-content: center; height: 100vh">
+  <button style="width: 200px; height: 60px" title="A tooltip">Hover me</button>
+  <script>
+    let frames = 0, hoveredAt = -1;
+    function count() {
+      frames++;
+      if (hoveredAt < 0 && document.querySelector('button').matches(':hover')) hoveredAt = frames;
+      requestAnimationFrame(count);
+    }
+    requestAnimationFrame(count);
+  </script>
+</body>
+</html>

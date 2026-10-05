@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+<head>
+  <!-- Chronicle's book: the page cancels the arrow keys it uses and leaves letters to the mod. -->
+</head>
+<body style="padding: 20px">
+  <p>J closes this page, as the mod's own key. Typed into the field, J is text.</p>
+  <input id="name">
+  <script>document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') e.preventDefault(); });</script>
+</body>
+</html>

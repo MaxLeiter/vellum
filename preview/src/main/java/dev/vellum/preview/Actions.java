@@ -191,10 +191,10 @@ final class Actions {
             String selector = String.join(" ", args);
             Document doc = scene.document();
             Element e = doc == null ? null : doc.querySelector(selector);
-            if (e == null || e.box == null) throw new IllegalStateException("nothing is shown for " + selector);
-            float[] at = doc.pointerTarget(e);
-            if (at == null) throw new IllegalStateException("the pointer can't reach " + selector + ": something covers it");
-            return new Point(at[0], at[1]);
+            float[] at = e == null ? null : doc.pointerTarget(e);
+            if (at != null) return new Point(at[0], at[1]);
+            if (e == null || e.visibleRect() == null) throw new IllegalStateException("nothing is shown for " + selector);
+            throw new IllegalStateException("the pointer can't reach " + selector + ": something covers it");
         }
 
         private void frames(int n) {

@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <!-- A conversation card: speakers above, the reply far below them. The two on the left gaze softly
+       (-mc-gaze-reach and -mc-gaze-limit, as Chronicle's speakers do), the two on the right as the inventory's player
+       does; mirrored, so with the pointer on the reply each pair turns by the same geometry. -->
+  <style>
+    html { background: #151a24 }
+    body { margin: 0; padding: 8px; color: #8b96ad; display: flex; justify-content: center }
+    .card { width: 220px; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+            background: #1d2434; outline: 1px solid #34405a }
+    .speakers { display: flex; gap: 6px; align-items: flex-end }
+    figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px }
+    entity { background: linear-gradient(#26304a, #10141d); outline: 1px solid #34405a }
+    .eyes { width: 56px; height: 56px; -mc-entity-focus: eyes }
+    .body { width: 36px; height: 72px }
+    .soft entity { -mc-gaze-reach: 80px; -mc-gaze-limit: 30deg 9deg }
+    p { margin: 0 0 64px; color: #e8f0ff; text-align: center }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="speakers">
+      <figure class="soft"><entity class="body" player follow-mouse></entity>soft</figure>
+      <figure class="soft"><entity class="eyes" type="minecraft:villager" follow-mouse></entity>soft</figure>
+      <figure><entity class="eyes" type="minecraft:villager" follow-mouse></entity>default</figure>
+      <figure><entity class="body" player follow-mouse></entity>default</figure>
+    </div>
+    <p>Well met, traveller. The harvest was thin this year, and the roads are worse.</p>
+    <button>Farewell</button>
+  </div>
+</body>
+</html>

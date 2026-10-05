@@ -11,6 +11,7 @@ import dev.vellum.engine.style.TimingFunction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * CSS transitions and keyframe animations, plus the Web Animations-style {@code element.animate()} used by scripts,
@@ -108,9 +109,7 @@ public final class AnimationEngine {
 
     /** True while anything is running (hosts may use it to keep rendering). */
     public boolean isAnimating() {
-        if (!queued.isEmpty()) return true;
-        for (ElementAnimations state : animated) if (state.needsTick()) return true;
-        return false;
+        return any(ElementAnimations::needsTick);
     }
 
     /**
@@ -119,8 +118,13 @@ public final class AnimationEngine {
      * count ({@link Document#settled}).
      */
     public boolean isSettling() {
+        return any(ElementAnimations::isSettling);
+    }
+
+    /** Whether events or callbacks are waiting for the next tick, or {@code test} holds for an animated target. */
+    private boolean any(Predicate<ElementAnimations> test) {
         if (!queued.isEmpty()) return true;
-        for (ElementAnimations state : animated) if (state.isSettling()) return true;
+        for (ElementAnimations state : animated) if (test.test(state)) return true;
         return false;
     }
 

@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <!-- The dev autopilot's portraits: entities fitted whole, then with their eyes focused at 48 and 32 px, then boxes
+       of other shapes placed with object-position, -mc-pitch and -mc-model-scale. Its armour stands come from a
+       render state the autopilot registers: arms, one raised, and no base plate. -->
+  <style>
+    html { background: #151a24 }
+    body { margin: 0; padding: 6px; color: #8b96ad; display: flex; flex-direction: column; gap: 6px }
+    .row { display: flex; gap: 4px; align-items: flex-end }
+    .row > span { flex: none; width: 48px }
+    entity { flex: none; background: linear-gradient(#26304a, #10141d); outline: 1px solid #34405a }
+    .s48 entity { width: 48px; height: 48px }
+    .s32 entity { width: 32px; height: 32px }
+    .eyes entity, entity.eyes { -mc-entity-focus: eyes }
+    .tall { width: 32px; height: 64px }
+    .wide { width: 64px; height: 32px }
+  </style>
+</head>
+<body>
+  <div class="row s48"><span>body</span>
+    <entity player follow-mouse></entity>
+    <entity type="minecraft:zombie" follow-mouse></entity>
+    <entity type="minecraft:villager" follow-mouse></entity>
+    <entity type="minecraft:zombie" baby follow-mouse></entity>
+    <entity type="minecraft:iron_golem"></entity>
+    <entity type="minecraft:pig" style="-mc-yaw: 30deg"></entity>
+    <entity type="minecraft:fox"></entity>
+    <entity type="minecraft:ghast"></entity>
+    <entity type="minecraft:armor_stand" head="minecraft:golden_helmet"></entity>
+  </div>
+  <div class="row s48 eyes"><span>eyes</span>
+    <entity player follow-mouse></entity>
+    <entity type="minecraft:zombie" follow-mouse></entity>
+    <entity type="minecraft:villager" follow-mouse></entity>
+    <entity type="minecraft:zombie" baby follow-mouse></entity>
+    <entity type="minecraft:iron_golem"></entity>
+    <entity type="minecraft:pig" style="-mc-yaw: 30deg"></entity>
+    <entity type="minecraft:fox"></entity>
+    <entity type="minecraft:ghast"></entity>
+    <entity type="minecraft:armor_stand" head="minecraft:golden_helmet"></entity>
+  </div>
+  <div class="row s32 eyes"><span>eyes, 32</span>
+    <entity player follow-mouse></entity>
+    <entity type="minecraft:zombie" follow-mouse></entity>
+    <entity type="minecraft:villager" follow-mouse></entity>
+    <entity type="minecraft:zombie" baby follow-mouse></entity>
+    <entity type="minecraft:iron_golem"></entity>
+    <entity type="minecraft:pig" style="-mc-yaw: 30deg"></entity>
+    <entity type="minecraft:fox"></entity>
+    <entity type="minecraft:ghast"></entity>
+    <entity type="minecraft:armor_stand" head="minecraft:golden_helmet"></entity>
+  </div>
+  <div class="row"><span>placed</span>
+    <entity player class="tall" style="object-position: top"></entity>
+    <entity type="minecraft:pig" class="tall" style="object-position: top"></entity>
+    <entity type="minecraft:armor_stand" class="tall" style="object-position: center; -mc-pitch: 25deg"></entity>
+    <entity player class="tall eyes" follow-mouse></entity>
+    <entity type="minecraft:villager" class="wide eyes" follow-mouse></entity>
+    <entity type="minecraft:zombie" class="wide eyes" style="object-position: 30% 60%"></entity>
+    <entity type="minecraft:iron_golem" class="tall eyes" style="-mc-model-scale: 0.6"></entity>
+    <entity type="minecraft:armor_stand" class="tall eyes" style="-mc-pitch: 30deg"></entity>
+  </div>
+</body>
+</html>
