@@ -2,9 +2,9 @@ package dev.vellum.engine.paint;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Text;
-import dev.vellum.engine.layout.TextMeasure;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.layout.Fragment;
+import dev.vellum.engine.layout.TextMeasure;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.PointerEvents;
 import dev.vellum.engine.style.Visibility;

@@ -176,9 +176,9 @@ final class StackingOrder {
         if (outlines) {
             for (LineBox line : box.lines) {
                 for (Fragment f : line.fragments) {
-                    if (f instanceof Fragment.InlineBox ib && hasOutline(styleOf(ib.box()))) {
-                        v.inlineOutline(ib, styleOf(ib.box()), cx, cy);
-                    }
+                    if (!(f instanceof Fragment.InlineBox ib)) continue;
+                    ComputedStyle s = styleOf(ib.box());
+                    if (hasOutline(s)) v.inlineOutline(ib, s, cx, cy);
                 }
             }
         }

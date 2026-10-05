@@ -74,12 +74,12 @@ host: setViewport(w, h, guiScale)    on resize
 host: input.mouseMove/mouseDown/...  on input  → DOM events, hover/active/focus flags, default actions
 host: frame(nowMs)                   every frame:
         scheduler.run      timers, requestAnimationFrame
-        input.tick         smooth scroll, caret blink
+        input.tick         scrolling (smooth scrolls, scroll events), caret blink
         scripts.beforeRestyle  template bindings re-render if any script entry ran since the last frame
         updateStyle        if style dirty: cascade → element.baseStyle; animations.styleChanged → element.style
         animations.tick    advance transitions/animations → element.style; invalidates layout if needed
         updateLayout       if layout dirty: box tree → element.box
-        input.afterLayout  after any layout (also one a script flushed): clamp scrolls, autofocus, re-target hover
+        input.afterLayout  after any layout (also one a script flushed): caret in view, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
 ```
 
@@ -110,20 +110,35 @@ hover/active/focus changed (`Document.domVersion` is unchanged) elements whose s
 state skip matching.
 
 Per-element results live on `Element`: `baseStyle` (cascade), `style` (after animations, used by layout and paint),
-`beforeStyle`/`afterStyle`, `box`, `replaced`, scroll offsets, and opaque slots for subsystem state
-(`animationState`, `controlState`, `parsedInlineStyle`, `scriptWrapper`).
+`beforeStyle`/`afterStyle`, `box`, `replaced`, scroll state, and opaque slots for subsystem state
+(`animationState`, `controlState`, `parsedInlineStyle`, `scriptWrapper`). The animation engine is the only writer
+of `style`; when a change moves paint order without a relayout (z-index, opacity or a transform starting a stacking
+context) it bumps `Document.stackingVersion()`.
 
 ### Contracts between subsystems
 - **css → anim**: after computing an element's base style the style engine calls
   `document.animations().styleChanged(el, oldBase, newBase)`; the animation engine sets `el.style`.
   For keyframes the animation engine calls `StyleEngine.resolveKeyframes(el, name, base)` which returns
   `List<ResolvedKeyframe(offset, timing, style, props)>`, each keyframe's declarations computed for that element.
-- **layout ← style**: layout reads only `element.style` / `beforeStyle` / `afterStyle` and `Host.fonts()`.
+- **layout ← style**: layout reads only `element.style` / `beforeStyle` / `afterStyle` and `Host.fonts()` (through
+  `TextMeasure`).
   Boxes use the coordinate rules in `Box`'s javadoc.
 - **paint ← layout**: the painter reads the box tree from `LayoutEngine.root()`. Form controls are painted by
-  `input.Controls.paint(canvas, box)`, called by the painter after the box's background and border.
+  `input.Controls.paint(canvas, box, style)`, called by the painter after the box's background and border with the
+  style it paints the box with.
+- **geometry**: where a box is on screen is `paint.Coordinates` (`toViewport`, `fromViewport`, `boundingRect`),
+  the one mapping painting, hit testing, input, scripts (`getBoundingClientRect`) and hosts (slot positions, the
+  inspector) share: box positions, the scroll offsets of the boxes whose content they are in
+  (`Box.contentParent()`), and CSS transforms resolved as the painter resolves them.
 - **input ← paint**: hit testing is `Painter.hitTest(x, y)`, which mirrors paint order, transforms, clipping,
-  scrolling, `pointer-events` and `visibility`.
+  scrolling, `pointer-events` and `visibility`. The `HitResult` carries the point in the hit box's coordinates, the
+  scrollbar hit (if any), and the caret offset in text (computed on request).
+- **text**: `layout.TextMeasure` (one per document, `LayoutEngine.textMeasure()`) is how wide text is for layout,
+  painting, hit testing and controls alike: the host's advances plus `letter-spacing` and `word-spacing`. It caches
+  the host's string widths (bounded), so relayouts do not measure the same words again.
+- **scrolling**: an element owns its scroll position and smooth-scroll destination (`Element.scrollTo/scrollBy/
+  scrollIntoView` with a `ScrollBehavior`); input, scripts, focus and layout (re-clamping) all scroll through it,
+  and `dom.Scrolling` eases smooth scrolls and fires `scroll` once per frame per element that moved.
 - **script ↔ dom**: scripts wrap DOM nodes; `Node.scriptWrapper` caches the wrapper. Inline `on*` attributes are
   run by `ScriptRuntime.runInlineHandler`.
 
@@ -146,7 +161,7 @@ Elements with behaviour:
 | `input type=range` | Vanilla slider look; `min`, `max`, `step`, `value`; drag and keys. |
 | `select` / `option` | Button that opens a dropdown list (an overlay in a top layer). |
 | `progress`, `meter` | Bars styled by CSS. |
-| `details` / `summary` | Toggle `open`. |
+| `details` / `summary` | Toggle `open`; closed, only the summary is rendered (UA stylesheet; loose text too). |
 | `dialog` | Hidden unless `open`; `showModal()` puts it in the top layer with a backdrop. |
 | `img src` | Texture (`ns:textures/...png`), sprite (`sprite:ns:path`), or canvas. |
 | `canvas width height` | 2D drawing surface (subset of CanvasRenderingContext2D: fillRect, clearRect, strokeRect, drawImage of sprites/textures/items, fillText, getImageData/putImageData, paths of lines and rects). Backed by a texture. |
@@ -247,12 +262,20 @@ All layout is in floats (GUI px). Painting snaps to device pixels.
   area names), auto-placement (row/column, dense), implicit tracks (`grid-auto-rows/columns`), `gap`, alignment
   (`justify-items/self`, `align-items/self`, `justify-content`, `align-content`). Track sizing is the spec algorithm
   simplified: no baseline alignment in grid.
-- **Positioning**: relative (offset after layout), absolute (containing block = nearest positioned ancestor's
-  padding box; `auto` insets resolve to the static position), fixed (viewport), sticky (as relative). z-index and
+- **Positioning**: relative (offset after layout), absolute (containing block = the padding box of the nearest
+  positioned or transformed ancestor, an inline one contributing its fragments' bounds; `auto` insets resolve to the
+  static position), fixed (the viewport, or the nearest transformed ancestor), sticky (as relative). Layout records
+  the containing block (`Box.containingBlock`); an out-of-flow box's `Box.contentParent()` is the box whose content
+  it is in, and the scrollers between it and its containing block neither scroll nor clip it. Gaining or losing a
+  transform is layout-affecting (it changes containing blocks); a transform's value is paint-only. z-index and
   stacking are paint concerns.
-- **Overflow**: scroll containers record `scrollWidth/scrollHeight`; their content is laid out normally and painted
-  shifted by the element's scroll offset. Scrollbars are overlay (they do not take layout space), drawn by the
-  painter, styled by `scrollbar-width` and the scrollbar colour properties.
+- **Overflow**: scroll containers record `scrollWidth/scrollHeight` (`Box.maxScrollLeft/Top()` is the range); their
+  content is laid out normally and painted shifted by the element's scroll offset. An out-of-flow box extends its
+  containing block's scrollable overflow, not the scrollers it escapes. After a layout, scroll offsets are
+  re-clamped through the element (firing `scroll` if that moves them). Text controls' overflow is their text
+  (`Controls.overflow`), so a textarea scrolls by its element's offsets like any scroll container. Scrollbars are
+  overlay (they do not take layout space), drawn by the painter, styled by `scrollbar-width` and the scrollbar colour
+  properties.
 - **Replaced elements**: intrinsic size from `ReplacedContent` (or `width`/`height` attributes), `aspect-ratio`,
   `object-fit` (applied at paint). Form controls are atomic boxes sized by the UA stylesheet; their children
   (option elements) are not laid out.
@@ -283,14 +306,25 @@ Per box:
 8. Scrollbars (overlay), outline (`outline`, `outline-offset`; focus rings), and `::after` order handled by the box
    tree.
 
-Text runs: `drawText` per fragment with colour, decorations, and `text-shadow` layers (drawn first, offset, in the
-shadow colour; `text-shadow: minecraft` uses the host's native shadow). Ellipsis is already in the fragment text.
+Text runs: drawn by `paint.TextPainter` (also used by form controls) with colour, decorations, and `text-shadow`
+layers (drawn first, offset, in the shadow colour; `text-shadow: minecraft` uses the host's native shadow).
+Letter- and word-spaced text is drawn in the parts layout cut it into (`SpacedText`: glyphs, or words), at the
+positions layout measured. Ellipsis is already in the fragment text. A run maps its processed text back to the
+text node's data for caret offsets.
+
+Inline elements: their fragments (inline box decorations, then the content up to the fragment's end) are a group:
+`opacity` applies to the group, and an `outline` is drawn around each fragment after the block's lines (so links get
+their focus ring). Positioned inline elements still paint in line order (no z-index for them).
+
+The z-ordered lists of each stacking context are cached until the layout or `Document.stackingVersion()` changes;
+painting and hit testing share them.
 
 Snapping: rectangle edges round to device pixels (`Canvas.devicePixel()`) so borders stay crisp at every GUI scale.
 
 Hit testing walks the same order in reverse, applies inverse transforms, honours clips and scroll offsets, skips
 `pointer-events: none` and `visibility: hidden`, and returns the deepest element (text hits resolve to the parent
-element, with the character offset for caret placement).
+element and its inline box, with the character offset for caret placement computed when asked; scrollbar hits name
+the scrollbar).
 
 ## 8. Animation
 
@@ -317,10 +351,12 @@ element, with the character offset for caret placement).
   (same element down and up), `dblclick`, `contextmenu` (right button), `:active` while pressed, pointer capture
   during drags (range thumb, scrollbar, text selection), and the cursor from `cursor` via `Host.setCursor`.
 - Wheel: deltas in GUI px, a notch being `InputHandler.WHEEL_NOTCH` (24 px) in every host; `wheel` event; if not
-  cancelled, scrolls the nearest scrollable ancestor that can move in that direction
+  cancelled, scrolls the nearest scroll container whose content holds the target that can move in that direction
   (smooth when `scroll-behavior: smooth`, default on), with scroll chaining.
 - Scrollbars: overlay thumbs appear when a container is scrollable; hover widens them; drag to scroll; click track
-  to page.
+  to page. Hover and presses use the hit test's scrollbar hit; drags map the pointer through `Coordinates`.
+- Scripts: `scrollTop`/`scrollLeft`, `scrollTo`/`scrollBy` (with `behavior`) and `scrollIntoView` (`block`,
+  `inline`, `behavior`) go through the element's scroll API; without a behavior, `scroll-behavior` decides.
 - Keyboard: `keydown`/`keyup` to the focused element (or body); hosts pass DOM `key` and `code` names, and the engine
   derives `keyCode` from `code` and tracks auto-repeat (a keydown with no keyup since); Tab / Shift+Tab focus navigation by tabindex order;
   Enter/Space activate buttons, checkboxes, links; arrow keys on range, radio groups and selects; Escape bubbles to the
@@ -329,7 +365,8 @@ element, with the character offset for caret placement).
   paste via `Host`), word-wise movement (ctrl/alt), Home/End, undo/redo (simple stack), `maxlength`, `placeholder`,
   `readonly`, horizontal scroll to keep the caret visible; `beforeinput`, `input`, `change` (on blur/Enter) events;
   textarea with line navigation.
-- Focus: `focus`/`blur`/`focusin`/`focusout`; `:focus-visible` after keyboard navigation; `autofocus`.
+- Focus: `focus`/`blur`/`focusin`/`focusout`; `:focus-visible` after keyboard navigation; `autofocus`; elements
+  without a box (also the content of a closed `<details>`, hidden by the UA stylesheet) are not tab stops.
 - Default actions run only if the event was not cancelled: checkbox/radio toggle, `label` forwards to its control,
   `details` toggle, link navigation, `select` dropdown, button click sound (`Host.playSound`).
 

@@ -1,7 +1,6 @@
 package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Overflow;
 import dev.vellum.engine.style.Visibility;
 import org.junit.jupiter.api.Test;

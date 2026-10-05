@@ -88,7 +88,7 @@ public final class Scrollbars {
     }
 
     private static float maxScroll(Box box, boolean vertical) {
-        return vertical ? box.scrollHeight - box.paddingBoxHeight() : box.scrollWidth - box.paddingBoxWidth();
+        return vertical ? box.maxScrollTop() : box.maxScrollLeft();
     }
 
     private static float thumbLength(Box box, boolean vertical, float trackLength) {
