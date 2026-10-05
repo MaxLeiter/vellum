@@ -198,7 +198,7 @@ final class CanvasTestScreen extends Screen {
         EntityPortrait.Framing body = EntityPortrait.Framing.BODY;
         EntityPortrait.draw(c, pig, EntityPortrait.Pose.FRONT, body, -1, 0, 0, 30, 40);
         EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, null, 1, 0), body, -1, 30, 0, 30, 40);
-        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, new EntityPortrait.Gaze(20, 10), 1, 0), body, -1, 62, 0, 30, 56);
+        EntityPortrait.draw(c, mc.player, new EntityPortrait.Pose(-30, 0, new EntityPortrait.Gaze(40, 20), 1, 0), body, -1, 62, 0, 30, 56);
     }
 
     @Override

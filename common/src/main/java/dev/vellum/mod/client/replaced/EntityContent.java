@@ -29,13 +29,13 @@ import java.util.Set;
  *   <li>{@code <entity id="123">}: an entity in the world by network id.</li>
  * </ul>
  * {@code -mc-yaw}, {@code -mc-pitch} and {@code -mc-model-scale} turn, view and size it; {@code rotatable} lets the
- * pointer turn it; {@code follow-mouse} turns its head toward the pointer (like the inventory's player);
- * {@code walk} (optionally a speed, 0.7 by default) swings its limbs. Created entities play their idle animations and
- * take {@code baby}, {@code variant} and {@code color} (the {@code <type>/variant} and {@code <type>/color}
- * components, e.g. {@code variant="minecraft:black"} on a cat, {@code color="pink"} on a sheep), {@code components}
- * (SNBT of any entity components) and equipment by slot ({@code mainhand="minecraft:iron_sword"}, {@code offhand},
- * {@code head}, {@code chest}, {@code legs}, {@code feet}, {@code body}, {@code saddle}). Attributes are read when they
- * change.
+ * pointer turn it; {@code follow-mouse} turns its head toward the pointer (like the inventory's player), as far as
+ * {@code -mc-gaze-reach} and {@code -mc-gaze-limit} let it; {@code walk} (optionally a speed, 0.7 by default) swings
+ * its limbs. Created entities play their idle animations and take {@code baby}, {@code variant} and {@code color}
+ * (the {@code <type>/variant} and {@code <type>/color} components, e.g. {@code variant="minecraft:black"} on a cat,
+ * {@code color="pink"} on a sheep), {@code components} (SNBT of any entity components) and equipment by slot
+ * ({@code mainhand="minecraft:iron_sword"}, {@code offhand}, {@code head}, {@code chest}, {@code legs}, {@code feet},
+ * {@code body}, {@code saddle}). Attributes are read when they change.
  */
 final class EntityContent extends TurnableContent {
     /** Attributes that make up a created entity: when one changes, it is created again. */
@@ -100,10 +100,11 @@ final class EntityContent extends TurnableContent {
         if (followMouse) {
             float gazeYaw = 0, gazePitch = 0;
             if (canvas.mouseX() >= 0) {
-                // As vanilla's inventory: up to about ±30° toward a pointer 40 px away from the eyes.
+                // As vanilla's inventory, unless -mc-gaze-reach and -mc-gaze-limit soften or cap it.
+                ComputedStyle style = style();
                 float[] eyes = EntityPortrait.gazeOrigin(framing, x, y, width, height);
-                gazeYaw = (float) Math.atan((canvas.mouseX() - eyes[0]) / 40.0F) * 20.0F;
-                gazePitch = (float) Math.atan((eyes[1] - canvas.mouseY()) / 40.0F) * 20.0F;
+                gazeYaw = style.gazeYaw(canvas.mouseX() - eyes[0]);
+                gazePitch = style.gazePitch(eyes[1] - canvas.mouseY());
             }
             gaze = new EntityPortrait.Gaze(gazeYaw, gazePitch);
         }
