@@ -649,6 +649,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (body and eyes fits at several sizes, `object-position`) whose armour stands come from a render state the autopilot
   registers (`VellumEntities`: arms, one raised, no base plate). It drives pages through `VellumAutomation`
   (docs/API.md), the public client API for dev automation: it waits for pages to settle, hovers the showcase title
-  screen's first button for a burst of screenshots a tick apart, fills in the templates demo, clicks a Mobdex row
-  scrolled out of its list, and answers the demo toast overlay through chat, checking each result.
+  screen's first button for a burst of screenshots a tick apart, opens a page under a resting cursor (hovered within
+  its first frames), screenshots an item tooltip with a title's lines and plain and `title-nowrap` titles, closes a
+  page with an `onKey` handler, fills in the templates demo, clicks a Mobdex row scrolled out of its list, and
+  answers the demo toast overlay through chat, checking each result.
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.

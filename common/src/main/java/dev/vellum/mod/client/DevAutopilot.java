@@ -2,10 +2,12 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.platform.Window;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.Constants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Options;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
@@ -29,6 +31,7 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
@@ -43,8 +46,10 @@ import java.util.function.Supplier;
  * {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas test and the 3D pages also at 3),
  * logs the frame rate of each (and of benchmark pages of 3D content), and quits. It drives pages with
  * {@link VellumAutomation}: hovers the title screen's first button for a burst of screenshots a tick apart (hover
- * effects and animations), fills in the templates demo (clicks, typing, Enter), clicks a Mobdex row scrolled out of
- * its list and scrolls the list back, and answers the demo toast overlay through chat; it checks each result, and
+ * effects and animations), opens a page under the resting cursor (hovered within its first frames, without a mouse
+ * move), hovers items and titles for their tooltips (an item's lines with a title's after them), closes a page with a
+ * mod's key ({@link DocumentDriver#onKey}), fills in the templates demo (clicks, typing, Enter), clicks a Mobdex row scrolled out of its list and scrolls the list back, and
+ * answers the demo toast overlay through chat; it checks each result, and
  * waits for pages to settle rather than for a fixed time. Armour stands in pages get a render state of the
  * autopilot's ({@link VellumEntities}: arms, one raised, and no base plate), shown on a page of portraits.
  */
@@ -221,6 +226,9 @@ public final class DevAutopilot {
         hover(".panel button");
         for (int i = 0; i < 4; i++) grab(mc, "showcase_title_hover_" + i, 0);
         steps.add(() -> VellumAutomation.screen().ifPresent(VellumAutomation::leave)); // or the next pages open hovered
+        firstHover(mc);
+        tooltips(mc);
+        modKeys(mc);
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
         }
@@ -291,6 +299,140 @@ public final class DevAutopilot {
             <entity type="minecraft:fox"></entity><entity type="minecraft:ghast"></entity>\
             <entity type="minecraft:armor_stand" head="minecraft:golden_helmet"></entity>""");
 
+
+    /**
+     * A page whose button sits under the cursor where it rests when the page opens. The page counts its frames
+     * ({@code requestAnimationFrame}) and notes the first in which the button matches {@code :hover}.
+     */
+    private static final String FIRST_HOVER = """
+            <body style="display: flex; align-items: center; justify-content: center; height: 100vh">
+              <button style="width: 200px; height: 60px" title="A tooltip">Hover me</button>
+              <style>button:hover { background: #a33; }</style>
+              <script>
+                let frames = 0, hoveredAt = -1;
+                function count() {
+                  frames++;
+                  if (hoveredAt < 0 && document.querySelector('button').matches(':hover')) hoveredAt = frames;
+                  requestAnimationFrame(count);
+                }
+                requestAnimationFrame(count);
+              </script>
+            </body>
+            """;
+
+    /**
+     * Opens {@link #FIRST_HOVER} with the cursor resting at the window's centre, as a screen opening leaves it: the
+     * mouse handler has the position, and no move event reaches the screen (Minecraft drops the first move after a
+     * screen opens). The button must be hovered within the first frames, with no mouse movement; half a second later
+     * its title tooltip shows, and the screenshot has both.
+     */
+    private static void firstHover(Minecraft mc) {
+        steps.add(() -> {
+            Window w = mc.getWindow();
+            MouseHandler mouse = mc.mouseHandler;
+            mouse.setIgnoreFirstMove(); // takes the position without a move event
+            mouse.onMove(w.handle(), w.getScreenWidth() / 2.0, w.getScreenHeight() / 2.0, 0, 0);
+            VellumScreens.openInline(FIRST_HOVER, null);
+        });
+        steps.add(() -> {
+            int at = VellumAutomation.screen().flatMap(page -> page.eval("hoveredAt")).map(JsonElement::getAsInt).orElse(-1);
+            if (at >= 1 && at <= 3) Constants.LOG.info("Vellum autopilot: a page opened under a resting cursor is hovered from frame {}", at);
+            else Constants.LOG.error("Vellum autopilot: the button under the resting cursor was not hovered in the first frames ({})", at);
+        });
+        settle("the first hover's tooltip", VellumAutomation::screen, 0);
+        grab(mc, "first_hover", 0);
+        steps.add(() -> VellumAutomation.screen().ifPresent(VellumAutomation::leave));
+    }
+
+    /** Chronicle's shop row (an item's tooltip with the row's title-json lines after it), and a {@code title-nowrap} title. */
+    private static final String SHOP_ROW = """
+            <style>
+              body { padding: 20px; display: flex; flex-direction: column; gap: 12px; align-items: start }
+              .row { display: flex; align-items: center; gap: 4px }
+              item { width: 16px; height: 16px }
+            </style>
+            <div class="row" id="deal" title-json='{"text":"","extra":[{"text":"Buy for 6 emeralds","color":"green"},{"text":"\\nIron comes a long way to get here, so it costs more in Rauca","color":"gray","italic":true}]}'>
+              <item id="minecraft:iron_sword" tooltip></item> Iron Sword
+            </div>
+            <div class="row" id="note" title-nowrap title-json='{"text":"","extra":[{"text":"Rauca","color":"gold"},{"text":"\\nA long way from anywhere that sells iron cheaply","color":"gray"}]}'>
+              <item id="minecraft:compass"></item> A note on the town
+            </div>
+            """;
+
+    /**
+     * Tooltips: an {@code <item tooltip>} in a row with a {@code title-json} (the item's lines, then the row's, in one
+     * box, none wrapped); the same row's title alone beside the item (wrapped at 170 px); a {@code title-nowrap}
+     * title; and the showcase shop's wares, whose items show their tooltip with the card's rarity and price.
+     */
+    private static void tooltips(Minecraft mc) {
+        steps.add(() -> VellumScreens.openInline(SHOP_ROW, null));
+        settle("the shop row", VellumAutomation::screen, 0);
+        hover("#deal item");
+        steps.add(() -> {
+            DocumentDriver driver = mc.gui.screen() == null ? null : DocumentDriver.of(mc.gui.screen());
+            if (driver != null && driver.requestedTooltip()) Constants.LOG.info("Vellum autopilot: the item's tooltip shows with the row's lines");
+            else Constants.LOG.error("Vellum autopilot: no tooltip over the shop row's item");
+        });
+        grab(mc, "tooltip_item_title", 0);
+        hover("#deal");
+        grab(mc, "tooltip_title_wrapped", 0);
+        hover("#note");
+        grab(mc, "tooltip_title_nowrap", 0);
+        steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("shop")));
+        settle("the shop", VellumAutomation::screen, SETTLE);
+        hover(".card:first-child item");
+        grab(mc, "showcase_shop_tooltip", 0);
+        steps.add(() -> VellumAutomation.screen().ifPresent(VellumAutomation::leave));
+    }
+
+    /** Chronicle's book: the page cancels the arrow keys it uses and leaves letters to the mod. */
+    private static final String MOD_KEYS = """
+            <body style="padding: 20px">
+              <p>J closes this page, as the mod's own key. Typed into the field, J is text.</p>
+              <input id="name">
+              <script>document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') e.preventDefault(); });</script>
+            </body>
+            """;
+
+    /**
+     * A mod's key on a page ({@link DocumentDriver#onKey}): a handler that closes the page on J. Typed into a focused
+     * field, J is text and the handler is not asked; neither is it for a key the page cancels. With nothing focused,
+     * J reaches it and the page closes.
+     */
+    private static void modKeys(Minecraft mc) {
+        VellumScreen[] book = new VellumScreen[1];
+        List<String> asked = new ArrayList<>();
+        steps.add(() -> {
+            book[0] = VellumScreens.openInline(MOD_KEYS, null);
+            book[0].driver().onKey(e -> {
+                String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
+                asked.add(key);
+                if (!key.equals("j")) return false;
+                book[0].onClose();
+                return true;
+            });
+        });
+        settle("the mod keys page", VellumAutomation::screen, 0);
+        steps.add(() -> VellumAutomation.screen().ifPresent(page -> {
+            page.click("#name");
+            page.type("j");
+            String typed = page.eval("document.getElementById('name').value").map(JsonElement::getAsString).orElse("");
+            page.click("p"); // nothing focused
+            page.leave();
+            page.key("ArrowLeft");
+            if (typed.equals("j") && asked.isEmpty() && mc.gui.screen() == book[0]) {
+                Constants.LOG.info("Vellum autopilot: keys the page uses (typing, a cancelled key) don't reach the mod's handler");
+            } else {
+                Constants.LOG.error("Vellum autopilot: the field has '{}', the mod's handler was asked about {}", typed, asked);
+            }
+            page.key("j");
+            if (mc.gui.screen() != book[0] && asked.equals(List.of("j"))) {
+                Constants.LOG.info("Vellum autopilot: the mod's key handler closed the page");
+            } else {
+                Constants.LOG.error("Vellum autopilot: J left the page open; the mod's handler was asked about {}", asked);
+            }
+        }));
+    }
 
     /**
      * In the open Mobdex: clicks the list's last row, which is scrolled out of the list, so the click has to scroll it

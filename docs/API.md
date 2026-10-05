@@ -458,8 +458,10 @@ is one), so cap the wait. A HUD overlay is not settled until its page has loaded
 its error panel is settled.
 
 Vellum's own autopilot (`./gradlew :neoforge:runClient -Pautopilot`, or `:fabric:runClient`) uses all of this: it
-waits for each page to settle, hovers the showcase title screen, fills in the templates demo, clicks a row scrolled
-out of the Mobdex's list, and answers the demo toast through chat.
+waits for each page to settle, hovers the showcase title screen, opens a page under a resting cursor and checks it is
+hovered within its first frames, hovers items and titles for their tooltips, closes a page with a mod's key through
+`onKey`, fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and answers the demo toast
+through chat.
 
 ## Stability
 
