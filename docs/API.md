@@ -56,7 +56,8 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 - `vellum.close()` (or Escape, unless the page handles it) closes the screen. Shift+Escape always closes it, and so
   do three quick Escapes (see [Security](#security)).
 - `vellum.send(channel, value)` in the page calls every `onMessage(channel, ...)` handler with the value as a
-  `JsonElement`, at most 20 times a second (`client.messagesPerSecond`).
+  `JsonElement`. A page may send a burst of 20 messages, then 20 a second (`client.messageBurst`,
+  `client.messagesPerSecond`), so up to 40 arrive in the first second.
 - `screen.driver().push(json)` replaces `vellum.data`; template bindings update and `vellum.on('data', fn)`
   listeners run.
 - `screen.driver().onClose(() -> ...)` runs once when the page closes for good: the screen is closed or replaced by

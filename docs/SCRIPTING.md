@@ -258,7 +258,7 @@ anim.finished.then(() => console.log('shown'));
 | `vellum.data` | The latest data from the server or the mod that opened the page (a parsed JSON value; `{}` until data arrives). Templates read from it. |
 | `vellum.on(channel, fn)` | Calls `fn(value)` for messages on `channel`; `'data'` fires whenever `vellum.data` is replaced. Returns a function that removes the listener. |
 | `vellum.off(channel, fn)` | Removes a listener. |
-| `vellum.send(channel, value)` | Sends `JSON.stringify(value)` to the server or mod. At most 20 messages per second (bursts of 20); extra messages are dropped with a warning, and `send` returns false. |
+| `vellum.send(channel, value)` | Sends `JSON.stringify(value)` to the server or mod. A burst of 20 messages, then 20 per second, so up to 40 in the first second. Extra messages are dropped with a warning, and `send` returns false. |
 | `vellum.state(object)` | Makes the object's properties visible to [templates](#templates) and returns it. |
 | `vellum.close()` | Closes the screen. |
 | `vellum.playSound(id, volume = 1, pitch = 1)` | Plays a sound event such as `'minecraft:ui.button.click'`. |
@@ -422,9 +422,12 @@ owners can change them in `config/vellum.properties` (docs/API.md, Settings).
 - `localStorage` and `sessionStorage` hold at most 256K characters each (keys plus values); going over throws a
   `RangeError` whose message starts with `QuotaExceededError`.
 - `v-for` renders at most 10,000 items.
-- `vellum.send` delivers at most 20 messages per second (bursts of 20), and `vellum.playSound` plays at most 8 sounds
+- `vellum.send` delivers a burst of 20 messages, then 20 per second, and `vellum.playSound` plays at most 8 sounds
   per second. Both count per screen, so reloading the page doesn't reset them (`client.messagesPerSecond`,
   `client.messageBurst` and `client.soundsPerSecond`).
+- Don't send a message per input event. Wheel and pointer events fire once per callback, and a trackpad can scroll
+  60 to 120 times a second. Keep the latest state in the page and send it at most every 100 ms or so, or when the
+  drag or scroll ends.
 - `console` and script errors reach the log at most 50 times a second, each message cut to 4096 characters.
 
 Strings built with `+` have no cap of their own, so avoid building huge ones: the memory budget stops the entry that
