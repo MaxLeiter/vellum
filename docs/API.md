@@ -64,6 +64,8 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
   them reaches your `onMessage` handlers first.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
+- A page follows the pointer from its first frame, as vanilla screens do. One opened under a resting cursor shows
+  `:hover` there at once, and its `title` tooltip half a second later, without the mouse moving.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
   a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
@@ -401,7 +403,8 @@ or the element has `pointer-events: none`), they return false and send nothing, 
 elsewhere.
 
 After `click` or `wheel` the pointer stays where it is, as a real mouse would: the element keeps `:hover`, and half a
-second later its `title` tooltip shows. Call `leave()` before a screenshot.
+second later its `title` tooltip shows. Call `leave()` before a screenshot. Pages follow the pointer from their first
+frame, so the next page you open is hovered wherever the pointer was left, too.
 
 A HUD overlay takes input while it is interactive over the open screen: a screen its `Input` or predicate accepts,
 once a frame has drawn the overlay above that screen. `hover`, `click` and `wheel` then take the same path as on a

@@ -579,7 +579,13 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - `VellumScreen` (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
-  world shows).
+  world shows). Minecraft tells a screen about the pointer only when it moves, and drops the first move after a
+  screen opens, so each frame the screen also hands the driver the render's pointer
+  (`DocumentDriver.followPointer`, in `VellumContainerScreen` too). The page gets a move when it has had no pointer
+  since it loaded, or when the render's pointer changed since the last frame and is not where the page last had it.
+  A page opened under a resting cursor is hovered from its first frames, as vanilla widgets are, and a move sent from
+  code without moving the mouse stands until the mouse moves. `VellumAutomation` moves the mouse handler along with
+  its events (so `leave()` stays off the page), and HUD overlays poll the pointer themselves.
 - `VellumContainerScreen` (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this

@@ -101,6 +101,10 @@ public final class DocumentDriver {
     private @Nullable String tooltipSource;
     private List<Component> titleLines = List.of();
     private List<FormattedCharSequence> tooltipLines = List.of();
+    /** Where the page last got the pointer (GUI px), from any pointer event; NaN before any since it loaded. */
+    private double pointerX = Double.NaN, pointerY = Double.NaN;
+    /** The pointer the owner screen was last rendered with ({@link #followPointer}); MIN_VALUE before the first frame. */
+    private int renderX = Integer.MIN_VALUE, renderY = Integer.MIN_VALUE;
 
     /**
      * @param url     the page ({@code ns:path/page.html}); also the base for its relative URLs
@@ -193,6 +197,8 @@ public final class DocumentDriver {
         LIVE.add(this);
         error = null;
         tooltipSource = null; // translations may have changed
+        pointerX = pointerY = Double.NaN; // the new document has not seen the pointer
+        renderX = renderY = Integer.MIN_VALUE;
         if (html == null) VellumScreens.pageLoading(url, this);
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
@@ -343,26 +349,62 @@ public final class DocumentDriver {
     // ---- Input (true = consumed) ----
 
     public boolean mouseMoved(double x, double y) {
+        pointerAt(x, y);
         return input(in -> in.mouseMove((float) x, (float) y, KeyNames.current()));
     }
 
     public boolean mouseClicked(MouseButtonEvent e) {
+        pointerAt(e.x(), e.y());
         return input(in -> in.mouseDown((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
     public boolean mouseReleased(MouseButtonEvent e) {
+        pointerAt(e.x(), e.y());
         return input(in -> in.mouseUp((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
     /** The pointer left the page (an interactive HUD overlay whose screen closed): hover ends. */
     void mouseLeave() {
+        pointerX = pointerY = Double.NaN;
         Document doc = document();
         if (doc != null) doc.input().mouseLeave();
     }
 
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        pointerAt(x, y);
         return input(in -> in.wheel((float) x, (float) y, (float) -scrollX * InputHandler.WHEEL_NOTCH,
                 (float) -scrollY * InputHandler.WHEEL_NOTCH, KeyNames.current()));
+    }
+
+    /**
+     * For screens, every frame before {@link #extract}: the pointer the frame is rendered with. Minecraft tells a
+     * screen where the pointer is only when it moves, and drops the first move after a screen opens, so a page opened
+     * under a resting cursor would hover nothing until the mouse moved. Vanilla widgets read the render's pointer
+     * instead. This does the same: it sends the page a move to the render's pointer when the page has not had the
+     * pointer since it loaded, or when the render's pointer changed since the last frame and is not where the page
+     * last had it. Frames with an unchanged pointer send nothing, so a move sent from code
+     * ({@code screen.mouseMoved} without moving the mouse) stands until the mouse moves. {@link VellumAutomation}
+     * moves the mouse handler's pointer along with its events, so the two agree.
+     */
+    void followPointer(int mouseX, int mouseY) {
+        boolean moved = renderX != Integer.MIN_VALUE && (mouseX != renderX || mouseY != renderY);
+        renderX = mouseX;
+        renderY = mouseY;
+        boolean elsewhere = (int) pointerX != mouseX || (int) pointerY != mouseY;
+        if (!Double.isNaN(pointerX) && !(moved && elsewhere)) return;
+        // The render's pointer is the mouse handler's, truncated: send the exact one when it is that.
+        Minecraft mc = Minecraft.getInstance();
+        double x = mc.mouseHandler.getScaledXPos(mc.getWindow()), y = mc.mouseHandler.getScaledYPos(mc.getWindow());
+        if ((int) x != mouseX || (int) y != mouseY) {
+            x = mouseX;
+            y = mouseY;
+        }
+        mouseMoved(x, y);
+    }
+
+    private void pointerAt(double x, double y) {
+        pointerX = x;
+        pointerY = y;
     }
 
     /**
