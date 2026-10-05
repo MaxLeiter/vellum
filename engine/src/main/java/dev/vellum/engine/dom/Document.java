@@ -157,6 +157,7 @@ public final class Document extends Node {
     }
 
     private void runScriptElement(Element script) {
+        // controlState TRUE marks the script "already started" (or inert, for fragment-parsed scripts).
         if (scripts == null || script.controlState == Boolean.TRUE) return;
         String type = script.getAttribute("type");
         if (type != null && !type.isBlank() && !type.equals("text/javascript") && !type.equals("module")

@@ -8,7 +8,7 @@ import java.util.Map;
  *
  * <p>This is a plain mutable struct for speed. The style engine builds one per element on every restyle and never
  * mutates it after handing it out; the animation engine produces a separate copy with animated values applied
- * ({@link dev.vellum.engine.dom.Element#style()}), so layout and paint always read a stable snapshot.
+ * ({@link dev.vellum.engine.dom.Element#style}), so layout and paint always read a stable snapshot.
  *
  * <p>Conventions: lengths that may be percentages or keywords are {@link Length}; border and outline widths are
  * resolved px floats (0 when the style is none); colours are ARGB ints with {@code currentColor} already resolved;

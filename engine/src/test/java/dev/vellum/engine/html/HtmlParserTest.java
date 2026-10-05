@@ -81,4 +81,12 @@ class HtmlParserTest {
         Document doc = parse("<div>a</span>b<!-- c -->d</div></div>e");
         assertEquals("<div>abd</div>e", HtmlSerializer.innerHTML(doc.body()));
     }
+
+    @Test
+    void fragmentScriptsAreInert() {
+        Document doc = parse("<div id=a></div>");
+        doc.getElementById("a").setInnerHTML("<script>x()</script>");
+        Element script = doc.getElementById("a").children().get(0);
+        assertEquals(Boolean.TRUE, script.controlState);
+    }
 }

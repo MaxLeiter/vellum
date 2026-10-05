@@ -117,9 +117,7 @@ public final class PreviewHost implements Host {
 
     @Override
     public ScriptRuntime createScriptRuntime(Document document) {
-        // INTEGRATION: return dev.vellum.engine.script.Scripting.rhino().apply(document) once the scripting
-        // workstream lands. Until then pages render without scripts.
-        return null;
+        return dev.vellum.engine.script.Scripting.rhino().apply(document);
     }
 
     @Override

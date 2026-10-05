@@ -52,6 +52,9 @@ public final class HtmlParser {
         Element container = doc.createElement("template");
         HtmlParser p = new HtmlParser(doc, html, container, false);
         p.run();
+        // Scripts created by fragment parsing (innerHTML, v-html) never run, as in browsers: server-sent markup
+        // must not be able to smuggle code past the page's own scripts.
+        for (Element script : container.getElementsByTagName("script")) script.controlState = Boolean.TRUE;
         List<Node> out = new ArrayList<>(container.childNodes());
         for (Node n : out) container.removeChild(n);
         return out;

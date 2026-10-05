@@ -49,7 +49,6 @@ final class PageScene implements Scene {
             String html = host.loadText(url);
             if (html == null) throw new IllegalArgumentException("Page not found: " + url);
             document = Document.parse(host, url, html);
-            // INTEGRATION: assumes the scripting runtime exposes the "data" channel as vellum.data.
             if (data != null) document.receive("data", data);
         });
     }
