@@ -116,7 +116,7 @@ class EventsTest {
     @Test
     void keyboardEventFields() {
         Page page = page("document.addEventListener('keydown', e => log.push([e.key, e.code, e.repeat, e.shiftKey, e.ctrlKey, e instanceof KeyboardEvent].join(' ')))");
-        page.byId("b").dispatchEvent(new KeyboardEvent("keydown", "Enter", "Enter", 257, false, new Modifiers(true, false, false, false)));
+        page.byId("b").dispatchEvent(new KeyboardEvent("keydown", "Enter", "Enter", false, new Modifiers(true, false, false, false)));
         assertEquals("Enter Enter false true false true", page.eval("log.join()"));
     }
 

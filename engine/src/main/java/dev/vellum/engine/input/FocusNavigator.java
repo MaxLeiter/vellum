@@ -39,10 +39,11 @@ final class FocusNavigator {
      */
     List<Element> order() {
         List<Element> positive = new ArrayList<>(), zero = new ArrayList<>();
-        for (Element e : Dom.elements(document)) {
-            if (!e.isFocusable() || e.tabIndex() < 0 || !isNavigable(e) || !isRadioTabStop(e)) continue;
-            (e.tabIndex() > 0 ? positive : zero).add(e);
-        }
+        document.forEachElement(e -> {
+            if (e.isFocusable() && e.tabIndex() >= 0 && isNavigable(e) && isRadioTabStop(e)) {
+                (e.tabIndex() > 0 ? positive : zero).add(e);
+            }
+        });
         positive.sort(Comparator.comparingInt(Element::tabIndex)); // stable: ties stay in tree order
         positive.addAll(zero);
         return positive;
@@ -56,7 +57,7 @@ final class FocusNavigator {
         int next = i < 0 ? (backward ? order.size() - 1 : 0) : Math.floorMod(i + (backward ? -1 : 1), order.size());
         Element target = order.get(next);
         focusByKeyboard(target);
-        if (target.tagName().equals("input") && Forms.isTextControl(target)) TextField.of(target).selectAll();
+        if (target.tagName().equals("input") && target.isTextControl()) TextField.of(target).selectAll();
         return true;
     }
 
@@ -87,12 +88,8 @@ final class FocusNavigator {
         if (autofocusDone) return;
         autofocusDone = true;
         if (document.focusedElement() != null) return;
-        for (Element e : Dom.elements(document)) {
-            if (e.hasAttribute("autofocus") && e.isFocusable() && isNavigable(e)) {
-                focusByKeyboard(e);
-                return;
-            }
-        }
+        Element first = document.firstDescendant(e -> e.hasAttribute("autofocus") && e.isFocusable() && isNavigable(e));
+        if (first != null) focusByKeyboard(first);
     }
 
     private void setVisible(boolean v) {
@@ -125,8 +122,8 @@ final class FocusNavigator {
     }
 
     private static boolean isRadioTabStop(Element e) {
-        if (!Forms.isInput(e, "radio") || e.checked()) return true;
-        for (Element r : Forms.radioGroup(e)) if (r.checked()) return false;
+        if (!e.inputType().equals("radio") || e.checked()) return true;
+        for (Element r : e.radioGroup()) if (r.checked()) return false;
         return true;
     }
 }

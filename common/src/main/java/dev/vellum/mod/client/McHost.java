@@ -56,11 +56,7 @@ final class McHost implements Host {
 
     @Override
     public @Nullable ScriptRuntime createScriptRuntime(Document document) {
-        // Initial data is delivered before any script runs, so pages can read vellum.data at load.
-        ScriptRuntime runtime = Scripting.rhino().apply(document);
-        String data = driver.data();
-        if (data != null) runtime.receive("data", data);
-        return runtime;
+        return Scripting.rhino().apply(document);
     }
 
     @Override

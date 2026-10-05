@@ -47,12 +47,6 @@ public final class Colors {
                 Math.round(blue(argb) * factor));
     }
 
-    public static String toCss(int argb) {
-        if (alpha(argb) == 255) return String.format("#%06x", argb & 0xFFFFFF);
-        return String.format("rgba(%d, %d, %d, %s)", red(argb), green(argb), blue(argb),
-                Float.toString(Math.round(alpha(argb) / 255f * 1000) / 1000f));
-    }
-
     private static int clamp(int c) {
         return c < 0 ? 0 : Math.min(255, c);
     }

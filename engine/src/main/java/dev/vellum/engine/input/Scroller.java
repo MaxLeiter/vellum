@@ -109,8 +109,9 @@ final class Scroller {
 
     /** After relayout: clamps offsets and destinations of containers whose content shrank. */
     void clampAll() {
-        for (Element e : Dom.elements(document)) {
-            if (e.box != null && e.box.isScrollContainer()) e.scrollTo(e.scrollLeft, e.scrollTop);
+        // A snapshot: clamping fires scroll events, whose listeners may change the tree.
+        for (Element e : document.descendants(e -> e.box != null && e.box.isScrollContainer())) {
+            e.scrollTo(e.scrollLeft, e.scrollTop);
         }
         targets.replaceAll((e, t) -> new float[] {clamp(t[0], maxLeft(e)), clamp(t[1], maxTop(e))});
     }

@@ -15,6 +15,7 @@ final class RecordingCanvas implements Canvas {
 
     @Override public void save() {}
     @Override public void restore() {}
+    @Override public int saveCount() { return 0; }
     @Override public void translate(float dx, float dy) {}
     @Override public void transform(float a, float b, float c, float d, float e, float f) {}
     @Override public void multiplyAlpha(float alpha) {}

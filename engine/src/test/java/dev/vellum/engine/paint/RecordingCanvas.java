@@ -100,6 +100,11 @@ final class RecordingCanvas implements Canvas {
     }
 
     @Override
+    public int saveCount() {
+        return stack.size();
+    }
+
+    @Override
     public void restore() {
         Object[] s = stack.pop();
         matrix = (Affine) s[0];

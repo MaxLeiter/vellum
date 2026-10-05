@@ -68,19 +68,41 @@ Packages in `engine/` (`dev.vellum.engine.*`):
 `Document` drives everything on one thread (the render thread in Minecraft):
 
 ```
+host: Document.parse(host, url, html, initialData)   parse, deliver initialData as vellum.data, run scripts,
+                                                     bind templates (ScriptRuntime.documentLoaded), DOMContentLoaded, load
 host: setViewport(w, h, guiScale)    on resize
 host: input.mouseMove/mouseDown/...  on input  → DOM events, hover/active/focus flags, default actions
 host: frame(nowMs)                   every frame:
         scheduler.run      timers, requestAnimationFrame
         input.tick         smooth scroll, caret blink
-        styleEngine.restyle    if style dirty: cascade → element.baseStyle; animations.styleChanged → element.style
+        updateStyle        if style dirty: cascade → element.baseStyle; animations.styleChanged → element.style
         animations.tick    advance transitions/animations → element.style; invalidates layout if needed
-        layoutEngine.layout    if layout dirty: box tree → element.box
+        updateLayout       if layout dirty: box tree → element.box
+        input.afterLayout  after any layout (also one a script flushed): clamp scrolls, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
 ```
 
-Dirty tracking is document-wide (any DOM, attribute, state or text change marks style and layout dirty). Full
-restyle and relayout of a few hundred elements is cheap; per-subtree invalidation can come later without API changes.
+Scripts reading styles or geometry call `flushStyle()` / `flushLayout()`, which run the same `updateStyle` /
+`updateLayout` stages and nothing else: no animation tick and no event-producing work, so no script runs inside a
+flush.
+
+The document is its own error boundary. An exception from the engine during any host call (parse, setViewport,
+frame, paint, hitTest, input, receive) stops the document: it is reported once through `Host.reportError` and kept as
+`Document.error()`, and later host calls do nothing (input returns false). Hosts check `error()` to show it. The
+painter restores the canvas to the save count it found, also when it throws. Errors in scripts and listeners are
+reported and do not stop anything.
+
+Dirty tracking is document-wide (D-008): there is one style flag and one layout flag, and a pass restyles or
+relayouts everything, but a change sets only the flags it can affect. Attribute and form or interaction state
+changes (`:checked`, `:hover`, `:placeholder-shown`...) restyle; the restyle invalidates layout when a
+layout-affecting property changed. Layout is invalidated directly only by what layout reads without styles: tree
+and text changes, and the `width`/`height`/`src` of replaced elements and an input's `type`. Typing in a field
+restyles only when its emptiness flips. Changes to detached nodes invalidate nothing. Moving a node within the
+document (`insertBefore` of a connected node) keeps its state (focus, hover, replaced content such as canvases);
+only nodes that leave the document lose it.
+
+Events are dispatched only when something in the document handles their type: the document counts listeners and
+inline `on*` handlers per type, so `mousemove` with no listener costs nothing.
 
 Per-element results live on `Element`: `baseStyle` (cascade), `style` (after animations, used by layout and paint),
 `beforeStyle`/`afterStyle`, `box`, `replaced`, scroll offsets, and opaque slots for subsystem state
@@ -123,7 +145,7 @@ Elements with behaviour:
 | `dialog` | Hidden unless `open`; `showModal()` puts it in the top layer with a backdrop. |
 | `img src` | Texture (`ns:textures/...png`), sprite (`sprite:ns:path`), or canvas. |
 | `canvas width height` | 2D drawing surface (subset of CanvasRenderingContext2D: fillRect, clearRect, strokeRect, drawImage of sprites/textures/items, fillText, getImageData/putImageData, paths of lines and rects). Backed by a texture. |
-| `template` | Inert content for scripts. |
+| `template` | Inert content for scripts: its contents are not rendered, queried (`getElementById`, `querySelector`...) or run. |
 | `script`, `style`, `link rel=stylesheet` | As in HTML. Scripts run in document order after parsing (like `defer`). |
 
 Minecraft elements (provided by the Minecraft host as replaced content):
@@ -289,11 +311,13 @@ element, with the character offset for caret placement).
 - Pointer: hover chain (`:hover` on target and ancestors), `mouseover/out/enter/leave/move`, `mousedown/up`, `click`
   (same element down and up), `dblclick`, `contextmenu` (right button), `:active` while pressed, pointer capture
   during drags (range thumb, scrollbar, text selection), and the cursor from `cursor` via `Host.setCursor`.
-- Wheel: `wheel` event; if not cancelled, scrolls the nearest scrollable ancestor that can move in that direction
+- Wheel: deltas in GUI px, a notch being `InputHandler.WHEEL_NOTCH` (24 px) in every host; `wheel` event; if not
+  cancelled, scrolls the nearest scrollable ancestor that can move in that direction
   (smooth when `scroll-behavior: smooth`, default on), with scroll chaining.
 - Scrollbars: overlay thumbs appear when a container is scrollable; hover widens them; drag to scroll; click track
   to page.
-- Keyboard: `keydown`/`keyup` to the focused element (or body); Tab / Shift+Tab focus navigation by tabindex order;
+- Keyboard: `keydown`/`keyup` to the focused element (or body); hosts pass DOM `key` and `code` names, and the engine
+  derives `keyCode` from `code` and tracks auto-repeat (a keydown with no keyup since); Tab / Shift+Tab focus navigation by tabindex order;
   Enter/Space activate buttons, checkboxes, links; arrow keys on range, radio groups and selects; Escape bubbles to the
   host (closes the screen unless a script calls preventDefault or a dropdown/dialog is open).
 - Text fields: caret, selection (shift+arrows, mouse drag, double-click word, ctrl/cmd+A), clipboard (copy, cut,

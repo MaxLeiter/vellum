@@ -38,8 +38,9 @@ class KeyboardTest {
         fx.listen(fx.el("b"), "click");
         fx.el("b").focus();
         assertTrue(fx.key("Enter"));
-        assertTrue(fx.key(" "));
-        assertFalse(fx.input.keyDown(" ", "Space", 0, true, NONE), "auto-repeat does not re-click");
+        assertTrue(fx.input.keyDown(" ", "Space", NONE));
+        assertFalse(fx.input.keyDown(" ", "Space", NONE), "auto-repeat does not re-click");
+        fx.input.keyUp(" ", "Space", NONE);
         assertEquals(List.of("click:b", "click:b"), fx.log);
         fx.el("c").focus();
         assertFalse(fx.key("Enter"), "Enter does not toggle checkboxes");

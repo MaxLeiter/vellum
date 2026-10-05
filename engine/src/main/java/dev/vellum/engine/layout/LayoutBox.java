@@ -50,9 +50,6 @@ final class LayoutBox extends Box {
      */
     Area gridArea;
 
-    /** Offset of the last line's baseline from the border-box top, or NaN (inline-block baseline alignment). */
-    float lastBaseline = Float.NaN;
-
     /**
      * Used min-height and max-height (border-box, NaN when none) of the layout in progress, set by
      * {@link LayoutPass} for formatting contexts whose content sizing depends on them (flex, grid).

@@ -1,8 +1,8 @@
 package dev.vellum.engine.anim;
 
 /**
- * A running scripted animation ({@code element.animate()}), Web Animations style. STUB: implemented by the animation
- * workstream; the method set is the contract the script bindings rely on.
+ * A scripted animation ({@code element.animate()}), Web Animations style: the playback control scripts get, as the
+ * {@code Animation} object. Implemented by the animation engine's script animations.
  */
 public interface Animation {
     enum PlayState { IDLE, RUNNING, PAUSED, FINISHED }

@@ -46,8 +46,6 @@ final class Token implements ComponentValue {
 
     boolean isDelim(char c) { return type == Type.DELIM && value.charAt(0) == c; }
 
-    boolean isNumeric() { return type == Type.NUMBER || type == Type.PERCENTAGE || type == Type.DIMENSION; }
-
     @Override
     public String toString() {
         return type + "(" + text() + ")";

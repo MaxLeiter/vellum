@@ -64,8 +64,8 @@ Numbered decisions with the reasons and the alternatives considered. Newest last
 **Why.** Text at multiples of 8px is pixel-perfect. Border-box is what almost every author resets to anyway. White text on the translucent world background matches vanilla menus.
 
 ## D-008 Document-wide dirty tracking
-**Choice.** Any DOM, attribute, text or state change marks the whole document for restyle and relayout on the next frame.
-**Why.** UI documents are small (hundreds of elements), and a full pass costs well under a millisecond. The API leaves room for subtree invalidation later.
+**Choice.** A change marks the whole document for restyle and/or relayout on the next frame: one flag each, set only when the change can affect that stage (attribute and state changes restyle, and the restyle decides whether layout must run; tree and text changes relayout).
+**Why.** UI documents are small (hundreds of elements), and a full pass costs well under a millisecond, but typing or hovering should not relayout. The API leaves room for subtree invalidation later.
 
 ## D-009 Templates by dirty checking
 **Choice.** We provide `{{ }}` interpolation and `v-if`/`v-for`/`:attr`/`@event`/`v-model` directives. Bindings are re-evaluated after every handler, timer and data update, and the DOM is touched only when a value changed.

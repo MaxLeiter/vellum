@@ -11,7 +11,9 @@ import dev.vellum.engine.event.WheelEvent;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.HitResult;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Turns host input into DOM events and default actions: hover/active/focus state, click synthesis, wheel and
@@ -21,8 +23,14 @@ import java.util.List;
  * {@link FocusNavigator} (tab order, focus-visible, autofocus), {@link Scroller} (wheel, smooth scrolling,
  * scrollbars), {@link TextField} / {@link RangeControl} / {@link SelectPopup} (per-control behaviour) and
  * {@link Activation} (click default actions). This class routes input between them.
+ *
+ * <p>The host methods (pointer, wheel and keys) run inside the document's error boundary
+ * ({@link Document#guard}): they return false once the document has stopped.
  */
 public final class InputHandler {
+    /** Wheel distance of one notch in GUI px (about three lines of 8 px text); hosts scale wheel notches by it. */
+    public static final float WHEEL_NOTCH = 24;
+
     /** Finds the element under a viewport point; {@link dev.vellum.engine.paint.Painter#hitTest} by default. */
     @FunctionalInterface
     public interface HitTester {
@@ -37,6 +45,8 @@ public final class InputHandler {
     private SelectPopup popup;
     /** Set when a keydown for a character was cancelled, so its charTyped is dropped (as browsers skip the input). */
     private boolean suppressChar;
+    /** Keys held down, so a keydown without a keyup in between is reported as auto-repeat. */
+    private final Set<String> keysDown = new HashSet<>();
 
     public InputHandler(Document document) {
         this.document = document;
@@ -55,12 +65,14 @@ public final class InputHandler {
 
     /** Mouse moved to (x, y) in viewport px. Returns true if the document is under the pointer. */
     public boolean mouseMove(float x, float y, Modifiers mods) {
-        pointer.moveTo(x, y, mods);
-        if (pointer.drag() != null) pointer.drag().move(x, y);
-        if (popup != null) popup.hover(x, y);
-        Element target = trackHover();
-        if (target != null) pointer.fire("mousemove", target, 0, 0, null);
-        return target != null;
+        return document.guard(() -> {
+            pointer.moveTo(x, y, mods);
+            if (pointer.drag() != null) pointer.drag().move(x, y);
+            if (popup != null) popup.hover(x, y);
+            Element target = trackHover();
+            if (target != null) pointer.fire("mousemove", target, 0, 0, null);
+            return target != null;
+        });
     }
 
     /**
@@ -68,26 +80,28 @@ public final class InputHandler {
      * pointer (or an open dropdown took the press).
      */
     public boolean mouseDown(float x, float y, int button, Modifiers mods) {
-        pointer.moveTo(x, y, mods);
-        if (popup != null) {
-            // Like a native dropdown, an open list swallows presses; one outside it closes it.
-            if (!popup.contains(x, y)) popup = null;
-            return true;
-        }
-        Element target = hitAt(x, y);
-        if (target == null) return false;
-        if (button == 0) {
-            Drag scrollbar = scroller.press(target, x, y);
-            if (scrollbar != null) {
-                pointer.capture(target, scrollbar);
+        return document.guard(() -> {
+            pointer.moveTo(x, y, mods);
+            if (popup != null) {
+                // Like a native dropdown, an open list swallows presses; one outside it closes it.
+                if (!popup.contains(x, y)) popup = null;
                 return true;
             }
-        }
-        int clicks = pointer.press(target, button);
-        MouseEvent down = pointer.fire("mousedown", target, button, clicks, null);
-        if (button == 2) pointer.fire("contextmenu", target, button, clicks, null);
-        if (button == 0 && !down.defaultPrevented()) pressDefault(target, clicks);
-        return true;
+            Element target = hitAt(x, y);
+            if (target == null) return false;
+            if (button == 0) {
+                Drag scrollbar = scroller.press(target, x, y);
+                if (scrollbar != null) {
+                    pointer.capture(target, scrollbar);
+                    return true;
+                }
+            }
+            int clicks = pointer.press(target, button);
+            MouseEvent down = pointer.fire("mousedown", target, button, clicks, null);
+            if (button == 2) pointer.fire("contextmenu", target, button, clicks, null);
+            if (button == 0 && !down.defaultPrevented()) pressDefault(target, clicks);
+            return true;
+        });
     }
 
     /** Default action of a primary mousedown: focus (or blur), then the control's own press behaviour. */
@@ -95,55 +109,60 @@ public final class InputHandler {
         focus.focusByPointer(Dom.closest(target, Element::isFocusable));
         if (target.isDisabled()) return;
         Drag drag = null;
-        if (Forms.isTextControl(target)) {
-            drag = TextField.of(target).press(pointer.x, pointer.y, clicks, pointer.mods().shift());
-        }
-        else if (Forms.isInput(target, "range")) drag = new RangeControl(target).press(pointer.x);
+        if (target.isTextControl()) drag = TextField.of(target).press(pointer.x, pointer.y, clicks, pointer.mods().shift());
+        else if (target.inputType().equals("range")) drag = new RangeControl(target).press(pointer.x);
         else if (target.tagName().equals("select")) openPopup(target);
         if (drag != null) pointer.capture(target, drag);
     }
 
     /** A mouse button went up. Returns true if the document is under the pointer. */
     public boolean mouseUp(float x, float y, int button, Modifiers mods) {
-        pointer.moveTo(x, y, mods);
-        Drag drag = pointer.releaseCapture();
-        if (drag != null) drag.end();
-        if (popup != null && popup.contains(x, y)) {
-            pointer.release(null, button);
-            if (popup.release(x, y)) popup = null;
-            return true;
-        }
-        Element target = hitAt(x, y);
-        Element clickTarget = pointer.release(target, button);
-        if (target != null) pointer.fire("mouseup", target, button, pointer.clicks(), null);
-        if (clickTarget != null && !clickTarget.isDisabled()) {
-            MouseEvent click = pointer.fire("click", clickTarget, button, pointer.clicks(), null);
-            if (!click.defaultPrevented()) document.activationBehavior(clickTarget, click);
-            if (pointer.clicks() == 2) pointer.fire("dblclick", clickTarget, button, 2, null);
-        }
-        if (drag != null) trackHover(); // the capture ended: hover follows the pointer again
-        return target != null;
+        return document.guard(() -> {
+            pointer.moveTo(x, y, mods);
+            Drag drag = pointer.releaseCapture();
+            if (drag != null) drag.end();
+            if (popup != null && popup.contains(x, y)) {
+                pointer.release(null, button);
+                if (popup.release(x, y)) popup = null;
+                return true;
+            }
+            Element target = hitAt(x, y);
+            Element clickTarget = pointer.release(target, button);
+            if (target != null) pointer.fire("mouseup", target, button, pointer.clicks(), null);
+            if (clickTarget != null && !clickTarget.isDisabled()) {
+                MouseEvent click = pointer.fire("click", clickTarget, button, pointer.clicks(), null);
+                if (!click.defaultPrevented()) Activation.run(clickTarget, click);
+                if (pointer.clicks() == 2) pointer.fire("dblclick", clickTarget, button, 2, null);
+            }
+            if (drag != null) trackHover(); // the capture ended: hover follows the pointer again
+            return target != null;
+        });
     }
 
-    /** Wheel input; deltas in px, positive scrolls down/right. Returns true if consumed (cancelled or scrolled). */
+    /**
+     * Wheel input; deltas in px (a notch is {@link #WHEEL_NOTCH}), positive scrolls down/right. Returns true if
+     * consumed (cancelled or scrolled).
+     */
     public boolean wheel(float x, float y, float deltaX, float deltaY, Modifiers mods) {
-        pointer.moveTo(x, y, mods);
-        float dx = deltaX, dy = deltaY;
-        if (mods.shift() && dx == 0) {
-            dx = dy;
-            dy = 0;
-        }
-        if (popup != null) {
-            if (popup.contains(x, y)) popup.wheel(dy);
-            return true;
-        }
-        Element target = hitAt(x, y);
-        if (target == null) return false;
-        if (pointer.dispatch(new WheelEvent(x, y, pointer.buttons(), mods, dx, dy), target).defaultPrevented()) return true;
-        boolean scrolled = target.tagName().equals("textarea") && dx == 0 && TextField.of(target).wheel(dy)
-                || scroller.wheel(target, dx, dy);
-        if (scrolled) trackHover();
-        return scrolled;
+        return document.guard(() -> {
+            pointer.moveTo(x, y, mods);
+            float dx = deltaX, dy = deltaY;
+            if (mods.shift() && dx == 0) {
+                dx = dy;
+                dy = 0;
+            }
+            if (popup != null) {
+                if (popup.contains(x, y)) popup.wheel(dy);
+                return true;
+            }
+            Element target = hitAt(x, y);
+            if (target == null) return false;
+            if (pointer.dispatch(new WheelEvent(x, y, pointer.buttons(), mods, dx, dy), target).defaultPrevented()) return true;
+            boolean scrolled = target.tagName().equals("textarea") && dx == 0 && TextField.of(target).wheel(dy)
+                    || scroller.wheel(target, dx, dy);
+            if (scrolled) trackHover();
+            return scrolled;
+        });
     }
 
     /** Re-targets hover at the pointer position (after moves, scrolls and relayouts). Returns the hovered element. */
@@ -166,36 +185,52 @@ public final class InputHandler {
 
     // ---- Keyboard ----
 
-    /** A key went down. {@code key}/{@code code} use DOM names. Returns true if consumed (default prevented or handled). */
-    public boolean keyDown(String key, String code, int keyCode, boolean repeat, Modifiers mods) {
-        suppressChar = false;
-        if (popup != null && popupKey(key)) return true;
-        Element target = keyTarget();
-        if (target == null) return false;
-        if (!target.dispatchEvent(new KeyboardEvent("keydown", key, code, keyCode, repeat, mods))) {
-            suppressChar = key.codePointCount(0, key.length()) == 1;
-            return true;
-        }
-        return keyDefault(document.focusedElement(), key, mods, repeat);
+    /**
+     * A key went down. {@code key}/{@code code} use DOM names. A key that is already down (no keyup since) is
+     * auto-repeat. Returns true if consumed (default prevented or handled).
+     */
+    public boolean keyDown(String key, String code, Modifiers mods) {
+        return document.guard(() -> {
+            boolean repeat = !keysDown.add(keyId(key, code));
+            suppressChar = false;
+            if (popup != null && popupKey(key)) return true;
+            Element target = keyTarget();
+            if (target == null) return false;
+            if (!target.dispatchEvent(new KeyboardEvent("keydown", key, code, repeat, mods))) {
+                suppressChar = key.codePointCount(0, key.length()) == 1;
+                return true;
+            }
+            return keyDefault(document.focusedElement(), key, mods, repeat);
+        });
     }
 
-    public boolean keyUp(String key, String code, int keyCode, Modifiers mods) {
-        Element target = keyTarget();
-        if (target == null) return false;
-        boolean prevented = !target.dispatchEvent(new KeyboardEvent("keyup", key, code, keyCode, false, mods));
-        return prevented || wantsKeyboard();
+    public boolean keyUp(String key, String code, Modifiers mods) {
+        return document.guard(() -> {
+            keysDown.remove(keyId(key, code));
+            Element target = keyTarget();
+            if (target == null) return false;
+            boolean prevented = !target.dispatchEvent(new KeyboardEvent("keyup", key, code, false, mods));
+            return prevented || wantsKeyboard();
+        });
+    }
+
+    /** What identifies a held key: its physical code, or its key when the host knows no code. */
+    private static String keyId(String key, String code) {
+        return code.isEmpty() || code.equals("Unidentified") ? key : code;
     }
 
     /** Text input (already composed characters). Returns true if consumed. */
     public boolean charTyped(String text) {
-        if (suppressChar) {
-            suppressChar = false;
+        return document.guard(() -> {
+            if (suppressChar) {
+                suppressChar = false;
+                return true;
+            }
+            Element focused = document.focusedElement();
+            if (focused == null || !focused.isTextControl()) return false;
+            TextField.of(focused).type(text);
             return true;
-        }
-        Element focused = document.focusedElement();
-        if (focused == null || !Forms.isTextControl(focused)) return false;
-        TextField.of(focused).type(text);
-        return true;
+        });
     }
 
     /** Keys while a dropdown is open; false lets the key continue (Tab closes the list and moves focus). */
@@ -219,7 +254,7 @@ public final class InputHandler {
     private boolean keyDefault(Element el, String key, Modifiers mods, boolean repeat) {
         if (key.equals("Tab")) return focus.move(mods.shift());
         if (el == null) return false;
-        if (Forms.isTextControl(el)) return TextField.of(el).keyDown(key, mods);
+        if (el.isTextControl()) return TextField.of(el).keyDown(key, mods);
         if (el.isDisabled()) return false;
         if (el.tagName().equals("select")) {
             boolean open = key.equals("Enter") || key.equals(" ")
@@ -227,12 +262,12 @@ public final class InputHandler {
             if (open) openPopup(el);
             return open || SelectPopup.stepClosed(el, key);
         }
-        if (Forms.isInput(el, "range")) return new RangeControl(el).keyDown(key);
-        if (Forms.isInput(el, "radio") && radioArrow(el, key)) return true;
+        if (el.inputType().equals("range")) return new RangeControl(el).keyDown(key);
+        if (el.inputType().equals("radio") && radioArrow(el, key)) return true;
         boolean pushable = Forms.isButton(el) || Forms.isDetailsSummary(el);
         boolean activate = switch (key) {
             case "Enter" -> pushable || el.tagName().equals("a") && el.hasAttribute("href");
-            case " " -> !repeat && (pushable || Forms.isInput(el, "checkbox") || Forms.isInput(el, "radio"));
+            case " " -> !repeat && (pushable || el.isCheckable());
             default -> false;
         };
         if (activate) el.click();
@@ -247,7 +282,7 @@ public final class InputHandler {
             default -> 0;
         };
         if (dir == 0) return false;
-        List<Element> group = Forms.radioGroup(radio).stream().filter(r -> r == radio || !r.isDisabled()).toList();
+        List<Element> group = radio.radioGroup().stream().filter(r -> r == radio || !r.isDisabled()).toList();
         Element next = group.get(Math.floorMod(group.indexOf(radio) + dir, group.size()));
         focus.focusByKeyboard(next);
         Forms.checkRadio(next);
@@ -284,14 +319,14 @@ public final class InputHandler {
         if (scroller.tick(nowMs)) trackHover();
         if (pointer.drag() != null) pointer.drag().move(pointer.x, pointer.y);
         Element focused = document.focusedElement();
-        if (focused != null && Forms.isTextControl(focused)) TextField.of(focused).blink(nowMs);
+        if (focused != null && focused.isTextControl()) TextField.of(focused).blink(nowMs);
     }
 
     /** Called after each relayout: clamps scroll offsets, keeps the caret in view, autofocus, re-hit-tests hover. */
     public void afterLayout() {
         scroller.clampAll();
         Element focused = document.focusedElement();
-        if (focused != null && Forms.isTextControl(focused)) TextField.of(focused).scrollToCaret();
+        if (focused != null && focused.isTextControl()) TextField.of(focused).scrollToCaret();
         if (popup != null && popup.select().box == null) popup = null;
         focus.autofocus();
         trackHover();
@@ -310,14 +345,14 @@ public final class InputHandler {
      * newly focused element scrolls into view.
      */
     public void focusChanged(Element old, Element now) {
-        if (old != null && Forms.isTextControl(old)) TextField.of(old).blurred();
+        if (old != null && old.isTextControl()) TextField.of(old).blurred();
         if (popup != null && popup.select() == old) popup = null;
-        if (now != null && Forms.isTextControl(now)) TextField.of(now).focused();
+        if (now != null && now.isTextControl()) TextField.of(now).focused();
         focus.focusChanged(now);
     }
 
-    /** Default action for an uncancelled click on {@code target}. */
-    public void activationBehavior(Element target, Event event) {
+    /** The default action of an uncancelled synthetic click ({@link Element#click()}). */
+    public void activate(Element target, Event event) {
         Activation.run(target, event);
     }
 
@@ -334,7 +369,7 @@ public final class InputHandler {
     /** True when a text field has focus, so hosts can suppress their own key bindings (e.g. inventory key). */
     public boolean wantsKeyboard() {
         Element focused = document.focusedElement();
-        return focused != null && Forms.isEditable(focused);
+        return focused != null && document.error() == null && Forms.isEditable(focused);
     }
 
     /** True when the pointer is over (or dragging) a scroll container's scrollbar; the painter widens it. */

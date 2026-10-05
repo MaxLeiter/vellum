@@ -29,10 +29,6 @@ final class Templates {
         compiler = new TemplateCompiler(rt, cloaked);
     }
 
-    boolean installed() {
-        return installed;
-    }
-
     /** Compiles the document (once scripts have run); the entry that calls this then runs the first digest. */
     void install() {
         if (installed) return;

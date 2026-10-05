@@ -1,6 +1,5 @@
 package dev.vellum.engine.input;
 
-import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.layout.Box;
 
@@ -11,16 +10,6 @@ import java.util.function.Predicate;
 /** Tree and geometry queries used across the input package. */
 final class Dom {
     private Dom() {}
-
-    /** Every element of the document in tree order, starting with the root element. */
-    static List<Element> elements(Document document) {
-        Element root = document.documentElement();
-        if (root == null) return List.of();
-        List<Element> all = new ArrayList<>();
-        all.add(root);
-        all.addAll(root.getElementsByTagName("*"));
-        return all;
-    }
 
     /** The element itself and its ancestors, innermost first; empty for null. */
     static List<Element> chain(Element e) {

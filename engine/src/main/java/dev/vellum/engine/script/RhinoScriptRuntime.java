@@ -64,11 +64,6 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         templates = new Templates(this);
         vellum = new VellumApi(this);
         WindowBindings.install(this);
-        // Templates bind once scripts have run (so vellum.state() calls are in), before the page's own listeners.
-        document.addEventListener("DOMContentLoaded", e -> enter("Error in templates", c -> {
-            templates.install();
-            return null;
-        }), false, true);
     }
 
     // ---- ScriptRuntime ----
@@ -102,6 +97,15 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     @Override
     public void receive(String channel, String json) {
         vellum.receive(channel, json);
+    }
+
+    /** Templates bind once scripts have run (so their {@code vellum.state()} calls are in). */
+    @Override
+    public void documentLoaded() {
+        enter("Error in templates", cx -> {
+            templates.install();
+            return null;
+        });
     }
 
     @Override

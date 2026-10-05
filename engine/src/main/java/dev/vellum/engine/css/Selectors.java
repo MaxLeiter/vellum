@@ -5,10 +5,10 @@ import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Selector matching for the DOM API (matches, closest, querySelector, querySelectorAll). Parsed selectors are kept
@@ -44,22 +44,11 @@ public final class Selectors {
     private static List<Element> query(Node scope, String selector, boolean firstOnly) {
         List<Selector> selectors = parse(selector);
         Element scopeElement = scope instanceof Element e ? e : scope instanceof Document d ? d.documentElement() : null;
-        List<Element> out = new ArrayList<>(firstOnly ? 1 : 8);
-        collect(scope, selectors, new MatchContext(scopeElement), out, firstOnly);
-        return out;
-    }
-
-    private static boolean collect(Node node, List<Selector> selectors, MatchContext ctx, List<Element> out,
-                                   boolean firstOnly) {
-        for (int i = 0, n = node.childCount(); i < n; i++) {
-            if (!(node.childAt(i) instanceof Element e)) continue;
-            if (SelectorParser.matchesAny(selectors, e, ctx)) {
-                out.add(e);
-                if (firstOnly) return true;
-            }
-            if (collect(e, selectors, ctx, out, firstOnly)) return true;
-        }
-        return false;
+        MatchContext ctx = new MatchContext(scopeElement);
+        Predicate<Element> matches = e -> SelectorParser.matchesAny(selectors, e, ctx);
+        if (!firstOnly) return scope.descendants(matches);
+        Element first = scope.firstDescendant(matches);
+        return first == null ? List.of() : List.of(first);
     }
 
     private static List<Selector> parse(String selector) {

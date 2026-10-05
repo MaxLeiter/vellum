@@ -3,6 +3,7 @@ package dev.vellum.engine.html;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
+import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
@@ -83,10 +84,18 @@ class HtmlParserTest {
     }
 
     @Test
-    void fragmentScriptsAreInert() {
-        Document doc = parse("<div id=a></div>");
-        doc.getElementById("a").setInnerHTML("<script>x()</script>");
-        Element script = doc.getElementById("a").children().get(0);
-        assertEquals(Boolean.TRUE, script.controlState);
+    void fragmentScriptsNeverRun() {
+        TestHost host = new TestHost();
+        host.scripting = Scripting.rhino();
+        Document doc = Document.parse(host, "test:x.html", "<div id=a></div>");
+        Element a = doc.getElementById("a");
+        a.setInnerHTML("<script>console.log('fragment')</script>");
+        Node script = a.firstChild();
+        doc.body().appendChild(script.cloneNode(true));
+        doc.body().appendChild(script);
+        Element created = doc.createElement("script");
+        created.setTextContent("console.log('created')");
+        doc.body().appendChild(created.cloneNode(true));
+        assertEquals(List.of("INFO: created"), host.logs, "cloned and moved, the fragment's script stays inert");
     }
 }

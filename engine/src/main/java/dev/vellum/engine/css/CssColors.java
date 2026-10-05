@@ -16,7 +16,7 @@ import java.util.Map;
  * syntax, {@code / alpha}), the CSS named colours, Minecraft's chat colours ({@code mc-gold}...), {@code transparent},
  * {@code currentColor} and {@code color-mix()} (always mixed in sRGB, whatever space is named).
  */
-final class CssColors {
+public final class CssColors {
     private static final Map<String, Integer> NAMED = new HashMap<>();
 
     static {
@@ -86,7 +86,7 @@ final class CssColors {
     }
 
     /** {@code rgb(r, g, b)} or {@code rgba(r, g, b, a)}, the form getComputedStyle uses. */
-    static String serialize(int argb) {
+    public static String serialize(int argb) {
         String rgb = Colors.red(argb) + ", " + Colors.green(argb) + ", " + Colors.blue(argb);
         if (Colors.alpha(argb) == 255) return "rgb(" + rgb + ")";
         return "rgba(" + rgb + ", " + CssText.number(Math.round(Colors.alpha(argb) / 255f * 1000) / 1000f) + ")";

@@ -2,6 +2,7 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
+import dev.vellum.engine.css.CssColors;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.Constants;
@@ -66,7 +67,7 @@ final class McText {
 
     private static String css(Style style) {
         StringBuilder css = new StringBuilder();
-        if (style.getColor() != null) css.append(String.format("color:#%06x;", style.getColor().getValue() & 0xFFFFFF));
+        if (style.getColor() != null) css.append("color:").append(CssColors.serialize(0xFF000000 | style.getColor().getValue())).append(';');
         if (style.isBold()) css.append("font-weight:bold;");
         if (style.isItalic()) css.append("font-style:italic;");
         if (style.isUnderlined() || style.isStrikethrough()) {

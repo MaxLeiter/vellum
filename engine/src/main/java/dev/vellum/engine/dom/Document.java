@@ -12,11 +12,16 @@ import dev.vellum.engine.html.HtmlParser;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.engine.layout.LayoutEngine;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.paint.Painter;
 import dev.vellum.engine.script.ScriptRuntime;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * A document and its rendering pipeline. Hosts drive it with three calls:
@@ -26,10 +31,17 @@ import java.util.List;
  *   <li>{@link #paint} to draw onto a {@link Canvas},</li>
  * </ol>
  * plus input forwarded to {@link #input()}. Everything runs on one thread (the render thread in Minecraft).
+ *
+ * <p>The document is its own error boundary: if the engine throws during a host call (loading, a frame, painting,
+ * input, a message), the document stops. The exception is reported once through {@link Host#reportError} and kept
+ * as {@link #error()}, and later host calls do nothing, so hosts only check {@link #error()} to show it. Errors in
+ * scripts and listeners are reported without stopping anything.
  */
 public final class Document extends Node {
     private final Host host;
-    private String url;
+    private final String url;
+    /** JSON delivered to scripts as {@code vellum.data} before any script runs, or null. */
+    private final String initialData;
     private final Scheduler scheduler = new Scheduler(this);
     private final StyleEngine styleEngine;
     private final LayoutEngine layoutEngine;
@@ -37,20 +49,26 @@ public final class Document extends Node {
     private final Painter painter;
     private final InputHandler input;
     private ScriptRuntime scripts;
-    private boolean loaded;
+    private String readyState = "loading";
     private boolean closed;
+    private Throwable error;
 
     private float viewportWidth = 320, viewportHeight = 240;
     private float devicePixelRatio = 1;
-    private boolean styleDirty = true, layoutDirty = true;
+    boolean styleDirty = true, layoutDirty = true;
+    /** A layout ran (perhaps in a script's flush) whose follow-up work waits for the next frame. */
+    private boolean laidOut;
     private int version;
+    /** Listeners plus inline {@code on*} handlers in this document, by lower-case event type. */
+    private final Map<String, int[]> handlers = new HashMap<>();
 
     private Element focused;
 
-    private Document(Host host, String url) {
+    private Document(Host host, String url, String initialData) {
         super(null);
         this.host = host;
         this.url = url == null ? "" : url;
+        this.initialData = initialData;
         this.styleEngine = new StyleEngine(this);
         this.layoutEngine = new LayoutEngine(this);
         this.animationEngine = new AnimationEngine(this);
@@ -58,20 +76,31 @@ public final class Document extends Node {
         this.input = new InputHandler(this);
     }
 
-    /** Creates an empty document with {@code <html><head></head><body></body></html>}. */
+    /** Creates an empty document with {@code <html><head></head><body></body></html>}, without loading it. */
     public static Document create(Host host, String url) {
-        Document doc = new Document(host, url);
+        Document doc = new Document(host, url, null);
         Element html = doc.appendChild(doc.createElement("html"));
         html.appendChild(doc.createElement("head"));
         html.appendChild(doc.createElement("body"));
         return doc;
     }
 
-    /** Parses HTML into a new document, then loads it (stylesheets, scripts, the load event). */
+    /** {@link #parse(Host, String, String, String)} without initial data. */
     public static Document parse(Host host, String url, String html) {
-        Document doc = new Document(host, url);
-        HtmlParser.parseInto(doc, html);
-        doc.load();
+        return parse(host, url, html, null);
+    }
+
+    /**
+     * Parses HTML into a new document, then loads it: runs its scripts (after delivering {@code initialData}, a JSON
+     * value or null, as {@code vellum.data}), then fires {@code DOMContentLoaded} and {@code load}. Stylesheets are
+     * found on the first restyle. Never throws for engine errors: the document comes back stopped ({@link #error()}).
+     */
+    public static Document parse(Host host, String url, String html, String initialData) {
+        Document doc = new Document(host, url, initialData);
+        doc.run(() -> {
+            HtmlParser.parseInto(doc, html);
+            doc.load();
+        });
         return doc;
     }
 
@@ -80,7 +109,6 @@ public final class Document extends Node {
 
     public Host host() { return host; }
     public String url() { return url; }
-    public void setUrl(String url) { this.url = url; }
     public Scheduler scheduler() { return scheduler; }
     public StyleEngine styleEngine() { return styleEngine; }
     public LayoutEngine layoutEngine() { return layoutEngine; }
@@ -89,11 +117,17 @@ public final class Document extends Node {
     public InputHandler input() { return input; }
     /** The script runtime, or null when scripting is disabled. */
     public ScriptRuntime scripts() { return scripts; }
-    public boolean isClosed() { return closed; }
+    /** {@code document.readyState}: "loading" while parsing, "interactive" while scripts run, then "complete". */
+    public String readyState() { return readyState; }
 
     /** Resolves a URL relative to this document. */
     public String resolveUrl(String relative) {
         return host.resolveUrl(url, relative);
+    }
+
+    @Override
+    Node cloneShallow() {
+        throw new UnsupportedOperationException("Documents cannot be cloned");
     }
 
     // ---- Tree helpers ----
@@ -126,9 +160,7 @@ public final class Document extends Node {
     }
 
     public Element getElementById(String id) {
-        Element[] found = new Element[1];
-        Element.walk(this, e -> { if (found[0] == null && id.equals(e.getAttribute("id"))) found[0] = e; });
-        return found[0];
+        return firstDescendant(e -> id.equals(e.attribute("id")));
     }
 
     public Element querySelector(String selector) {
@@ -141,28 +173,25 @@ public final class Document extends Node {
 
     // ---- Loading ----
 
-    /**
-     * Finishes loading after parsing: creates the script runtime, runs scripts in document order, then fires
-     * {@code DOMContentLoaded} and {@code load}. Stylesheets are discovered by the style engine on the first restyle.
-     */
-    public void load() {
-        if (loaded) return;
-        loaded = true;
+    /** Scripts run after parsing in document order (like {@code defer}), then templates bind, then the events. */
+    private void load() {
+        readyState = "interactive";
         scripts = host.createScriptRuntime(this);
-        List<Element> scriptElements = new ArrayList<>();
-        Element.walk(this, e -> { if (e.tagName().equals("script")) scriptElements.add(e); });
-        for (Element s : scriptElements) runScriptElement(s);
+        if (scripts != null && initialData != null) scripts.receive("data", initialData);
+        for (Element script : getElementsByTagName("script")) runScript(script);
+        if (scripts != null) scripts.documentLoaded();
         dispatchEvent(new Event("DOMContentLoaded", true, false));
+        readyState = "complete";
         dispatchEvent(new Event("load", false, false));
     }
 
-    private void runScriptElement(Element script) {
-        // controlState TRUE marks the script "already started" (or inert, for fragment-parsed scripts).
-        if (scripts == null || script.controlState == Boolean.TRUE) return;
+    /** Runs a script element, unless it already started (or must never run) or is a data block. */
+    private void runScript(Element script) {
+        if (scripts == null || !script.tagName().equals("script") || script.alreadyStarted) return;
         String type = script.getAttribute("type");
         if (type != null && !type.isBlank() && !type.equals("text/javascript") && !type.equals("module")
                 && !type.equals("application/javascript")) return; // data blocks, templates...
-        script.controlState = Boolean.TRUE; // "already started"
+        script.alreadyStarted = true;
         String src = script.getAttribute("src");
         String code;
         String name;
@@ -192,48 +221,73 @@ public final class Document extends Node {
         this.viewportWidth = width;
         this.viewportHeight = height;
         this.devicePixelRatio = devicePixelRatio;
-        styleDirty = true; // vw/vh and media queries
-        layoutDirty = true;
-        dispatchEvent(new Event("resize", false, false));
+        invalidate(true); // vw/vh and media queries
+        run(() -> dispatchEvent(new Event("resize", false, false)));
     }
 
     // ---- Pipeline ----
 
     /**
      * Advances the document to {@code nowMs} (a monotonic clock in ms): runs timers and animation frames, advances
-     * transitions and animations, then restyles and relayouts if anything changed.
+     * transitions and animations, restyles and relayouts if anything changed, then does the work that follows a
+     * layout (scroll clamping, autofocus, re-targeting hover), which may fire events.
      */
     public void frame(double nowMs) {
-        if (closed) return;
-        scheduler.run(nowMs);
-        input.tick(nowMs);
-        if (styleDirty) {
-            styleDirty = false;
-            styleEngine.restyle();
-        }
-        animationEngine.tick(nowMs);
-        if (updateReplaced()) layoutDirty = true;
-        if (layoutDirty) {
-            layoutDirty = false;
-            layoutEngine.layout();
-            version++;
-            input.afterLayout();
-        }
+        run(() -> {
+            scheduler.run(nowMs);
+            input.tick(nowMs);
+            updateStyle();
+            animationEngine.tick(nowMs);
+            if (updateReplaced()) layoutDirty = true;
+            updateLayout();
+            if (laidOut) {
+                laidOut = false;
+                input.afterLayout();
+            }
+        });
+    }
+
+    /** Restyles now if needed, for scripts reading computed styles. Fires no events. */
+    public void flushStyle() {
+        updateStyle();
+    }
+
+    /** Restyles and relayouts now if needed, for scripts reading geometry. Fires no events. */
+    public void flushLayout() {
+        updateStyle();
+        updateLayout();
+    }
+
+    private void updateStyle() {
+        if (!styleDirty) return;
+        styleDirty = false;
+        styleEngine.restyle();
+    }
+
+    private void updateLayout() {
+        if (!layoutDirty) return;
+        layoutDirty = false;
+        layoutEngine.layout();
+        version++;
+        laidOut = true;
     }
 
     private boolean updateReplaced() {
         boolean[] changed = {false};
-        Element.walk(this, e -> {
-            ReplacedContent r = e.replaced;
-            if (r != null && r.update()) changed[0] = true;
+        forEachElement(e -> {
+            if (e.replaced != null && e.replaced.update()) changed[0] = true;
         });
         return changed[0];
     }
 
     /** Paints the current layout. Call after {@link #frame}. */
     public void paint(Canvas canvas) {
-        if (closed) return;
-        painter.paint(canvas);
+        run(() -> painter.paint(canvas));
+    }
+
+    /** The topmost element (and box) at a viewport point, as painted; null when nothing is there. */
+    public HitResult hitTest(float x, float y) {
+        return guarded(() -> painter.hitTest(x, y), null);
     }
 
     /** Incremented on every relayout; hosts use it to know when to reposition things (e.g. container slots). */
@@ -241,70 +295,126 @@ public final class Document extends Node {
 
     public void invalidateStyle() { styleDirty = true; }
     public void invalidateLayout() { layoutDirty = true; }
-    public boolean needsStyle() { return styleDirty; }
     public boolean needsLayout() { return layoutDirty; }
 
-    /** Runs restyle and layout now if needed (for scripts reading geometry). */
-    public void flushLayout() {
-        if (styleDirty) {
-            styleDirty = false;
-            styleEngine.restyle();
-            animationEngine.tick(scheduler.now());
-        }
-        if (layoutDirty) {
-            layoutDirty = false;
-            layoutEngine.layout();
-            version++;
-            input.afterLayout();
+    /** Marks style dirty, and layout too when {@code layout}. */
+    void invalidate(boolean layout) {
+        invalidate(true, layout);
+    }
+
+    private void invalidate(boolean style, boolean layout) {
+        styleDirty |= style;
+        layoutDirty |= layout;
+    }
+
+    // ---- Error boundary ----
+
+    /** The engine failure that stopped this document, or null while it runs. */
+    public Throwable error() { return error; }
+
+    /**
+     * Runs host-driven work inside the document's error boundary. Returns the work's result, or false when the
+     * document is stopped or closed (the work does not run) or the work failed (the document stops).
+     */
+    public boolean guard(BooleanSupplier work) {
+        return guarded(work::getAsBoolean, false);
+    }
+
+    private void run(Runnable work) {
+        guarded(() -> {
+            work.run();
+            return null;
+        }, null);
+    }
+
+    /** The boundary itself: the work's result, or {@code otherwise} when it did not run or failed. */
+    private <T> T guarded(Supplier<T> work, T otherwise) {
+        if (error != null || closed) return otherwise;
+        try {
+            return work.get();
+        } catch (RuntimeException | StackOverflowError e) {
+            if (error == null) {
+                error = e;
+                host.reportError("The page stopped after an engine error", e);
+            }
+            return otherwise;
         }
     }
 
     // ---- Mutation hooks (called by nodes) ----
 
-    void treeMutated(Node parent, Node child, boolean added) {
-        styleDirty = true;
-        layoutDirty = true;
-        if (added && loaded && child.isConnected()) {
-            if (child instanceof Element e) {
-                if (e.tagName().equals("script")) runScriptElement(e);
-                else Element.walk(e, d -> { if (d.tagName().equals("script")) runScriptElement(d); });
-            }
-        }
+    /** {@code child} was inserted into this connected document; {@code arrived} unless it only moved within it. */
+    void inserted(Node child, boolean arrived) {
+        invalidate(true);
+        if (!arrived || scripts == null || readyState.equals("loading") || child.isInert()) return;
+        if (child instanceof Element e) runScript(e);
+        for (Element script : child.getElementsByTagName("script")) runScript(script);
     }
 
+    /** {@code node} is about to leave the document (not just move within it). */
     void nodeRemoving(Node node) {
         if (focused != null && node.contains(focused)) setFocus(null);
         input.nodeRemoving(node);
         disposeReplaced(node);
     }
 
+    /** Disposes the replaced content in a subtree; a failing dispose is reported and the rest still disposed. */
     private void disposeReplaced(Node node) {
         if (node instanceof Element e && e.replaced != null) {
-            e.replaced.dispose();
+            ReplacedContent content = e.replaced;
             e.replaced = null;
+            try {
+                content.dispose();
+            } catch (RuntimeException ex) {
+                reportError("Error disposing <" + e.tagName() + ">", ex);
+            }
         }
         for (Node c : node.children) disposeReplaced(c);
     }
 
-    void attributeChanged(Element element, String name, String oldValue) {
-        styleDirty = true;
-        layoutDirty = true;
+    /**
+     * Restyles for any attribute (selectors read them). Relayouts only for what layout reads directly: the size and
+     * source of replaced elements and an input's type; other layout changes come from the restyle.
+     */
+    void attributeChanged(Element element, String name) {
+        if (!element.isConnected()) return;
+        boolean layout = switch (name) {
+            case "width", "height", "src" -> host.isReplacedTag(element.tagName());
+            case "type" -> element.tagName().equals("input");
+            default -> false;
+        };
+        invalidate(layout);
         if (element.replaced != null) element.replaced.attributeChanged(name);
     }
 
-    void textChanged(Text text) {
-        layoutDirty = true;
-        styleDirty = true; // :empty, and <style> contents
+    /**
+     * Text changed: relayout; restyle too when it is a stylesheet's or the parent's emptiness flipped ({@code :empty},
+     * {@code :placeholder-shown}).
+     */
+    void textChanged(Text text, boolean emptinessFlipped) {
+        if (!text.isConnected()) return;
+        Element parent = text.parentElement();
+        invalidate(emptinessFlipped || parent != null && parent.tagName().equals("style"), true);
     }
 
-    /** Interaction or form state changed; restyle (for :checked, :hover...) and repaint. */
-    void stateChanged(Element element, boolean affectsSelectors) {
-        styleDirty = true;
-        layoutDirty = true;
+    /** Form state that selectors read changed ({@code :checked}, {@code :placeholder-shown}): restyle. */
+    void stateChanged(Element element) {
+        if (element.isConnected()) styleDirty = true;
     }
 
     void scrolled(Element element) {
         element.dispatchEvent(new Event("scroll", false, false));
+    }
+
+    /** Adds {@code delta} to the count of handlers (listeners or inline attributes) for an event type. */
+    void countHandlers(String type, int delta) {
+        handlers.computeIfAbsent(type.toLowerCase(Locale.ROOT), t -> new int[1])[0] += delta;
+    }
+
+    /** Whether anything in the document may handle {@code type} events, so dispatch can skip the rest. */
+    boolean handles(String type) {
+        int[] count = handlers.get(type.toLowerCase(Locale.ROOT));
+        return count != null && count[0] > 0;
     }
 
     // ---- Interaction state ----
@@ -347,11 +457,6 @@ public final class Document extends Node {
         }
     }
 
-    /** Runs the default action of a click that was not cancelled (toggle checkboxes, follow links...). */
-    public void activationBehavior(Element target, Event event) {
-        input.activationBehavior(target, event);
-    }
-
     // ---- Host messaging ----
 
     /**
@@ -359,20 +464,23 @@ public final class Document extends Node {
      * {@code CustomEvent("message")} on the document whose detail is {@code {channel, json}}.
      */
     public void receive(String channel, String json) {
-        if (scripts != null) scripts.receive(channel, json);
-        dispatchEvent(new CustomEvent("message", false, false, new String[] {channel, json}));
+        run(() -> {
+            if (scripts != null) scripts.receive(channel, json);
+            dispatchEvent(new CustomEvent("message", false, false, new String[] {channel, json}));
+        });
     }
 
     // ---- Errors and lifecycle ----
 
+    /** Reports an error in page code (a listener, a script); the document keeps running. */
     public void reportError(String message, Throwable error) {
         host.reportError(message, error);
     }
 
-    /** Disposes scripts, timers and replaced content. The document must not be used afterwards. */
+    /** Fires {@code unload}, then disposes scripts, timers and replaced content. The document is unusable afterwards. */
     public void close() {
         if (closed) return;
-        dispatchEvent(new Event("unload", false, false));
+        run(() -> dispatchEvent(new Event("unload", false, false)));
         closed = true;
         scheduler.clear();
         if (scripts != null) scripts.dispose();

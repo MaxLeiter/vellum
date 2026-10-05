@@ -8,4 +8,9 @@ public final class DocumentFragment extends Node {
 
     @Override
     public String nodeName() { return "#document-fragment"; }
+
+    @Override
+    Node cloneShallow() {
+        return new DocumentFragment(ownerDocument);
+    }
 }

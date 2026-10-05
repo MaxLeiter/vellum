@@ -47,13 +47,7 @@ public final class Length {
 
     public boolean isFixed() { return kind == Kind.FIXED; }
     public boolean isAuto() { return kind == Kind.AUTO; }
-    public boolean isNone() { return kind == Kind.NONE; }
-    /** True when this is a plain length with no percentage part, so it resolves without a reference. */
-    public boolean isAbsolute() { return kind == Kind.FIXED && percent == 0; }
     public boolean hasPercent() { return kind == Kind.FIXED && percent != 0; }
-    public boolean isIntrinsic() {
-        return kind == Kind.MIN_CONTENT || kind == Kind.MAX_CONTENT || kind == Kind.FIT_CONTENT;
-    }
 
     /**
      * Resolves against a percentage reference. Keywords resolve to {@code fallback}. When the reference is unknown

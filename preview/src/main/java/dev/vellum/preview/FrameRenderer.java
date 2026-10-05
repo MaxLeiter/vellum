@@ -55,13 +55,9 @@ final class FrameRenderer {
 
         ImageCanvas canvas = new ImageCanvas(image, scale, assets, font);
         if (scene.error() == null) scene.paint(canvas);
+        if (scene.error() != null) paintError(canvas, scene.error(), guiWidth, guiHeight);
+        else if (overlay != null) overlay.accept(canvas);
         canvas.dispose();
-
-        // A fresh canvas: a scene that failed mid-paint may have left state pushed.
-        ImageCanvas top = new ImageCanvas(image, scale, assets, font);
-        if (scene.error() != null) paintError(top, scene.error(), guiWidth, guiHeight);
-        else if (overlay != null) overlay.accept(top);
-        top.dispose();
         return image;
     }
 

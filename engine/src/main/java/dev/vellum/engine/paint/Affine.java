@@ -79,10 +79,6 @@ public final class Affine {
         return a * d - b * c;
     }
 
-    public boolean isIdentity() {
-        return a == 1 && b == 0 && c == 0 && d == 1 && e == 0 && f == 0;
-    }
-
     /** Inverts in place; returns false (leaving the matrix unchanged) when it is singular, e.g. {@code scale(0)}. */
     public boolean invert() {
         float det = determinant();

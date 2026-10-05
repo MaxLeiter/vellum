@@ -56,7 +56,6 @@ final class LayoutPass {
         box.width = width;
         box.height = r.height();
         box.baseline = r.firstBaseline();
-        box.lastBaseline = r.lastBaseline();
         return r;
     }
 

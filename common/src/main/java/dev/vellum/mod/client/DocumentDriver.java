@@ -29,7 +29,6 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,8 +41,8 @@ import java.util.function.Predicate;
  * or a HUD overlay): loads the page, keeps its viewport in sync with the GUI-scaled window, runs frame and paint,
  * forwards input (SDL to DOM), switches SDL text input on while a text field has focus, routes messages, and reloads.
  *
- * <p>Nothing the engine throws escapes: the first exception is logged and the document is replaced by an
- * {@link ErrorPanel} until it is reloaded. Render thread only.
+ * <p>The document is its own error boundary ({@link Document#error()}): once the engine fails, the page is replaced
+ * by an {@link ErrorPanel} until it is reloaded. Render thread only.
  */
 public final class DocumentDriver {
     /** What a driver needs from whatever shows it. */
@@ -57,15 +56,12 @@ public final class DocumentDriver {
         }
     }
 
-    /** Wheel notches to px; a notch scrolls about three lines of 8 px text. */
-    private static final float WHEEL_PX = 24;
     private static final Set<DocumentDriver> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
 
     private final Owner owner;
     private final McHost host = new McHost(this);
     private final int session;
     private final Map<String, List<Consumer<JsonElement>>> listeners = new HashMap<>();
-    private final Set<Integer> keysDown = new HashSet<>();
     private String url;
     private @Nullable String html;
     private @Nullable String data;
@@ -102,7 +98,7 @@ public final class DocumentDriver {
         this.width = width;
         this.height = height;
         if (document == null && error == null) load();
-        else guard(() -> applyViewport(document));
+        else applyViewport(document);
     }
 
     public void reload() {
@@ -133,15 +129,17 @@ public final class DocumentDriver {
         error = null;
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
+            Constants.LOG.error("Vellum: page not found: {}", url);
             fail("Page not found: " + url, null);
             return;
         }
-        guard(() -> {
-            Document doc = Document.parse(host, url, source);
-            document = doc;
+        Document doc = Document.parse(host, url, source, data);
+        document = doc;
+        doc.guard(() -> {
             McText.expand(doc);
-            if (width > 0) applyViewport(doc);
+            return true;
         });
+        if (width > 0) applyViewport(doc);
     }
 
     private void applyViewport(@Nullable Document doc) {
@@ -151,13 +149,7 @@ public final class DocumentDriver {
     private void disposeDocument() {
         Document doc = document;
         document = null;
-        if (doc != null) {
-            try {
-                doc.close();
-            } catch (RuntimeException e) {
-                Constants.LOG.warn("Vellum: error while closing {}", name(), e);
-            }
-        }
+        if (doc != null) doc.close();
     }
 
     // ---- Rendering ----
@@ -165,39 +157,31 @@ public final class DocumentDriver {
     /** Runs a frame and paints it (or the error panel). {@code mouseX} is -1 when there is no pointer (HUDs). */
     public void extract(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         runDeferred();
-        Document doc = document;
-        if (doc != null && error == null) {
-            McCanvas canvas = null;
-            try {
-                doc.frame(Util.getMillis());
-                canvas = new McCanvas(g, mouseX, mouseY);
-                doc.paint(canvas);
-            } catch (RuntimeException | StackOverflowError e) {
-                fail("Vellum could not render " + name(), e);
-            } finally {
-                if (canvas != null) canvas.finish();
-            }
+        Document doc = document();
+        if (doc != null) {
+            doc.frame(Util.getMillis());
+            McCanvas canvas = new McCanvas(g, mouseX, mouseY);
+            doc.paint(canvas);
+            canvas.finish();
             syncTextInput();
             if (cursor != Cursor.AUTO && cursor != Cursor.DEFAULT) g.requestCursor(cursorType(cursor));
+        }
+        if (error == null && document != null && document.error() != null) {
+            fail("Vellum could not show " + name(), document.error());
         }
         if (error != null) error.extract(g, width, height, owner.screen() != null);
     }
 
     /** The live document, or null while it failed or is not loaded. */
     public @Nullable Document document() {
-        return error == null ? document : null;
+        return error == null && document != null && document.error() == null ? document : null;
     }
 
     /** The element under a viewport point (hit testing mirrors paint), or null. */
     public @Nullable Element elementAt(double x, double y) {
         Document doc = document();
-        if (doc == null) return null;
-        try {
-            HitResult hit = doc.painter().hitTest((float) x, (float) y);
-            return hit == null ? null : hit.element();
-        } catch (RuntimeException e) {
-            return null; // hit testing only refines container clicks; a failure means "nothing here"
-        }
+        HitResult hit = doc == null ? null : doc.hitTest((float) x, (float) y);
+        return hit == null ? null : hit.element();
     }
 
     // ---- Input (true = consumed) ----
@@ -215,7 +199,8 @@ public final class DocumentDriver {
     }
 
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
-        return input(in -> in.wheel((float) x, (float) y, (float) -scrollX * WHEEL_PX, (float) -scrollY * WHEEL_PX, KeyNames.current()));
+        return input(in -> in.wheel((float) x, (float) y, (float) -scrollX * InputHandler.WHEEL_NOTCH,
+                (float) -scrollY * InputHandler.WHEEL_NOTCH, KeyNames.current()));
     }
 
     /**
@@ -223,16 +208,14 @@ public final class DocumentDriver {
      * key, hotbar swaps) don't fire while typing.
      */
     public boolean keyPressed(KeyEvent e) {
-        boolean repeat = !keysDown.add(e.key());
         String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
-        return input(in -> in.keyDown(key, KeyNames.code(e.key()), e.key(), repeat, KeyNames.modifiers(e.modifiers()))
+        return input(in -> in.keyDown(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers()))
                 || (in.wantsKeyboard() && !e.isEscape()));
     }
 
     public boolean keyReleased(KeyEvent e) {
-        keysDown.remove(e.key());
         String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
-        return input(in -> in.keyUp(key, KeyNames.code(e.key()), e.key(), KeyNames.modifiers(e.modifiers())));
+        return input(in -> in.keyUp(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers())));
     }
 
     public boolean charTyped(CharacterEvent e) {
@@ -240,16 +223,11 @@ public final class DocumentDriver {
     }
 
     private boolean input(Predicate<InputHandler> action) {
-        Document doc = document;
-        if (doc == null || error != null) return false;
-        try {
-            return action.test(doc.input());
-        } catch (RuntimeException | StackOverflowError e) {
-            fail("Vellum input error in " + name(), e);
-            return false;
-        } finally {
-            syncTextInput();
-        }
+        Document doc = document();
+        if (doc == null) return false;
+        boolean consumed = action.test(doc.input());
+        syncTextInput();
+        return consumed;
     }
 
     // ---- Messages ----
@@ -267,17 +245,13 @@ public final class DocumentDriver {
     /** Delivers a message to the page's {@code vellum.on(channel, fn)} listeners. */
     public void receive(String channel, String json) {
         Document doc = document();
-        if (doc != null) guard(() -> doc.receive(channel, json));
+        if (doc != null) doc.receive(channel, json);
     }
 
     /** Handles {@code vellum.send(channel, value)} on the client, alongside (or instead of) a server session. */
     public DocumentDriver onMessage(String channel, Consumer<JsonElement> handler) {
         listeners.computeIfAbsent(channel, c -> new ArrayList<>()).add(handler);
         return this;
-    }
-
-    @Nullable String data() {
-        return data;
     }
 
     /** From the page: client listeners first, then the server session if there is one. */
@@ -351,31 +325,16 @@ public final class DocumentDriver {
 
     // ---- Internals ----
 
-    private void guard(Runnable action) {
-        try {
-            action.run();
-        } catch (RuntimeException | StackOverflowError e) {
-            fail("Vellum could not show " + name(), e);
-        }
-    }
-
+    /** Shows {@code error} instead of the page (the document already logged it through its host). */
     private void fail(String title, @Nullable Throwable e) {
         if (error != null) return;
-        if (e == null) Constants.LOG.error(title);
-        else Constants.LOG.error(title, e);
         error = ErrorPanel.of(title, e);
         setTextInput(false);
     }
 
     private void syncTextInput() {
         Document doc = document();
-        boolean wants;
-        try {
-            wants = doc != null && doc.input().wantsKeyboard();
-        } catch (RuntimeException e) {
-            wants = false;
-        }
-        setTextInput(wants);
+        setTextInput(doc != null && doc.input().wantsKeyboard());
     }
 
     private void setTextInput(boolean on) {
