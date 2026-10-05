@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "vellum:malformed_payloads",
+  "max_ticks": 40,
+  "setup_ticks": 1,
+  "structure": "vellum:test/arena"
+}

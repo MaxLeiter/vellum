@@ -15,8 +15,9 @@ import net.minecraft.server.level.ServerPlayer;
 public final class VellumCommon {
     private VellumCommon() {}
 
-    /** Declares every registry entry. Call before the loader registers {@code VellumRegistry.entries()}. */
+    /** Reads the settings and declares every registry entry. Call before the loader registers {@code VellumRegistry.entries()}. */
     public static void init() {
+        VellumConfig.load();
         VellumDemos.init();
         VellumGameTests.init();
     }

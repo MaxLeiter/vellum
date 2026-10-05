@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.cursor.CursorType;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.vellum.engine.dom.Document;
@@ -15,6 +16,8 @@ import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.TokenBucket;
+import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.client.render.McCanvas;
 import dev.vellum.mod.client.replaced.McReplaced;
 import dev.vellum.mod.net.ClosedPayload;
@@ -34,6 +37,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -85,6 +89,15 @@ public final class DocumentDriver {
     private static final Set<DocumentDriver> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
     /** Title tooltips wrap at this width, as vanilla widget tooltips do ({@code Tooltip.splitTooltip}). */
     private static final int TOOLTIP_WIDTH = 170;
+    /** Escapes the page keeps within this time count towards {@code client.forceClosePresses}. */
+    private static final long FORCE_CLOSE_WINDOW_MS = 1500;
+    /** A web link opens only this soon after the player clicked or pressed a key in the page. */
+    private static final long USER_ACTIVATION_MS = 1000;
+    /** A close this soon after an Escape press was the player's (ServerPages counts reopen loops by it). */
+    private static final long ESCAPE_CLOSE_MS = 500;
+    /** {@code client.forceCloseKey} as last read, and the key it names. */
+    private static @Nullable String forceCloseName;
+    private static InputConstants.@Nullable Key forceCloseKey;
 
     private final Owner owner;
     private final McHost host = new McHost(this);
@@ -104,6 +117,13 @@ public final class DocumentDriver {
     /** A child screen (link confirmation) is up and will return to this one: survive the owner's removal. */
     private boolean suspended;
     private @Nullable String pendingNavigation;
+    /** When the player last clicked or pressed a key in the page, and pressed Escape (Util.getMillis). */
+    private long lastUserInput = Long.MIN_VALUE / 2, lastEscape = Long.MIN_VALUE / 2;
+    /** Times of recent Escape presses the page kept (consumed), newest last. */
+    private final ArrayDeque<Long> keptEscapes = new ArrayDeque<>();
+    /** Messages to a server session, limited per driver so reloading the page doesn't reset the limit. */
+    private final TokenBucket sendRate = new TokenBucket(VellumConfig.CLIENT_MESSAGE_BURST.get(), VellumConfig.CLIENT_MESSAGES_PER_SECOND.get());
+    private boolean warnedSendRate, warnedLink;
     /** Whether the last frame asked vanilla for a tooltip (the page's, an item's or a title). */
     private boolean tooltipRequested;
     /**
@@ -183,7 +203,10 @@ public final class DocumentDriver {
                 Constants.LOG.error("Vellum: an onClose handler of {} failed", name(), e);
             }
         }
-        if (session >= 0 && !closedByServer) VellumClient.sendToServer(new ClosedPayload(session));
+        if (session >= 0 && !closedByServer) {
+            VellumClient.sendToServer(new ClosedPayload(session));
+            ServerPages.closed(Util.getMillis() - lastEscape < ESCAPE_CLOSE_MS);
+        }
     }
 
     /**
@@ -267,6 +290,21 @@ public final class DocumentDriver {
             fail("Vellum could not show " + name(), document.error());
         }
         if (error != null) error.extract(g, width, height, owner.screen() != null);
+        extractTypingNotice(g);
+    }
+
+    /**
+     * While the player types into a page a server opened: a line at the bottom of the screen, drawn above the page,
+     * which the page can neither cover nor detect. Pages can look like any screen, a login form included.
+     */
+    private void extractTypingNotice(GuiGraphicsExtractor g) {
+        if (!serverSession() || !textInput || owner.screen() == null || !VellumConfig.CLIENT_TYPING_NOTICE.get()) return;
+        Font font = Minecraft.getInstance().font;
+        Component text = Component.translatable("vellum.serverPages.typing");
+        int y = height - 17;
+        g.nextStratum();
+        g.fill(4, y, 4 + font.width(text) + 8, y + 13, 0xE0101010);
+        g.text(font, text, 8, y + 3, 0xFFFFD866, false);
     }
 
     /**
@@ -388,6 +426,7 @@ public final class DocumentDriver {
     }
 
     public boolean mouseClicked(MouseButtonEvent e) {
+        lastUserInput = Util.getMillis();
         return input(in -> in.mouseDown((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
@@ -434,9 +473,62 @@ public final class DocumentDriver {
      * don't fire while typing.
      */
     public boolean keyPressed(KeyEvent e) {
+        long now = Util.getMillis();
+        if (forceCloseKey(e)) {
+            lastEscape = now;
+            owner.closeDocument();
+            return true;
+        }
+        lastUserInput = now;
+        if (e.isEscape()) lastEscape = now;
         String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
-        return input(in -> in.keyDown(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers()))
+        boolean used = input(in -> in.keyDown(key, KeyNames.code(e.key()), KeyNames.modifiers(e.modifiers()))
                 || (in.wantsKeyboard() && !e.isEscape())) || keyHandled(e);
+        if (used && e.isEscape() && keptTooManyEscapes(now)) {
+            owner.closeDocument();
+            return true;
+        }
+        return used;
+    }
+
+    /**
+     * Shift and {@code client.forceCloseKey} (Escape by default): closes the page's screen, whatever the page does.
+     * The page never sees the key.
+     */
+    private boolean forceCloseKey(KeyEvent e) {
+        if (owner.screen() == null || !e.hasShiftDown()) return false;
+        InputConstants.Key key = forceCloseKey();
+        return key != null && e.key() == key.getValue();
+    }
+
+    private static InputConstants.@Nullable Key forceCloseKey() {
+        String name = VellumConfig.CLIENT_FORCE_CLOSE_KEY.get();
+        if (!name.equals(forceCloseName)) {
+            forceCloseName = name;
+            try {
+                forceCloseKey = InputConstants.getKey(name);
+            } catch (RuntimeException e) {
+                forceCloseKey = null;
+            }
+            if (forceCloseKey == null || forceCloseKey == InputConstants.UNKNOWN) {
+                Constants.LOG.warn("Vellum: client.forceCloseKey={} is no key; using Escape", name);
+                forceCloseKey = InputConstants.getKey("key.keyboard.escape");
+            }
+        }
+        return forceCloseKey;
+    }
+
+    /**
+     * Records an Escape the page kept; true when it is the {@code client.forceClosePresses}th within
+     * {@link #FORCE_CLOSE_WINDOW_MS}, so a page that swallows Escape can still be left by pressing it repeatedly.
+     */
+    private boolean keptTooManyEscapes(long now) {
+        if (owner.screen() == null) return false;
+        while (!keptEscapes.isEmpty() && now - keptEscapes.peekFirst() > FORCE_CLOSE_WINDOW_MS) keptEscapes.pollFirst();
+        keptEscapes.addLast(now);
+        if (keptEscapes.size() < VellumConfig.CLIENT_FORCE_CLOSE_PRESSES.get()) return false;
+        keptEscapes.clear();
+        return true;
     }
 
     /**
@@ -540,11 +632,30 @@ public final class DocumentDriver {
             Constants.LOG.warn("Vellum: {} message on '{}' is too large to send ({} chars)", name(), channel, json.length());
             return;
         }
+        if (!sendRate.tryTake()) {
+            if (!warnedSendRate) Constants.LOG.warn("Vellum: {} is sending too many messages; dropping some", name());
+            warnedSendRate = true;
+            return;
+        }
         VellumClient.sendToServer(new MessagePayload(session, channel, json));
     }
 
     int session() {
         return session;
+    }
+
+    /**
+     * Whether a server opened this page (it belongs to a server session). Its scripts may then be the server's (an
+     * inline page, or a page from a server resource pack), and its {@code vellum.send} messages go to the server:
+     * {@link VellumScreens#onPageLoad} hooks should not give such a page anything the server must not see.
+     */
+    public boolean serverSession() {
+        return session >= 0;
+    }
+
+    /** Whether a text field in the page has keyboard focus (the player is typing into it). */
+    boolean typing() {
+        return textInput;
     }
 
     String name() {
@@ -557,7 +668,11 @@ public final class DocumentDriver {
         closeRequested = true;
     }
 
-    /** {@code <a href>}: another .html page replaces this one; web links ask first, as chat links do. */
+    /**
+     * {@code <a href>}, {@code location.href}, {@code vellum.open}: another .html page replaces this one; web links ask
+     * first, as chat links do, and only right after the player clicked or pressed a key in the page, so a script
+     * cannot put the confirmation up again and again.
+     */
     void navigate(String target) {
         pendingNavigation = target;
     }
@@ -568,7 +683,14 @@ public final class DocumentDriver {
         if (target != null) {
             Screen screen = owner.screen();
             if (target.startsWith("https://") || target.startsWith("http://")) {
-                if (screen != null) {
+                if (VellumConfig.CLIENT_WEB_LINKS.get() == VellumConfig.WebLinks.BLOCK) {
+                    if (!warnedLink) Constants.LOG.info("Vellum: {} links to {}; web links are blocked (client.webLinks)", name(), target);
+                    warnedLink = true;
+                } else if (Util.getMillis() - lastUserInput > USER_ACTIVATION_MS) {
+                    if (!warnedLink) Constants.LOG.warn("Vellum: {} tried to open {} without a click or key press; ignored", name(), target);
+                    warnedLink = true;
+                } else if (screen != null) {
+                    lastUserInput = Long.MIN_VALUE / 2; // one confirmation per click
                     try {
                         URI uri = new URI(target);
                         suspended = true;

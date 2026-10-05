@@ -628,7 +628,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   `VellumClient.tick` compares the client's copy of the statistics every client tick and pushes them when they
   change).
 - `VellumScreen` (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
-  to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
+  to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled
+  (Shift+Escape always closes, and so does the third cancelled Escape within 1.5 s: `DocumentDriver.keyPressed`),
   `isPauseScreen` set per screen with `pauses(boolean)` (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows). Minecraft tells a screen about the pointer only when it moves, and drops the first move after a
   screen opens, so every frame rendered with a pointer the driver compares the page's pointer
@@ -676,8 +677,31 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (`mouseLeave` on the way). Keys stay with the screen.
 - Networking: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
   `vellum:data` (server → client: JSON for a session), `vellum:message` (client → server: session, channel, JSON),
-  `vellum:close`. Server API: `VellumServer.open(player, url, data)` returns a session handle with `push(data)`,
-  `onMessage(channel, handler)`, `close()`; container screens open via a `MenuType` whose extra data carries the url.
+  `vellum:close` and `vellum:closed`. Server API: `VellumServer.open(player, url, data)` returns a session handle
+  with `push(data)`, `onMessage(channel, handler)`, `close()`; container screens open via a `MenuType` whose extra
+  data carries the url. The codecs' string caps are the protocol's hard limits (a peer that writes past them fails
+  to decode and is disconnected); the settings file can only lower them.
+- Trust (docs/API.md, Security): a server's pages and a client's messages are both untrusted.
+  - Server side, `VellumServer.handleMessage` drops a message unless its session belongs to the sender, it is under
+    the session's token bucket (`TokenBucket`), `server.maxMessageChars` and `server.maxMessageDepth`, and it is one
+    strict JSON value (`net.JsonLimits`: a linear depth scan before Gson reads anything, then a non-lenient read).
+    Session ids stay positive and are checked against the sender's UUID; a player's sessions past
+    `server.maxSessionsPerPlayer` end oldest first.
+  - Client side, every server payload goes through `client.ServerPages`: the player's policy
+    (`client.serverPages`), size and depth caps on pages and data, a token bucket on opens, and one waiting open
+    (newest wins) that shows only over no screen, a container screen or a Vellum screen. A refused or replaced open
+    is reported closed. The guard against reopen loops counts opens arriving within a second of the player closing
+    a server page with Escape (`DocumentDriver.close` tells it), and blocks the server's pages after
+    `client.reopenStrikes` in a row. State resets with the connection.
+  - `DocumentDriver`: web links need a click or key press in the page in the last second and ask through
+    `ConfirmLinkScreen`; messages to a session have their own token bucket that survives reloads and navigation;
+    while a server page has a focused text field a notice is drawn in a new stratum over the page.
+    `serverSession()` lets page hooks tell server pages apart.
+  - `McHost.playSound` plays only ids the sound manager knows, through a per-driver token bucket, with volume capped
+    and pitch clamped.
+- Settings: `VellumConfig` reads `config/vellum.properties` on both sides in `VellumCommon.init`, typed settings
+  with defaults, ranges and comments, written to the file when missing. A record of caps from another module (the
+  engine's `Limits`) is mapped to `<prefix>.<component>` keys by `VellumConfig.section`, rebuilt on every load.
 - Resources and hot reload: documents load through the resource manager and reload with resources (F3+T). In a
   dev environment pages are read from `src/main/resources`, and the files they were read from are polled
   (`FileStamps`) so saving one reloads open documents.
