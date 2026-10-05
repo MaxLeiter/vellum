@@ -173,7 +173,8 @@ which are snapshots: they do not update when the document changes.
 
 **Text**: `data`, `nodeValue`, `length`.
 
-**Document**: `documentElement`, `head`, `body`, `title` (settable), `activeElement` (the focused element, or
+**Document**: `documentElement`, `head`, `body`, `title` (settable; the screen's title, which the narrator reads, so
+setting it renames the screen), `activeElement` (the focused element, or
 `body`), `readyState`, `URL`, `location`, `defaultView`, `getElementById`, `createElement`, `createTextNode`,
 `createDocumentFragment`.
 
@@ -210,7 +211,9 @@ handle any key the page leaves alone, such as the key that opened the screen. To
 in a `keydown` listener. While a text field has focus, keys other than Escape are typing and never reach the mod.
 
 The `title` attribute shows a tooltip, as in browsers but drawn like Minecraft's: when the pointer has rested on an
-element for half a second, the nearest `title` from the hovered element up shows at the pointer. A newline in the
+element for half a second, the nearest `title` from the hovered element up shows at the pointer. The wait is that
+element's `-mc-tooltip-delay`, an inherited CSS time: `.map { -mc-tooltip-delay: 0ms }` shows every tooltip on a map
+at once. A newline in the
 value breaks the line (`&#10;` in HTML, `'\n'` in a script string); long lines wrap at 170 px unless the element has
 `title-nowrap`. `title-json` takes a chat component instead, for coloured text
 (`title-json='{"text":"Rare","color":"gold"}'`), read like `<mc-text json>`. An empty `title` hides an ancestor's.
@@ -220,6 +223,11 @@ attribute from a script changes the tooltip while it shows.
 Over an `<item tooltip>` the item's tooltip shows at once, as in vanilla screens, and the title that applies adds its
 lines after the item's in the same box, unwrapped: a shop row's price under the item. An empty `title` on the item
 shows the item's tooltip by itself.
+
+Minecraft's narrator reads the page's title, the focused or hovered element by its name and role (`aria-label`,
+`aria-labelledby`, `role`, `aria-hidden`), and live regions (`aria-live`, `role="status"`, `"log"`, `"alert"`) when
+their text changes. docs/API.md has the rules. Scripts change what it reads by changing these attributes and the
+regions' text.
 
 ## Animations
 

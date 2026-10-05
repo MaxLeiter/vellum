@@ -106,3 +106,21 @@ Each decision has its reasons and the alternatives we looked at. Newest last.
 - Keeping the split proportional keeps a capped pose a smaller copy of vanilla's.
 - One shorthand whose optional second and third values give the tilt up and down costs one more longhand than a symmetric pair, and saves a third property for a portrait that looks up readily but barely nods.
 **Alternatives.** A smooth cap (scaling the atan so it approaches the limit) would also change the turn near the eyes, so reach and limit would no longer be independent; a separate `-mc-gaze-pitch` for asymmetric limits; attributes on `<entity>`, which could not transition.
+
+## D-015 The tooltip delay is an inherited CSS property
+**Choice.** `-mc-tooltip-delay: <time>` (initial `500ms`) sets how long the pointer rests before a `title` shows. It is inherited, and the delay that counts is the one of the element whose title shows. It is read by input only: not part of `sameLayout`, never invalidating layout or stacking.
+**Why.**
+- A map or a shop list wants every tooltip at once, as vanilla shows a slot's item. Inherited, it is set once on the map, and a child can still override it.
+- The title's element owns the tooltip, so its delay decides; the element under the pointer may be a span inside it.
+- Read when asked, a change applies to a delay already running, and `needsFrame` and `settled` follow from the same number.
+**Alternatives.** A `title-delay` attribute, which would have to be repeated on every pin or looked up the tree by hand; a document-wide setting, which cannot tell a map from a settings page.
+
+## D-016 Narration: the engine computes, the host phrases and speaks
+**Choice.** The engine (`input.Narration`) computes what an element reads as (role, name, value, state, hint), which element focus and the pointer read, and what live regions announce. The Minecraft host phrases it with vanilla's widget keys and lets vanilla's `Screen` schedule and collect the screen's narration; it calls `GameNarrator` itself only for live regions and HUD overlays. Names follow ARIA's order, simplified: `aria-label`, `aria-labelledby`, what the element provides (`alt`, a label, an item), its content, its own title. A title that is not the name is read after it as a hint. A page reads its live regions when it opens, and a region read when it appears.
+**Why.**
+- The engine has no narrator, and the previewer and tests want the same answers as the game. Vanilla already waits 750 ms after a mouse move, reads only what changed, and phrases widgets in every language; reusing it keeps a Vellum screen sounding like a vanilla one.
+- Content before title, with the title as a hint, reads a button with a tooltip as "Ask button. Sells to anyone who asks", as vanilla reads a widget's tooltip. Title before content would read the tooltip as the button's label and drop the label.
+- Browsers announce live regions only when they change. A conversation screen that opened silently would not read what the speaker last said; Chronicle's old screens did.
+- A log reads its new children, compared by text rather than node identity, so pages that rebuild a list from data (`v-for`) still read only the new line.
+- Hover narration is limited to elements that are interactive or titled or labelled, as vanilla narrates widgets and not text.
+**Alternatives.** Building `NarratableEntry` widgets for page elements, which would need vanilla's widget list to change as the page does; speaking every change ourselves, which would duplicate vanilla's scheduling and lose its "only what changed".

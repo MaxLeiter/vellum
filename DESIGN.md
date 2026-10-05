@@ -61,7 +61,7 @@ Packages in `engine/` (`dev.vellum.engine.*`):
 | `paint` | `Painter` (paint order + hit testing), `Canvas` (backend contract), `Shapes` (tessellation), `ScissorStack` (clips for scissor-based hosts) |
 | `replaced` | The engine's replaced elements (`img`, `sprite`, `canvas`), the registry that adds the host's, `ImageSources` (image sizes, `canvas:` images), `Context2D` (the canvas 2D context) |
 | `anim` | `AnimationEngine`: transitions, @keyframes animations, `element.animate()` |
-| `input` | `InputHandler` (pointer, wheel, keyboard, focus), form controls, smooth scrolling |
+| `input` | `InputHandler` (pointer, wheel, keyboard, focus), form controls, smooth scrolling, tooltips, `Narration` (accessible names and roles, live regions) |
 | `script` | `ScriptRuntime` contract, the Rhino-based runtime, DOM bindings, `vellum.*` API, template bindings |
 
 ## 3. The pipeline
@@ -84,6 +84,8 @@ host: frame(nowMs)                   every frame:
         input.afterLayout  after any layout (also one a script flushed): caret in view, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
 host: input.tooltip()                every frame, after paint: the tooltip to draw on top, or null
+host: input.narration()              while a narrator listens: the focused and hovered elements as it reads them,
+                                     live regions' announcements (once a frame); the title is Document.title()
 host: close()                        pagehide, unload (scripts still run), then dispose scripts, timers, replaced content
 ```
 
@@ -266,6 +268,8 @@ corner as a single Length; elliptical radii use the horizontal value), `backgrou
 applies at once (halfway through in `@keyframes`).
 
 Vellum extensions: `-mc-tint: <color>` (multiply images, sprites, entities and models; items cannot be tinted),
+`-mc-tooltip-delay: <time>` (inherited, initial `500ms`, non-negative: how long the pointer rests before a `title`
+shows; read by input only, so a change neither relayouts nor repaints),
 `text-shadow: minecraft` (the game's native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
 <any font id>` (also the aliases `monospace` → uniform, `sans-serif`/`serif`/`system-ui` → default; names without a
 namespace are `minecraft:` ids). `host.FontFamilies` is the one mapping, used by the style engine and every host.
@@ -474,8 +478,9 @@ the scrollbar).
   textarea with line navigation.
 - Tooltips (`input.Tooltips`): the element whose `title` / `title-json` applies is the nearest one with either
   attribute from the hover target up (an empty one means none, as in HTML). Its tooltip is due once the pointer has
-  rested on it (or inside it) for 500 ms, and is hidden by a button or key press until the pointer reaches another
-  tooltip's element. Its lines wrap at the host's width unless the element has `title-nowrap`. When the hover target
+  rested on it (or inside it) for that element's used `-mc-tooltip-delay` (500 ms unless a rule sets it; read when
+  asked, so `needsFrame`, `settled` and the tooltip all follow a style change), and is hidden by a button or key
+  press until the pointer reaches another tooltip's element. Its lines wrap at the host's width unless the element has `title-nowrap`. When the hover target
   is replaced content that shows its own tooltip (`ReplacedContent.showsTooltip`: an `<item tooltip>`), that
   tooltip shows instead, at once and through presses, and the title that applies adds its lines after the content's,
   never wrapped. A titled row that holds an item usually means "this item, and this about it", so the composition
@@ -483,6 +488,22 @@ the scrollbar).
   `InputHandler.tooltip()` each frame after painting (a `Tooltip` record: the title's element, text and JSON, the
   pointer position, the content element when there is one, and whether to wrap) and draw it, so scripts can change
   the attributes live. `needsFrame` covers the moment the delay ends; a content tooltip has no delay to wait out.
+- Narration (`input.Narration`, `InputHandler.narration()`): what the page gives a screen reader, computed only
+  when a host asks. An element reads as an `Accessible`: a role (the `role` attribute's first token when Vellum
+  knows it, else the tag's: button, link, checkbox, radio, slider, text box, combo box, tab, image, `<item>`,
+  `<slot>`), a name, a value, a checked state, a hint, and its place among the tab stops. The name is `aria-label`,
+  else the text `aria-labelledby` names, else the element's own (`alt`, a button input's `value`, the content's
+  `ReplacedContent.accessibleName()`, a control's `<label>`), else its content's text cut to about 100 characters
+  (not for fields, images and replaced content), else its own title, else a placeholder (D-016). The hint is
+  `aria-describedby`, else the title that applies when it is not the name. `aria-hidden="true"` hides an element and
+  its subtree. Text is read as laid out (`input.Accessibility`): whitespace collapsed, hidden content left out, each
+  block a sentence joined by ". ". `focused()` is the focused element; `hovered()` the nearest element from the
+  hover target up that is interactive or has a title or `aria-label`, stopping at an empty title. Live regions
+  (`input.LiveRegions`): `aria-live` polite or assertive, else `role` status or log (polite) or alert (assertive);
+  `announcements()` compares each region's text, without nested regions, with the last call's, when the DOM changed
+  since (`domVersion`); a log announces its new children only (after those it kept, or the overlap of its old end
+  with its new start); a region new since the last call announces its text, a log its last entry. Hosts call it
+  once a frame, which is the debounce.
 - Pointer leave: `InputHandler.mouseLeave()` when the host stops giving the document the pointer (an interactive
   HUD overlay whose screen closed): hover ends with `mouseout`/`mouseleave`, a drag ends, no tooltip.
 - Focus: `focus`/`blur`/`focusin`/`focusout`; `:focus-visible` after keyboard navigation; `autofocus`; elements
@@ -617,6 +638,19 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   page opened under a resting cursor is hovered from its first frames, as vanilla widgets are. A move sent to a
   screen without moving the mouse handler lasts one frame, so `VellumAutomation` moves the mouse handler along with
   its events.
+- Narration (`PageNarrator`, one per driver): a screen's title (`getTitle`, so also `getNarrationMessage`) is the
+  page's `Document.title()`, else the screen's own; vanilla's `Screen` still schedules and collects narration (on
+  opening, 750 ms after a mouse move, 200 ms after a press) and our `updateNarratedWidget` adds the page's element as
+  vanilla adds a widget: the focused element unless it was the last one read, else the hovered one, with its place
+  among the tab stops, then nested its title in vanilla's widget phrasing (`gui.narrate.button`,
+  `gui.narrate.slider`, `gui.narrate.editBox`, `gui.narrate.tab`, `narration.checkbox`, `narration.item`; Vellum's
+  own keys for links and radios), its usage (`narration.*.usage.*`) and its hint. With nothing to read, vanilla's
+  screen usage. Every frame a page is drawn while the narrator reads system messages, the driver hands live regions'
+  announcements to `GameNarrator` (`saySystemQueued`, or `saySystemNow` for assertive ones); an interactive HUD
+  overlay over a screen also reads its hovered element itself, 750 ms after it changes. A navigation in a screen
+  narrates the new page (`triggerImmediateNarration`). `VellumAutomation.narration()` collects a screen's narration
+  with a fresh `ScreenNarrationCollector`, and `recordNarration()` records what the driver hands the narrator, also
+  with it off.
 - `VellumContainerScreen` (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
@@ -682,8 +716,12 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   screen's first button for a burst of screenshots a tick apart, drags a turntable, opens a page under a resting
   cursor (hovered within its first frames), screenshots an item tooltip with a title's lines and plain and
   `title-nowrap` titles, closes a page with an `onKey` handler, fills in the templates demo, clicks a Mobdex row
-  scrolled out of its list, and answers the demo toast overlay through chat. Its own pages live in
+  scrolled out of its list, checks on Chronicle's page that a map pin with `-mc-tooltip-delay: 0ms` shows its title
+  on the first frame while a row with the default does not, and what the narrator is given there (the title, a
+  hovered reply as "label button", the log's lines as they are added), and answers the demo toast overlay through
+  chat, checking the overlay narrates its hovered button. Its own pages live in
   `assets/vellum/vellum/dev/`. Each step runs on a client tick; a wait is a step that queues itself again until its
   condition holds or it times out. Every check is logged, and the run ends with
   `Vellum autopilot finished: N checks, M failed` (an error when M is not 0).
-- Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.
+- Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots; `--narrate`
+  prints what a narrator would be given.
