@@ -98,9 +98,9 @@ public final class DocumentDriver {
     /** Whether the last frame asked vanilla for a tooltip (the page's, an item's or a title). */
     private boolean tooltipRequested;
     /**
-     * The last title's attributes ({@code title-json}, {@code title}; both null for none yet, as no title has neither)
-     * and what was made of them, so JSON is parsed and lines are split once: the text, and its lines split at newlines
-     * and wrapped, each made when first asked for.
+     * The last title's {@code title-json} and {@code title} (both null before any: a title has at least one), the text
+     * made of them, and its lines split at newlines and wrapped, each made when first asked for. So JSON is parsed and
+     * lines are split once, not every frame.
      */
     private @Nullable String lastJson, lastText;
     private @Nullable Component title;
@@ -316,7 +316,7 @@ public final class DocumentDriver {
 
     /**
      * The title as text: its {@code title-json}, else its {@code title}; null when neither makes any. Made again only
-     * when the attributes change, which the same strings frame after frame show at once.
+     * when the attributes change; the same strings, frame after frame, compare by identity.
      */
     private @Nullable Component title(Tooltip tooltip) {
         if (!Objects.equals(tooltip.json(), lastJson) || !Objects.equals(tooltip.text(), lastText)) {
