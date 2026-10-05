@@ -60,6 +60,12 @@ public interface Host {
     /** Called for {@code vellum.send(channel, data)}: forward a JSON message to the server or the owning mod. */
     default void send(String channel, String json) {}
 
+    /** Translates a key (Minecraft language files in game); returns the key itself when unknown. */
+    default String translate(String key, String... args) { return key; }
+
+    /** Whether the user asked for reduced motion ({@code prefers-reduced-motion: reduce}). */
+    default boolean prefersReducedMotion() { return false; }
+
     /** Called for {@code <a href>} activation and {@code location.href = ...}; hosts may navigate or ignore. */
     default void navigate(String url) {}
 

@@ -56,6 +56,12 @@ public final class InputHandler {
      */
     public void paintOverlays(Canvas canvas) {}
 
+    /**
+     * True when focus last moved by keyboard (Tab, arrows), false after pointer input. The style engine uses it for
+     * {@code :focus-visible}.
+     */
+    public boolean focusVisible() { return false; }
+
     /** True when a text field has focus, so hosts can suppress their own key bindings (e.g. inventory key). */
     public boolean wantsKeyboard() { return false; }
 }

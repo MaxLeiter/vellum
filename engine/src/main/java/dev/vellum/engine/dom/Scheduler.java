@@ -59,8 +59,11 @@ public final class Scheduler {
         return !frameCallbacks.isEmpty();
     }
 
-    /** Runs due timers (at most a bounded number, so an interval storm cannot hang a frame), then frame callbacks. */
-    void run(double nowMs) {
+    /**
+     * Runs due timers (at most a bounded number, so an interval storm cannot hang a frame), then frame callbacks.
+     * Called by {@link Document#frame}; public so tests can drive time without the rest of the pipeline.
+     */
+    public void run(double nowMs) {
         now = nowMs;
         int budget = 1000;
         while (!timers.isEmpty() && timers.peek().due <= nowMs && budget-- > 0) {
