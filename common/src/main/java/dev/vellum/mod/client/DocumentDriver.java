@@ -180,7 +180,8 @@ public final class DocumentDriver {
     }
 
     private void applyViewport(@Nullable Document doc) {
-        if (doc != null) doc.setViewport(width, height, Minecraft.getInstance().getWindow().getGuiScale());
+        // A minimised or mid-resize window can report 0x0; a page laid out at zero size has nothing to show anyway.
+        if (doc != null) doc.setViewport(Math.max(1, width), Math.max(1, height), Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void disposeDocument() {
