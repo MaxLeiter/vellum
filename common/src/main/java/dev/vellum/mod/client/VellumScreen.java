@@ -14,6 +14,7 @@ import org.jspecify.annotations.Nullable;
  */
 public class VellumScreen extends Screen implements DocumentDriver.Owner {
     private final DocumentDriver driver;
+    private boolean pauses;
 
     /**
      * @param html    inline HTML, or null to load {@code url}
@@ -41,9 +42,19 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
         driver.extract(g, mouseX, mouseY);
     }
 
+    /**
+     * Whether this screen pauses a singleplayer world while it is open, like a vanilla book. Off by default, since
+     * pages that talk to the server (shops, conversations) need it running. Minecraft asks every tick, so this can
+     * change while the screen is open.
+     */
+    public VellumScreen pauses(boolean pauses) {
+        this.pauses = pauses;
+        return this;
+    }
+
     @Override
     public boolean isPauseScreen() {
-        return false;
+        return pauses;
     }
 
     @Override

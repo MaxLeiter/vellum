@@ -63,6 +63,9 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   another screen. Not when the page navigates or reloads, or while a link confirmation is open over it. The page's
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
   them reaches your `onMessage` handlers first.
+- `screen.pauses(true)` pauses a singleplayer world while the screen is open, like a vanilla book. It is off by
+  default, because pages that talk to the server (shops, conversations) need the world running:
+  `VellumScreens.open("mymod:vellum/book.html", data).pauses(true)`.
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
 - `screen.driver().onKey(handler)` gives your mod the key presses the page leaves alone, before the screen's own keys
   (Escape, a container screen's inventory key). Use it for your own key mappings; the page doesn't know about them. A

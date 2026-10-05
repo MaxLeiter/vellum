@@ -592,7 +592,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   change).
 - `VellumScreen` (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
-  `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
+  `isPauseScreen` set per screen with `pauses(boolean)` (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows). Minecraft tells a screen about the pointer only when it moves, and drops the first move after a
   screen opens, so each frame the screen also passes the driver the pointer position it was rendered with
   (`DocumentDriver.followPointer`, in `VellumContainerScreen` too). The page gets a move when it has had no pointer
