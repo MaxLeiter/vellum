@@ -20,6 +20,7 @@ import dev.vellum.mod.client.replaced.McReplaced;
 import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.MessagePayload;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -38,6 +39,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
@@ -96,12 +98,14 @@ public final class DocumentDriver {
     /** Whether the last frame asked vanilla for a tooltip (the page's, an item's or a title). */
     private boolean tooltipRequested;
     /**
-     * The last title's attributes and wrapping, and its lines: split at newlines, and as shown alone (wrapped or not),
-     * so JSON is parsed and lines split once.
+     * The last title's {@code title-json} and {@code title} (both null before any: a title has at least one), the text
+     * made of them, and its lines split at newlines and wrapped, each made when first asked for. So JSON is parsed and
+     * lines are split once, not every frame.
      */
-    private @Nullable String tooltipSource;
-    private List<Component> titleLines = List.of();
-    private List<FormattedCharSequence> tooltipLines = List.of();
+    private @Nullable String lastJson, lastText;
+    private @Nullable Component title;
+    private @Nullable List<Component> titleLines;
+    private @Nullable List<FormattedCharSequence> wrappedLines;
 
     /**
      * @param url     the page ({@code ns:path/page.html}); also the base for its relative URLs
@@ -193,7 +197,7 @@ public final class DocumentDriver {
         disposeDocument();
         LIVE.add(this);
         error = null;
-        tooltipSource = null; // translations may have changed
+        lastJson = lastText = null; // translations may have changed
         if (html == null) VellumScreens.pageLoading(url, this);
         String source = html != null ? html : VellumResources.loadText(url);
         if (source == null) {
@@ -269,14 +273,22 @@ public final class DocumentDriver {
         if (tooltip == null) return;
         int x = (int) tooltip.x(), y = (int) tooltip.y();
         if (tooltip.content() != null) {
-            if (tooltip.content().replaced instanceof McReplaced content && content.showTooltip(g, titleLines(tooltip), x, y)) {
+            List<Component> extra = tooltip.element() == null ? List.of() : titleLines(tooltip);
+            if (tooltip.content().replaced instanceof McReplaced content && content.showTooltip(g, extra, x, y)) {
                 tooltipRequested = true;
             }
             return;
         }
-        List<FormattedCharSequence> lines = tooltipLines(tooltip);
-        if (lines.isEmpty()) return;
-        g.setTooltipForNextFrame(Minecraft.getInstance().font, lines, x, y);
+        Font font = Minecraft.getInstance().font;
+        if (tooltip.wrap()) {
+            List<FormattedCharSequence> lines = wrappedLines(tooltip);
+            if (lines.isEmpty()) return;
+            g.setTooltipForNextFrame(font, lines, x, y);
+        } else {
+            List<Component> lines = titleLines(tooltip);
+            if (lines.isEmpty()) return;
+            g.setComponentTooltipForNextFrame(font, lines, x, y);
+        }
         tooltipRequested = true;
     }
 
@@ -285,28 +297,34 @@ public final class DocumentDriver {
         return tooltipRequested;
     }
 
-    /** The title's lines, split at its newlines only. */
+    /** The title's lines, split at its newlines only: after an item's lines, or alone with {@code title-nowrap}. */
     private List<Component> titleLines(Tooltip tooltip) {
-        parseTitle(tooltip);
+        Component text = title(tooltip);
+        if (titleLines == null) titleLines = text == null ? List.of() : McText.lines(text);
         return titleLines;
     }
 
-    /** The title's lines as a tooltip of their own: wrapped at {@link #TOOLTIP_WIDTH} unless the tooltip says not to. */
-    private List<FormattedCharSequence> tooltipLines(Tooltip tooltip) {
-        parseTitle(tooltip);
-        return tooltipLines;
+    /** The title's lines wrapped at {@link #TOOLTIP_WIDTH}, as vanilla wraps widget tooltips. */
+    private List<FormattedCharSequence> wrappedLines(Tooltip tooltip) {
+        Component text = title(tooltip);
+        if (wrappedLines == null) wrappedLines = text == null ? List.of() : Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
+        return wrappedLines;
     }
 
-    private void parseTitle(Tooltip tooltip) {
-        String source = tooltip.json() + "\u0000" + tooltip.text() + "\u0000" + tooltip.wrap();
-        if (source.equals(tooltipSource)) return;
-        Component text = tooltip.json() != null ? McText.component(tooltip.json()) : null;
-        if (text == null && tooltip.text() != null) text = Component.literal(tooltip.text());
-        tooltipSource = source;
-        titleLines = text == null ? List.of() : McText.lines(text);
-        if (text == null) tooltipLines = List.of();
-        else if (tooltip.wrap()) tooltipLines = Minecraft.getInstance().font.split(text, TOOLTIP_WIDTH);
-        else tooltipLines = titleLines.stream().map(Component::getVisualOrderText).toList();
+    /**
+     * The title as text: its {@code title-json}, else its {@code title}; null when neither makes any. Made again only
+     * when the attributes change; the same strings, frame after frame, compare by identity.
+     */
+    private @Nullable Component title(Tooltip tooltip) {
+        if (!Objects.equals(tooltip.json(), lastJson) || !Objects.equals(tooltip.text(), lastText)) {
+            lastJson = tooltip.json();
+            lastText = tooltip.text();
+            Component json = lastJson != null ? McText.component(lastJson) : null;
+            title = json == null && lastText != null ? Component.literal(lastText) : json;
+            titleLines = null;
+            wrappedLines = null;
+        }
+        return title;
     }
 
     /**

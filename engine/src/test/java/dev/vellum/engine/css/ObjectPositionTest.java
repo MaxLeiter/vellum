@@ -67,18 +67,35 @@ class ObjectPositionTest {
     }
 
     @Test
-    void transitionsWithoutRelayoutAndFromTheCentre() {
-        Page page = new TestHost().load("<style>#m { transition: object-position 100ms linear } "
+    void transitionsWithoutRelayout() {
+        Page page = new TestHost().load("<style>#m { transition: object-position 100ms linear; object-position: center } "
                 + "#m.on { object-position: 0 100% }</style><div id=m></div>");
         Element m = page.byId("m");
         m.addClass("on");
         page.frame(0);
         assertFalse(page.frameLaysOut(50), "paint-only");
-        assertEquals(25, m.style.objectX(100), 1e-3, "unset animates from 50%");
+        assertEquals(25, m.style.objectX(100), 1e-3);
         assertEquals(75, m.style.objectY(100), 1e-3);
         page.frame(100);
         assertEquals(Length.ZERO, m.style.objectPositionX);
         assertEquals(Length.PERCENT_100, m.style.objectPositionY);
+    }
+
+    /** An unset axis is no position (an entity stands on its bottom edge), so changes to and from it apply at once. */
+    @Test
+    void unsetDoesNotInterpolate() {
+        Page page = new TestHost().load("<style>#m { transition: object-position 100ms linear } "
+                + "#m.on { object-position: 0 100% }</style><div id=m></div>");
+        Element m = page.byId("m");
+        m.addClass("on");
+        page.frame(0);
+        page.frame(50);
+        assertEquals(Length.ZERO, m.style.objectPositionX);
+        assertEquals(Length.PERCENT_100, m.style.objectPositionY);
+        m.removeClass("on");
+        page.frame(60);
+        assertSame(Length.AUTO, m.style.objectPositionX);
+        assertSame(Length.AUTO, m.style.objectPositionY);
     }
 
     private static void assertPosition(String x, String y, String css) {

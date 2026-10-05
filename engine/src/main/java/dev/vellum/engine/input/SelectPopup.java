@@ -158,7 +158,7 @@ final class SelectPopup {
     // ---- Geometry and paint ----
 
     private FontSpec font() {
-        return FontSpec.of(Forms.style(select));
+        return FontSpec.of(select.computedStyle());
     }
 
     private float rowHeight() {

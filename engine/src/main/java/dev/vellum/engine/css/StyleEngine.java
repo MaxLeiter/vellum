@@ -347,4 +347,28 @@ public final class StyleEngine {
     public static String computedValue(ComputedStyle style, String property) {
         return ComputedValues.serialize(style, property);
     }
+
+    /**
+     * The properties a {@code transition-property} entry names: for {@code all}, every property that interpolates;
+     * for a shorthand, its longhands that animate ({@code margin}, {@code border}, {@code outline}...); else the
+     * longhand of that name. Empty for names it doesn't know.
+     */
+    public static EnumSet<Prop> transitionProperties(String name) {
+        EnumSet<Prop> set = EnumSet.noneOf(Prop.class);
+        Shorthand shorthand = Shorthands.get(name);
+        if (name.equals("all")) {
+            for (Prop p : Prop.values()) {
+                if (p.interpolation != Prop.Interp.NONE && p.interpolation != Prop.Interp.DISCRETE) set.add(p);
+            }
+            set.add(Prop.VISIBILITY); // discrete, but CSS interpolates it specially so fades can hide at the end
+        } else if (shorthand != null) {
+            for (Longhand l : shorthand.longhands()) {
+                if (l.prop != null && l.prop.interpolation != Prop.Interp.NONE) set.add(l.prop);
+            }
+        } else {
+            Prop p = Prop.byName(name);
+            if (p != null) set.add(p);
+        }
+        return set;
+    }
 }

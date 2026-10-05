@@ -3,7 +3,6 @@ package dev.vellum.mod.client.replaced;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
-import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
@@ -48,11 +47,6 @@ public abstract class McReplaced implements ReplacedContent {
      */
     public boolean showTooltip(GuiGraphicsExtractor g, List<Component> extra, int x, int y) {
         return false;
-    }
-
-    /** The element's style, or the initial one before it has one. */
-    protected ComputedStyle style() {
-        return element.style != null ? element.style : ComputedStyle.INITIAL;
     }
 
     protected String attr(String name, String fallback) {

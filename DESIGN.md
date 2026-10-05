@@ -204,11 +204,11 @@ Minecraft elements (the Minecraft host's replaced content, `Host.replacedElement
 
 | Element | Behaviour |
 |---|---|
-| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size. `tooltip` attribute shows the vanilla item tooltip on hover, with the lines of the `title` that applies after it. |
+| `<item id="minecraft:diamond_sword" count="1" components="{...}">` | Renders an item stack (with count, durability bar). 16×16 intrinsic; scaled by CSS size and kept square (`object-fit: contain`). `tooltip` attribute shows the vanilla item tooltip on hover, with the lines of the `title` that applies after it. |
 | `<slot index="n">` | A real container slot of the open menu at this position (only in container screens). 18×18 with the vanilla slot look; the item, hover highlight, clicks, drags and tooltips are vanilla. |
 | `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity, standing on the bottom of its box and fitted to it, or cropped to its head and shoulders (`-mc-entity-focus: eyes`), placed by `object-position`. Turned, viewed and sized by `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` (below); `rotatable`, `follow-mouse` (softened by `-mc-gaze-reach` and `-mc-gaze-limit`), `walk`; created entities also take `baby`, `variant`, `color`, `components` and equipment by slot. |
 | `<model block="minecraft:oak_stairs[facing=east]">` / `<model item="minecraft:trident">` | A block state or item drawn in 3D, centred in its box (or placed by `object-position`): at yaw and pitch 0 items as in the inventory and blocks in the inventory's usual view, turned by the same properties; `rotatable`. |
-| `<player-head name="..." uuid="...">` | A player's face from their skin. |
+| `<player-head name="..." uuid="...">` | A player's face from their skin, kept square like an item. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
 | `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated (`Host.translate`) or component text (`Host.formatText` gives styled runs, which become spans), as a normal inline element. Expanded by the engine when the element is parsed or inserted and when those attributes change, so templates and scripts can use it. |
 
@@ -262,7 +262,8 @@ corner as a single Length; elliptical radii use the horizontal value), `backgrou
 `object-position` takes a `<position>` (one to four values: keywords, lengths, percentages) and is stored per axis
 (`-vellum-object-position-x`/`-y`, as `transform-origin` is). An axis no rule set is `Length.AUTO`: it serialises as
 `50%` and centres content like the initial value, but content can tell it apart, so `<entity>` keeps its own default
-(below). It is paint-only and animates, an unset axis as `50%`.
+(below). It is paint-only and animates. An unset axis has no position to interpolate from, so a change to or from it
+applies at once (halfway through in `@keyframes`).
 
 Vellum extensions: `-mc-tint: <color>` (multiply images, sprites, entities and models; items cannot be tinted),
 `text-shadow: minecraft` (the game's native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
@@ -307,6 +308,8 @@ a replaced element with `rotatable` that no `mousedown` listener cancelled drive
 - Vanilla-looking controls via sprites (`minecraft:widget/button`, `_highlighted`, `_disabled`,
   `widget/text_field`, `widget/text_field_highlighted`, `widget/checkbox*`, `widget/slider*`), with
   `text-shadow: minecraft` on button text.
+- Minecraft elements: `item` 16×16, `player-head` 8×8, `entity` 32×48 and `model` 32×32, all `inline-block`;
+  `item, player-head { object-fit: contain }`, so they stay square in any box. `slot` is the vanilla grey well.
 - Utility classes prefixed `mc-`: `.mc-panel` (the vanilla grey container panel with bevel border), `.mc-inset`
   (a sunken slot bevel), `.mc-tooltip` (tooltip background and frame), `.mc-dark` (translucent dark panel used by
   vanilla menus), `.mc-label` (`#404040`, no shadow: container labels).
@@ -376,9 +379,10 @@ Per box:
    Minecraft bevel: `border: 2px outset #c6c6c6`); `dashed`/`dotted` as segments.
 5. Form control painting (`input.Controls.paint`).
 6. Replaced content (`ReplacedContent.paint`), sized by `object-fit` and placed by `object-position`
-   (`ComputedStyle.objectX/objectY`). Content that fits itself inside that box (items, heads and models in a square,
-   entities) places itself with the same methods. Minecraft content draws through the Minecraft canvas, which its
-   paint finds in one documented place (`McReplaced`).
+   (`ComputedStyle.objectX/objectY`). Items and heads are `object-fit: contain` in the UA stylesheet, so the box they
+   are given is already their square. Content that fits itself inside its box places itself with the same methods:
+   models in a square (`ComputedStyle.objectSquare`), entities by `style.EntityFraming`. Minecraft content draws
+   through the Minecraft canvas, which its paint finds in one documented place (`McReplaced`).
 7. Children: clip to the padding box if `overflow` is not visible (rectangular clip; rounded clip is not supported),
    translate by `-scroll`, paint children and line fragments.
 8. Scrollbars (overlay), outline (`outline`, `outline-offset`; focus rings), and `::after` order handled by the box
@@ -408,6 +412,8 @@ the scrollbar).
 
 - Transitions: on restyle, for each property in `transition-property` whose base value changed (and interpolates),
   start a transition from the current animated value to the new value with the duration, delay and timing function.
+  A shorthand names the longhands it sets in the shorthand registry (`StyleEngine.transitionProperties`), so
+  `transition: outline` animates the outline's width and colour but not `outline-offset`, as in CSS.
   Retargeting mid-flight starts from the current value (with the spec's reversing shortening for reversed transitions).
   `transitionrun/start/end/cancel` events.
 - Keyframes: `animation-name` maps to `@keyframes`; keyframes resolved per element via the style engine;
@@ -548,10 +554,12 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 - `DocumentDriver`: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
   input, messages, reload. After painting it shows the engine's tooltip at the engine's pointer through
   `setTooltipForNextFrame`. A title alone gets lines from `Font.split` at 170 px, as vanilla widget tooltips, or
-  split only at newlines with `title-nowrap`; `title-json` is parsed like `<mc-text json>` and cut into lines at its
-  newlines by `McText.lines`. Over an `<item tooltip>` the item content (`McReplaced.showTooltip`, `ItemTooltips`)
-  sets one tooltip: vanilla's item tooltip as is when no title applies, else the item's lines
-  (`Screen.getTooltipFromItem`), then the title's, with the item's tooltip image, style and the gap after its name.
+  split only at newlines with `title-nowrap` (shown as vanilla's `List<Component>` tooltip); `title-json` is parsed
+  like `<mc-text json>` and cut into lines at its newlines by `McText.lines`. The driver keeps the last title's text
+  and makes each form of its lines when first asked for. Over an `<item tooltip>` the item content
+  (`McReplaced.showTooltip`, `ItemTooltips`) sets one tooltip: the item's lines (`Screen.getTooltipFromItem`), then
+  those of the title that applies, if any, with the item's tooltip image, style and the gap after its name, as
+  vanilla's item tooltip has them.
   NeoForge's client entry installs the overload that passes the stack on, so its tooltip events (gather components,
   colour, pre) see the item as for vanilla item tooltips.
   `onKey(Predicate<KeyEvent>)` handlers get key presses the page left alone (not cancelled, not used by a focused
@@ -571,7 +579,9 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
     age and size (and apart for states a mod supplied). With `-mc-entity-focus: eyes` the scale comes from the eye
     height instead (the box's shorter side spans 0.7 of it) and the origin is placed so that the eye point, on the
     upright axis, lands where `object-position` says; the view tilt (pitch and the gaze lean) turns about the feet,
-    so the origin is moved by the eye's projected height to keep the eyes still. `follow-mouse` aims the gaze from
+    so the origin is moved by the eye's projected height to keep the eyes still. The engine's `style.EntityFraming`
+    holds these rules (where the room and the eye point go, the eyes scale), so the previewer's stand-in is framed by
+    the same code. `follow-mouse` aims the gaze from
     that eye point (a third down the box with the body fit), turning the head as far as the element's
     `-mc-gaze-reach` and `-mc-gaze-limit` give; the body leans half of that turn and the head turns the rest on top,
     as in vanilla's inventory, so a capped gaze keeps the same split. Display entities are created client-side,

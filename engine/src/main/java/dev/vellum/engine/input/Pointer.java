@@ -87,7 +87,7 @@ final class Pointer {
     void updateCursor(Element target, boolean overScrollbar) {
         Cursor c = Cursor.DEFAULT;
         if (target != null && !overScrollbar) {
-            c = Forms.style(target).cursor;
+            c = target.computedStyle().cursor;
             if (c == Cursor.AUTO) c = target.isTextControl() && !target.isDisabled() ? Cursor.TEXT : Cursor.DEFAULT;
         }
         if (c != cursor) {

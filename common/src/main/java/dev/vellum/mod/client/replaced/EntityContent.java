@@ -1,7 +1,6 @@
 package dev.vellum.mod.client.replaced;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponentMap;
@@ -76,13 +75,15 @@ final class EntityContent extends TurnableContent {
         createdIn = null;
     }
 
+    /** Posed by the element's style and attributes: the one place that decides how it stands. */
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
+        int tint = tint();
+        if (!canvas.sceneVisible(tint, x, y, width, height)) return;
         Entity entity = entity();
         if (entity == null) return;
-        ComputedStyle style = style();
-        EntityPortrait.Framing framing = new EntityPortrait.Framing(style.entityFocus, style.objectPositionX, style.objectPositionY);
-        EntityPortrait.draw(canvas, entity, pose(canvas, framing, x, y, width, height), framing, tint(), x, y, width, height);
+        EntityPortrait.Pose pose = new EntityPortrait.Pose(yaw(), pitch(), followMouse, modelScale(), walk);
+        EntityPortrait.draw(canvas, entity, pose, element.computedStyle(), tint, x, y, width, height);
     }
 
     private void load() {
@@ -92,23 +93,6 @@ final class EntityContent extends TurnableContent {
         float networkId = element.numberAttribute("id", Float.NaN);
         id = Float.isNaN(networkId) ? null : (int) networkId;
         type = Identifier.tryParse(attr("type", "minecraft:pig"));
-    }
-
-    /** The pose from the element's style and attributes and the pointer: the one place that decides how it stands. */
-    private EntityPortrait.Pose pose(McCanvas canvas, EntityPortrait.Framing framing, float x, float y, float width, float height) {
-        EntityPortrait.Gaze gaze = null;
-        if (followMouse) {
-            float gazeYaw = 0, gazePitch = 0;
-            if (canvas.mouseX() >= 0) {
-                // As vanilla's inventory, unless -mc-gaze-reach and -mc-gaze-limit soften or cap it.
-                ComputedStyle style = style();
-                float[] eyes = EntityPortrait.gazeOrigin(framing, x, y, width, height);
-                gazeYaw = style.gazeYaw(canvas.mouseX() - eyes[0]);
-                gazePitch = style.gazePitch(eyes[1] - canvas.mouseY());
-            }
-            gaze = new EntityPortrait.Gaze(gazeYaw, gazePitch);
-        }
-        return new EntityPortrait.Pose(yaw(), pitch(), gaze, modelScale(), walk);
     }
 
     private @Nullable Entity entity() {

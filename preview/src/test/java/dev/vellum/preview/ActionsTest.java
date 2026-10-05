@@ -1,10 +1,6 @@
 package dev.vellum.preview;
 
 import dev.vellum.engine.dom.Document;
-import dev.vellum.engine.dom.Viewport;
-import dev.vellum.preview.host.PreviewHost;
-import dev.vellum.preview.render.MinecraftAssets;
-import dev.vellum.preview.render.MinecraftFont;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -13,7 +9,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,10 +33,7 @@ class ActionsTest {
                     if (e.key === 'Enter' && e.shiftKey) document.getElementById('o').textContent = document.getElementById('i').value;
                   });
                 </script>""");
-        MinecraftAssets assets = MinecraftAssets.open(List.of(), Optional.empty());
-        MinecraftFont font = new MinecraftFont(assets);
-        PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
-                new Viewport(200, 120, 2));
+        TestScene t = TestScene.open(page, Optional.empty(), 200, 120, 2);
         Actions actions = Actions.parse("""
                 # click, type, a key with a modifier, the wheel over a selector, a shot
                 wait 2
@@ -53,9 +45,9 @@ class ActionsTest {
                 shot done
                 """);
         ByteArrayOutputStream log = new ByteArrayOutputStream();
-        actions.run(scene, new FrameRenderer(assets, font), 200, 120, 2, dir, new PrintStream(log));
+        actions.run(t.scene(), t.renderer(), 200, 120, 2, dir, new PrintStream(log));
 
-        Document doc = scene.document();
+        Document doc = t.scene().document();
         assertEquals("clicked", doc.getElementById("b").textContent());
         assertEquals("hi there", doc.getElementById("o").textContent());
         assertEquals(24, doc.getElementById("s").scrollTop(), 1e-3);
@@ -74,11 +66,9 @@ class ActionsTest {
                 </div>
                 <button id=below style="display: block; height: 40px" onclick="this.textContent = 'missed'">no</button>
                 <div style="position: relative"><p id=covered>x</p><i style="position: absolute; inset: 0"></i></div>""");
-        MinecraftAssets assets = MinecraftAssets.open(List.of(), Optional.empty());
-        MinecraftFont font = new MinecraftFont(assets);
-        PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
-                new Viewport(200, 120, 2));
-        FrameRenderer renderer = new FrameRenderer(assets, font);
+        TestScene t = TestScene.open(page, Optional.empty(), 200, 120, 2);
+        PageScene scene = t.scene();
+        FrameRenderer renderer = t.renderer();
         Actions.parse("click #tall").run(scene, renderer, 200, 120, 2, dir, new PrintStream(new ByteArrayOutputStream()));
         Document doc = scene.document();
         assertEquals("clicked", doc.getElementById("tall").textContent(), "the middle of its 20 px that show");

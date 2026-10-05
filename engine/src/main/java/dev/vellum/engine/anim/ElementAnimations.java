@@ -1,6 +1,7 @@
 package dev.vellum.engine.anim;
 
 import dev.vellum.engine.css.ResolvedKeyframe;
+import dev.vellum.engine.css.StyleEngine;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.style.AnimationSpec;
@@ -171,7 +172,7 @@ final class ElementAnimations {
         for (int i = specs.size() - 1; i >= 0; i--) { // the last entry naming a property wins
             TransitionSpec spec = specs.get(i);
             boolean enabled = canStart && Math.max(spec.durationMs(), 0) + spec.delayMs() > 0;
-            for (Prop prop : Prop.forTransitionName(spec.property())) {
+            for (Prop prop : StyleEngine.transitionProperties(spec.property())) {
                 if (listed.add(prop)) updateTransition(prop, enabled ? spec : null, oldBase, prop.get(newBase), now);
             }
         }

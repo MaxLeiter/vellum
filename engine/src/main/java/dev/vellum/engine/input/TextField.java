@@ -77,7 +77,7 @@ final class TextField {
     }
 
     FontSpec font() {
-        return FontSpec.of(Forms.style(element));
+        return FontSpec.of(element.computedStyle());
     }
 
     TextMeasure measure() {
@@ -105,7 +105,7 @@ final class TextField {
     /** {@code cached} if it lays out {@code text} as this field would now, else a new layout: wrapped in a textarea. */
     private TextLayout lines(TextLayout cached, String text, boolean masked) {
         float wrap = multiline && element.box != null ? element.box.contentWidth() : Float.POSITIVE_INFINITY;
-        ComputedStyle s = Forms.style(element);
+        ComputedStyle s = element.computedStyle();
         FontSpec font = FontSpec.of(s);
         if (cached != null && cached.matches(text, masked, wrap, font, s)) return cached;
         return new TextLayout(text, masked, wrap, measure(), font, s);
@@ -139,7 +139,7 @@ final class TextField {
     /** Height of a visual line: the line height in a textarea; the content height in an input (text is centred in it). */
     float lineHeight() {
         return element.box == null ? glyphHeight()
-                : Controls.lineHeight(element, Forms.style(element), element.box.contentHeight());
+                : Controls.lineHeight(element, element.computedStyle(), element.box.contentHeight());
     }
 
     float glyphHeight() {

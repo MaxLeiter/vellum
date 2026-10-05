@@ -10,8 +10,9 @@ import java.util.UUID;
 
 /**
  * {@code <player-head name="..." uuid="...">}: a player's face (the 8×8 face plus the hat layer) from their skin,
- * a square placed by {@code object-position}, multiplied by {@code -mc-tint}. Without attributes it shows the local player. Unknown profiles resolve in the background and show the default
- * skin until then.
+ * filling the box ({@code object-fit: contain} makes it a square placed by {@code object-position}), multiplied by
+ * {@code -mc-tint}. Without attributes it shows the local player. Unknown profiles resolve in the background and show
+ * the default skin until then.
  */
 final class PlayerHeadContent extends McReplaced {
     private static final float PX = 1 / 64f;
@@ -33,6 +34,12 @@ final class PlayerHeadContent extends McReplaced {
         return 16;
     }
 
+    /** Until the skin has resolved (or failed to), so automation waits for the real face. */
+    @Override
+    public boolean loading() {
+        return !Minecraft.getInstance().playerSkinRenderCache().lookup(profile).isDone();
+    }
+
     @Override
     public void attributeChanged(String name) {
         if (name.equals("name") || name.equals("uuid")) profile = profile();
@@ -41,12 +48,9 @@ final class PlayerHeadContent extends McReplaced {
     @Override
     protected void draw(McCanvas canvas, float x, float y, float width, float height) {
         Identifier skin = Minecraft.getInstance().playerSkinRenderCache().getOrDefault(profile).playerSkin().body().texturePath();
-        float size = Math.min(width, height);
-        x += style().objectX(width - size);
-        y += style().objectY(height - size);
-        int tint = style().tint;
-        canvas.blit(skin, x, y, size, size, 8 * PX, 8 * PX, 16 * PX, 16 * PX, tint, false);
-        canvas.blit(skin, x, y, size, size, 40 * PX, 8 * PX, 48 * PX, 16 * PX, tint, false);
+        int tint = element.computedStyle().tint;
+        canvas.blit(skin, x, y, width, height, 8 * PX, 8 * PX, 16 * PX, 16 * PX, tint, false);
+        canvas.blit(skin, x, y, width, height, 40 * PX, 8 * PX, 48 * PX, 16 * PX, tint, false);
     }
 
     private ResolvableProfile profile() {

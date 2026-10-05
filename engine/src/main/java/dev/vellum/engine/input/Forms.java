@@ -2,7 +2,6 @@ package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.InputEvent;
-import dev.vellum.engine.style.ComputedStyle;
 
 import java.util.Set;
 
@@ -33,11 +32,6 @@ final class Forms {
     /** True for a {@code <summary>} that toggles its parent {@code <details>}. */
     static boolean isDetailsSummary(Element e) {
         return e.tagName().equals("summary") && e.parentElement() != null && e.parentElement().tagName().equals("details");
-    }
-
-    /** The style used for painting and metrics; the initial style before the first restyle. */
-    static ComputedStyle style(Element e) {
-        return e.style != null ? e.style : ComputedStyle.INITIAL;
     }
 
     /** The control a label activates: its {@code for} target, else its first labelable descendant. */

@@ -42,20 +42,17 @@ final class Tooltips {
     /** The tooltip to show at {@code now} for the hovered element, or null. */
     Tooltip current(Element hovered, double now, float x, float y) {
         track(hovered, now);
-        String text = owner == null ? null : nonBlank(owner.getAttribute("title"));
-        String json = owner == null ? null : nonBlank(owner.getAttribute("title-json"));
-        boolean titled = text != null || json != null;
         Element content = content();
-        if (content != null) return new Tooltip(titled ? owner : null, text, json, x, y, content, false);
-        if (!titled || dismissed || now - since < DELAY_MS) return null;
-        shown = true;
-        return new Tooltip(owner, text, json, x, y, null, !owner.hasAttribute("title-nowrap"));
+        if (content == null && (dismissed || now - since < DELAY_MS)) return null;
+        if (!titled(owner)) return content == null ? null : new Tooltip(null, null, null, x, y, content);
+        if (content == null) shown = true;
+        String text = nonBlank(owner.getAttribute("title")), json = nonBlank(owner.getAttribute("title-json"));
+        return new Tooltip(owner, text, json, x, y, content);
     }
 
     /** Whether a title tooltip is coming that the host has not been given yet: waiting out the delay, or due. */
     boolean pending() {
-        return owner != null && !dismissed && !shown && content() == null
-                && (nonBlank(owner.getAttribute("title")) != null || nonBlank(owner.getAttribute("title-json")) != null);
+        return !dismissed && !shown && content() == null && titled(owner);
     }
 
     /** Whether a tooltip becomes visible at {@code now} that the host has not been given yet. */
@@ -66,6 +63,12 @@ final class Tooltips {
     /** The hovered element when its content shows a tooltip of its own, else null. */
     private Element content() {
         return hovered != null && hovered.replaced != null && hovered.replaced.showsTooltip() ? hovered : null;
+    }
+
+    /** Whether {@code owner} (null for none) has a title to show: a non-blank {@code title} or {@code title-json}. */
+    private static boolean titled(Element owner) {
+        return owner != null && (nonBlank(owner.getAttribute("title")) != null
+                || nonBlank(owner.getAttribute("title-json")) != null);
     }
 
     private static Element owner(Element e) {

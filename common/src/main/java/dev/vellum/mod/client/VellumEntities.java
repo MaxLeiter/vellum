@@ -6,8 +6,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import org.jspecify.annotations.Nullable;
 
-import java.util.function.BiFunction;
-
 /**
  * Client API for how pages draw entities ({@code <entity>}).
  *
@@ -18,6 +16,13 @@ import java.util.function.BiFunction;
  */
 public final class VellumEntities {
     private VellumEntities() {}
+
+    /** Makes the render state GUI renders of an entity start from ({@link #registerPortraitState}). */
+    @FunctionalInterface
+    public interface PortraitState<T extends Entity> {
+        /** The state to draw {@code entity} from at {@code partialTick}, or null for its renderer's state this frame. */
+        @Nullable EntityRenderState create(T entity, float partialTick);
+    }
 
     /**
      * Makes GUI renders of {@code type} start from the render state {@code state} returns, given the entity and the
@@ -33,8 +38,7 @@ public final class VellumEntities {
      * <p>Registering a type again replaces its function. Call during client setup; the function runs on the render
      * thread, once per frame for every {@code <entity>} on screen showing that type.
      */
-    public static <T extends Entity> void registerPortraitState(EntityType<T> type,
-                                                                BiFunction<? super T, Float, ? extends @Nullable EntityRenderState> state) {
+    public static <T extends Entity> void registerPortraitState(EntityType<T> type, PortraitState<? super T> state) {
         EntityPortrait.registerState(type, state);
     }
 }

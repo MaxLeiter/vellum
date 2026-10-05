@@ -308,8 +308,9 @@ keeps it spinning for a moment. A `mousedown` listener that calls `preventDefaul
 ### Placing entities and models
 
 `object-position` places every Minecraft element in its box as it places an image: one to four values, keywords,
-lengths and percentages (`right 4px bottom`, `25% 75%`). Items, heads and models take a square as wide as the box's
-shorter side; models times `-mc-model-scale`.
+lengths and percentages (`right 4px bottom`, `25% 75%`). Items and heads have `object-fit: contain` from the default
+stylesheet, so they take a square as wide as the box's shorter side. Models take that square too, times
+`-mc-model-scale`.
 
 An `<entity>` is fitted one of two ways:
 
@@ -366,13 +367,17 @@ VellumEntities.registerPortraitState(MyEntities.AUTOMATON.get(), AutomatonRender
 ```
 
 ```java
-public static <T extends Entity> void registerPortraitState(EntityType<T> type,
-        BiFunction<? super T, Float, ? extends @Nullable EntityRenderState> state)
+public static <T extends Entity> void registerPortraitState(EntityType<T> type, PortraitState<? super T> state)
+
+@FunctionalInterface
+public interface PortraitState<T extends Entity> {   // VellumEntities.PortraitState
+    @Nullable EntityRenderState create(T entity, float partialTick);
+}
 ```
 
 The function gets the entity and the partial tick and runs every frame for every `<entity>` of that type that is on
 screen. Return null to fall back to the renderer's state for that frame. Registering the type again replaces the
-function.
+function. A method reference like the one above, or a lambda, fits it.
 
 Vellum then sets these fields on your state, as it does on its own:
 

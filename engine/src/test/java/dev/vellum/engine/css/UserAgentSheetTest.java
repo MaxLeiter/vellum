@@ -8,6 +8,7 @@ import dev.vellum.engine.style.Cursor;
 import dev.vellum.engine.style.Display;
 import dev.vellum.engine.style.Image;
 import dev.vellum.engine.style.Length;
+import dev.vellum.engine.style.ObjectFit;
 import dev.vellum.engine.style.Shadow;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
@@ -141,6 +142,9 @@ class UserAgentSheetTest {
         assertEquals(Length.px(16), page.style("item").height);
         assertEquals(Length.px(48), page.style("entity").height);
         assertEquals(Length.px(8), page.style("player-head").width);
+        assertEquals(ObjectFit.CONTAIN, page.style("item").objectFit, "items and faces are squares");
+        assertEquals(ObjectFit.CONTAIN, page.style("player-head").objectFit);
+        assertEquals(ObjectFit.FILL, page.style("entity").objectFit, "entities fit their own way");
         assertEquals(Display.INLINE_BLOCK, page.style("sprite").display);
         assertEquals(Display.INLINE, page.style("mc-text").display);
     }
