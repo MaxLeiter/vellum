@@ -36,8 +36,10 @@ class TemplatesTest {
     void interpolationFollowsData() {
         Page page = new Page("<p id=p>Hello {{ name }}, {{ stats.hp }} HP</p>", false); // undefined until data arrives
         page.doc.receive("data", "{\"name\": \"Steve\", \"stats\": {\"hp\": 20}}");
+        page.render();
         assertEquals("Hello Steve, 20 HP", page.byId("p").textContent());
         page.doc.receive("data", "{\"name\": \"Alex\", \"stats\": {\"hp\": 7}}");
+        page.render();
         assertEquals("Hello Alex, 7 HP", page.byId("p").textContent());
     }
 
@@ -52,8 +54,10 @@ class TemplatesTest {
         assertEquals("1 / 2", page.byId("b").textContent());
         page.byId("b").click();
         page.byId("b").click();
+        page.render();
         assertEquals("3 / 6", page.byId("b").textContent());
         page.run("state.count = 10");
+        page.render();
         assertEquals("10 / 20", page.byId("b").textContent(), "any entry re-renders");
     }
 
@@ -69,10 +73,13 @@ class TemplatesTest {
         Element zero = page.byId("d").children().getFirst();
         assertEquals(List.of("zero"), texts(page.byId("d")));
         page.run("s.n = 1");
+        page.render();
         assertEquals(List.of("one"), texts(page.byId("d")));
         page.run("s.n = 5");
+        page.render();
         assertEquals(List.of("many"), texts(page.byId("d")));
         page.run("s.n = 0");
+        page.render();
         assertSame(zero, page.byId("d").children().getFirst(), "branches are kept and reused");
     }
 
@@ -85,12 +92,14 @@ class TemplatesTest {
         List<Element> before = list.children();
         assertEquals(List.of("a", "b", "c"), texts(list));
         page.run("s.items.reverse(); s.items[0].name = 'C'");
+        page.render();
         List<Element> after = list.children();
         assertEquals(List.of("C", "b", "a"), texts(list));
         assertSame(before.get(2), after.get(0));
         assertSame(before.get(0), after.get(2));
         assertEquals("0", after.getFirst().getAttribute("data-index"));
         page.run("s.items.splice(1, 1); s.items.push({id: 9, name: 'z'})");
+        page.render();
         assertEquals(List.of("C", "a", "z"), texts(list));
         assertSame(before.get(0), list.children().get(1));
     }
@@ -122,6 +131,7 @@ class TemplatesTest {
         assertEquals("yes", d.getAttribute("title"));
         assertFalse(d.hasAttribute("disabled"));
         page.run("s.visible = false; s.on = false");
+        page.render();
         assertEquals("base off", d.getAttribute("class"));
         assertTrue(d.hasAttribute("v-hidden"));
         assertNull(d.getAttribute("title"));
@@ -171,6 +181,7 @@ class TemplatesTest {
         assertEquals("Steve", page.byId("area").value());
         type(name, "Alex");
         assertEquals("Alex", page.eval("s.name"));
+        page.render();
         assertEquals("Alex", page.byId("area").value(), "other bindings re-render after the input event");
         type(page.byId("age"), "12");
         assertEquals("number 12", page.eval("typeof s.age + ' ' + s.age"));
@@ -179,6 +190,7 @@ class TemplatesTest {
         page.byId("t").dispatchEvent(new Event("change", true, false));
         assertEquals("spaced", page.eval("s.note"));
         page.run("s.name = 'Zed'");
+        page.render();
         assertEquals("Zed", name.value());
     }
 
@@ -230,7 +242,9 @@ class TemplatesTest {
     void brokenExpressionsAreReportedOnceAndOthersStillRender() {
         Page page = new Page("<p id=a>{{ missing.x }}</p><p id=b>{{ n }}</p><script>const s = vellum.state({n: 1})</script>", false);
         page.run("s.n = 2");
+        page.render();
         page.run("s.n = 3");
+        page.render();
         assertEquals("3", page.byId("b").textContent());
         assertEquals(1, page.host.errors.size(), page.errors());
         assertTrue(page.errors().contains("Error in template text \"{{ missing.x }}\": ReferenceError"), page.errors());
@@ -253,6 +267,41 @@ class TemplatesTest {
         Page page = new Page("<p>{{ s.n++ }}</p><script>const s = vellum.state({n: 0})</script>");
         assertTrue(page.host.logs.stream().anyMatch(l -> l.startsWith("WARN: Templates still changing")), page.host.logs.toString());
         assertEquals("10", page.eval("s.n"));
+    }
+
+    @Test
+    void templatesRenderOncePerFrame() {
+        Page page = new Page("""
+                <button id=b @click="s.n++">{{ render() }}</button>
+                <script>
+                let renders = 0;
+                const s = vellum.state({n: 0});
+                function render() { renders++; return s.n }
+                </script>""");
+        int loaded = Integer.parseInt(page.eval("renders"));
+        for (int i = 0; i < 5; i++) page.byId("b").click();
+        page.run("setTimeout(() => s.n++, 0); setTimeout(() => s.n++, 0)");
+        assertEquals(String.valueOf(loaded), page.eval("renders"), "entries only mark the templates");
+        page.doc.frame(16);
+        assertEquals("7", page.byId("b").textContent());
+        assertEquals(String.valueOf(loaded + 2), page.eval("renders"), "one digest: a changing pass and a stable one");
+        page.doc.frame(32); // after the eval entry: one stable pass
+        page.doc.frame(48); // no entry since: nothing to do
+        assertEquals(String.valueOf(loaded + 3), page.eval("renders"));
+    }
+
+    @Test
+    void nextTickRunsOnceTheDomShowsTheState() {
+        Page page = new Page("""
+                <p id=p>{{ s.n }}</p>
+                <script>
+                const s = vellum.state({n: 1}), seen = [];
+                const text = () => document.getElementById('p').textContent;
+                addEventListener('load', () => seen.push('load ' + text()));
+                </script>""");
+        page.run("s.n = 2; seen.push(text()); vellum.nextTick(() => seen.push(text()))");
+        page.render();
+        assertEquals("load 1,1,2", page.eval("seen.join()"));
     }
 
     private static List<String> texts(Element parent) {

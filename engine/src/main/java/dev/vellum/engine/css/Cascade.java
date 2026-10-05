@@ -42,11 +42,30 @@ final class Cascade {
     private final int[] declared = new int[LONGHANDS.size()];
     private int declaredCount;
     private final Map<String, Decl> customWinners = new HashMap<>();
-    /** Computed values of var() declarations by substituted text, when context-free; cleared each restyle. */
+    /** Set when a non-inherited property took its parent's value ({@code inherit}); see {@link #inheritedExplicitly}. */
+    private boolean inheritedExplicitly;
+    /**
+     * Context-free computed values of var() declarations, cleared each restyle: by the custom properties they were
+     * substituted with (most elements share their parent's map), then by the substituted text.
+     */
     private final Map<VarKey, Object> varValues = new HashMap<>();
+    private final Map<VarText, Object> varTexts = new HashMap<>();
+
+    /** A declaration under one set of custom properties, both by identity (the maps are immutable). */
+    private record VarKey(Decl decl, Map<String, String> vars) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof VarKey k && k.decl == decl && k.vars == vars;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * System.identityHashCode(decl) + System.identityHashCode(vars);
+        }
+    }
 
     /** A declaration (by identity) with one substitution result. */
-    private record VarKey(Decl decl, String text) {}
+    private record VarText(Decl decl, String text) {}
 
     void environment(Host host, float viewportWidth, float viewportHeight, float devicePixelRatio) {
         ctx.environment(host, viewportWidth, viewportHeight, devicePixelRatio);
@@ -55,11 +74,20 @@ final class Cascade {
     /** Starts a restyle pass: forgets cached var() substitutions. */
     void newPass() {
         varValues.clear();
+        varTexts.clear();
     }
 
     /** Whether the last computation read element attributes ({@code attr()}), which selectors do not track. */
     boolean readAttributes() {
         return ctx.attributeRead;
+    }
+
+    /**
+     * Whether the last computation copied a non-inherited property from the parent ({@code inherit}), so it depends
+     * on more of the parent's style than its inherited properties.
+     */
+    boolean inheritedExplicitly() {
+        return inheritedExplicitly;
     }
 
     /**
@@ -105,6 +133,7 @@ final class Cascade {
         declaredCount = 0;
         customWinners.clear();
         ctx.attributeRead = false;
+        inheritedExplicitly = false;
     }
 
     private void win(Decl d) {
@@ -172,22 +201,31 @@ final class Cascade {
 
     private Object keyword(Longhand l, Keyword k, ComputedStyle s, ComputedStyle parent) {
         boolean inherit = k == Keyword.INHERIT || (k == Keyword.UNSET && l.inherited());
-        if (inherit && parent != null) return l.get(parent);
+        if (inherit && parent != null) {
+            inheritedExplicitly |= !l.inherited();
+            return l.get(parent);
+        }
         if (l.initial != null) return value(l, l.initial, s, parent);
         return l.get(ComputedStyle.INITIAL);
     }
 
     /**
      * A var() declaration's value: substituted, re-expanded when it belongs to a shorthand, then parsed. Invalid
-     * results are invalid at computed-value time, which means unset. Context-free results are cached by text, so
-     * elements sharing variables share the work.
+     * results are invalid at computed-value time, which means unset. Context-free results are cached, so elements
+     * sharing variables share the work.
      */
     private Object substituted(Longhand l, Decl d, ComputedStyle s, ComputedStyle parent) {
-        String text = Vars.substitute(d.value, s.customProperties::get);
-        if (text == null) return keyword(l, Keyword.UNSET, s, parent);
-        VarKey key = new VarKey(d, text);
+        VarKey key = new VarKey(d, s.customProperties);
         Object cached = varValues.get(key);
         if (cached != null) return cached;
+        String text = Vars.substitute(d.value, s.customProperties::get);
+        if (text == null) return keyword(l, Keyword.UNSET, s, parent);
+        VarText byText = new VarText(d, text);
+        cached = varTexts.get(byText);
+        if (cached != null) {
+            varValues.put(key, cached);
+            return cached;
+        }
         List<ComponentValue> values = CssParser.parseComponentValues(text);
         if (d.pending != null) {
             Map<Longhand, List<ComponentValue>> parts = d.pending.expand(values);
@@ -199,7 +237,10 @@ final class Cascade {
         ctx.dependent = false;
         Object v = Decl.parse(l, values, ctx);
         if (v == null) return keyword(l, Keyword.UNSET, s, parent);
-        if (!ctx.dependent) varValues.put(key, v);
+        if (!ctx.dependent) {
+            varValues.put(key, v);
+            varTexts.put(byText, v);
+        }
         return v;
     }
 

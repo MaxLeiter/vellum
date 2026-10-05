@@ -10,12 +10,9 @@ import dev.vellum.shadow.rhino.NativeObject;
 import dev.vellum.shadow.rhino.Scriptable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * {@code v-for}: one instance per item, each a clone of the template element compiled in its own scope (the loop
@@ -26,13 +23,12 @@ final class ForBinding implements Binding {
     /** Items rendered at most; the cloning is Java work outside the script budget. */
     static final int MAX_ITEMS = 10_000;
 
-    /** One item: its value, its key (the property name for objects, else the index) and its index. */
-    private record Item(Object value, Object key, int index) {}
-
     private static final class Instance {
         final Element element;
         final NativeObject scope;
         final Block block = new Block();
+        /** The last update that rendered this instance. */
+        int rendered;
 
         Instance(Element element, NativeObject scope) {
             this.element = element;
@@ -49,8 +45,12 @@ final class ForBinding implements Binding {
     private final Expr source, key, filter;
     /** Evaluates :key and v-if for an item before its instance is known. */
     private final NativeObject probe;
-    private List<Instance> instances = List.of();
-    private Map<Object, Instance> byKey = Map.of();
+    /** The rendered instances in order and by key; each update fills the spare pair and swaps. */
+    private List<Instance> instances = new ArrayList<>(), nextInstances = new ArrayList<>();
+    private Map<Object, Instance> byKey = new HashMap<>(), nextByKey = new HashMap<>();
+    private int updates;
+    /** Whether the update in progress created an instance. */
+    private boolean created;
 
     ForBinding(RhinoScriptRuntime rt, TemplateCompiler compiler, Element template, Text anchor, Scriptable scope,
                List<String> aliases, Expr source, Expr key, Expr filter) {
@@ -70,44 +70,92 @@ final class ForBinding implements Binding {
     public boolean update(Context cx) {
         Node parent = anchor.parentNode();
         if (parent == null) return false; // removed by a script
-        boolean changed = false;
-        List<Instance> next = new ArrayList<>();
-        Map<Object, Instance> nextByKey = new HashMap<>();
-        for (Item item : items(cx)) {
-            assign(probe, item);
-            if (filter != null && !Js.bool(filter.eval(cx, probe))) continue;
-            Object k = key == null ? item.index() : normalize(key.eval(cx, probe));
-            Instance instance = byKey.get(k);
-            if (instance == null || nextByKey.containsKey(k)) { // new, or a duplicate key
-                instance = create();
-                changed = true;
-            }
-            nextByKey.putIfAbsent(k, instance);
-            assign(instance.scope, item);
-            next.add(instance);
-        }
-        Set<Instance> kept = Collections.newSetFromMap(new IdentityHashMap<>());
-        kept.addAll(next);
+        updates++;
+        created = false;
+        renderItems(cx);
+        boolean changed = created;
         for (Instance old : instances) {
-            if (!kept.contains(old)) {
+            if (old.rendered != updates) {
                 old.element.remove();
                 changed = true;
             }
         }
-        // Walk backwards from the anchor, moving only the elements that are out of place.
+        changed |= arrange(parent);
+        List<Instance> rendered = nextInstances;
+        nextInstances = instances;
+        instances = rendered;
+        Map<Object, Instance> keyed = nextByKey;
+        nextByKey = byKey;
+        byKey = keyed;
+        nextInstances.clear(); // the spares hold nothing between updates, so removed instances can go
+        nextByKey.clear();
+        for (Instance instance : rendered) changed |= instance.block.update(cx);
+        return changed;
+    }
+
+    /** Arrays, objects (own enumerable properties) and {@code n in 5} (1 to 5), each through {@link #render}. */
+    private void renderItems(Context cx) {
+        Object value = source.eval(cx, scope);
+        int count = 0;
+        if (value instanceof Number n) {
+            for (int i = 0; i < n.doubleValue() && i < MAX_ITEMS; i++, count++) render(cx, i + 1, i, i);
+        } else if (value instanceof NativeArray array) {
+            Object[] values = cx.getElements(array);
+            for (int i = 0; i < values.length && i < MAX_ITEMS; i++, count++) render(cx, values[i], i, i);
+        } else if (value instanceof Scriptable object) {
+            Object[] ids = object.getIds();
+            for (int i = 0; i < ids.length && i < MAX_ITEMS; i++, count++) {
+                String name = String.valueOf(ids[i]);
+                render(cx, Js.property(object, name), name, i);
+            }
+        }
+        if (count == MAX_ITEMS) rt.document.host().log(Host.LogLevel.WARN, "v-for renders at most " + MAX_ITEMS + " items");
+    }
+
+    /**
+     * Renders one item ({@code key} is the property name for objects, else the index): reuses the instance of its
+     * key, unless another item took it already (a duplicate key), else creates one.
+     */
+    private void render(Context cx, Object value, Object itemKey, int index) {
+        assign(probe, value, itemKey, index);
+        if (filter != null && !Js.bool(filter.eval(cx, probe))) return;
+        Object k = key == null ? index : normalize(key.eval(cx, probe));
+        Instance instance = byKey.get(k);
+        if (instance == null || nextByKey.containsKey(k)) {
+            instance = create();
+            created = true;
+        }
+        nextByKey.putIfAbsent(k, instance);
+        instance.rendered = updates;
+        assign(instance.scope, value, itemKey, index);
+        nextInstances.add(instance);
+    }
+
+    /**
+     * Puts the rendered instances, in order, right before the anchor. Walks back from the anchor by position,
+     * moving only the elements that are out of place; returns whether any moved.
+     */
+    private boolean arrange(Node parent) {
+        boolean moved = false;
+        int at = indexOf(parent, anchor);
         Node ref = anchor;
-        for (int i = next.size() - 1; i >= 0; i--) {
-            Element el = next.get(i).element;
-            if (el.parentNode() != parent || el.nextSibling() != ref) {
+        for (int i = nextInstances.size() - 1; i >= 0; i--) {
+            Element el = nextInstances.get(i).element;
+            if (at > 0 && parent.childAt(at - 1) == el) {
+                at--;
+            } else {
                 parent.insertBefore(el, ref);
-                changed = true;
+                at = indexOf(parent, el);
+                moved = true;
             }
             ref = el;
         }
-        instances = next;
-        byKey = nextByKey;
-        for (Instance instance : next) changed |= instance.block.update(cx);
-        return changed;
+        return moved;
+    }
+
+    private static int indexOf(Node parent, Node child) {
+        for (int i = 0, n = parent.childCount(); i < n; i++) if (parent.childAt(i) == child) return i;
+        return -1;
     }
 
     private Instance create() {
@@ -117,32 +165,10 @@ final class ForBinding implements Binding {
     }
 
     /** Sets the loop variables: {@code (value, key, index)} for objects, {@code (value, index)} otherwise. */
-    private void assign(NativeObject target, Item item) {
-        target.put(aliases.get(0), target, item.value());
-        if (aliases.size() > 1) target.put(aliases.get(1), target, item.key());
-        if (aliases.size() > 2) target.put(aliases.get(2), target, item.index());
-    }
-
-    /** Arrays, objects (own enumerable properties) and {@code n in 5} (1 to 5). */
-    private List<Item> items(Context cx) {
-        Object value = source.eval(cx, scope);
-        List<Item> items = new ArrayList<>();
-        if (value instanceof Number n) {
-            for (int i = 0; i < n.doubleValue() && i < MAX_ITEMS; i++) items.add(new Item(i + 1, i, i));
-        } else if (value instanceof NativeArray array) {
-            List<Object> values = Js.elements(array);
-            for (int i = 0; i < values.size() && i < MAX_ITEMS; i++) items.add(new Item(values.get(i), i, i));
-        } else if (value instanceof Scriptable object) {
-            Object[] ids = object.getIds();
-            for (int i = 0; i < ids.length && i < MAX_ITEMS; i++) {
-                String name = String.valueOf(ids[i]);
-                items.add(new Item(Js.property(object, name), name, i));
-            }
-        }
-        if (items.size() == MAX_ITEMS) {
-            rt.document.host().log(Host.LogLevel.WARN, "v-for renders at most " + MAX_ITEMS + " items");
-        }
-        return items;
+    private void assign(NativeObject target, Object value, Object itemKey, int index) {
+        target.put(aliases.get(0), target, value);
+        if (aliases.size() > 1) target.put(aliases.get(1), target, itemKey);
+        if (aliases.size() > 2) target.put(aliases.get(2), target, index);
     }
 
     /** Keys compare as JS would: 1 and 1.0 are the same number, a concatenated string equals a literal one. */

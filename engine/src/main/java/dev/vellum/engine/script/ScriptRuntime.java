@@ -27,6 +27,13 @@ public interface ScriptRuntime {
     /** Called once the document's scripts have run, before {@code DOMContentLoaded} is dispatched. */
     default void documentLoaded() {}
 
+    /**
+     * Called by {@link dev.vellum.engine.dom.Document#frame} once per frame, after timers, animation frames and
+     * input and before restyle: applies the DOM updates the runtime deferred (template bindings re-render here, at
+     * most once per frame however many entries ran).
+     */
+    default void beforeRestyle() {}
+
     /** Releases resources. The runtime is unusable afterwards. */
     void dispose();
 }

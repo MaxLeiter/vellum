@@ -270,6 +270,51 @@ class CascadeTest {
     }
 
     @Test
+    void childrenKeepTheirStylesWhenOnlyNonInheritedParentPropertiesChange() {
+        Document doc = page("""
+                <style>.box { border: 1px solid blue } .box:hover { border-color: red; border-width: 3px }
+                .kid { border-top: inherit }</style>
+                <div class=box><p id=plain>a <b>b</b></p><p id=kid class=kid>c</p></div>""");
+        ComputedStyle plain = style(doc, "#plain"), bold = style(doc, "b");
+        doc.setHovered(element(doc, ".box"), true);
+        doc.styleEngine().restyle();
+        assertEquals(RED, style(doc, ".box").borderTopColor);
+        assertSame(plain, style(doc, "#plain"), "the inherited properties did not change");
+        assertSame(bold, style(doc, "b"));
+        assertEquals(3, style(doc, "#kid").borderTopWidth, "an explicit inherit follows the parent");
+    }
+
+    @Test
+    void interactionStateReachesEveryDependentElement() {
+        Document doc = page("""
+                <style>.a:hover .b, .a:hover + .c, .f:focus-within, li:nth-child(2):hover, :has(> .d:active) { color: red }</style>
+                <div class=a><span class=b>x</span></div><div class=c>y</div>
+                <div class=f><input id=i></div><ul><li>1</li><li id=two>2</li></ul><div id=p><i class=d>d</i></div>""");
+        Element a = element(doc, ".a");
+        doc.setHovered(a, true);
+        doc.styleEngine().restyle();
+        assertEquals(RED, style(doc, ".b").color);
+        assertEquals(RED, style(doc, ".c").color);
+        doc.setHovered(a, false);
+        element(doc, "#i").focus();
+        doc.setHovered(element(doc, "#two"), true);
+        doc.setActive(element(doc, ".d"), true);
+        doc.styleEngine().restyle();
+        assertEquals(WHITE, style(doc, ".b").color);
+        assertEquals(WHITE, style(doc, ".c").color);
+        assertEquals(RED, style(doc, ".f").color);
+        assertEquals(RED, style(doc, "#two").color);
+        assertEquals(RED, style(doc, "#p").color);
+
+        // A DOM change in the same pass as an interaction change is seen too.
+        doc.setHovered(a, true);
+        element(doc, ".c").setAttribute("class", "z");
+        doc.styleEngine().restyle();
+        assertEquals(RED, style(doc, ".b").color);
+        assertEquals(WHITE, style(doc, ".z").color);
+    }
+
+    @Test
     void newElementsAndRemovedPseudoElementsInvalidateLayout() {
         Document doc = page("<style>.x::before { content: 'a' }</style><div id=a class=x></div>");
         Element a = element(doc, "#a");

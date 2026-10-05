@@ -1,6 +1,8 @@
 package dev.vellum.engine.css;
 
+import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.host.Host;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -18,22 +20,18 @@ import java.util.Set;
  * <p>The attribute keeps declarations as written (a shorthand stays a shorthand) in their original order; a
  * property that is set again is updated in place. Reading a longhand covered by a shorthand returns that
  * longhand's part of it.
+ *
+ * <p>The parsed declarations live in the element's {@link ElementState}, which the cascade reads too: the attribute
+ * is parsed once when it changes from outside, and writes through this class install their result directly.
  */
 public final class InlineStyle {
     private InlineStyle() {}
 
-    /** One declaration as written. */
-    private record Entry(String name, String value, boolean important) {
-        CssParser.Declaration parse() {
-            return new CssParser.Declaration(name, CssParser.parseComponentValues(value), important, 0);
-        }
-
+    /** One declaration as written, with the longhand declarations it expands to for the cascade. */
+    record Entry(String name, String value, boolean important, List<Decl> decls) {
         /** The longhands (or custom property) this entry sets. */
         List<String> longhands() {
-            Shorthand s = Shorthands.get(name);
-            if (s != null) return s.longhands().stream().map(l -> l.name).toList();
-            Longhand l = Properties.longhand(name);
-            return List.of(l == null ? name : l.name);
+            return InlineStyle.longhands(name);
         }
 
         boolean covers(String longhand) {
@@ -44,9 +42,9 @@ public final class InlineStyle {
         String valueOf(String longhand) {
             Shorthand s = Shorthands.get(name);
             if (s == null) return value;
-            CssParser.Declaration d = parse();
-            if (Decl.keyword(d.value()) != null) return value;
-            Map<Longhand, List<ComponentValue>> parts = Decl.containsVar(d.value()) ? null : s.expand(d.value());
+            List<ComponentValue> parsed = CssParser.parseComponentValues(value);
+            if (Decl.keyword(parsed) != null) return value;
+            Map<Longhand, List<ComponentValue>> parts = Decl.containsVar(parsed) ? null : s.expand(parsed);
             return parts == null ? "" : ComponentValue.text(parts.get(Properties.longhand(longhand)));
         }
     }
@@ -79,7 +77,7 @@ public final class InlineStyle {
 
     /** "important" or "". */
     public static String getPropertyPriority(Element element, String property) {
-        List<String> longhands = new Entry(normalize(property), "", false).longhands();
+        List<String> longhands = longhands(normalize(property));
         List<Entry> entries = entries(element);
         for (String l : longhands) {
             Entry e = effective(entries, l);
@@ -94,9 +92,9 @@ public final class InlineStyle {
             removeProperty(element, property);
             return;
         }
-        Entry entry = new Entry(normalize(property), value.trim(), "important".equalsIgnoreCase(priority));
-        if (!valid(entry)) return;
-        List<Entry> entries = entries(element);
+        Entry entry = entry(element, normalize(property), value.trim(), "important".equalsIgnoreCase(priority));
+        if (entry == null) return; // invalid
+        List<Entry> entries = new ArrayList<>(entries(element));
         int at = -1;
         for (int i = 0; i < entries.size(); i++) if (entries.get(i).name.equals(entry.name)) at = i;
         if (at >= 0) {
@@ -114,7 +112,7 @@ public final class InlineStyle {
     public static String removeProperty(Element element, String property) {
         String name = normalize(property);
         String old = getPropertyValue(element, name);
-        List<String> removed = new Entry(name, "", false).longhands();
+        List<String> removed = longhands(name);
         List<Entry> before = entries(element), after = new ArrayList<>();
         for (int i = 0; i < before.size(); i++) {
             Entry e = before.get(i);
@@ -128,7 +126,8 @@ public final class InlineStyle {
             List<Entry> later = before.subList(i + 1, before.size());
             for (String l : longhands) {
                 if (!removed.contains(l) && later.stream().noneMatch(x -> x.covers(l))) {
-                    after.add(new Entry(l, e.valueOf(l), e.important));
+                    Entry part = entry(element, l, e.valueOf(l), e.important);
+                    if (part != null) after.add(part);
                 }
             }
         }
@@ -142,7 +141,7 @@ public final class InlineStyle {
     }
 
     public static void setCssText(Element element, String cssText) {
-        write(element, parse(cssText));
+        write(element, parse(element, cssText));
     }
 
     /** Number of declared properties (after shorthand expansion). */
@@ -171,6 +170,14 @@ public final class InlineStyle {
         return found;
     }
 
+    /** The longhands (or the custom property) a declaration of {@code name} sets. */
+    private static List<String> longhands(String name) {
+        Shorthand s = Shorthands.get(name);
+        if (s != null) return s.longhands().stream().map(l -> l.name).toList();
+        Longhand l = Properties.longhand(name);
+        return List.of(l == null ? name : l.name);
+    }
+
     private static String normalize(String property) {
         String p = property.trim();
         if (p.startsWith("--")) return p;
@@ -179,23 +186,40 @@ public final class InlineStyle {
         return alias == null ? p : alias.name;
     }
 
+    /** The element's declarations as written (read-only). */
     private static List<Entry> entries(Element element) {
-        String style = element.getAttribute("style");
-        return style == null ? new ArrayList<>() : parse(style);
+        return ElementState.of(element).inlineEntries;
     }
 
-    /** The valid declarations of a style attribute, as written. */
-    private static List<Entry> parse(String css) {
+    /**
+     * The valid declarations of a style attribute, as written. Invalid ones are dropped, as browsers do, and logged
+     * at debug level.
+     */
+    static List<Entry> parse(Element element, String css) {
         List<Entry> out = new ArrayList<>();
+        Document doc = element.ownerDocument();
         for (CssParser.Declaration d : CssParser.parseDeclarations(css)) {
-            Entry e = new Entry(normalize(d.name()), ComponentValue.text(d.value()), d.important());
-            if (valid(e)) out.add(e);
+            String value = ComponentValue.text(d.value());
+            Entry e = entry(doc, normalize(d.name()), value, d.value(), d.important());
+            if (e != null) {
+                out.add(e);
+            } else {
+                doc.host().log(Host.LogLevel.DEBUG, doc.url() + ": invalid declaration in a style attribute '"
+                        + d.name() + ": " + value + "'");
+            }
         }
         return out;
     }
 
-    private static boolean valid(Entry e) {
-        return Decl.expand(e.parse(), "", null) != null;
+    /** A declaration of {@code element}'s inline style, or null when the value is invalid. */
+    private static Entry entry(Element element, String name, String value, boolean important) {
+        return entry(element.ownerDocument(), name, value, CssParser.parseComponentValues(value), important);
+    }
+
+    /** An entry whose value parses to {@code parsed}, or null when that is invalid for the property. */
+    private static Entry entry(Document doc, String name, String value, List<ComponentValue> parsed, boolean important) {
+        List<Decl> decls = Decl.expand(new CssParser.Declaration(name, parsed, important, 0), doc.url(), doc.host());
+        return decls == null ? null : new Entry(name, value, important, decls);
     }
 
     private static String serialize(List<Entry> entries) {
@@ -207,9 +231,11 @@ public final class InlineStyle {
         return sb.toString();
     }
 
+    /** Writes the attribute, then installs the parsed result so nothing parses it again. */
     private static void write(Element element, List<Entry> entries) {
         String css = serialize(entries);
         if (css.isEmpty()) element.removeAttribute("style");
         else element.setAttribute("style", css);
+        element.parsedInlineStyle = new ElementState(element.getAttribute("style"), entries);
     }
 }

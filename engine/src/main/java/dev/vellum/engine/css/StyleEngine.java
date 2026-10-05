@@ -25,9 +25,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -39,11 +37,12 @@ import java.util.function.Consumer;
  *
  * <p>Restyles are full-document (DESIGN D-008) but incremental in effect: an element whose matched rules, parent
  * style and container style are unchanged keeps its previous style objects, so identity comparison is enough
- * downstream, and a changed style is compared property by property to decide whether layout must run again.
+ * downstream, and a changed style is compared property by property to decide whether layout must run again. When
+ * only hover, active or focus state changed since the last restyle ({@link Document#domVersion} is unchanged),
+ * elements whose matching did not read that state keep their matched rules without matching again.
  */
 public final class StyleEngine {
     private static final Stylesheet USER_AGENT = loadUserAgentSheet();
-    private static final Prop[] PROPS = Prop.values();
 
     private final Document document;
     private final Host host;
@@ -51,6 +50,10 @@ public final class StyleEngine {
     private final List<Entry> matched = new ArrayList<>();
     private RuleIndex index;
     private List<Source> sources;
+    /** The {@link Document#domVersion} the last restyle ran at (and {@link #sources} were collected at). */
+    private int styledVersion;
+    /** This pass only follows hover, active and focus changes: the DOM and the rules are as last time. */
+    private boolean interactionOnly;
     private MediaQuery.Environment environment;
     /** Bumped whenever something every element depends on changes: sheets, media, viewport, root font size. */
     private int generation;
@@ -76,31 +79,46 @@ public final class StyleEngine {
         if (root == null) return;
         MediaQuery.Environment env = new MediaQuery.Environment(document.viewportWidth(), document.viewportHeight(),
                 document.devicePixelRatio(), host.prefersReducedMotion());
-        List<Source> found = new ArrayList<>();
-        Map<String, Stylesheet> usedStyles = new HashMap<>();
-        collectSheets(document, found, usedStyles);
-        styleSheets = usedStyles;
+        boolean domChanged = sources == null || document.domVersion() != styledVersion;
+        styledVersion = document.domVersion();
+        List<Source> found = sources;
+        if (domChanged) {
+            found = new ArrayList<>();
+            Map<String, Stylesheet> usedStyles = new HashMap<>();
+            collectSheets(document, found, usedStyles);
+            styleSheets = usedStyles;
+        }
+        interactionOnly = !domChanged;
         if (index == null || !env.equals(environment) || !found.equals(sources)) {
             index = RuleIndex.build(USER_AGENT, found, env, this::loadSheet);
-            sources = found;
             environment = env;
             generation++;
+            interactionOnly = false;
             cascade.environment(host, env.width(), env.height(), env.guiScale());
         }
+        sources = found;
         cascade.newPass();
         restyle(root, null, null, new MatchContext(root));
     }
 
     private void restyle(Element el, ComputedStyle parent, ComputedStyle container, MatchContext mc) {
-        ElementState state = state(el);
+        ElementState state = ElementState.of(el);
         matched.clear();
-        index.match(el, mc, matched);
+        boolean rematch = !interactionOnly || !state.matchesSurviveInteraction();
+        boolean sameMatches = true;
+        if (rematch) {
+            mc.interactionRead = false;
+            index.match(el, mc, matched);
+            sameMatches = state.updateMatches(matched, mc.interactionRead);
+        }
         ComputedStyle old = el.baseStyle;
         ComputedStyle base = old;
-        if (old == null || !state.unchanged(matched, parent, container, generation)) {
+        if (old == null || !sameMatches || !state.sameInputs(parent, container, generation)) {
+            if (!rematch) state.matchesInto(matched);
             float rem = parent == null ? ComputedStyle.DEFAULT_FONT_SIZE : rootFontSize;
             base = reuseIfEqual(old, cascade.compute(el, parent, container, rem, matched, PseudoElement.NONE,
                     state.inline));
+            boolean inheritsExplicitly = cascade.inheritedExplicitly();
             boolean readsAttributes = cascade.readAttributes();
             el.beforeStyle = pseudo(el, base, rem, PseudoElement.BEFORE, el.beforeStyle);
             readsAttributes |= cascade.readAttributes();
@@ -108,7 +126,7 @@ public final class StyleEngine {
             readsAttributes |= cascade.readAttributes();
             el.placeholderStyle = el.isTextControl()
                     ? pseudo(el, base, rem, PseudoElement.PLACEHOLDER, el.placeholderStyle) : null;
-            state.remember(matched, parent, container, generation, readsAttributes);
+            state.remember(parent, container, generation, readsAttributes, inheritsExplicitly);
         }
         if (parent == null && base.fontSize != rootFontSize) {
             rootFontSize = base.fontSize; // rem changed: nothing below may be reused
@@ -145,27 +163,11 @@ public final class StyleEngine {
             document.invalidateLayout();
             return fresh;
         }
-        boolean equal = Float.compare(old.lineHeightFactor, fresh.lineHeightFactor) == 0
-                && old.isFlexOrGridItemHint == fresh.isFlexOrGridItemHint;
-        for (Prop p : PROPS) {
-            if (Objects.equals(p.get(old), p.get(fresh))) continue;
-            equal = false;
-            if (p.affectsLayout) {
-                document.invalidateLayout();
-                break;
-            }
+        if (!old.sameLayout(fresh)) {
+            document.invalidateLayout();
+            return fresh;
         }
-        return equal ? old : fresh;
-    }
-
-    private ElementState state(Element el) {
-        String style = el.getAttribute("style");
-        if (el.parsedInlineStyle instanceof ElementState s && Objects.equals(s.inlineText, style)) return s;
-        List<Decl> inline = style == null || style.isBlank() ? null
-                : Stylesheet.declarations(style, document.url(), host, log(document.url()));
-        ElementState s = new ElementState(style, inline);
-        el.parsedInlineStyle = s;
-        return s;
+        return old.sameAs(fresh) ? old : fresh;
     }
 
     // ---- Stylesheets ----
@@ -185,8 +187,7 @@ public final class StyleEngine {
                 }
                 case "link" -> {
                     String rel = e.getAttribute("rel"), href = e.getAttribute("href");
-                    boolean stylesheet = rel != null && List.of(rel.toLowerCase(Locale.ROOT).split("\\s+")).contains("stylesheet");
-                    if (stylesheet && href != null) {
+                    if (rel != null && href != null && Selector.hasToken(rel, "stylesheet", true)) {
                         out.add(new Source(loadSheet(document.resolveUrl(href)), media(e)));
                     }
                 }

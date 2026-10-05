@@ -24,10 +24,14 @@ final class ElementAnimations {
     private final List<CssTransition> transitions = new ArrayList<>();
     private List<CssAnimation> cssAnimations = new ArrayList<>();
     private final List<ScriptAnimation> scripted = new ArrayList<>();
-    /** Every property an effect has set on this element, to tell when animating moved layout. */
-    private final EnumSet<Prop> animated = EnumSet.noneOf(Prop.class);
+    /** All of the above, bottom layer first; rebuilt by {@link #layer} whenever one of them changes. */
+    private final List<Player> players = new ArrayList<>();
     /** Something changed since the last tick (a restyle or a script call), so the next tick must update. */
     private boolean dirty;
+    /** Some player's time moves, as of the last tick: finished animations that fill forwards need no ticks. */
+    private boolean advancing;
+    /** The composed style handed out last ({@code element.style}) and the one the next compose writes. */
+    private Composed front = new Composed(), back = new Composed();
 
     ElementAnimations(AnimationEngine engine, Element element) {
         this.engine = engine;
@@ -35,14 +39,12 @@ final class ElementAnimations {
     }
 
     boolean isEmpty() {
-        return transitions.isEmpty() && cssAnimations.isEmpty() && scripted.isEmpty();
+        return players.isEmpty();
     }
 
     /** Whether the next tick has work: a player whose time moves, or a change since the last tick. */
     boolean needsTick() {
-        if (dirty) return true;
-        for (Player p : players()) if (p.isAdvancing()) return true;
-        return false;
+        return dirty || advancing;
     }
 
     /** The base style changed: update transitions and CSS animations from it (see the engine's styleChanged). */
@@ -51,56 +53,79 @@ final class ElementAnimations {
         if (rendered) updateTransitions(oldBase, newBase, now);
         else cancel(transitions);
         updateCssAnimations(rendered ? newBase.animations : List.of(), newBase, now);
-        for (Player p : players()) p.sample(now);
+        layer();
+        for (Player p : players) p.sample(now);
         dirty = true;
     }
 
     /** Advances every player to {@code now} and drops the ones that are done. */
     void tick(double now) {
-        for (Player p : players()) p.advance(now);
-        transitions.removeIf(t -> !t.hasEffect()); // finished or cancelled; the base value has taken over
-        pruneScripted(now);
+        advancing = false;
+        for (Player p : players) {
+            p.advance(now);
+            advancing |= p.isAdvancing();
+        }
+        boolean removed = transitions.removeIf(t -> !t.hasEffect()); // finished or cancelled: the base has taken over
+        if (pruneScripted(now) || removed) layer();
         dirty = false;
     }
 
     /**
-     * {@code base} with every current effect applied in layer order, onto a copy made when the first one applies:
-     * {@code base} itself when none does.
+     * {@code base} with every current effect applied in layer order, or {@code base} itself when none applies.
+     *
+     * <p>Two styles alternate as the result, so the one handed out last frame stays intact for comparison
+     * ({@link AnimationEngine}'s layout check) and is overwritten the frame after: by then any layout-affecting change
+     * between the two has caused a relayout, so a box tree still holding the older one only sees newer paint values.
      */
     ComputedStyle compose(ComputedStyle base) {
         if (base == null) return null;
-        ComputedStyle style = base;
-        for (Player p : players()) {
+        Composed target = null;
+        for (Player p : players) {
             if (!p.hasEffect()) continue;
-            if (style == base) style = base.copy();
-            animated.addAll(p.effect.props());
-            p.apply(style);
+            if (target == null) target = back.reset(base);
+            target.written.addAll(p.effect.props());
+            p.apply(target.style);
         }
-        return style;
-    }
-
-    /** Whether an animated property that affects layout differs between two styles of this element. */
-    boolean layoutChanged(ComputedStyle before, ComputedStyle after) {
-        if (before == after) return false;
-        if (before == null || after == null) return true;
-        for (Prop p : animated) {
-            if (p.affectsLayout && !Objects.equals(p.get(before), p.get(after))) return true;
-        }
-        return false;
+        if (target == null) return base;
+        back = front;
+        front = target;
+        return target.style;
     }
 
     /** Adds a scripted animation that is (again) playing and marks the element for the next tick. */
     void attach(ScriptAnimation animation) {
-        if (!animation.isIdle() && !scripted.contains(animation)) scripted.add(animation);
+        if (!animation.isIdle() && !scripted.contains(animation)) {
+            scripted.add(animation);
+            layer();
+        }
         dirty = true;
     }
 
     /** Cancels everything (the element left the document). */
     void cancelAll() {
-        for (Player p : players()) p.cancel();
+        for (Player p : players) p.cancel();
         transitions.clear();
         cssAnimations.clear();
         scripted.clear();
+        players.clear();
+    }
+
+    /** A style composed on a base, with the properties effects wrote into it. */
+    private static final class Composed {
+        ComputedStyle style, base;
+        final EnumSet<Prop> written = EnumSet.noneOf(Prop.class);
+
+        /** Makes {@link #style} a copy of {@code base}: by restoring what effects wrote when it already was one. */
+        Composed reset(ComputedStyle base) {
+            if (style == null || this.base != base) {
+                style = base.copy();
+                this.base = base;
+            } else {
+                for (Prop p : written) p.set(style, p.get(base));
+            }
+            written.clear();
+            return this;
+        }
     }
 
     // ---- Transitions ----
@@ -185,31 +210,34 @@ final class ElementAnimations {
     /**
      * Drops scripted animations that no longer affect the element: cancelled ones, finished ones that do not fill,
      * and finished filling ones whose every property a later finished filling one sets (Web Animations' automatic
-     * removal, so repeated {@code fill: "forwards"} animations do not pile up). Scripts can replay them.
+     * removal, so repeated {@code fill: "forwards"} animations do not pile up). Scripts can replay them. Returns
+     * whether any was dropped.
      */
-    private void pruneScripted(double now) {
-        if (scripted.isEmpty()) return;
-        EnumSet<Prop> covered = EnumSet.noneOf(Prop.class);
+    private boolean pruneScripted(double now) {
+        if (scripted.isEmpty()) return false;
+        int before = scripted.size();
+        EnumSet<Prop> covered = null;
         for (int i = scripted.size() - 1; i >= 0; i--) {
             ScriptAnimation a = scripted.get(i);
             boolean finished = a.isFinished(now);
-            if (a.isIdle() || finished && (!a.hasEffect() || covered.containsAll(a.effect.props()))) {
+            if (a.isIdle() || finished && (!a.hasEffect() || covered != null && covered.containsAll(a.effect.props()))) {
                 scripted.remove(i);
             } else if (finished) {
+                if (covered == null) covered = EnumSet.noneOf(Prop.class);
                 covered.addAll(a.effect.props());
             }
         }
+        return scripted.size() != before;
     }
 
     // ---- Helpers ----
 
-    /** Every player, bottom layer first. */
-    private List<Player> players() {
-        List<Player> all = new ArrayList<>(transitions.size() + cssAnimations.size() + scripted.size());
-        all.addAll(transitions);
-        all.addAll(cssAnimations);
-        all.addAll(scripted);
-        return all;
+    /** Rebuilds {@link #players} from the three layers. */
+    private void layer() {
+        players.clear();
+        players.addAll(transitions);
+        players.addAll(cssAnimations);
+        players.addAll(scripted);
     }
 
     private static void cancel(List<? extends Player> players) {

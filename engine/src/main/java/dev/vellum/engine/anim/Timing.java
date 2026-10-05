@@ -10,13 +10,14 @@ import java.util.Objects;
 /**
  * The Web Animations timing model, shared by CSS transitions, CSS animations and scripted animations: maps an
  * animation's current time onto a phase, an iteration and an eased iteration progress. Times are in ms. There is no
- * end delay and no iteration start.
+ * end delay and no iteration start. Also the options of {@link AnimationEngine#animate} ({@code element.animate}):
+ * null direction, fill and easing mean the defaults.
  *
  * @param easing applied to each whole iteration. Transitions and scripted animations use it; CSS animations apply
  *               their timing function per keyframe instead, so theirs is linear
  */
-record Timing(double delay, double duration, double iterations, Direction direction, FillMode fill,
-              TimingFunction easing) {
+public record Timing(double delay, double duration, double iterations, Direction direction, FillMode fill,
+                     TimingFunction easing) {
     enum Phase { BEFORE, ACTIVE, AFTER }
 
     /**
@@ -31,7 +32,7 @@ record Timing(double delay, double duration, double iterations, Direction direct
         boolean hasEffect() { return !Double.isNaN(progress); }
     }
 
-    Timing {
+    public Timing {
         delay = Double.isFinite(delay) ? delay : 0;
         duration = duration > 0 ? duration : 0;
         iterations = iterations >= 0 ? iterations : 0;
@@ -45,9 +46,9 @@ record Timing(double delay, double duration, double iterations, Direction direct
                 TimingFunction.LINEAR);
     }
 
-    static Timing of(AnimationOptions options) {
-        return new Timing(options.delayMs(), options.durationMs(), options.iterations(), options.direction(),
-                options.fill(), options.easing());
+    /** One linear iteration of {@code durationMs}, without delay or fill. */
+    public static Timing of(double durationMs) {
+        return new Timing(0, durationMs, 1, null, null, null);
     }
 
     /** A transition: one iteration, filling backwards so the start value shows during the delay. */

@@ -93,7 +93,9 @@ public final class Interpolate {
 
     /**
      * Function by function when both lists have the same function types (an empty list stands for identity
-     * functions of the other list's types); otherwise an {@link Interpolated} blend the painter resolves.
+     * functions of the other list's types); otherwise an {@link Interpolated} blend the painter resolves by
+     * decomposing both sides. Matrices always blend that way: interpolating their components would collapse a
+     * rotation (a half turn passes through the zero matrix).
      */
     private static List<TransformFunction> transforms(List<TransformFunction> from, List<TransformFunction> to,
                                                       float t) {
@@ -117,13 +119,11 @@ public final class Interpolate {
             case Rotate x when b instanceof Rotate y -> new Rotate(lerp(x.degrees(), y.degrees(), t));
             case Skew x when b instanceof Skew y ->
                     new Skew(lerp(x.xDegrees(), y.xDegrees(), t), lerp(x.yDegrees(), y.yDegrees(), t));
-            case Matrix x when b instanceof Matrix y -> new Matrix(lerp(x.a(), y.a(), t), lerp(x.b(), y.b(), t),
-                    lerp(x.c(), y.c(), t), lerp(x.d(), y.d(), t), lerp(x.e(), y.e(), t), lerp(x.f(), y.f(), t));
             default -> null;
         };
     }
 
-    /** Identity functions of the same types as {@code list}, or null if it holds a blend (which has no identity). */
+    /** Identity functions of the same types as {@code list}, or null if it holds a function that blends as a whole. */
     private static List<TransformFunction> identities(List<TransformFunction> list) {
         TransformFunction[] out = new TransformFunction[list.size()];
         for (int i = 0; i < out.length; i++) {
@@ -132,7 +132,7 @@ public final class Interpolate {
                 case Scale ignored -> new Scale(1, 1);
                 case Rotate ignored -> new Rotate(0);
                 case Skew ignored -> new Skew(0, 0);
-                case Matrix ignored -> new Matrix(1, 0, 0, 1, 0, 0);
+                case Matrix ignored -> null;
                 case Interpolated ignored -> null;
             };
             if (out[i] == null) return null;

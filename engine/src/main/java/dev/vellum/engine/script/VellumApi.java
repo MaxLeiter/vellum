@@ -15,7 +15,8 @@ import java.util.Map;
 /**
  * The {@code vellum} object: data and messages from the host or server ({@code data}, {@code on}, {@code off}),
  * messages back ({@code send}, rate limited), {@code close}, {@code playSound}, {@code t} (translations),
- * {@code open} (navigation) and {@code state} (reactive state for templates).
+ * {@code open} (navigation), {@code state} (reactive state for templates) and {@code nextTick} (a callback after
+ * templates next render).
  */
 final class VellumApi {
     /** Messages per second a document may send; bursts up to the same count are allowed. */
@@ -44,7 +45,8 @@ final class VellumApi {
                 .action("playSound", (v, a) -> host.playSound(a.str(0), (float) a.num(1, 1), (float) a.num(2, 1)))
                 .method("t", (v, a) -> host.translate(a.str(0), Arrays.stream(a.from(1)).map(Js::str).toArray(String[]::new)))
                 .action("open", (v, a) -> host.navigate(rt.document.resolveUrl(a.str(0))))
-                .method("state", (v, a) -> rt.templates.state(a.has(0) ? a.get(0) : rt.js.newObject()));
+                .method("state", (v, a) -> rt.templates.state(a.has(0) ? a.get(0) : rt.js.newObject()))
+                .action("nextTick", (v, a) -> rt.templates.nextTick(a.fn(0)));
     }
 
     /** The current {@code vellum.data}. */

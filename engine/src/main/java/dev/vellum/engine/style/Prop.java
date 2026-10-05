@@ -1,7 +1,5 @@
 package dev.vellum.engine.style;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -163,17 +161,10 @@ public enum Prop {
 
     public void set(ComputedStyle s, Object value) { setter.accept(s, value); }
 
-    /** Inherited properties, in declaration order. */
-    public static final List<Prop> INHERITED;
     private static final Map<String, Prop> BY_NAME = new HashMap<>();
 
     static {
-        List<Prop> inherited = new ArrayList<>();
-        for (Prop p : values()) {
-            BY_NAME.put(p.cssName, p);
-            if (p.inherited) inherited.add(p);
-        }
-        INHERITED = Collections.unmodifiableList(inherited);
+        for (Prop p : values()) BY_NAME.put(p.cssName, p);
         // Common aliases so transitions can name the CSS property people expect.
         BY_NAME.put("transform-origin", TRANSFORM_ORIGIN_X);
         BY_NAME.put("background", BACKGROUND_COLOR);

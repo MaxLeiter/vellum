@@ -61,6 +61,7 @@ public final class Document extends Node {
     private int version;
     /** Listeners plus inline {@code on*} handlers in this document, by lower-case event type. */
     private final Map<String, int[]> handlers = new HashMap<>();
+    private int domVersion;
 
     private Element focused;
 
@@ -221,7 +222,7 @@ public final class Document extends Node {
         this.viewportWidth = width;
         this.viewportHeight = height;
         this.devicePixelRatio = devicePixelRatio;
-        invalidate(true); // vw/vh and media queries
+        styleDirty = layoutDirty = true; // vw/vh and media queries
         run(() -> dispatchEvent(new Event("resize", false, false)));
     }
 
@@ -236,6 +237,7 @@ public final class Document extends Node {
         run(() -> {
             scheduler.run(nowMs);
             input.tick(nowMs);
+            if (scripts != null) scripts.beforeRestyle();
             updateStyle();
             animationEngine.tick(nowMs);
             if (updateReplaced()) layoutDirty = true;
@@ -293,6 +295,12 @@ public final class Document extends Node {
     /** Incremented on every relayout; hosts use it to know when to reposition things (e.g. container slots). */
     public int layoutVersion() { return version; }
 
+    /**
+     * Incremented on every change to the tree, attributes, text or form state; not on hover, active or focus
+     * changes. Lets subsystems skip work when only interaction state changed (or nothing did).
+     */
+    public int domVersion() { return domVersion; }
+
     public void invalidateStyle() { styleDirty = true; }
     public void invalidateLayout() { layoutDirty = true; }
     public boolean needsLayout() { return layoutDirty; }
@@ -302,7 +310,9 @@ public final class Document extends Node {
         invalidate(true, layout);
     }
 
+    /** A tree, attribute or text change: bumps {@link #domVersion} and marks style and/or layout dirty. */
     private void invalidate(boolean style, boolean layout) {
+        domVersion++;
         styleDirty |= style;
         layoutDirty |= layout;
     }
@@ -399,7 +409,9 @@ public final class Document extends Node {
 
     /** Form state that selectors read changed ({@code :checked}, {@code :placeholder-shown}): restyle. */
     void stateChanged(Element element) {
-        if (element.isConnected()) styleDirty = true;
+        if (!element.isConnected()) return;
+        domVersion++;
+        styleDirty = true;
     }
 
     void scrolled(Element element) {

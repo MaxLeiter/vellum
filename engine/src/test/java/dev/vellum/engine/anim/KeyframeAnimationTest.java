@@ -7,15 +7,12 @@ import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Length;
 import dev.vellum.engine.style.Prop;
 import dev.vellum.engine.style.TimingFunction;
-import dev.vellum.engine.style.TimingFunction.Steps;
 import dev.vellum.engine.style.TransitionSpec;
 import dev.vellum.engine.testing.TestHost;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static dev.vellum.engine.anim.AnimFixture.keyframe;
 import static dev.vellum.engine.anim.AnimFixture.style;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,14 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KeyframeAnimationTest {
     private static final double EPS = 1e-4;
+    /** Keyframes come from {@link AnimFixture#KEYFRAMES}. */
     private final AnimFixture f = new AnimFixture();
-
-    @BeforeEach
-    void keyframes() {
-        f.keyframes.put("fade", List.of(keyframe(0, null, Prop.OPACITY, 0f), keyframe(1, null, Prop.OPACITY, 1f)));
-        f.keyframes.put("grow", List.of(keyframe(0, null, Prop.WIDTH, Length.ZERO),
-                keyframe(1, null, Prop.WIDTH, Length.px(100))));
-    }
 
     private static AnimationSpec spec(String name, float duration, float delay, float iterations,
                                       Direction direction, FillMode fill) {
@@ -65,7 +56,6 @@ class KeyframeAnimationTest {
 
     @Test
     void missingEndpointsUseTheBaseValue() {
-        f.keyframes.put("dip", List.of(keyframe(0.5f, null, Prop.OPACITY, 0f)));
         f.restyle(0, style(Prop.OPACITY, 1f, Prop.ANIMATION, List.of(spec("dip", 100))));
         f.tick(0);
         f.tick(25);
@@ -78,10 +68,6 @@ class KeyframeAnimationTest {
 
     @Test
     void propertiesOnlyAnimateBetweenTheKeyframesThatSetThem() {
-        f.keyframes.put("mixed", List.of(
-                keyframe(0, null, Prop.OPACITY, 0f),
-                keyframe(0.5f, null, Prop.WIDTH, Length.px(100)),
-                keyframe(1, null, Prop.OPACITY, 1f)));
         f.restyle(0, style(Prop.WIDTH, Length.ZERO, Prop.ANIMATION, List.of(spec("mixed", 100))));
         f.tick(0);
         f.tick(25);
@@ -112,7 +98,6 @@ class KeyframeAnimationTest {
         assertEquals(0.75, f.opacity(), EPS);
 
         AnimFixture g = new AnimFixture();
-        g.keyframes.putAll(f.keyframes);
         g.restyle(0, animated(spec("fade", 100, 0, 1, Direction.REVERSE, FillMode.NONE)));
         g.tick(0);
         g.tick(25);
@@ -128,7 +113,6 @@ class KeyframeAnimationTest {
         assertFalse(f.engine.isAnimating());
 
         AnimFixture g = new AnimFixture();
-        g.keyframes.putAll(f.keyframes);
         g.restyle(0, animated(spec("fade", 100, 0, 1, Direction.NORMAL, FillMode.FORWARDS)));
         g.tick(0);
         g.tick(100);
@@ -145,7 +129,6 @@ class KeyframeAnimationTest {
         assertEquals(List.of("animationstart:fade@0.0"), f.takeEvents());
 
         AnimFixture g = new AnimFixture();
-        g.keyframes.putAll(f.keyframes);
         g.restyle(0, animated(spec("fade", 100, 50, 1, Direction.NORMAL, FillMode.NONE)));
         g.tick(25);
         assertEquals(0.5, g.opacity()); // the base value
@@ -163,8 +146,6 @@ class KeyframeAnimationTest {
 
     @Test
     void keyframeTimingFunctionsEaseTheirSegment() {
-        f.keyframes.put("stepped", List.of(keyframe(0, new Steps(2, Steps.Jump.END), Prop.OPACITY, 0f),
-                keyframe(1, null, Prop.OPACITY, 1f)));
         f.restyle(0, animated(spec("stepped", 100)));
         f.tick(0);
         f.tick(30);
@@ -174,7 +155,6 @@ class KeyframeAnimationTest {
 
         // Keyframes without their own timing function use the animation's.
         AnimFixture g = new AnimFixture();
-        g.keyframes.putAll(f.keyframes);
         g.restyle(0, animated(new AnimationSpec("fade", 100, 0, TimingFunction.EASE, 1, Direction.NORMAL,
                 FillMode.NONE, false)));
         g.tick(0);
@@ -231,18 +211,15 @@ class KeyframeAnimationTest {
 
     @Test
     void unrelatedRestylesKeepAnimationsRunningAndReresolveKeyframes() {
-        f.restyle(0, animated(spec("fade", 100)));
+        List<AnimationSpec> grow = List.of(spec("grow-em", 100));
+        f.restyle(0, style(Prop.WIDTH, Length.ZERO, Prop.ANIMATION, grow));
         f.tick(0);
         f.tick(50);
-        ComputedStyle recoloured = animated(spec("fade", 100));
-        recoloured.color = 0xFFFF0000;
-        f.restyle(50, recoloured);
+        assertEquals(Length.px(40), f.el.style.width); // half-way to 10em of 8px
+        f.restyle(50, style(Prop.WIDTH, Length.ZERO, Prop.FONT_SIZE, 16f, Prop.ANIMATION, grow));
         f.tick(75);
-        assertEquals(0.75, f.opacity(), EPS);
-        assertEquals(List.of("fade", "fade"), f.resolved); // once per base style
-
-        f.engine.styleChanged(f.el, recoloured, recoloured); // same base: cached
-        assertEquals(2, f.resolved.size());
+        assertEquals(Length.px(120), f.el.style.width); // still running, now towards 10em of 16px
+        assertEquals(List.of("animationstart:grow-em@0.0"), f.takeEvents());
     }
 
     @Test
@@ -291,7 +268,6 @@ class KeyframeAnimationTest {
             @Override
             public boolean prefersReducedMotion() { return true; }
         });
-        g.keyframes.putAll(f.keyframes);
         g.restyle(0, animated(spec("fade", 1000, 500, 1, Direction.NORMAL, FillMode.FORWARDS)));
         g.tick(0);
         assertEquals(1, g.opacity());

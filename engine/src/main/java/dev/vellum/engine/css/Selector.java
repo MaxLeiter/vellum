@@ -5,8 +5,12 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.dom.Text;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * A complex selector (Selectors 4): compound selectors joined by combinators, with its specificity and optional
@@ -61,32 +65,79 @@ final class Selector {
             }
             default -> {
                 // Sibling combinators: walk the preceding element siblings ('+' only looks at the nearest one).
-                Node parent = e.parentNode();
-                if (parent == null) return false;
+                Siblings siblings = ctx.siblings(e);
+                if (siblings == null) return false;
                 boolean adjacent = combinators[i - 1] == '+';
-                for (int k = indexIn(parent, e) - 1; k >= 0; k--) {
-                    if (parent.childAt(k) instanceof Element s) {
-                        if (matchAt(s, i - 1, ctx)) return true;
-                        if (adjacent) return false;
-                    }
+                for (int k = ctx.position(e) - 1; k >= 0; k--) {
+                    if (matchAt(siblings.elements[k], i - 1, ctx)) return true;
+                    if (adjacent) return false;
                 }
                 return false;
             }
         }
     }
 
-    private static int indexIn(Node parent, Node child) {
-        for (int i = 0, n = parent.childCount(); i < n; i++) if (parent.childAt(i) == child) return i;
-        return -1;
-    }
-
-    /** Scope for matching: {@code :scope}, and the anchor element of the {@code :has()} being evaluated. */
+    /**
+     * State for one matching pass (a restyle, a query): {@code :scope}, the anchor of the {@code :has()} being
+     * evaluated, whether interaction state was read, and each parent's element children with their positions, found
+     * on first use. The DOM must not change while a context is in use.
+     */
     static final class MatchContext {
         final Element scope;
         Element anchor;
+        /** Set when a selector read hover, active or focus state; the style engine resets it per element. */
+        boolean interactionRead;
+        private final IdentityHashMap<Node, Siblings> siblings = new IdentityHashMap<>();
+        private final IdentityHashMap<Element, Integer> positions = new IdentityHashMap<>();
 
         MatchContext(Element scope) {
             this.scope = scope;
+        }
+
+        /** The element children of {@code e}'s parent, or null without a parent. */
+        Siblings siblings(Element e) {
+            Node parent = e.parentNode();
+            if (parent == null) return null;
+            Siblings s = siblings.get(parent);
+            if (s == null) {
+                List<Element> elements = new ArrayList<>(parent.childCount());
+                for (int i = 0, n = parent.childCount(); i < n; i++) {
+                    if (parent.childAt(i) instanceof Element c) {
+                        positions.put(c, elements.size());
+                        elements.add(c);
+                    }
+                }
+                siblings.put(parent, s = new Siblings(elements.toArray(Element[]::new)));
+            }
+            return s;
+        }
+
+        /** {@code e}'s 0-based index in {@link #siblings}, which must have been called for it. */
+        int position(Element e) {
+            return positions.get(e);
+        }
+    }
+
+    /** A parent's element children in order, with their positions among same-type siblings (built on demand). */
+    static final class Siblings {
+        final Element[] elements;
+        private int[] ofType, ofTypeFromEnd;
+
+        Siblings(Element[] elements) {
+            this.elements = elements;
+        }
+
+        /** The 1-based position of {@code elements[i]} among the siblings with its tag name. */
+        int typePosition(int i, boolean fromEnd) {
+            if (ofType == null) {
+                int n = elements.length;
+                ofType = new int[n];
+                ofTypeFromEnd = new int[n];
+                Map<String, Integer> counts = new HashMap<>();
+                for (int k = 0; k < n; k++) ofType[k] = counts.merge(elements[k].tagName(), 1, Integer::sum);
+                for (int k = 0; k < n; k++) ofTypeFromEnd[k] = counts.get(elements[k].tagName()) - ofType[k] + 1;
+            }
+            return fromEnd ? ofTypeFromEnd[i] : ofType[i];
         }
     }
 
@@ -128,19 +179,16 @@ final class Selector {
         public boolean matches(Element e, MatchContext ctx) {
             String actual = e.getAttribute(name);
             if (actual == null) return false;
-            if (op == 0) return true;
             String v = value;
-            if (ignoreCase) {
-                actual = actual.toLowerCase(Locale.ROOT);
-                v = v.toLowerCase(Locale.ROOT);
-            }
+            int n = actual.length(), len = v == null ? 0 : v.length();
             return switch (op) {
-                case '=' -> actual.equals(v);
-                case '~' -> !v.isEmpty() && !v.contains(" ") && List.of(actual.trim().split("\\s+")).contains(v);
-                case '|' -> actual.equals(v) || actual.startsWith(v + "-");
-                case '^' -> !v.isEmpty() && actual.startsWith(v);
-                case '$' -> !v.isEmpty() && actual.endsWith(v);
-                case '*' -> !v.isEmpty() && actual.contains(v);
+                case 0 -> true;
+                case '=' -> n == len && actual.regionMatches(ignoreCase, 0, v, 0, len);
+                case '~' -> len > 0 && indexOfWhitespace(v, 0) < 0 && hasToken(actual, v, ignoreCase);
+                case '|' -> (n == len || n > len && actual.charAt(len) == '-') && actual.regionMatches(ignoreCase, 0, v, 0, len);
+                case '^' -> len > 0 && actual.regionMatches(ignoreCase, 0, v, 0, len);
+                case '$' -> len > 0 && n >= len && actual.regionMatches(ignoreCase, n - len, v, 0, len);
+                case '*' -> len > 0 && (ignoreCase ? containsIgnoringCase(actual, v) : actual.contains(v));
                 default -> false;
             };
         }
@@ -148,13 +196,54 @@ final class Selector {
         @Override public int specificity() { return CLASS; }
     }
 
+    /** Whether the whitespace-separated {@code list} contains {@code token} (which has no whitespace). */
+    static boolean hasToken(String list, String token, boolean ignoreCase) {
+        int n = list.length(), len = token.length();
+        for (int start = 0; start < n; ) {
+            int end = indexOfWhitespace(list, start);
+            if (end < 0) end = n;
+            if (end - start == len && list.regionMatches(ignoreCase, start, token, 0, len)) return true;
+            start = end + 1;
+        }
+        return false;
+    }
+
+    private static boolean containsIgnoringCase(String s, String part) {
+        for (int i = 0, last = s.length() - part.length(); i <= last; i++) {
+            if (s.regionMatches(true, i, part, 0, part.length())) return true;
+        }
+        return false;
+    }
+
+    /** The index of the first CSS whitespace character at or after {@code from}, or -1. */
+    private static int indexOfWhitespace(String s, int from) {
+        for (int i = from, n = s.length(); i < n; i++) {
+            char c = s.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') return i;
+        }
+        return -1;
+    }
+
     /** Pseudo-classes without arguments. */
     enum PseudoClass implements Simple {
-        HOVER, ACTIVE, FOCUS, FOCUS_VISIBLE, FOCUS_WITHIN, CHECKED, DISABLED, ENABLED, EMPTY, ROOT, FIRST_CHILD,
-        LAST_CHILD, ONLY_CHILD, FIRST_OF_TYPE, LAST_OF_TYPE, ONLY_OF_TYPE, PLACEHOLDER_SHOWN, OPEN, SCOPE, ANY_LINK;
+        HOVER(true), ACTIVE(true), FOCUS(true), FOCUS_VISIBLE(true), FOCUS_WITHIN(true), CHECKED, DISABLED, ENABLED,
+        EMPTY, ROOT, FIRST_CHILD, LAST_CHILD, ONLY_CHILD, FIRST_OF_TYPE, LAST_OF_TYPE, ONLY_OF_TYPE,
+        PLACEHOLDER_SHOWN, OPEN, SCOPE, ANY_LINK;
+
+        /** Reads interaction state (hover, active, focus), which changes without the DOM changing. */
+        private final boolean interaction;
+
+        PseudoClass() {
+            this(false);
+        }
+
+        PseudoClass(boolean interaction) {
+            this.interaction = interaction;
+        }
 
         @Override
         public boolean matches(Element e, MatchContext ctx) {
+            if (interaction) ctx.interactionRead = true;
             return switch (this) {
                 case HOVER -> e.isHovered();
                 case ACTIVE -> e.isActive();
@@ -221,16 +310,15 @@ final class Selector {
 
         /** 1-based position of {@code e} among its element siblings that are of the same type / match {@code of}. */
         static int position(Element e, boolean fromEnd, boolean ofType, List<Selector> of, MatchContext ctx) {
-            Node parent = e.parentNode();
-            if (parent == null) return 1;
-            int n = parent.childCount(), pos = 0;
-            for (int k = 0; k < n; k++) {
-                Node c = parent.childAt(fromEnd ? n - 1 - k : k);
-                if (!(c instanceof Element s)) continue;
-                if (ofType && !s.tagName().equals(e.tagName())) continue;
-                if (of != null && s != e && !SelectorParser.matchesAny(of, s, ctx)) continue;
-                pos++;
-                if (s == e) return pos;
+            Siblings siblings = ctx.siblings(e);
+            if (siblings == null) return 1;
+            Element[] all = siblings.elements;
+            int i = ctx.position(e);
+            if (ofType) return siblings.typePosition(i, fromEnd);
+            if (of == null) return fromEnd ? all.length - i : i + 1;
+            int pos = 1; // e itself (the caller has checked it matches `of`)
+            for (int k = fromEnd ? i + 1 : i - 1; k >= 0 && k < all.length; k += fromEnd ? 1 : -1) {
+                if (SelectorParser.matchesAny(of, all[k], ctx)) pos++;
             }
             return pos;
         }
@@ -266,12 +354,12 @@ final class Selector {
                     if (first == ' ' || first == '>') {
                         if (anyDescendantMatches(e, s, ctx)) return true;
                     } else {
-                        Node parent = e.parentNode();
-                        if (parent == null) continue;
+                        Siblings siblings = ctx.siblings(e);
+                        if (siblings == null) continue;
                         // Following siblings and their subtrees: the subject may sit below a later sibling.
-                        for (int k = indexIn(parent, e) + 1, n = parent.childCount(); k < n; k++) {
-                            if (parent.childAt(k) instanceof Element sib
-                                    && (s.matches(sib, ctx) || anyDescendantMatches(sib, s, ctx))) return true;
+                        Element[] all = siblings.elements;
+                        for (int k = ctx.position(e) + 1; k < all.length; k++) {
+                            if (s.matches(all[k], ctx) || anyDescendantMatches(all[k], s, ctx)) return true;
                         }
                     }
                 }

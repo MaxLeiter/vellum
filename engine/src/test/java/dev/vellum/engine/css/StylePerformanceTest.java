@@ -4,6 +4,7 @@ import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import org.junit.jupiter.api.Test;
 
+import java.lang.management.ManagementFactory;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,6 +62,45 @@ class StylePerformanceTest {
                 full / 1e6, hover / 1e6);
         assertTrue(full < 20_000_000, "full restyle took " + full / 1e6 + " ms");
         assertTrue(hover < 20_000_000, "hover restyle took " + hover / 1e6 + " ms");
+    }
+
+    /**
+     * Hovering a container whose hover style only changes its border keeps every descendant's style (their
+     * inherited properties did not change), so 500 transitioned children cost neither cascade work nor transition
+     * bookkeeping.
+     */
+    @Test
+    void hoverOverTransitionedElementsIsCheap() {
+        StringBuilder html = new StringBuilder("""
+                <style>
+                  .list { border: 1px solid #333 } .list:hover { border-color: #fff }
+                  .card { padding: 2px; transition: background-color .2s, transform .2s, opacity .2s }
+                  .card:hover { background-color: #444 }
+                </style><div class=list>""");
+        for (int i = 0; i < ELEMENTS; i++) html.append("<div class=card><span>item ").append(i).append("</span></div>");
+        Document doc = StyleTesting.page(html.append("</div>").toString());
+        Element list = doc.querySelector(".list");
+        for (int i = 0; i < 200; i++) hover(doc, list, i);
+        long time = time(20, i -> hover(doc, list, i));
+        long allocated = allocated(() -> hover(doc, list, 1)) + allocated(() -> hover(doc, list, 0));
+        System.out.printf("hover restyle over %d transitioned elements: %.3f ms, %d KB allocated%n", ELEMENTS,
+                time / 1e6, allocated / 2 / 1024);
+        assertTrue(time < 5_000_000, "hover restyle took " + time / 1e6 + " ms");
+        assertTrue(allocated / 2 < 256 * 1024, "hover restyle allocated " + allocated / 2 + " bytes");
+    }
+
+    private static void hover(Document doc, Element element, int i) {
+        doc.setHovered(element, i % 2 == 0);
+        doc.styleEngine().restyle();
+        doc.animations().tick(0);
+    }
+
+    /** Bytes allocated by this thread while {@code body} runs. */
+    private static long allocated(Runnable body) {
+        com.sun.management.ThreadMXBean bean = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
+        long before = bean.getCurrentThreadAllocatedBytes();
+        body.run();
+        return bean.getCurrentThreadAllocatedBytes() - before;
     }
 
     private static void fullRestyle(Document doc, Element root, int i) {
