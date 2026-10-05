@@ -1,5 +1,6 @@
 package dev.vellum.engine.anim;
 
+import dev.vellum.engine.paint.Affine;
 import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.Display;
 import dev.vellum.engine.style.Length;
@@ -7,6 +8,7 @@ import dev.vellum.engine.style.Prop;
 import dev.vellum.engine.style.Shadow;
 import dev.vellum.engine.style.TransformFunction;
 import dev.vellum.engine.style.TransformFunction.Interpolated;
+import dev.vellum.engine.style.TransformFunction.Matrix;
 import dev.vellum.engine.style.TransformFunction.Rotate;
 import dev.vellum.engine.style.TransformFunction.Scale;
 import dev.vellum.engine.style.TransformFunction.Translate;
@@ -133,6 +135,17 @@ class InterpolateTest {
                 value(Prop.TRANSFORM, List.of(), to, 0.5f));
         assertEquals(List.of(new Translate(Length.px(5), Length.px(10)), new Scale(2, 1)),
                 value(Prop.TRANSFORM, to, List.of(), 0.5f));
+    }
+
+    @Test
+    void matricesBlendByDecomposingSoRotationsSurvive() {
+        List<TransformFunction> from = List.of(new Matrix(1, 0, 0, 1, 0, 0));
+        List<TransformFunction> to = List.of(new Matrix(-1, 0, 0, -1, 0, 0)); // a half turn
+        List<?> half = (List<?>) value(Prop.TRANSFORM, from, to, 0.5f);
+        assertEquals(List.of(new Interpolated(from, to, 0.5f)), half);
+        @SuppressWarnings("unchecked")
+        Affine m = new Affine().concat((List<TransformFunction>) half, 10, 10);
+        assertEquals(1, Math.abs(m.determinant()), 1e-4, "a quarter turn, not the zero matrix: " + m);
     }
 
     @Test

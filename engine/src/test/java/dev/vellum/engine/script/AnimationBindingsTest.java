@@ -1,6 +1,6 @@
 package dev.vellum.engine.script;
 
-import dev.vellum.engine.anim.AnimationOptions;
+import dev.vellum.engine.anim.Timing;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.TimingFunction;
 import dev.vellum.shadow.rhino.EcmaError;
@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The keyframe and option parsing behind {@code element.animate()} (the animation engine itself is another module). */
 class AnimationBindingsTest {
@@ -64,12 +65,22 @@ class AnimationBindingsTest {
 
     @Test
     void options() {
-        assertEquals(AnimationOptions.of(300), parse("300", AnimationBindings::options));
-        assertEquals(new AnimationOptions(200, 50, new TimingFunction.Steps(4, TimingFunction.Steps.Jump.START),
-                        Float.POSITIVE_INFINITY, AnimationSpec.Direction.ALTERNATE_REVERSE, AnimationSpec.FillMode.FORWARDS),
+        assertEquals(Timing.of(300), parse("300", AnimationBindings::options));
+        assertEquals(new Timing(50, 200, Double.POSITIVE_INFINITY, AnimationSpec.Direction.ALTERNATE_REVERSE,
+                        AnimationSpec.FillMode.FORWARDS, new TimingFunction.Steps(4, TimingFunction.Steps.Jump.START)),
                 parse("{duration: 200, delay: 50, easing: 'steps(4, jump-start)', iterations: Infinity, "
                         + "direction: 'alternate-reverse', fill: 'forwards'}", AnimationBindings::options));
         assertEquals(new TimingFunction.CubicBezier(0.1f, 0.7f, 1f, 0.1f), AnimationBindings.easing(" cubic-bezier(0.1, 0.7, 1.0, 0.1) "));
+    }
+
+    @Test
+    void easingsParseAsInCss() {
+        assertEquals(TimingFunction.EASE_IN, AnimationBindings.easing("Ease-In"));
+        assertEquals(new TimingFunction.Steps(2, TimingFunction.Steps.Jump.NONE), AnimationBindings.easing("steps(2, jump-none)"));
+        assertEquals(new TimingFunction.CubicBezier(0.5f, 0, 0.5f, 1), AnimationBindings.easing("cubic-bezier(calc(1 / 2), 0, .5, 1)"));
+        for (String invalid : List.of("cubic-bezier(2, 0, 0, 1)", "steps(1, jump-none)", "steps(0)", "ease-in 1", "bounce")) {
+            assertThrows(EcmaError.class, () -> AnimationBindings.easing(invalid), invalid);
+        }
     }
 
     @Test

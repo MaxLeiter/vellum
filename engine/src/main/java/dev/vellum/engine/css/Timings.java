@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Easing functions: the keywords, {@code cubic-bezier()} and {@code steps()}. */
-final class Timings {
+public final class Timings {
     private static final Map<String, TimingFunction> KEYWORDS = Map.of(
             "linear", TimingFunction.LINEAR, "ease", TimingFunction.EASE, "ease-in", TimingFunction.EASE_IN,
             "ease-out", TimingFunction.EASE_OUT, "ease-in-out", TimingFunction.EASE_IN_OUT,
@@ -19,6 +19,13 @@ final class Timings {
             "jump-both", Steps.Jump.BOTH);
 
     private Timings() {}
+
+    /** Parses an easing written as CSS ({@code element.animate()} options and keyframes), or returns null. */
+    public static TimingFunction parse(String css) {
+        ValueReader r = new ValueReader(CssParser.trim(CssParser.parseComponentValues(css)));
+        TimingFunction f = read(r, new ValueContext());
+        return f != null && r.atEnd() ? f : null;
+    }
 
     /** Reads one timing function, or returns null without consuming anything. */
     static TimingFunction read(ValueReader r, ValueContext ctx) {

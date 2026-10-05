@@ -26,28 +26,16 @@ import java.util.List;
  * duration, so they fire their start and end events immediately and show their end state if they fill forwards.
  */
 public final class AnimationEngine {
-    /** Computes {@code @keyframes} for an element, as {@link dev.vellum.engine.css.StyleEngine#resolveKeyframes}. */
-    @FunctionalInterface
-    public interface KeyframeResolver {
-        List<ResolvedKeyframe> resolve(Element element, String name, ComputedStyle base);
-    }
-
     private final Document document;
-    private KeyframeResolver keyframes;
     /** States of the elements with animations, in the order they got them. */
     private final List<ElementAnimations> animated = new ArrayList<>();
     /** Events and callbacks waiting for the end of the tick. */
     private List<Runnable> queued = new ArrayList<>();
-    private double lastTick;
+    /** The {@link Document#domVersion} at the last check that every animated element is still in the document. */
+    private int connectedVersion;
 
     public AnimationEngine(Document document) {
         this.document = document;
-        this.keyframes = (element, name, base) -> document.styleEngine().resolveKeyframes(element, name, base);
-    }
-
-    /** Replaces where keyframes come from (by default the document's style engine). */
-    public void setKeyframeResolver(KeyframeResolver resolver) {
-        this.keyframes = resolver;
     }
 
     /**
@@ -58,6 +46,10 @@ public final class AnimationEngine {
      */
     public void styleChanged(Element element, ComputedStyle oldBase, ComputedStyle newBase) {
         ElementAnimations state = stateOf(element);
+        if (oldBase == newBase) { // the style engine kept the style: nothing to start or stop
+            if (state == null) element.style = newBase;
+            return;
+        }
         if (state == null) {
             boolean mayAnimate = newBase != null
                     && (!newBase.animations.isEmpty() || oldBase != null && !newBase.transitions.isEmpty());
@@ -79,10 +71,11 @@ public final class AnimationEngine {
      * Elements that left the document lose their animations.
      */
     public void tick(double nowMs) {
-        lastTick = nowMs;
+        boolean treeChanged = document.domVersion() != connectedVersion;
+        connectedVersion = document.domVersion();
         for (Iterator<ElementAnimations> it = animated.iterator(); it.hasNext(); ) {
             ElementAnimations state = it.next();
-            if (!state.element.isConnected()) state.cancelAll();
+            if (treeChanged && !state.element.isConnected()) state.cancelAll();
             else if (state.needsTick()) state.tick(nowMs);
             else continue;
             update(state, state.element.baseStyle);
@@ -99,9 +92,9 @@ public final class AnimationEngine {
      * script layer computes them with {@code StyleEngine.computeDeclarations} and distributes missing offsets.
      * Missing 0% / 100% keyframes animate from / to the underlying value.
      */
-    public Animation animate(Element element, List<ResolvedKeyframe> keyframes, AnimationOptions options) {
+    public Animation animate(Element element, List<ResolvedKeyframe> keyframes, Timing timing) {
         ScriptAnimation animation = new ScriptAnimation(this, element,
-                KeyframeEffect.of(keyframes, TimingFunction.LINEAR), effective(Timing.of(options)));
+                KeyframeEffect.of(keyframes, TimingFunction.LINEAR), effective(timing));
         animation.play();
         return animation;
     }
@@ -116,11 +109,11 @@ public final class AnimationEngine {
     // ---- For players ----
 
     /**
-     * The current time. During a frame the scheduler holds the frame's time, also in {@link #styleChanged}, which
-     * runs before {@link #tick}; the last tick time covers callers that drive {@link #tick} directly.
+     * The current time: the frame's, which the scheduler holds from the start of a frame (before restyle and
+     * {@link #tick}) until the next one.
      */
     double now() {
-        return Math.max(lastTick, document.scheduler().now());
+        return document.scheduler().now();
     }
 
     boolean reducedMotion() {
@@ -133,7 +126,7 @@ public final class AnimationEngine {
     }
 
     List<ResolvedKeyframe> resolveKeyframes(Element element, String name, ComputedStyle base) {
-        return keyframes.resolve(element, name, base);
+        return document.styleEngine().resolveKeyframes(element, name, base);
     }
 
     /** Queues an event dispatch or callback for the end of the current (or next) tick. */
@@ -169,11 +162,15 @@ public final class AnimationEngine {
         animated.remove(state);
     }
 
-    /** Recomposes the element's style on {@code base}, invalidating layout if an animated layout property moved. */
+    /** Recomposes the element's style on {@code base}, invalidating layout if a layout property moved. */
     private void update(ElementAnimations state, ComputedStyle base) {
-        ComputedStyle before = state.element.style;
-        state.element.style = state.compose(base);
-        if (!document.needsLayout() && state.layoutChanged(before, state.element.style)) document.invalidateLayout();
+        ComputedStyle before = state.element.style, after = state.compose(base);
+        state.element.style = after;
+        if (!document.needsLayout() && layoutMoved(before, after)) document.invalidateLayout();
+    }
+
+    private static boolean layoutMoved(ComputedStyle before, ComputedStyle after) {
+        return before == null || after == null ? before != after : !before.sameLayout(after);
     }
 
     private void dispatchQueued() {

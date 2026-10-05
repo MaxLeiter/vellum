@@ -34,20 +34,20 @@ class ScriptAnimationTest {
         f.restyle(0, style(Prop.OPACITY, 0.5f));
     }
 
-    private Animation fadeIn(AnimationOptions options) {
+    private Animation fadeIn(Timing options) {
         Animation a = f.engine.animate(f.el, FADE_IN, options);
         a.onFinish(() -> log.add("finish"));
         a.onCancel(() -> log.add("cancel"));
         return a;
     }
 
-    private static AnimationOptions options(float duration, float delay, float iterations, FillMode fill) {
-        return new AnimationOptions(duration, delay, TimingFunction.LINEAR, iterations, Direction.NORMAL, fill);
+    private static Timing options(float duration, float delay, float iterations, FillMode fill) {
+        return new Timing(delay, duration, iterations, Direction.NORMAL, fill, TimingFunction.LINEAR);
     }
 
     @Test
     void playsFromTheNextTickAndRemovesItsEffectWhenFinished() {
-        Animation a = fadeIn(AnimationOptions.of(100));
+        Animation a = fadeIn(Timing.of(100));
         assertEquals(PlayState.RUNNING, a.playState());
         assertEquals(0, a.currentTime());
         assertTrue(f.engine.isAnimating());
@@ -75,8 +75,7 @@ class ScriptAnimationTest {
 
     @Test
     void delayAndIterations() {
-        Animation a = fadeIn(new AnimationOptions(100, 50, TimingFunction.LINEAR, 2, Direction.ALTERNATE,
-                FillMode.BOTH));
+        Animation a = fadeIn(new Timing(50, 100, 2, Direction.ALTERNATE, FillMode.BOTH, TimingFunction.LINEAR));
         f.tick(0);
         assertEquals(0, f.opacity()); // filling backwards during the delay
         f.tick(175);
@@ -88,7 +87,7 @@ class ScriptAnimationTest {
 
     @Test
     void pauseAndPlay() {
-        Animation a = fadeIn(AnimationOptions.of(100));
+        Animation a = fadeIn(Timing.of(100));
         f.tick(0);
         f.tick(40);
         a.pause();
@@ -104,7 +103,7 @@ class ScriptAnimationTest {
 
     @Test
     void seekingAndPlaybackRate() {
-        Animation a = fadeIn(AnimationOptions.of(100));
+        Animation a = fadeIn(Timing.of(100));
         f.tick(0);
         a.setCurrentTime(75);
         f.tick(0);
@@ -119,7 +118,7 @@ class ScriptAnimationTest {
 
     @Test
     void reversePlaysBackToTheStart() {
-        Animation a = fadeIn(AnimationOptions.of(100));
+        Animation a = fadeIn(Timing.of(100));
         f.tick(0);
         f.tick(50);
         a.reverse();
@@ -168,7 +167,7 @@ class ScriptAnimationTest {
 
     @Test
     void missingKeyframesAnimateFromTheUnderlyingValue() {
-        f.engine.animate(f.el, List.of(keyframe(1, null, Prop.OPACITY, 1f)), AnimationOptions.of(100));
+        f.engine.animate(f.el, List.of(keyframe(1, null, Prop.OPACITY, 1f)), Timing.of(100));
         f.tick(0);
         f.tick(50);
         assertEquals(0.75, f.opacity(), EPS);
@@ -176,8 +175,7 @@ class ScriptAnimationTest {
 
     @Test
     void easingAppliesToTheWholeIteration() {
-        f.engine.animate(f.el, FADE_IN, new AnimationOptions(100, 0, TimingFunction.EASE, 1, Direction.NORMAL,
-                FillMode.NONE));
+        f.engine.animate(f.el, FADE_IN, new Timing(0, 100, 1, Direction.NORMAL, FillMode.NONE, TimingFunction.EASE));
         f.tick(0);
         f.tick(50);
         assertEquals(0.8024, f.opacity(), 1e-3);
@@ -185,11 +183,10 @@ class ScriptAnimationTest {
 
     @Test
     void scriptedAnimationsOverrideCssAnimations() {
-        f.keyframes.put("fade", FADE_IN);
         f.restyle(0, style(Prop.OPACITY, 0.5f, Prop.ANIMATION, List.of(new AnimationSpec("fade", 100, 0,
                 TimingFunction.LINEAR, 1, Direction.NORMAL, FillMode.NONE, false))));
         f.engine.animate(f.el, List.of(keyframe(0, null, Prop.OPACITY, 0.25f), keyframe(1, null, Prop.OPACITY, 0.25f)),
-                AnimationOptions.of(100));
+                Timing.of(100));
         f.tick(0);
         f.tick(50);
         assertEquals(0.25, f.opacity(), EPS);

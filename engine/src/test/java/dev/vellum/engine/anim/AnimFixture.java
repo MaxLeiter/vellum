@@ -12,27 +12,31 @@ import dev.vellum.engine.testing.TestHost;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
- * Drives the animation engine the way the pipeline does, without the (stubbed) style and layout engines: tests
- * hand-build base styles and call {@link #restyle} and {@link #tick}. Keyframes come from {@link #keyframes}, and
- * every timing event on {@link #el} is recorded in {@link #events} as {@code type:name@seconds}.
+ * Drives the animation engine the way the pipeline does, without running layout: tests hand-build base styles and
+ * call {@link #restyle} and {@link #tick}. {@code animation-name}s resolve through the style engine against the
+ * {@code @keyframes} in {@link #KEYFRAMES}, and every timing event on {@link #el} is recorded in {@link #events} as
+ * {@code type:name@seconds}.
  */
 final class AnimFixture {
     static final List<String> EVENT_TYPES = List.of("transitionrun", "transitionstart", "transitionend",
             "transitioncancel", "animationstart", "animationiteration", "animationend", "animationcancel");
+    static final String KEYFRAMES = """
+            @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+            @keyframes grow { from { width: 0 } to { width: 100px } }
+            @keyframes grow-em { to { width: 10em } }
+            @keyframes dip { 50% { opacity: 0 } }
+            @keyframes mixed { 0% { opacity: 0 } 50% { width: 100px } 100% { opacity: 1 } }
+            @keyframes stepped { 0% { opacity: 0; animation-timing-function: steps(2, end) } 100% { opacity: 1 } }
+            """;
 
     final Document doc;
     final AnimationEngine engine;
     final Element el;
-    final Map<String, List<ResolvedKeyframe>> keyframes = new HashMap<>();
-    /** Keyframe resolutions, as {@code name} per call. */
-    final List<String> resolved = new ArrayList<>();
     final List<String> events = new ArrayList<>();
 
     AnimFixture() {
@@ -40,12 +44,9 @@ final class AnimFixture {
     }
 
     AnimFixture(TestHost host) {
-        doc = Document.create(host, "test:anim.html");
+        doc = Document.parse(host, "test:anim.html", "<style>" + KEYFRAMES + "</style>");
+        doc.styleEngine().restyle(); // loads the keyframes; the tests style el by hand
         engine = doc.animations();
-        engine.setKeyframeResolver((element, name, base) -> {
-            resolved.add(name);
-            return keyframes.getOrDefault(name, List.of());
-        });
         el = doc.body().appendChild(doc.createElement("div"));
         for (String type : EVENT_TYPES) {
             el.addEventListener(type, e -> {

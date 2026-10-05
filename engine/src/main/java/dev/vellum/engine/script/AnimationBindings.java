@@ -1,9 +1,10 @@
 package dev.vellum.engine.script;
 
 import dev.vellum.engine.anim.Animation;
-import dev.vellum.engine.anim.AnimationOptions;
+import dev.vellum.engine.anim.Timing;
 import dev.vellum.engine.css.ResolvedKeyframe;
 import dev.vellum.engine.css.StyleEngine;
+import dev.vellum.engine.css.Timings;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.Event;
 import dev.vellum.engine.style.AnimationSpec;
@@ -22,8 +23,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -43,8 +42,6 @@ final class AnimationBindings {
             return properties.entrySet().stream().map(p -> p.getKey() + ": " + p.getValue()).collect(Collectors.joining("; "));
         }
     }
-
-    private static final Pattern EASING_FUNCTION = Pattern.compile("(cubic-bezier|steps)\\((.*)\\)");
 
     private final RhinoScriptRuntime rt;
     private final HostClass<Animation> animation;
@@ -66,7 +63,7 @@ final class AnimationBindings {
 
     Object animate(Element element, Args a) {
         List<Keyframe> keyframes = keyframes(a.get(0));
-        AnimationOptions options = options(a.get(1));
+        Timing options = options(a.get(1));
         rt.document.flushLayout(); // keyframes are computed on top of the current base style
         StyleEngine styles = rt.document.styleEngine();
         List<ResolvedKeyframe> resolved = keyframes.stream().map(k -> {
@@ -201,17 +198,17 @@ final class AnimationBindings {
     }
 
     /** A duration in ms, or {@code {duration, delay, easing, iterations, direction, fill}}. */
-    static AnimationOptions options(Object spec) {
-        if (Js.isNullish(spec)) return AnimationOptions.of(0);
-        if (!(spec instanceof Scriptable o)) return AnimationOptions.of((float) number(spec, 0));
+    static Timing options(Object spec) {
+        if (Js.isNullish(spec)) return Timing.of(0);
+        if (!(spec instanceof Scriptable o)) return Timing.of(number(spec, 0));
         Object easing = Js.property(o, "easing");
-        return new AnimationOptions(
-                (float) number(Js.property(o, "duration"), 0),
-                (float) number(Js.property(o, "delay"), 0),
-                Js.isNullish(easing) ? TimingFunction.LINEAR : easing(Js.str(easing)),
-                (float) number(Js.property(o, "iterations"), 1),
+        return new Timing(
+                number(Js.property(o, "delay"), 0),
+                number(Js.property(o, "duration"), 0),
+                number(Js.property(o, "iterations"), 1),
                 keyword(o, "direction", AnimationSpec.Direction.NORMAL),
-                keyword(o, "fill", AnimationSpec.FillMode.NONE));
+                keyword(o, "fill", AnimationSpec.FillMode.NONE),
+                Js.isNullish(easing) ? TimingFunction.LINEAR : easing(Js.str(easing)));
     }
 
     private static double number(Object value, double fallback) {
@@ -230,43 +227,10 @@ final class AnimationBindings {
         }
     }
 
-    /** A CSS easing: a keyword, {@code cubic-bezier(a, b, c, d)} or {@code steps(n[, position])}. */
+    /** A CSS easing, as {@code animation-timing-function} parses it. */
     static TimingFunction easing(String text) {
-        String s = text.trim().toLowerCase(Locale.ROOT);
-        TimingFunction keyword = switch (s) {
-            case "linear" -> TimingFunction.LINEAR;
-            case "ease" -> TimingFunction.EASE;
-            case "ease-in" -> TimingFunction.EASE_IN;
-            case "ease-out" -> TimingFunction.EASE_OUT;
-            case "ease-in-out" -> TimingFunction.EASE_IN_OUT;
-            case "step-start" -> new TimingFunction.Steps(1, TimingFunction.Steps.Jump.START);
-            case "step-end" -> new TimingFunction.Steps(1, TimingFunction.Steps.Jump.END);
-            default -> null;
-        };
-        if (keyword != null) return keyword;
-        Matcher m = EASING_FUNCTION.matcher(s);
-        if (m.matches()) {
-            String[] args = m.group(2).split(",");
-            try {
-                if (m.group(1).equals("cubic-bezier") && args.length == 4) {
-                    return new TimingFunction.CubicBezier(Float.parseFloat(args[0].trim()), Float.parseFloat(args[1].trim()),
-                            Float.parseFloat(args[2].trim()), Float.parseFloat(args[3].trim()));
-                }
-                if (m.group(1).equals("steps") && args.length <= 2) {
-                    TimingFunction.Steps.Jump jump = args.length == 1 ? TimingFunction.Steps.Jump.END : switch (args[1].trim()) {
-                        case "start", "jump-start" -> TimingFunction.Steps.Jump.START;
-                        case "end", "jump-end" -> TimingFunction.Steps.Jump.END;
-                        case "jump-none" -> TimingFunction.Steps.Jump.NONE;
-                        case "jump-both" -> TimingFunction.Steps.Jump.BOTH;
-                        default -> null;
-                    };
-                    int count = Integer.parseInt(args[0].trim());
-                    if (jump != null && count > 0) return new TimingFunction.Steps(count, jump);
-                }
-            } catch (NumberFormatException ignored) {
-                // falls through to the error below
-            }
-        }
-        throw Js.typeError("Invalid easing: " + text);
+        TimingFunction f = Timings.parse(text);
+        if (f == null) throw Js.typeError("Invalid easing: " + text);
+        return f;
     }
 }
