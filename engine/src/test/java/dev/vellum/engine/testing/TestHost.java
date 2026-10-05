@@ -1,8 +1,10 @@
 package dev.vellum.engine.testing;
 
 import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.host.ArraySurface;
 import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.Host;
+import dev.vellum.engine.host.PixelSurface;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.style.Cursor;
@@ -15,9 +17,9 @@ import java.util.function.Function;
 
 /**
  * A deterministic in-memory host for tests: Minecraft-like font metrics ({@link TestFonts}), the Rhino script
- * runtime, resources from a map, and recorded logs, errors, sounds, cursors and messages. Errors are recorded and,
- * unless {@link #recordErrors} was called, thrown, so tests notice broken listeners and scripts.
- * {@link #load} gives a {@link Page} to drive.
+ * runtime, resources and image sizes from maps, in-memory canvases, and recorded logs, errors, sounds, cursors and
+ * messages. Errors are recorded and, unless {@link #recordErrors} was called, thrown, so tests notice broken
+ * listeners and scripts. {@link #load} gives a {@link Page} to drive.
  */
 public class TestHost implements Host {
     public final Map<String, String> resources = new HashMap<>();
@@ -66,6 +68,17 @@ public class TestHost implements Host {
 
     @Override
     public float[] imageSize(String url) { return imageSizes.get(url); }
+
+    /** Canvas pixels in memory, drawn as the texture {@code surface:WxH}. */
+    @Override
+    public PixelSurface createSurface(int width, int height) {
+        return new ArraySurface(width, height) {
+            @Override
+            public String url() {
+                return "surface:" + width + "x" + height;
+            }
+        };
+    }
 
     @Override
     public ScriptRuntime createScriptRuntime(Document document) {

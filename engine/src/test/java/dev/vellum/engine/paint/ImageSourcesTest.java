@@ -1,7 +1,5 @@
 package dev.vellum.engine.paint;
 
-import dev.vellum.engine.host.ArraySurface;
-import dev.vellum.engine.host.PixelSurface;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.RecordingCanvas;
 import dev.vellum.engine.testing.TestHost;
@@ -14,18 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** {@code sprite:} and {@code canvas:} image URLs read once by the engine, the same in {@code <img>} and CSS. */
 class ImageSourcesTest {
-    /** Canvases draw as "surface:WxH"; every sprite is 20×10. */
+    /** Canvases draw as "surface:WxH" (the test host's); every sprite is 20×10. */
     private final TestHost host = new TestHost() {
-        @Override
-        public PixelSurface createSurface(int width, int height) {
-            return new ArraySurface(width, height) {
-                @Override
-                public String url() {
-                    return "surface:" + width + "x" + height;
-                }
-            };
-        }
-
         @Override
         public float[] spriteSize(String id) {
             return new float[] {20, 10};

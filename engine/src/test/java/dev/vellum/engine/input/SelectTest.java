@@ -47,10 +47,10 @@ class SelectTest {
 
     @Test
     void valuesFollowSelectedAttributesAndOptionText() {
-        Page page = new TestHost().load("<select id=a><option disabled>x<option> Plain  text </option></select><select id=b></select>");
+        Page other = new TestHost().load("<select id=a><option disabled>x<option> Plain  text </option></select><select id=b></select>");
         assertEquals("2", s.value());
-        assertEquals("Plain text", page.byId("a").value(), "first enabled option; value defaults to the text");
-        assertEquals("", page.byId("b").value());
+        assertEquals("Plain text", other.byId("a").value(), "first enabled option; value defaults to the text");
+        assertEquals("", other.byId("b").value());
     }
 
     @Test
@@ -130,14 +130,14 @@ class SelectTest {
 
     @Test
     void longListsScrollWithTheWheel() {
-        Page page = new TestHost().load("<select id=s style='width: 80px'>" + "<option>o".repeat(12) + "<option>last</select>");
-        page.click(5, 5);
+        Page list = new TestHost().load("<select id=s style='width: 80px'>" + "<option>o".repeat(12) + "<option>last</select>");
+        list.click(5, 5);
         RecordingCanvas before = new RecordingCanvas();
-        page.input.paintOverlays(before);
+        list.input.paintOverlays(before);
         assertEquals(8, before.trace("text").size(), "eight rows visible");
-        assertTrue(page.input.wheel(5, 40, 0, 100, NONE));
+        assertTrue(list.input.wheel(5, 40, 0, 100, NONE));
         RecordingCanvas after = new RecordingCanvas();
-        page.input.paintOverlays(after);
+        list.input.paintOverlays(after);
         assertTrue(after.trace("text").getLast().startsWith("text 'last'"));
     }
 
