@@ -1,4 +1,4 @@
-# Vellum — Design
+# Vellum design
 
 Vellum is a small web engine for Minecraft GUIs. You write a screen, inventory, HUD or map in HTML, CSS and a little
 JavaScript. Vellum lays it out with real CSS (block, inline, flexbox, grid, positioning), animates it (transitions,
@@ -131,32 +131,32 @@ of used styles (§8); when a change moves paint order without a relayout (z-inde
 stacking context) it bumps `Document.stackingVersion()`.
 
 ### Contracts between subsystems
-- **css → anim**: after computing an element's base styles the style engine calls
+- css → anim: after computing an element's base styles the style engine calls
   `document.animations().styleChanged(el, which, oldBase, newBase)` for the element and for its ::before and
   ::after (`dom.PseudoElement`), parents first; the animation engine sets the used styles. It computes them with
   `StyleEngine.computeUsed(el, which, own)` (the cascade at used-value time, §8). For keyframes it calls
   `StyleEngine.resolveKeyframes(el, which, name, base)` which returns
   `List<ResolvedKeyframe(offset, timing, style, props)>`, each keyframe's declarations computed for that target.
-- **layout ← style**: layout reads only `element.style` / `beforeStyle` / `afterStyle` and `Host.fonts()` (through
+- layout ← style: layout reads only `element.style` / `beforeStyle` / `afterStyle` and `Host.fonts()` (through
   `TextMeasure`).
   Boxes use the coordinate rules in `Box`'s javadoc.
-- **paint ← layout**: the painter reads the box tree from `LayoutEngine.root()`. Form controls are painted by
+- paint ← layout: the painter reads the box tree from `LayoutEngine.root()`. Form controls are painted by
   `input.Controls.paint(canvas, box, style)`, called by the painter after the box's background and border with the
   style it paints the box with.
-- **geometry**: where a box is on screen is `paint.Coordinates` (`toViewport`, `fromViewport`, `boundingRect`),
+- geometry: where a box is on screen is `paint.Coordinates` (`toViewport`, `fromViewport`, `boundingRect`),
   the one mapping painting, hit testing, input, scripts (`getBoundingClientRect`) and hosts (slot positions, the
   inspector) share: box positions, the scroll offsets of the boxes whose content they are in
   (`Box.contentParent()`), and CSS transforms resolved as the painter resolves them.
-- **input ← paint**: hit testing is `Painter.hitTest(x, y)`, which mirrors paint order, transforms, clipping,
+- input ← paint: hit testing is `Painter.hitTest(x, y)`, which mirrors paint order, transforms, clipping,
   scrolling, `pointer-events` and `visibility`. The `HitResult` carries the point in the hit box's coordinates, the
   scrollbar hit (if any), and the caret offset in text (computed on request).
-- **text**: `layout.TextMeasure` (one per document, `LayoutEngine.textMeasure()`) is how wide text is for layout,
+- text: `layout.TextMeasure` (one per document, `LayoutEngine.textMeasure()`) is how wide text is for layout,
   painting, hit testing and controls alike: the host's advances plus `letter-spacing` and `word-spacing`. It caches
   the host's string widths (bounded), so relayouts do not measure the same words again.
-- **scrolling**: an element owns its scroll position and smooth-scroll destination (`Element.scrollTo/scrollBy/
+- scrolling: an element owns its scroll position and smooth-scroll destination (`Element.scrollTo/scrollBy/
   scrollIntoView` with a `ScrollBehavior`); input, scripts, focus and layout (re-clamping) all scroll through it,
   and `dom.Scrolling` eases smooth scrolls and fires `scroll` once per frame per element that moved.
-- **script ↔ dom**: scripts wrap DOM nodes; `Node.scriptWrapper` caches the wrapper. Inline `on*` attributes are
+- script ↔ dom: scripts wrap DOM nodes; `Node.scriptWrapper` caches the wrapper. Inline `on*` attributes are
   run by `ScriptRuntime.runInlineHandler`.
 
 ## 4. HTML
@@ -239,7 +239,7 @@ descendant/child only), `:placeholder-shown`, `:open` (details/dialog/select), a
 ### Properties
 Everything in `Prop`, with these shorthands expanded by the parser: `margin`, `padding`, `inset`, `border`,
 `border-top|right|bottom|left`, `border-width|style|color`, `border-radius` (with `/` for elliptical, stored per
-corner as a single Length — elliptical radii use the horizontal value), `background` (colour + layers),
+corner as a single Length; elliptical radii use the horizontal value), `background` (colour + layers),
 `background-*` longhands (`-image`, `-size`, `-position`, `-repeat`, `-clip`), `flex`, `flex-flow`, `gap`,
 `place-items`, `place-content`, `place-self`, `grid-template`, `grid-area`, `grid-row`, `grid-column`, `overflow`,
 `font` (simplified), `text-decoration` (line keywords), `transition`, `animation`, `outline`, `transform-origin`,
@@ -279,46 +279,46 @@ a replaced element with `rotatable` that no `mousedown` listener cancelled drive
 
 All layout is in floats (GUI px). Painting snaps to device pixels.
 
-- **Box tree.** One `Box` per rendered element (`display: none` → none; `contents` → children only). Text and inline
+- Box tree. One `Box` per rendered element (`display: none` → none; `contents` → children only). Text and inline
   elements inside a block container produce line boxes; block children of an inline are handled by splitting into
   anonymous blocks (simplified: an inline containing blocks is blockified). Loose text in flex/grid containers is
   wrapped in anonymous flex/grid items. `::before`/`::after` with `content` become `PSEUDO` boxes (inline or block
   per their display) containing their text.
-- **Block formatting**: width from containing block minus margins; `auto` margins centre; `min/max` constraints;
-  `box-sizing`; vertical margin collapsing between siblings and parent/first-child (no clearance — no floats).
-- **Inline formatting**: whitespace processing per `white-space`; greedy line breaking at spaces (and anywhere for
+- Block formatting: width from containing block minus margins; `auto` margins centre; `min/max` constraints;
+  `box-sizing`; vertical margin collapsing between siblings and parent/first-child (no clearance, since there are no floats).
+- Inline formatting: whitespace processing per `white-space`; greedy line breaking at spaces (and anywhere for
   `word-break: break-all` / overlong words with `overflow-wrap: anywhere`); `text-align` including `justify`;
   `text-indent`; `letter-spacing`; `text-transform`; `line-height` with half-leading; `vertical-align` (baseline,
   middle, top, bottom, text-top, text-bottom, sub, super); inline boxes with padding/border/margin (horizontal only
   affects layout); atomic inlines (inline-block/flex/grid, replaced) aligned on the baseline; `<br>`;
   `text-overflow: ellipsis` with `white-space: nowrap` and `overflow` not visible; `line-clamp` (with ellipsis).
-- **Flexbox**: the full CSS Flexbox §9 algorithm: direction and wrap (incl. reverse), `order`, flex base size from
+- Flexbox: the full CSS Flexbox §9 algorithm: direction and wrap (incl. reverse), `order`, flex base size from
   `flex-basis`/content, hypothetical main size with min/max (`min-width:auto` = content-based minimum), resolving
   flexible lengths with freezing, cross sizes, `align-items/self` (stretch, start, end, center, baseline),
   `justify-content` (all values), `align-content`, `gap`, auto margins, multi-line.
-- **Grid**: explicit tracks (`px`, `%`, `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()`,
+- Grid: explicit tracks (`px`, `%`, `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()`,
   `repeat(n | auto-fill | auto-fit, ...)`), `grid-template-areas`, line-based placement (numbers, negative, `span`,
   area names), auto-placement (row/column, dense), implicit tracks (`grid-auto-rows/columns`), `gap`, alignment
   (`justify-items/self`, `align-items/self`, `justify-content`, `align-content`). Track sizing is the spec algorithm
   simplified: no baseline alignment in grid.
-- **Positioning**: relative (offset after layout), absolute (containing block = the padding box of the nearest
+- Positioning: relative (offset after layout), absolute (containing block = the padding box of the nearest
   positioned or transformed ancestor, an inline one contributing its fragments' bounds; `auto` insets resolve to the
   static position), fixed (the viewport, or the nearest transformed ancestor), sticky (as relative). Layout records
   the containing block (`Box.containingBlock`); an out-of-flow box's `Box.contentParent()` is the box whose content
   it is in, and the scrollers between it and its containing block neither scroll nor clip it. Gaining or losing a
   transform is layout-affecting (it changes containing blocks); a transform's value is paint-only. z-index and
   stacking are paint concerns.
-- **Overflow**: scroll containers record `scrollWidth/scrollHeight` (`Box.maxScrollLeft/Top()` is the range); their
+- Overflow: scroll containers record `scrollWidth/scrollHeight` (`Box.maxScrollLeft/Top()` is the range); their
   content is laid out normally and painted shifted by the element's scroll offset. An out-of-flow box extends its
   containing block's scrollable overflow, not the scrollers it escapes. After a layout, scroll offsets are
   re-clamped through the element (firing `scroll` if that moves them). Text controls' overflow is their text
   (`Controls.overflow`), so a textarea scrolls by its element's offsets like any scroll container. Scrollbars are
   overlay (they do not take layout space), drawn by the painter, styled by `scrollbar-width` and the scrollbar colour
   properties.
-- **Replaced elements**: intrinsic size from `ReplacedContent` (or `width`/`height` attributes), `aspect-ratio`,
+- Replaced elements: intrinsic size from `ReplacedContent` (or `width`/`height` attributes), `aspect-ratio`,
   `object-fit` (applied at paint). Form controls are atomic boxes sized by the UA stylesheet; their children
   (option elements) are not laid out.
-- **Intrinsic sizes**: min-content / max-content measurement for every formatting context (needed by flex, grid,
+- Intrinsic sizes: min-content / max-content measurement for every formatting context (needed by flex, grid,
   inline-block shrink-to-fit, and `width: min-content | max-content | fit-content`). Cache per layout pass.
 
 ## 7. Paint
@@ -368,21 +368,21 @@ the scrollbar).
 
 ## 8. Animation
 
-- **Transitions**: on restyle, for each property in `transition-property` whose base value changed (and interpolates),
+- Transitions: on restyle, for each property in `transition-property` whose base value changed (and interpolates),
   start a transition from the current animated value to the new value with the duration, delay and timing function.
   Retargeting mid-flight starts from the current value (with the spec's reversing shortening for reversed transitions).
   `transitionrun/start/end/cancel` events.
-- **Keyframes**: `animation-name` maps to `@keyframes`; keyframes resolved per element via the style engine;
+- Keyframes: `animation-name` maps to `@keyframes`; keyframes resolved per element via the style engine;
   per-keyframe timing functions; iterations, direction, fill mode, delay, play state; `animationstart/iteration/end`.
   Animated values override the base style; transitions apply under animations as in CSS.
-- **Interpolation** by `Prop.Interp`: lengths (px and % parts separately; with `min()`/`max()`/`clamp()` terms, as
+- Interpolation by `Prop.Interp`: lengths (px and % parts separately; with `min()`/`max()`/`clamp()` terms, as
   `calc(a × (1 − t) + b × t)`; keyword ↔ length flips at 50%), floats, ints (rounded), colours (premultiplied), shadow
   lists (pairwise, padding with transparent zero shadows), transform lists (pairwise by function type when lists
   match; otherwise decompose both to matrices and interpolate translate/rotate/scale/skew), discrete for everything
   else.
 - Pseudo-elements animate like elements: `::before` and `::after` have their own transitions and animations, whose
   events go to the element with `pseudoElement` set.
-- **Used values.** A used style is the base style with the target's effects applied, computed at used-value time:
+- Used values. A used style is the base style with the target's effects applied, computed at used-value time:
   what a target inherits follows its parent's *used* values (a pseudo-element's parent is its element), and what it
   computes from `color` or `font-size` follows its own animated ones: `currentColor` anywhere (border colours,
   which default to it, `background-color`, `-mc-tint`, shadows and gradients without a colour, `color-mix()`) and
@@ -471,11 +471,11 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   - `vellum.send(channel, value)`: message to the server/mod (JSON-serialised).
   - `vellum.on(channel, fn)` / `vellum.off`: messages from the server/mod.
   - `vellum.close()`, `vellum.playSound(id, volume, pitch)`, `vellum.t(key, ...args)` (translation),
-    `vellum.open(url, data)` (open another UI), `vellum.nextTick(fn)` (runs `fn` once templates have rendered).
+    `vellum.open(url)` (open another UI), `vellum.nextTick(fn)` (runs `fn` once templates have rendered).
 - Lifecycle: `DOMContentLoaded` and `load` after the scripts run; `Document.close()` (screen closed, overlay hidden,
   navigation, reload) fires `pagehide` then `unload` at the document (where `window` listeners are) while the
   runtime is still alive, then disposes it.
-- **Templates** (no build step, AngularJS-style dirty checking): `{{ expr }}` in text and attributes,
+- Templates (no build step, AngularJS-style dirty checking): `{{ expr }}` in text and attributes,
   `v-if="expr"`, `v-for="item in expr"` (with `v-key`), `v-show`, `v-bind:attr` / `:attr`, `v-class`, `v-style`,
   `v-on:event` / `@event`, `v-model` (two-way for inputs). Expressions are JS evaluated with the scope chain
   `loop variables → vellum.data → state → globals`, where `state` is a reactive object created with
@@ -486,7 +486,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
 
 ## 11. Minecraft integration (`common/`)
 
-- **McCanvas** implements `Canvas` over `GuiGraphicsExtractor`: own affine matrix stack set into the pose (the pose
+- `McCanvas` implements `Canvas` over `GuiGraphicsExtractor`: own affine matrix stack set into the pose (the pose
   stack is only 16 deep); clips → `enableScissor` through `paint.ScissorStack` (intersected with the area the
   renderer draws, the framebuffer at its GUI scale, which for a frame after `Window.setWindowed` is smaller than the
   GUI; empty clips are never pushed and hide their content); alpha stack multiplied into colours; `fillRect` → `fill`
@@ -496,19 +496,19 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   reordering only when the text has right-to-left characters; `drawImage` → a textured quad (identifiers cached in `McImages`, canvases
   are registered dynamic textures); `drawSprite` → `blitSprite`. Rectangles are one render state each, sharing a copy
   of the transform until it changes.
-- **McFontMetrics**: `Font.getSplitter().stringWidth(...)` with the style (bold widens), scaled. Each `FontSpec` keeps
+- `McFontMetrics`: `Font.getSplitter().stringWidth(...)` with the style (bold widens), scaled. Each `FontSpec` keeps
   its resolved styles in its host slot; the shared table is keyed by families, bold and italic (not the size).
-- **Host**: resources from the resource manager (`assets/<ns>/...`; UIs conventionally in `assets/<ns>/vellum/`),
+- Host: resources from the resource manager (`assets/<ns>/...`; UIs conventionally in `assets/<ns>/vellum/`),
   `minecraft:`-style URLs, sounds, clipboard, cursor (`CursorTypes`), logging to the mod logger, translations.
-- **Replaced elements**: `item`, `slot`, `entity`, `model`, `player-head` (`McReplaced.ELEMENTS`); canvases are
+- Replaced elements: `item`, `slot`, `entity`, `model`, `player-head` (`McReplaced.ELEMENTS`); canvases are
   `McSurface`s (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
-- **DocumentDriver**: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
+- `DocumentDriver`: one per shown page (screen, container screen, HUD overlay): load, viewport, frame and paint,
   input, messages, reload. After painting it shows the page's title tooltip through `setTooltipForNextFrame` (lines
   from `Font.split` at 170 px, as vanilla widget tooltips; `title-json` parsed like `<mc-text json>`), at the
   engine's pointer; vanilla's first-set-wins rule keeps an `<item tooltip>` (set while painting) on top.
   `onClose(Runnable)` handlers run once when the owner closes the page for good (screen removed, overlay hidden),
   after the page's `unload`; not on navigation, reload or while suspended (link confirmation).
-- **3D content**: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
+- 3D content: entities, blocks and items are `Scene`s drawn by `McCanvas.drawScene` as picture-in-picture renders
   (`GuiSceneRenderState`, `GuiSceneRenderer`, registered by both loaders, which pool renderers so any number draw in a
   frame). The picture is rendered at the GUI scale into the element's box and blitted with a colour, so 3D content
   is crisp at any size, fades with `opacity` and takes `-mc-tint`. Content asks `McCanvas.sceneVisible` first and
@@ -526,18 +526,18 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
     that transform: block-like items (`usesBlockLight`) are first tilted back by the 30° their transform adds, so they
     turn about their upright axis; flat items turn about the screen's vertical axis, and an item whose GUI transform
     has another tilt turns about a slanted axis.
-- **Page hooks**: `VellumScreens.onPageLoad(url, hook)` runs when a page loads in any screen or overlay (opened,
+- Page hooks: `VellumScreens.onPageLoad(url, hook)` runs when a page loads in any screen or overlay (opened,
   linked to, reloaded), before its scripts, so client-side pages get live data however they are reached;
   `VellumScreens.pages(url)` finds the drivers showing a page later, and `driver.merge(fields)` updates some fields
   of `vellum.data` and keeps the rest. The Mobdex showcase uses all three (`showcase.Mobdex`: every living entity
   type with its attributes and the player's kill statistics, which it asks the server for; while a Mobdex is open,
   `VellumClient.tick` compares the client's copy of the statistics every client tick and pushes them when they
   change).
-- **VellumScreen** (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
+- `VellumScreen` (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows).
-- **VellumContainerScreen** (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
+- `VellumContainerScreen` (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
   frame are moved off-screen. Its GUI area (`leftPos`, `topPos`, `imageWidth`, `imageHeight`, which recipe viewers
@@ -548,7 +548,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   A registration's data function (`menu → JsonObject`) adds the mod's fields to that data; it is polled every client
   tick and the page is updated when its result or a stack changed. The page's title tooltip is shown after vanilla's
   slot tooltip (in `extractTooltip`), so a hovered slot's item wins.
-- **HUD layers**: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
+- HUD layers: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
   `register(id, url, Predicate<Screen> interactiveOver)` (or `Input.WHEN_CHAT_OPEN`, `Input.WHEN_CURSOR_FREE`: any
   screen) makes it interactive over the screens the predicate accepts, asked each frame and pointer event with the
   open screen. Over such a screen the loaders draw it after the screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
@@ -559,18 +559,18 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   release and drags; otherwise the screen gets it. The wheel goes to the same overlay and falls through when unused.
   Without a screen, or under one the predicate rejects, the overlay is drawn in the HUD layer without a pointer
   (`mouseLeave` on the way). Keys stay with the screen.
-- **Networking**: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
+- Networking: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
   `vellum:data` (server → client: JSON for a session), `vellum:message` (client → server: session, channel, JSON),
   `vellum:close`. Server API: `VellumServer.open(player, url, data)` returns a session handle with `push(data)`,
   `onMessage(channel, handler)`, `close()`; container screens open via a `MenuType` whose extra data carries the url.
-- **Resources and hot reload**: documents load through the resource manager and reload with resources (F3+T). In a
+- Resources and hot reload: documents load through the resource manager and reload with resources (F3+T). In a
   dev environment pages are read from `src/main/resources`, and the files they were read from are polled
   (`FileStamps`) so saving one reloads open documents.
-- **Commands**: `/vellum open <url>` (client), `/vellum demo`, `/vellum showcase [page]`, `/vellum inspect` (toggle
+- Commands: `/vellum open <url>` (client), `/vellum demo`, `/vellum showcase [page]`, `/vellum inspect` (toggle
   inspector overlay).
-- **Inspector**: F12 inside a Vellum screen toggles an overlay that highlights the hovered element's margin, border,
+- Inspector: F12 inside a Vellum screen toggles an overlay that highlights the hovered element's margin, border,
   padding and content boxes and shows its selector and size.
-- **Demo**: `assets/vellum/vellum/demo/` has a gallery: a vanilla-styled settings page, a chest-style inventory made
+- Demo: `assets/vellum/vellum/demo/` has a gallery: a vanilla-styled settings page, a chest-style inventory made
   of `<slot>`s, a flexbox/grid showcase, an animated menu, a scripted counter/todo with templates, and a map-like
   canvas.
 

@@ -16,24 +16,24 @@ checkout):
 repositories { mavenLocal() }
 
 // common/ (compiles against vanilla): the API, plus the engine types it exposes
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.1.0") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.2.0") }
 
 // neoforge/ and fabric/: the loader jar, so dev runs load Vellum as a mod (it bundles the engine and Rhino)
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.1.0") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.2.0") }   // or vellum-fabric-26.3
 ```
 
 Declare the dependency in your mod metadata: `[[dependencies.<modid>]] modId="vellum" type="optional"` (or
 `"required"`) in `neoforge.mods.toml`, and `"suggests": {"vellum": "*"}` (or `"depends"`) in `fabric.mod.json`.
 Players install Vellum like any other mod; don't nest its jar in yours.
 
-- Treat Vellum as an **optional** dependency unless your mod is built around it. Check that it is loaded before
+- Treat Vellum as an optional dependency unless your mod is built around it. Check that it is loaded before
   touching `dev.vellum` classes:
   - NeoForge: `ModList.get().isLoaded("vellum")`
   - Fabric: `FabricLoader.getInstance().isModLoaded("vellum")`
 - Put your Vellum-facing code in a separate class. It is then only class-loaded when Vellum is present, and you can
   fall back to a vanilla screen otherwise.
-- **Threads.** Server calls run on the server thread; client calls run on the render thread.
-- **Where pages live.** A page URL is a resource id: `mymod:vellum/shop.html` is
+- Server calls run on the server thread; client calls run on the render thread.
+- A page URL is a resource id: `mymod:vellum/shop.html` is
   `assets/mymod/vellum/shop.html` in your jar (or in a resource pack, which can restyle your UI). Stylesheets,
   scripts and images referenced from a page resolve relative to it, so `<link rel="stylesheet" href="shop.css">`
   loads `assets/mymod/vellum/shop.css`.
@@ -132,7 +132,7 @@ would claim the whole screen:
 The area is the union of the marked border boxes. A page with neither has the whole screen as its GUI area, so
 recipe viewers keep clear of it.
 
-The page's `vellum.data` is `{title, inventory, slots}`, where `slots[n]` is `{id, count, name}` for menu slot `n`.
+A container page's `vellum.data` is `{title, inventory, slots}`, where `slots[n]` is `{id, count, name}` for menu slot `n`.
 It updates when the menu's contents change (and only then), so a page can show totals or highlight search results. Clicking
 outside the page's content (where only `<html>`/`<body>` is under the pointer) drops the carried stack, as clicking
 outside a vanilla container does.

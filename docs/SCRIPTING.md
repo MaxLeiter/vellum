@@ -44,8 +44,8 @@ These do **not** work. Each is a syntax error unless noted:
 | `import` / `export` | several `<script>` elements; they share one global scope |
 | `Intl` (it is undefined) | format numbers and dates yourself |
 
-Two semantic differences matter. **`const` belongs to the enclosing function (or script), not to its block.** So a
-`const` in a loop body is initialised once and keeps its first value in every later iteration, and two `const`s
+Two scoping rules differ from what you may expect. A `const` is scoped to the enclosing function or script, not to
+its block. So a `const` in a loop body is initialised once and keeps its first value in every later iteration, and two `const`s
 with the same name in sibling blocks of one function or script (two loops, two `if` branches) are a
 `SyntaxError: redeclaration of const`, which stops the whole script. Use `let` for anything declared inside a
 block:
@@ -59,7 +59,7 @@ for (let y of b) { const n = y.name; }                         // SyntaxError: r
 
 A `const` in a callback (`list.forEach(x => { const n = ... })`) is fine: every call is a new function.
 
-And **`let` in a loop head is one binding for the whole loop**, not one per iteration. Closures created in the loop
+A `let` in a loop head is one binding for the whole loop, not one per iteration, so closures created in the loop
 all see the final value:
 
 ```js
@@ -286,7 +286,7 @@ Assigning to a name (`@click="count++"`) writes to whichever of those objects ha
 handler statements `this` is the element. Methods are called as methods: in `@click="shop.buy"`, and in
 `@click="buy"` for a method of a `vellum.state()` object, `this.stock` inside `buy` reads that object's `stock`.
 
-Because `vellum.data` comes first, **a data key hides state and globals of the same name**: if the page is opened
+Because `vellum.data` comes first, a data key hides state and globals of the same name. If the page is opened
 with `{"count": 3}`, `{{ count }}` always reads the data, and `count++` writes into `vellum.data` (which the next
 data update replaces) instead of your state; a data key named like one of your functions breaks the handlers that
 call it. Keep the data a page is opened with under one key, `{"options": {"title": "Shop"}}` read as

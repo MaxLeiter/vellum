@@ -9,7 +9,7 @@ Decompiled vanilla sources: unzip `~/Documents/mod/common/build/moddev/artifacts
 - `render(...)` is now `extractRenderState(GuiGraphicsExtractor, int mouseX, int mouseY, float a)` on `Renderable`/`Screen`. `renderBackground` is `extractBackground`; `renderLabels`/`renderSlot` are `extractLabels`/`extractSlot`.
 - `ResourceLocation` is now **`net.minecraft.resources.Identifier`**: `fromNamespaceAndPath`, `withDefaultNamespace`, `parse`, `tryParse`.
 - GPU API: `com.mojang.renderpearl.api.*` (`RenderPipeline`, `GpuTextureView`, `GpuSampler`, `GpuFormat`, `PrimitiveTopology`, `FilterMode`). OpenGL and Vulkan backends; GLSL compiled to SPIR-V. `com.mojang.blaze3d.*` still has `RenderSystem`, `NativeImage`, `VertexConsumer`, `PoseStack`, `Window`, `InputConstants`.
-- **Windowing and input use SDL3** (GLFW is gone). Key codes are SDL scancodes (`KEY_ESCAPE=41`, `KEY_RETURN=40`). Mouse buttons are `LEFT=1`, `MIDDLE=2`, `RIGHT=3`. Modifier masks: `MOD_SHIFT=3`, `MOD_CONTROL=192`, `MOD_ALT=768`.
+- Windowing and input use SDL3 (GLFW is gone). Key codes are SDL scancodes (`KEY_ESCAPE=41`, `KEY_RETURN=40`). Mouse buttons are `LEFT=1`, `MIDDLE=2`, `RIGHT=3`. Modifier masks: `MOD_SHIFT=3`, `MOD_CONTROL=192`, `MOD_ALT=768`.
 - Screens: `minecraft.gui.setScreen(screen)` and `minecraft.gui.screen()`. There is no `Minecraft.setScreen`. On NeoForge, `Screen.onClose()` calls `minecraft.gui.popScreenLayer()`.
 
 ## 1. GuiGraphicsExtractor
@@ -25,8 +25,8 @@ void disableScissor();
 boolean containsPointInScissor(int x,int y);
 void requestCursor(CursorType);     // applied once at end of frame
 ```
-- **Pose stack depth is limited to about 15 pushes.** Don't push once per DOM element. Keep your own matrix stack and `pose().set(...)` it, or push one level and set the matrix for each draw.
-- **Colours are ARGB ints.** Helpers are in `net.minecraft.util.ARGB` (`color`, `multiplyAlpha`, `alpha/red/green/blue`, `srgbLerp`...).
+- Pose stack depth is limited to about 15 pushes. Don't push once per DOM element. Keep your own matrix stack and `pose().set(...)` it, or push one level and set the matrix for each draw.
+- Colours are ARGB ints. Helpers are in `net.minecraft.util.ARGB` (`color`, `multiplyAlpha`, `alpha/red/green/blue`, `srgbLerp`...).
 - `text(...)` is skipped when alpha is 0. **There is no group opacity**: multiply alpha into every element. **Items cannot be tinted or faded**; they are blitted from the item atlas.
 
 ### Rectangles
@@ -40,7 +40,7 @@ void textHighlight(int x0,int y0,int x1,int y1, boolean invertText)
 ```
 - Coordinates are ints. For sub-pixel positions, translate or scale the pose with floats.
 - `fill` emits its vertices as (x0,y0), (x0,y1), (x1,y1), (x1,y0).
-- **GUI pipelines cull back faces.** A mirrored pose (negative scale) culls quads. Custom pipelines should use `.withCull(false)`.
+- GUI pipelines cull back faces. A mirrored pose (negative scale) culls quads. Custom pipelines should use `.withCull(false)`.
 
 ### Textures and sprites
 ```java
@@ -215,7 +215,7 @@ Other:
 - Fields: `imageWidth/imageHeight` (protected final, set in the constructor), `leftPos/topPos` (centred in `init()`), `menu`, `hoveredSlot`.
 - Render flow: `extractContents` translates the pose by `(leftPos, topPos)`, then calls `extractLabels` and `extractSlots` → `extractSlot(g, slot, mx, my)` (item at `slot.x, slot.y` plus decorations). After that comes `extractCarriedItem`, which starts a new stratum.
 - Hit testing goes through private `getHoveredSlot` → `isHovering(slot, mx, my)`. It uses `slot.x/slot.y` (16×16) relative to `leftPos/topPos`.
-- **`Slot.x` and `Slot.y` are `public final int`.** To place slots at positions computed by layout, make them mutable:
+- `Slot.x` and `Slot.y` are `public final int`. To place slots at positions computed by layout, make them mutable:
   - mixin `@Mutable @Accessor`, works on both loaders from common
   - NeoForge AT: `public-f net.minecraft.world.inventory.Slot x`
   - Fabric: `mutable field net/minecraft/world/inventory/Slot x I`

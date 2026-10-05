@@ -15,12 +15,12 @@ Publish Vellum locally from a Vellum checkout, then depend on it (see `docs/API.
 ```groovy
 repositories { mavenLocal() }
 // common/
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.1.0") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.2.0") }
 // neoforge/ and fabric/
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.1.0") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.2.0") }   // or vellum-fabric-26.3
 ```
 
-If most of your UI moves to Vellum, make it a **required** dependency (`type="required"` in `neoforge.mods.toml`,
+If most of your UI moves to Vellum, make it a required dependency (`type="required"` in `neoforge.mods.toml`,
 `"depends"` in `fabric.mod.json`) rather than keeping a vanilla fallback for every screen. Two UIs for one feature is the
 duplication you are porting to get rid of.
 
@@ -50,7 +50,7 @@ stylesheet linked from every page.
 | fade/slide/typewriter timers | `transition`, `@keyframes`, `el.animate()`, or a small timer in the page script |
 | palette constants | CSS custom properties (`--panel: #1b1b22`) |
 | `EditBox`, `Button`, sliders, cycle buttons | `<input>`, `<button>`, `<input type=range>`, `<select>`, checkboxes (vanilla look by default, restyle freely) |
-| `g.entity(...)` portraits | `<entity type="…" follow-mouse>`, `<entity id="<network id>">`, `<entity player>`; `rotate`/`scale` attributes (CSS `-mc-yaw`/`-mc-pitch` and `<model>` for blocks/items are landing next) |
+| `g.entity(...)` portraits | `<entity type="…" follow-mouse>`, `<entity id="<network id>">`, `<entity player>`; `rotatable`, and CSS `-mc-yaw`/`-mc-pitch`/`-mc-model-scale`; `<model block="…">` or `<model item="…">` for blocks and items |
 | `g.item(...)` icons, item tooltips | `<item id="…" count="…" tooltip>` |
 | `NativeImage` + `DynamicTexture` maps and procedural art | register the texture under an `Identifier` and use `<img src="mymod:dynamic/map">` or `background: url(mymod:dynamic/map)`; or draw with `<canvas>` `getContext('2d')` |
 | `blitSprite(...)` nine-slices | `background: sprite(mymod:widget/panel)` (honours the sprite's `.mcmeta` scaling) |
@@ -60,29 +60,29 @@ stylesheet linked from every page.
 
 ## 4. Porting a screen, step by step
 
-1. **List** what the screen shows and every action it sends. Write the view-model JSON shape down (often it
+1. List what the screen shows and every action it sends. Write the view-model JSON shape down (often it
    already exists as a payload or record).
-2. **Sketch the page** in the previewer first: `./gradlew :preview:run --args="path/to/page.html --data sample.json"`
+2. Sketch the page in the previewer first: `./gradlew :preview:run --args="path/to/page.html --data sample.json"`
    (live reload on save; F12 inspector). Use real sample data.
-3. **Wire actions** with `vellum.send(channel, value)` and handle them where the old screen's actions were handled.
-4. **Open it** from wherever the old screen opened (`VellumScreens.open(url, data)` on the client,
+3. Wire actions with `vellum.send(channel, value)` and handle them where the old screen's actions were handled.
+4. Open it from wherever the old screen opened (`VellumScreens.open(url, data)` on the client,
    `VellumServer.open(player, url, data)` on the server) and push updates instead of rebuilding.
-5. **Check it in game** with hot reload (edit the page under `src/main/resources` while the dev client runs) and with
+5. Check it in game with hot reload (edit the page under `src/main/resources` while the dev client runs) and with
    your dev autopilot's screenshots at GUI scales 2 and 3.
-6. **Delete the old screen** and its layout helpers once the page covers it.
+6. Delete the old screen and its layout helpers once the page covers it.
 
 ## 5. Gotchas
 
-- **JavaScript is Rhino** (ES2015-ish): no `class`, no `async`/`await`, no spread in calls, no `for (const x of …)`;
+- JavaScript is Rhino (ES2015-ish): no `class`, no `async`/`await`, no spread in calls, no `for (const x of …)`;
   a `const` inside a loop body keeps its first value, so use `let` in loops. Details in `docs/SCRIPTING.md`.
-- **Templates update on the next frame.** Code that reads the DOM right after changing state uses
+- Templates update on the next frame. Code that reads the DOM right after changing state uses
   `vellum.nextTick(fn)`.
-- **`vellum.data` keys shadow `vellum.state` and globals** in template expressions. Nest page options under one key
+- `vellum.data` keys shadow `vellum.state` and globals in template expressions. Nest page options under one key
   (`{start: {...}}`) rather than spreading them at the top level.
-- **Pixel sizes.** `px` is a GUI pixel; the default font is 8px and stays crisp at multiples of 8 (12 and 16 are
+- Pixel sizes. `px` is a GUI pixel; the default font is 8px and stays crisp at multiples of 8 (12 and 16 are
   fine too). Design for ~427×240 GUI px (GUI scale 2 on 1080p) and check scale 3.
-- **Live entities cost frame time.** A handful per screen is fine. In long lists use spawn eggs or `<item>` icons.
-- **Unsupported CSS** is dropped and logged at debug level, with no visible error: floats, tables (use
+- Live entities cost frame time. A handful per screen is fine. In long lists use spawn eggs or `<item>` icons.
+- Unsupported CSS is dropped and logged at debug level, with no visible error: floats, tables (use
   grid), 3D transforms, rounded `overflow: hidden` clipping. When something looks wrong, check `DESIGN.md` §5–§7 and
   the previewer's inspector.
 
