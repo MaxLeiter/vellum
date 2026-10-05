@@ -75,6 +75,7 @@ public interface Host {
 
     default void setCursor(Cursor cursor) {}
 
+    /** Called for {@code vellum.playSound}. The host decides how many sounds a page may play. */
     default void playSound(String id, float volume, float pitch) {}
 
     default String getClipboard() { return ""; }
@@ -84,8 +85,11 @@ public interface Host {
     /** Called for {@code vellum.close()} / {@code window.close()}. */
     default void close() {}
 
-    /** Called for {@code vellum.send(channel, data)}: forward a JSON message to the server or the owning mod. */
-    default void send(String channel, String json) {}
+    /**
+     * Called for {@code vellum.send(channel, data)}: forward a JSON message to the server or the owning mod. Returns
+     * false when the host dropped it (its rate limit), which {@code vellum.send} returns to the script.
+     */
+    default boolean send(String channel, String json) { return true; }
 
     /** Translates a key (Minecraft language files in game); returns the key itself when unknown. */
     default String translate(String key, String... args) { return key; }

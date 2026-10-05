@@ -206,8 +206,9 @@ public final class PreviewHost implements Host {
     }
 
     @Override
-    public void send(String channel, String json) {
+    public boolean send(String channel, String json) {
         log(LogLevel.INFO, "send " + channel + " " + json);
+        return true;
     }
 
     @Override

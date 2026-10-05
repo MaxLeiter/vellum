@@ -18,14 +18,12 @@ class VellumApiTest {
     }
 
     @Test
-    void sendIsRateLimited() {
-        Page page = new TestHost().load("<script>var results = []; for (let i = 0; i < 25; i++) results.push(vellum.send('spam', i));</script>");
-        assertEquals(dev.vellum.engine.Limits.DEFAULTS.sendRate(), page.host.sent.size());
-        assertEquals("false", page.eval("results[24]"));
-        assertEquals(1, page.host.logs.stream().filter(l -> l.startsWith("WARN: vellum.send")).count());
-        page.frame(500); // half a second refills half the bucket
-        page.run("for (let i = 0; i < 25; i++) vellum.send('spam', i)");
-        assertEquals(dev.vellum.engine.Limits.DEFAULTS.sendRate() + dev.vellum.engine.Limits.DEFAULTS.sendRate() / 2, page.host.sent.size());
+    void sendReturnsWhetherTheHostTookTheMessage() {
+        TestHost host = new TestHost();
+        host.sendLimit = 2;
+        Page page = host.load("<script>var results = []; for (let i = 0; i < 3; i++) results.push(vellum.send('spam', i));</script>");
+        assertEquals("true,true,false", page.eval("results.join()"));
+        assertEquals(2, page.host.sent.size());
     }
 
     @Test

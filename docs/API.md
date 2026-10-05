@@ -57,7 +57,7 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 - `vellum.close()` (or Escape, unless the page handles it) closes the screen. Shift+Escape always closes it, and so
   do three quick Escapes (see [Security](#security)).
 - `vellum.send(channel, value)` in the page calls every `onMessage(channel, ...)` handler with the value as a
-  `JsonElement`.
+  `JsonElement`, at most 20 times a second (`client.messagesPerSecond`).
 - `screen.driver().push(json)` replaces `vellum.data`; template bindings update and `vellum.on('data', fn)`
   listeners run.
 - `screen.driver().onClose(() -> ...)` runs once when the page closes for good: the screen is closed or replaced by
@@ -549,8 +549,8 @@ client can send anything.
 - Links to web pages ask first, as chat links do, and only right after a click or key press in the page, so a script
   can't bring the question up again and again. `client.webLinks=block` turns web links off. Other links only load
   `.html` pages from resources.
-- `vellum.send` delivers at most 20 messages a second from a server's page, counted per screen, so reloading the
-  page or following a link doesn't reset the count.
+- `vellum.send` delivers at most 20 messages a second, counted per screen, so reloading the page or following a
+  link doesn't reset the count.
 - `vellum.playSound` plays only sounds the game knows, at most 8 a second per screen, no louder than
   `client.maxSoundVolume` and then scaled by the player's sound settings.
 - While the player types into a server's page, Vellum draws a notice at the bottom of the screen. The page can't
@@ -628,7 +628,7 @@ What a server sends and accepts:
 | `server.messagesPerSecond` | 20 | 0.1 to 10000 | Messages a session takes per second after the burst. |
 | `server.maxSessionsPerPlayer` | 8 | 1 to 1024 | Open sessions per player; one more ends the oldest. |
 
-What a client lets server pages do:
+What a client lets pages do:
 
 | Key | Default | Range | Meaning |
 |---|---|---|---|
@@ -638,13 +638,13 @@ What a client lets server pages do:
 | `client.maxDataDepth` | 64 | 1 to 512 | Deepest nesting accepted in data from a server. |
 | `client.openBurst` | 5 | 1 to 1000 | Pages a server may open at once. |
 | `client.opensPerSecond` | 1 | 0.01 to 1000 | Pages a server may open per second after the burst. |
-| `client.messageBurst` | 20 | 1 to 10000 | Messages a server's page may send at once, per screen. |
-| `client.messagesPerSecond` | 20 | 0.1 to 10000 | Messages a server's page may send per second, per screen, across reloads. |
+| `client.messageBurst` | 20 | 1 to 10000 | Messages a page may send at once, per screen. |
+| `client.messagesPerSecond` | 20 | 0.1 to 10000 | Messages a page may send per second, per screen, across reloads. |
 | `client.forceCloseKey` | `key.keyboard.escape` | a key name | With Shift, closes any Vellum screen. Names as in `options.txt`. |
 | `client.forceClosePresses` | 3 | 2 to 10 | Escapes within 1.5 s that close a page which keeps Escape. |
 | `client.reopenStrikes` | 3 | 1 to 100 | Reopens in a row that stop a server's pages. |
 | `client.reopenBlockSeconds` | 30 | 1 to 3600 | How long they stay stopped. |
-| `client.soundsPerSecond` | 8 | 0 to 1000 | Sounds a page may play per second (and at once); 0 mutes pages. |
+| `client.soundsPerSecond` | 8 | 0 to 1000 | Sounds a page may play per second (and at once), per screen; 0 mutes pages. |
 | `client.maxSoundVolume` | 1 | 0 to 1 | Loudest volume a page may ask for. |
 | `client.webLinks` | `ask` | `ask`, `block` | Web links: confirm first (after a click or key press), or never open. |
 | `client.typingNotice` | `true` | `true`, `false` | The notice while typing into a server's page. |
@@ -675,8 +675,6 @@ The engine's caps on every page, a mod's or a server's. Each must be at least 1,
 | `limits.storageQuota` | 262144 | Characters in each of `localStorage` and `sessionStorage`. |
 | `limits.maxLogLength` | 4096 | Characters of one console message. |
 | `limits.logRate` | 50 | Log lines a second. |
-| `limits.sendRate` | 20 | `vellum.send` messages a second. |
-| `limits.soundRate` | 20 | `vellum.playSound` calls a second. |
 | `limits.maxForItems` | 10000 | Items of one `v-for`. |
 | `limits.maxTemplatePasses` | 10 | Template passes per frame. |
 | `limits.maxNodes` | 100000 | Nodes in a page. |
@@ -688,7 +686,6 @@ The engine's caps on every page, a mod's or a server's. Each must be at least 1,
 | `limits.maxVarLength` | 65536 | Characters of a value after `var()` substitution. |
 | `limits.maxCanvasSize` | 2048 | Pixels on each side of a canvas. |
 | `limits.maxCanvasPixels` | 16777216 | Pixels of all of a page's canvases. |
-| `limits.maxInlinePageLength` | 200000 | Characters of an inline page from a server. |
 
 `client.serverPages` defaults to `allow`. Server UIs are what Vellum is for, vanilla lets servers open container
 screens without asking, and the protections above work without the player's help. Players who want a say can set

@@ -116,11 +116,4 @@ class ScriptMemoryTest {
         page.frame(16);
         assertTrue(host.errors.size() <= Limits.DEFAULTS.logRate(), host.errors.size() + " errors logged");
     }
-
-    @Test
-    void soundsAreRateLimited() {
-        Page page = new TestHost().load("");
-        page.run("for (var i = 0; i < 1000; i++) vellum.playSound('minecraft:ui.button.click')");
-        assertEquals(Limits.DEFAULTS.soundRate(), page.host.sounds.size());
-    }
 }

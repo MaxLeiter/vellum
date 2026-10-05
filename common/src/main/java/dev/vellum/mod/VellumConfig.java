@@ -73,9 +73,9 @@ public final class VellumConfig {
     public static final Setting<Double> CLIENT_OPENS_PER_SECOND = decimal("client.opensPerSecond", 1, 0.01, 1000,
             "Pages per second a server may open after its burst.");
     public static final Setting<Integer> CLIENT_MESSAGE_BURST = integer("client.messageBurst", 20, 1, 10_000,
-            "Messages a server's page may send at once (per screen, across reloads and links).");
+            "Messages a page may send with vellum.send at once (per screen, across reloads and links).");
     public static final Setting<Double> CLIENT_MESSAGES_PER_SECOND = decimal("client.messagesPerSecond", 20, 0.1, 10_000,
-            "Messages per second a server's page may send after its burst. Extra messages are dropped.");
+            "Messages per second a page may send after its burst. Extra messages are dropped and vellum.send returns false.");
     public static final Setting<String> CLIENT_FORCE_CLOSE_KEY = text("client.forceCloseKey", "key.keyboard.escape",
             "With Shift held, this key always closes a Vellum screen; pages never see it. A key name as in options.txt.");
     public static final Setting<Integer> CLIENT_FORCE_CLOSE_PRESSES = integer("client.forceClosePresses", 3, 2, 10,
@@ -85,7 +85,7 @@ public final class VellumConfig {
     public static final Setting<Integer> CLIENT_REOPEN_BLOCK_SECONDS = integer("client.reopenBlockSeconds", 30, 1, 3600,
             "How long, in seconds, a server stopped for reopening pages stays stopped.");
     public static final Setting<Double> CLIENT_SOUNDS_PER_SECOND = decimal("client.soundsPerSecond", 8, 0, 1000,
-            "Sounds per second a page may play with vellum.playSound (a burst of as many, then this rate). 0 mutes pages.");
+            "Sounds per second a page may play with vellum.playSound (per screen, a burst of as many, then this rate). 0 mutes pages.");
     public static final Setting<Double> CLIENT_MAX_SOUND_VOLUME = decimal("client.maxSoundVolume", 1, 0, 1,
             "Loudest volume a page may play a sound at, 0 to 1 (then scaled by your sound settings).");
     public static final Setting<WebLinks> CLIENT_WEB_LINKS = choice("client.webLinks", WebLinks.ASK,

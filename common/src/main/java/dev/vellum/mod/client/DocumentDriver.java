@@ -121,7 +121,7 @@ public final class DocumentDriver {
     private long lastUserInput = Long.MIN_VALUE / 2, lastEscape = Long.MIN_VALUE / 2;
     /** Times of recent Escape presses the page kept (consumed), newest last. */
     private final ArrayDeque<Long> keptEscapes = new ArrayDeque<>();
-    /** Messages to a server session, limited per driver so reloading the page doesn't reset the limit. */
+    /** The page's messages ({@link #send}), limited per driver so reloading the page doesn't reset the limit. */
     private final TokenBucket sendRate = new TokenBucket(VellumConfig.CLIENT_MESSAGE_BURST.get(), VellumConfig.CLIENT_MESSAGES_PER_SECOND.get());
     private boolean warnedSendRate, warnedLink;
     /** Whether the last frame asked vanilla for a tooltip (the page's, an item's or a title). */
@@ -617,7 +617,17 @@ public final class DocumentDriver {
     }
 
     /** From the page: client listeners first, then the server session if there is one. */
-    void send(String channel, String json) {
+    /**
+     * {@code vellum.send}: to this driver's {@link #onMessage} handlers, then to the server if a server opened the
+     * page. At most {@code client.messageBurst} at once and {@code client.messagesPerSecond} after, counted per driver
+     * so reloading the page or following a link doesn't reset the count; false when the message is dropped.
+     */
+    boolean send(String channel, String json) {
+        if (!sendRate.tryTake()) {
+            if (!warnedSendRate) Constants.LOG.warn("Vellum: {} is sending too many messages; dropping some", name());
+            warnedSendRate = true;
+            return false;
+        }
         List<Consumer<JsonElement>> local = listeners.get(channel);
         if (local != null) {
             try {
@@ -627,17 +637,13 @@ public final class DocumentDriver {
                 Constants.LOG.warn("Vellum: {} sent malformed JSON on '{}'", name(), channel);
             }
         }
-        if (session < 0) return;
+        if (session < 0) return true;
         if (channel.length() > MessagePayload.MAX_CHANNEL || json.length() > MessagePayload.MAX_JSON) {
             Constants.LOG.warn("Vellum: {} message on '{}' is too large to send ({} chars)", name(), channel, json.length());
-            return;
-        }
-        if (!sendRate.tryTake()) {
-            if (!warnedSendRate) Constants.LOG.warn("Vellum: {} is sending too many messages; dropping some", name());
-            warnedSendRate = true;
-            return;
+            return false;
         }
         VellumClient.sendToServer(new MessagePayload(session, channel, json));
+        return true;
     }
 
     int session() {

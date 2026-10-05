@@ -107,8 +107,9 @@ final class McHost implements Host {
 
     /**
      * Plays a sound the game knows (registered, or defined by a resource pack's sounds.json), at most
-     * {@code client.soundsPerSecond} per page and no louder than {@code client.maxSoundVolume}. Unknown ids are
-     * dropped: vanilla would log a warning for each.
+     * {@code client.soundsPerSecond} per driver (this host lives as long as its driver, so reloading the page doesn't
+     * reset the count) and no louder than {@code client.maxSoundVolume}. Unknown ids are dropped: vanilla would log a
+     * warning for each.
      */
     @Override
     public void playSound(String id, float volume, float pitch) {
@@ -146,8 +147,8 @@ final class McHost implements Host {
     }
 
     @Override
-    public void send(String channel, String json) {
-        driver.send(channel, json);
+    public boolean send(String channel, String json) {
+        return driver.send(channel, json);
     }
 
     @Override

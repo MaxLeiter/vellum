@@ -614,7 +614,7 @@ public final class DevAutopilot {
      * What a hostile server can and can't do with pages: a page that keeps Escape still closes on Shift+Escape and
      * on Escape pressed three times; a page opened while chat is open waits for chat to close; a server that reopens
      * its page as the player closes it is stopped; a script can't open a web link without a click; data nested
-     * deeper than {@code client.maxDataDepth} is dropped.
+     * deeper than {@code client.maxDataDepth} is dropped; a page's messages are capped per screen, across reloads.
      */
     private static void serverPages(Minecraft mc) {
         Supplier<Integer> session = () -> mc.gui.screen() instanceof VellumScreen s ? s.driver().session() : -1;
@@ -659,6 +659,23 @@ public final class DevAutopilot {
         steps.add(() -> wait = 5);
         steps.add(() -> check(mc.gui.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject o && o.has("ok"),
                 "deeply nested data was dropped", "deeply nested data reached the page"));
+        // vellum.send is capped per screen (client.messageBurst), and reloading the page doesn't reset the count.
+        steps.add(() -> {
+            serverLog.clear();
+            serverOpen(mc, "<p>Spam</p><script>for (let i = 0; i < 100; i++) vellum.send('spam', i)</script>");
+        });
+        until("the spamming page is shown", ticks -> session.get() >= 0);
+        steps.add(() -> wait = 5);
+        steps.add(() -> {
+            if (mc.gui.screen() instanceof VellumScreen v) v.driver().reload();
+        });
+        steps.add(() -> wait = 5);
+        steps.add(() -> {
+            long sent = serverLog.stream().filter("spam"::equals).count();
+            int burst = VellumConfig.CLIENT_MESSAGE_BURST.get();
+            check(sent >= burst && sent < 2L * burst, "a page got {} of 200 messages through, across a reload (burst {})",
+                    "a page got {} of 200 messages through across a reload; expected one burst of {} and a little", sent, burst);
+        });
         // Typing into a server's page shows Vellum's notice over it.
         steps.add(() -> serverOpen(mc, "<body style='background:#2a2a40;padding:20px'><p>Sign in</p><input autofocus></body>"));
         until("the sign-in page is shown", ticks -> session.get() >= 0 && mc.gui.screen() instanceof VellumScreen v && v.driver().typing());
@@ -692,6 +709,7 @@ public final class DevAutopilot {
         serverLog.add("opened");
         VellumServer.openInline(player, html, null)
                 .onMessage("key", (p, key) -> serverLog.add("key " + key))
+                .onMessage("spam", (p, value) -> serverLog.add("spam"))
                 .onClose(() -> {
                     serverLog.add("closed");
                     if (reopen) player.level().getServer().execute(() -> open(player, html));

@@ -132,3 +132,12 @@ Each decision has its reasons and the alternatives we looked at. Newest last.
 - The protections that matter (leaving a page, not being trapped out of chat or the pause menu, no web requests) work without the player's help, so asking adds little.
 - One file read on both sides is one place to look. A config that refused to load would stop the game over a typo.
 **Alternatives.** `ask` by default; per-server allow lists, which need UI and storage of their own; separate client and server files, which split one topic across two places.
+
+## D-018 One setting and one enforcement point per cap
+**Choice.** The engine's caps on what happens inside a page are the fields of `engine/Limits`, set from `limits.<name>` keys. What leaves the page is the host's to limit: the mod caps `vellum.send` and `vellum.playSound` per screen (`DocumentDriver`, `McHost`) with `client.messageBurst`, `client.messagesPerSecond` and `client.soundsPerSecond`, and inline page size with `server.maxInlineHtmlChars` and `client.maxInlineHtmlChars`. `Limits` has no send or sound rate and no inline page size, and `Host.send` returns whether the host took the message.
+**Why.**
+- Two settings for one cap can disagree, and a player can't tell which one wins.
+- A bucket in the engine belongs to one document, so a page could reload itself or follow a link to get a fresh allowance. The driver outlives its documents.
+- The host's buckets have a burst apart from the rate, and a sound rate of 0 mutes pages. Only the host knows which sounds exist, so unknown ids don't use up the allowance.
+- Inline pages are measured on the network, before any engine sees them.
+**Alternatives.** Keeping the engine's limits and having the mod read them, which a reload would still reset; handing each document a bucket that lives in the driver through `Host`, which is more API for one caller.

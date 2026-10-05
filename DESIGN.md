@@ -695,7 +695,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
     a server page with Escape (`DocumentDriver.close` tells it), and blocks the server's pages after
     `client.reopenStrikes` in a row. State resets with the connection.
   - `DocumentDriver`: web links need a click or key press in the page in the last second and ask through
-    `ConfirmLinkScreen`; messages to a session have their own token bucket that survives reloads and navigation;
+    `ConfirmLinkScreen`; a page's messages go through a token bucket that survives reloads and navigation;
     while a server page has a focused text field a notice is drawn in a new stratum over the page.
     `serverSession()` lets page hooks tell server pages apart.
   - `McHost.playSound` plays only ids the sound manager knows, through a per-driver token bucket, with volume capped
@@ -824,7 +824,8 @@ hosts pass their limits with `Host.limits()`, which defaults to `Limits.current(
   Java stack, which the interpreter's depth limit does not count. `RhinoScriptRuntime` catches the overflow at the
   outermost entry and reports it as that entry's error; it counts as an overrun.
 - Console messages and script errors reach the log at `logRate` lines a second, each cut to `maxLogLength`
-  characters; `vellum.send` and `vellum.playSound` are limited to `sendRate` and `soundRate` a second.
+  characters. `vellum.send` and `vellum.playSound` are the host's to limit (`Host.send` may refuse): the mod counts
+  them per screen, so a page can't reset its allowance by reloading (section 11, Trust).
 
 ### What is left
 

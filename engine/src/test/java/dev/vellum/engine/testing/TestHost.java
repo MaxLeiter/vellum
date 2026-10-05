@@ -33,6 +33,8 @@ public class TestHost implements Host {
     public final List<Cursor> cursors = new ArrayList<>();
     public final List<String[]> sent = new ArrayList<>();
     public final List<String> navigations = new ArrayList<>();
+    /** Messages {@link #send} takes before it refuses the rest, as a host's rate limit would. */
+    public int sendLimit = Integer.MAX_VALUE;
     /** The host's replaced elements by tag (none unless a test adds them). */
     public final Map<String, Function<Element, ReplacedContent>> replaced = new HashMap<>();
     /** Natural sizes of textures by URL, for {@link #imageSize}. */
@@ -128,7 +130,11 @@ public class TestHost implements Host {
     public void close() { closed = true; }
 
     @Override
-    public void send(String channel, String json) { sent.add(new String[] {channel, json}); }
+    public boolean send(String channel, String json) {
+        if (sent.size() >= sendLimit) return false;
+        sent.add(new String[] {channel, json});
+        return true;
+    }
 
     @Override
     public void navigate(String url) { navigations.add(url); }

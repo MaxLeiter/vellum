@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Every cap the engine puts on a page: script CPU and memory, DOM and CSS size, canvases, logging and messages. Pages
+ * Every cap the engine puts on a page: script CPU and memory, DOM and CSS size, canvases and logging. Pages
  * can come from servers (DESIGN.md, "Security"), so each cap is set well above what a real page needs and well below
  * what would freeze or crash the game.
  *
@@ -15,6 +15,10 @@ import java.util.Objects;
  * {@link #current()}. Code that has no document at hand (the CSS parser) reads {@link #current()} directly. A mod
  * loader installs configured limits with {@link #setCurrent}; {@link #with(String, long)} builds them by field name,
  * with the same names as the record components ({@code maxNodes}, {@code instructionBudget}...).
+ *
+ * <p>What reaches past the page is the host's to limit, since only the host knows what lasts across reloads: how
+ * often {@code vellum.send} and {@code vellum.playSound} go through ({@link dev.vellum.engine.host.Host#send} may
+ * refuse), and how large a page a server may send.
  *
  * @param instructionBudget   script instructions one entry (a script, a listener, a timer...) may run; 50M
  * @param timeBudgetMs        wall-clock ms one entry may take; 1000
@@ -35,8 +39,6 @@ import java.util.Objects;
  * @param storageQuota        characters (keys plus values) in each of localStorage and sessionStorage; 256K
  * @param maxLogLength        characters of one console message; longer ones are cut; 4096
  * @param logRate             console messages and script errors logged per second (also the burst); 50
- * @param sendRate            vellum.send messages per second (also the burst); 20
- * @param soundRate           vellum.playSound calls per second (also the burst); 20
  * @param maxForItems         items one v-for renders; 10000
  * @param maxTemplatePasses   template update passes per frame before giving up on a binding that keeps changing; 10
  * @param maxNodes            nodes in a page's document; inserting more fails; 100000
@@ -48,7 +50,6 @@ import java.util.Objects;
  * @param maxVarLength        characters a value may have after var() substitution; 65536
  * @param maxCanvasSize       pixels a canvas may have on each side; 2048
  * @param maxCanvasPixels     pixels of all canvases of a page together; 16M (four 2048 px squares)
- * @param maxInlinePageLength characters of a page a server sends inline (enforced by the network layer); 200000
  */
 public record Limits(
         long instructionBudget,
@@ -70,8 +71,6 @@ public record Limits(
         int storageQuota,
         int maxLogLength,
         int logRate,
-        int sendRate,
-        int soundRate,
         int maxForItems,
         int maxTemplatePasses,
         int maxNodes,
@@ -82,14 +81,13 @@ public record Limits(
         int maxGridTracks,
         int maxVarLength,
         int maxCanvasSize,
-        int maxCanvasPixels,
-        int maxInlinePageLength) {
+        int maxCanvasPixels) {
 
     public static final Limits DEFAULTS = new Limits(
             50_000_000L, 1000, 10_000, 1000, 3, 100, 200, 25,
-            256L << 20, 90, 1 << 24, 1 << 20, 1 << 24, 1 << 16, 10_000, 1 << 20, 256 * 1024, 4096, 50, 20, 20,
+            256L << 20, 90, 1 << 24, 1 << 20, 1 << 24, 1 << 16, 10_000, 1 << 20, 256 * 1024, 4096, 50,
             10_000, 10,
-            100_000, 512, 32, 256, 64, 100_000, 65_536, 2048, 2048 * 2048 * 4, 200_000);
+            100_000, 512, 32, 256, 64, 100_000, 65_536, 2048, 2048 * 2048 * 4);
 
     private static volatile Limits current = DEFAULTS;
 
@@ -97,9 +95,8 @@ public record Limits(
         Object[] values = {instructionBudget, timeBudgetMs, loadTimeBudgetMs, maxStackDepth, maxBudgetOverruns,
                 frameScriptTimeMs, slowFrameMs, maxSlowFrames, entryAllocation, heapLimitPercent, maxStringLength,
                 maxArrayLength, maxBufferBytes, maxBigIntBits, maxTimers, maxMarkupLength, storageQuota, maxLogLength,
-                logRate, sendRate, soundRate, maxForItems, maxTemplatePasses, maxNodes, maxDepth, maxCssNesting,
-                maxSelectorParts, maxListItems, maxGridTracks, maxVarLength, maxCanvasSize, maxCanvasPixels,
-                maxInlinePageLength};
+                logRate, maxForItems, maxTemplatePasses, maxNodes, maxDepth, maxCssNesting,
+                maxSelectorParts, maxListItems, maxGridTracks, maxVarLength, maxCanvasSize, maxCanvasPixels};
         RecordComponent[] components = Limits.class.getRecordComponents();
         for (int i = 0; i < values.length; i++) {
             if (((Number) values[i]).longValue() < 1) {

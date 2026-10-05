@@ -1,8 +1,8 @@
 package dev.vellum.engine.dom;
 
 /**
- * A token bucket on the frame clock: {@code rate} takes a second, and bursts of up to {@code rate}. Used for what a
- * page may do often but not without end: messages to the server, sounds, log lines.
+ * A token bucket on the frame clock: {@code rate} takes a second, and bursts of up to {@code rate}. Used for log
+ * lines, which a page may write often but not without end.
  */
 public final class RateLimit {
     private final int rate;

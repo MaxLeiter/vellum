@@ -390,7 +390,7 @@ field. While the field has focus, text that only a modifier changes is left as t
 ## Limits
 
 Scripts are sandboxed because pages can come from servers. The numbers below are the defaults; players and server
-owners can change them in `config/vellum.properties` (`limits.<name>`, see docs/API.md).
+owners can change them in `config/vellum.properties` (docs/API.md, Settings).
 
 - No Java access: `java`, `Packages` and friends do not exist, and no Java object is ever visible to scripts.
   Rhino's non-standard globals (`Continuation`, `Script`, `With`, `Call`, `JavaException`) are removed too.
@@ -422,7 +422,9 @@ owners can change them in `config/vellum.properties` (`limits.<name>`, see docs/
 - `localStorage` and `sessionStorage` hold at most 256K characters each (keys plus values); going over throws a
   `RangeError` whose message starts with `QuotaExceededError`.
 - `v-for` renders at most 10,000 items.
-- `vellum.send` delivers at most 20 messages per second, and `vellum.playSound` plays at most 20 sounds per second.
+- `vellum.send` delivers at most 20 messages per second (bursts of 20), and `vellum.playSound` plays at most 8 sounds
+  per second. Both count per screen, so reloading the page doesn't reset them (`client.messagesPerSecond`,
+  `client.messageBurst` and `client.soundsPerSecond`).
 - `console` and script errors reach the log at most 50 times a second, each message cut to 4096 characters.
 
 Strings built with `+` have no cap of their own, so avoid building huge ones: the memory budget stops the entry that
