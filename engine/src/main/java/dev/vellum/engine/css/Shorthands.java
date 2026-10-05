@@ -88,7 +88,7 @@ final class Shorthands {
         register("object-position", longhands("-vellum-object-position-x", "-vellum-object-position-y"),
                 (l, v) -> pairOf(l, Images.splitPosition(v)));
         register("-mc-gaze-limit", longhands("-vellum-gaze-limit-yaw", "-vellum-gaze-limit-up",
-                "-vellum-gaze-limit-down"), Shorthands::dropRepeats, Shorthands::repeatingLast);
+                "-vellum-gaze-limit-down"), Shorthands::dropRepeats, (l, v) -> sequence(l, v, true));
         register("scrollbar-color", longhands("-vellum-scrollbar-thumb-color", "-vellum-scrollbar-track-color"),
                 (l, v) -> isIdent(v, "auto") ? Map.of() : sequence(l, v, false));
         register("background-position", List.of(BG_X, BG_Y), Shorthands::backgroundPosition);
@@ -158,38 +158,25 @@ final class Shorthands {
         register(name, longhands(first, second), CssText::collapse, (l, v) -> sequence(l, v, true));
     }
 
-    /** Values for {@code longhands} in order, each parsed greedily; missing ones repeat the first, or fail. */
+    /**
+     * Values for {@code longhands} in order, each parsed greedily. With {@code repeat}, each omitted one repeats the
+     * one before it ({@code -mc-gaze-limit: 30deg 9deg}); without, every one must be given.
+     */
     private static Map<Longhand, List<ComponentValue>> sequence(List<Longhand> longhands, List<ComponentValue> v,
-                                                               boolean repeatFirst) {
-        ValueReader r = new ValueReader(v);
-        ValueContext probe = new ValueContext();
-        Map<Longhand, List<ComponentValue>> out = new HashMap<>();
-        for (Longhand l : longhands) {
-            List<ComponentValue> part = r.atEnd() ? null : r.take(l.parser, probe);
-            if (part == null) {
-                if (!repeatFirst || out.isEmpty()) return null;
-                part = out.get(longhands.get(0));
-            }
-            out.put(l, part);
-        }
-        return r.atEnd() ? out : null;
-    }
-
-    /** Values for {@code longhands} in order; each omitted one repeats the one before it ({@code -mc-gaze-limit}). */
-    private static Map<Longhand, List<ComponentValue>> repeatingLast(List<Longhand> longhands, List<ComponentValue> v) {
+                                                               boolean repeat) {
         ValueReader r = new ValueReader(v);
         ValueContext probe = new ValueContext();
         Map<Longhand, List<ComponentValue>> out = new HashMap<>();
         List<ComponentValue> last = null;
         for (Longhand l : longhands) {
-            List<ComponentValue> part = r.atEnd() ? last : r.take(l.parser, probe);
+            List<ComponentValue> part = !r.atEnd() ? r.take(l.parser, probe) : repeat ? last : null;
             if (part == null) return null;
             out.put(l, last = part);
         }
         return r.atEnd() ? out : null;
     }
 
-    /** The shortest value {@link #repeatingLast} reads back: trailing values equal to the one before are left out. */
+    /** The shortest value {@link #sequence} reads back: trailing values equal to the one before are left out. */
     private static String dropRepeats(List<String> values) {
         int n = values.size();
         while (n > 1 && values.get(n - 1).equals(values.get(n - 2))) n--;

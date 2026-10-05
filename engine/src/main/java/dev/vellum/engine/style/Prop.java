@@ -1,6 +1,5 @@
 package dev.vellum.engine.style;
 
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,52 +176,10 @@ public enum Prop {
 
     static {
         for (Prop p : values()) BY_NAME.put(p.cssName, p);
-        // Common aliases so transitions can name the CSS property people expect.
-        BY_NAME.put("transform-origin", TRANSFORM_ORIGIN_X);
-        BY_NAME.put("background", BACKGROUND_COLOR);
     }
 
     /** Looks up a longhand by CSS name, or null. */
     public static Prop byName(String cssName) {
         return BY_NAME.get(cssName);
-    }
-
-    /**
-     * Expands a name used in {@code transition-property} into the longhands it covers ({@code border-color},
-     * {@code margin}, {@code inset}, {@code padding}, {@code border-radius}, {@code background}...).
-     */
-    public static EnumSet<Prop> forTransitionName(String name) {
-        EnumSet<Prop> set = EnumSet.noneOf(Prop.class);
-        switch (name) {
-            case "all" -> {
-                for (Prop p : values()) if (p.interpolation != Interp.NONE && p.interpolation != Interp.DISCRETE) set.add(p);
-                set.add(VISIBILITY); // discrete, but CSS interpolates it specially so fades can hide at the end
-            }
-            case "margin" -> set.addAll(List.of(MARGIN_TOP, MARGIN_RIGHT, MARGIN_BOTTOM, MARGIN_LEFT));
-            case "padding" -> set.addAll(List.of(PADDING_TOP, PADDING_RIGHT, PADDING_BOTTOM, PADDING_LEFT));
-            case "inset" -> set.addAll(List.of(TOP, RIGHT, BOTTOM, LEFT));
-            case "border-color" -> set.addAll(List.of(BORDER_TOP_COLOR, BORDER_RIGHT_COLOR, BORDER_BOTTOM_COLOR, BORDER_LEFT_COLOR));
-            case "border-width" -> set.addAll(List.of(BORDER_TOP_WIDTH, BORDER_RIGHT_WIDTH, BORDER_BOTTOM_WIDTH, BORDER_LEFT_WIDTH));
-            case "border" -> {
-                set.addAll(forTransitionName("border-color"));
-                set.addAll(forTransitionName("border-width"));
-            }
-            case "border-radius" -> set.addAll(List.of(BORDER_TOP_LEFT_RADIUS, BORDER_TOP_RIGHT_RADIUS,
-                    BORDER_BOTTOM_RIGHT_RADIUS, BORDER_BOTTOM_LEFT_RADIUS));
-            case "background" -> set.add(BACKGROUND_COLOR);
-            case "transform-origin" -> set.addAll(List.of(TRANSFORM_ORIGIN_X, TRANSFORM_ORIGIN_Y));
-            case "object-position" -> set.addAll(List.of(OBJECT_POSITION_X, OBJECT_POSITION_Y));
-            case "-mc-gaze-limit" -> set.addAll(List.of(GAZE_LIMIT_YAW, GAZE_LIMIT_UP, GAZE_LIMIT_DOWN));
-            case "outline" -> set.addAll(List.of(OUTLINE_WIDTH, OUTLINE_COLOR, OUTLINE_OFFSET));
-            case "gap" -> set.addAll(List.of(ROW_GAP, COLUMN_GAP));
-            case "flex" -> set.addAll(List.of(FLEX_GROW, FLEX_SHRINK, FLEX_BASIS));
-            case "font" -> set.addAll(List.of(FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT));
-            case "text-decoration" -> set.addAll(List.of(TEXT_DECORATION_UNDERLINE, TEXT_DECORATION_LINE_THROUGH));
-            default -> {
-                Prop p = byName(name);
-                if (p != null) set.add(p);
-            }
-        }
-        return set;
     }
 }

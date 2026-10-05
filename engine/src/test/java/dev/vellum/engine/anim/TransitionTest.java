@@ -1,11 +1,14 @@
 package dev.vellum.engine.anim;
 
+import dev.vellum.engine.css.StyleEngine;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.style.Length;
+import dev.vellum.engine.style.Prop;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -246,6 +249,29 @@ class TransitionTest {
         restyle(100, "margin-left: 10px; transition: margin 100ms linear");
         page.frame(150);
         assertEquals(Length.px(5), el.style.marginLeft);
+    }
+
+    /** A shorthand transitions the longhands it sets, as the shorthand registry has them. */
+    @Test
+    void shorthandNamesCoverTheirLonghands() {
+        assertEquals(EnumSet.of(Prop.OUTLINE_WIDTH, Prop.OUTLINE_STYLE, Prop.OUTLINE_COLOR),
+                StyleEngine.transitionProperties("outline"), "outline doesn't set outline-offset");
+        assertEquals(EnumSet.of(Prop.BORDER_TOP_WIDTH, Prop.BORDER_TOP_STYLE, Prop.BORDER_TOP_COLOR),
+                StyleEngine.transitionProperties("border-top"));
+        assertEquals(EnumSet.of(Prop.BACKGROUND_COLOR), StyleEngine.transitionProperties("background"));
+        assertEquals(EnumSet.of(Prop.TRANSFORM_ORIGIN_X, Prop.TRANSFORM_ORIGIN_Y),
+                StyleEngine.transitionProperties("transform-origin"));
+        assertEquals(EnumSet.of(Prop.GAZE_LIMIT_YAW, Prop.GAZE_LIMIT_UP, Prop.GAZE_LIMIT_DOWN),
+                StyleEngine.transitionProperties("-mc-gaze-limit"));
+        assertEquals(EnumSet.of(Prop.OPACITY), StyleEngine.transitionProperties("opacity"));
+        assertTrue(StyleEngine.transitionProperties("transition").isEmpty(), "list shorthands set no property of their own");
+        assertTrue(StyleEngine.transitionProperties("no-such-property").isEmpty());
+
+        restyle(0, "outline: 2px solid red; outline-offset: 0");
+        restyle(0, "outline: 4px solid red; outline-offset: 10px; transition: outline 100ms linear");
+        page.frame(50);
+        assertEquals(3, el.style.outlineWidth, EPS);
+        assertEquals(10, el.style.outlineOffset, EPS, "the offset changes at once");
     }
 
     @Test
