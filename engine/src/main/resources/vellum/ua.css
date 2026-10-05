@@ -1,0 +1,138 @@
+/*
+ * Vellum's user-agent stylesheet: HTML defaults, plus a vanilla Minecraft look for controls and the mc-* utility
+ * classes. Sprites are vanilla GUI sprites (assets/minecraft/textures/gui/sprites/<id>.png), so resource packs
+ * restyle pages the same way they restyle vanilla screens.
+ */
+
+*, ::before, ::after { box-sizing: border-box; }
+
+html { display: block; color: #fff; font: 8px minecraft:default; line-height: normal; }
+body { display: block; margin: 0; }
+
+/* ---- Not rendered ---- */
+
+head, script, style, template, link, meta, title, base, datalist, option, optgroup, noscript,
+input[type=hidden i], [hidden], dialog:not([open]) { display: none; }
+/* Template system: hidden by v-show, and until the template is compiled. */
+[v-hidden], [v-cloak] { display: none !important; }
+
+/* ---- Blocks ---- */
+
+div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, section, header, footer, nav, main, article, aside, figure, figcaption,
+pre, blockquote, hr, fieldset, legend, details, summary, form, address, dl, dt, dd, menu { display: block; }
+
+h1, h2, h3, h4, h5, h6 { font-weight: 700; }
+h1 { font-size: 16px; margin: 0 0 8px; }
+h2 { font-size: 12px; margin: 0 0 6px; }
+h3, h4, h5, h6 { font-size: 8px; margin: 0 0 4px; }
+p { margin: 0 0 8px; }
+pre { white-space: pre; margin: 0 0 8px; }
+blockquote { margin: 0 0 8px; padding-left: 6px; border-left: 2px solid rgba(255, 255, 255, 0.4); }
+hr { height: 0; margin: 4px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.3); }
+ul, ol { margin: 0 0 8px; padding-left: 12px; }
+dd { margin-left: 12px; }
+ul > li::before { content: "• "; }
+fieldset { margin: 0 0 8px; padding: 4px; border: 1px solid rgba(255, 255, 255, 0.3); }
+legend { padding: 0 2px; }
+summary { cursor: pointer; }
+summary::before { content: "▶ "; }
+details[open] > summary::before { content: "▼ "; }
+dialog { display: block; position: fixed; inset: 0; margin: auto; width: fit-content; height: fit-content; }
+
+/* ---- Text ---- */
+
+b, strong { font-weight: 700; }
+i, em, cite, var { font-style: italic; }
+u, ins { text-decoration: underline; }
+s, del, strike { text-decoration: line-through; }
+code, kbd, samp, pre { font-family: minecraft:uniform; }
+sub { vertical-align: sub; }
+sup { vertical-align: super; }
+a { color: #7fb2ff; text-decoration: underline; cursor: pointer; }
+a:focus-visible, [tabindex]:focus-visible { outline: 1px solid #fff; outline-offset: 1px; }
+
+/* ---- Minecraft elements ---- */
+
+item { display: inline-block; width: 16px; height: 16px; }
+/* The vanilla slot: grey well with a sunken 1px bevel; 16x16 inside. */
+slot {
+    display: inline-block; width: 18px; height: 18px; background-color: #8b8b8b;
+    border: 1px solid; border-color: #373737 #ffffff #ffffff #373737;
+}
+entity { display: inline-block; width: 32px; height: 48px; }
+player-head { display: inline-block; width: 8px; height: 8px; }
+sprite { display: inline-block; }
+mc-text { display: inline; }
+
+/* ---- Form controls ---- */
+
+button, input, select, textarea, progress, meter { display: inline-block; }
+
+/* Text fields: every input type not restyled below (unknown types are text, as in HTML). */
+input, textarea {
+    width: 150px; height: 20px; padding: 0 4px; background: sprite(minecraft:widget/text_field);
+    color: #e0e0e0; cursor: text; white-space: pre; overflow: hidden;
+}
+textarea { height: 60px; padding: 4px; white-space: pre-wrap; overflow: auto; }
+input:focus, textarea:focus { background-image: sprite(minecraft:widget/text_field_highlighted); }
+input:disabled, textarea:disabled { color: #707070; cursor: default; }
+::placeholder { color: #808080; }
+
+button, select, input[type=button i], input[type=submit i], input[type=reset i] {
+    display: inline-flex; align-items: center; justify-content: center; width: auto; height: 20px; padding: 0 8px;
+    background: sprite(minecraft:widget/button); color: #fff; text-shadow: minecraft; white-space: nowrap;
+    cursor: pointer; user-select: none;
+}
+select { justify-content: flex-start; text-align: start; }
+button:hover, button:focus-visible, select:hover, select:focus-visible,
+input[type=button i]:hover, input[type=button i]:focus-visible, input[type=submit i]:hover,
+input[type=submit i]:focus-visible, input[type=reset i]:hover, input[type=reset i]:focus-visible {
+    background-image: sprite(minecraft:widget/button_highlighted);
+}
+button:disabled, select:disabled, input[type=button i]:disabled, input[type=submit i]:disabled,
+input[type=reset i]:disabled {
+    background-image: sprite(minecraft:widget/button_disabled); color: #a0a0a0; cursor: default;
+}
+
+input[type=checkbox i], input[type=radio i] {
+    width: 20px; height: 20px; padding: 0; vertical-align: middle; background: sprite(minecraft:widget/checkbox);
+    cursor: pointer;
+}
+input[type=checkbox i]:checked, input[type=radio i]:checked {
+    background-image: sprite(minecraft:widget/checkbox_selected);
+}
+input[type=checkbox i]:hover, input[type=checkbox i]:focus-visible, input[type=radio i]:hover,
+input[type=radio i]:focus-visible {
+    background-image: sprite(minecraft:widget/checkbox_highlighted);
+}
+input[type=checkbox i]:checked:hover, input[type=checkbox i]:checked:focus-visible,
+input[type=radio i]:checked:hover, input[type=radio i]:checked:focus-visible {
+    background-image: sprite(minecraft:widget/checkbox_selected_highlighted);
+}
+
+/* The thumb (widget/slider_handle) is drawn by the control. */
+input[type=range i] {
+    width: 150px; height: 20px; padding: 0; background: sprite(minecraft:widget/slider); cursor: pointer;
+}
+input[type=range i]:focus-visible { background-image: sprite(minecraft:widget/slider_highlighted); }
+
+progress, meter { width: 150px; height: 8px; background-color: #202020; border: 1px solid #000; }
+
+/* ---- Utility classes ---- */
+
+/* The vanilla container panel (inventories, furnaces...). */
+.mc-panel {
+    padding: 7px; background-color: #c6c6c6; color: #404040;
+    border: 2px solid; border-color: #ffffff #555555 #555555 #ffffff;
+}
+/* A sunken bevel, as around slots. */
+.mc-inset { border: 1px solid; border-color: #373737 #ffffff #ffffff #373737; }
+/* The vanilla tooltip: near-black purple background with the purple frame. */
+.mc-tooltip {
+    padding: 3px 4px; background-color: #100010f0;
+    border: 1px solid; border-color: #5000ff50 #3c00bf50 #28007f50 #3c00bf50;
+}
+/* The translucent dark panel vanilla menus draw behind lists. */
+.mc-dark { background-color: rgba(0, 0, 0, 0.5); }
+/* Container labels ("Inventory"): dark grey, no shadow. */
+.mc-label { color: #404040; text-shadow: none; }
