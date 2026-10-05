@@ -54,6 +54,9 @@ class SelectorsTest {
         assertEquals(1, d.querySelectorAll("[title='hello world' i]").size());
         assertEquals(0, d.querySelectorAll("[title='hello world']").size());
         assertEquals(0, d.querySelectorAll("[title^='']").size());
+        assertEquals(List.of("root"), ids(d.querySelectorAll("[data-kind~=PANEL i][lang|=EN i]")));
+        assertEquals(0, d.querySelectorAll("[data-kind~=pan], [data-kind~='big panel'], [lang|=en-u]").size());
+        assertEquals(1, d.querySelectorAll("[title^=hello i][title$=WORLD i][title*='O w' i]").size());
         assertEquals(2, d.querySelectorAll("[id=cb], INPUT[ID=txt]").size());
     }
 

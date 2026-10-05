@@ -44,6 +44,7 @@ public final class Document extends Node {
     private float devicePixelRatio = 1;
     private boolean styleDirty = true, layoutDirty = true;
     private int version;
+    private int domVersion;
 
     private Element focused;
 
@@ -239,6 +240,12 @@ public final class Document extends Node {
     /** Incremented on every relayout; hosts use it to know when to reposition things (e.g. container slots). */
     public int layoutVersion() { return version; }
 
+    /**
+     * Incremented on every change to the tree, attributes, text or form state; not on hover, active or focus
+     * changes. Lets subsystems skip work when only interaction state changed (or nothing did).
+     */
+    public int domVersion() { return domVersion; }
+
     public void invalidateStyle() { styleDirty = true; }
     public void invalidateLayout() { layoutDirty = true; }
     public boolean needsStyle() { return styleDirty; }
@@ -262,6 +269,7 @@ public final class Document extends Node {
     // ---- Mutation hooks (called by nodes) ----
 
     void treeMutated(Node parent, Node child, boolean added) {
+        domVersion++;
         styleDirty = true;
         layoutDirty = true;
         if (added && loaded && child.isConnected()) {
@@ -287,18 +295,21 @@ public final class Document extends Node {
     }
 
     void attributeChanged(Element element, String name, String oldValue) {
+        domVersion++;
         styleDirty = true;
         layoutDirty = true;
         if (element.replaced != null) element.replaced.attributeChanged(name);
     }
 
     void textChanged(Text text) {
+        domVersion++;
         layoutDirty = true;
         styleDirty = true; // :empty, and <style> contents
     }
 
     /** Interaction or form state changed; restyle (for :checked, :hover...) and repaint. */
     void stateChanged(Element element, boolean affectsSelectors) {
+        domVersion++;
         styleDirty = true;
         layoutDirty = true;
     }

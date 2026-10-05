@@ -2,6 +2,7 @@ package dev.vellum.engine.style;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The computed style of one element: the result of the cascade, inheritance and value computation.
@@ -156,10 +157,126 @@ public final class ComputedStyle implements Cloneable {
     /** A fresh style inheriting the inherited properties of {@code parent} (or initial values when null). */
     public static ComputedStyle inheritFrom(ComputedStyle parent) {
         ComputedStyle s = new ComputedStyle();
-        if (parent == null) return s;
-        for (Prop p : Prop.INHERITED) p.set(s, p.get(parent));
-        s.lineHeightFactor = parent.lineHeightFactor;
+        if (parent != null) s.copyInheritedFrom(parent);
         return s;
+    }
+
+    // ---- Comparison and inheritance, field by field ----
+    // Hand-written so the style engine compares and inherits without boxing every value through Prop's accessors.
+    // Each method covers exactly the properties its Prop flag selects (ComputedStyleTest cross-checks them by
+    // reflection), so a new property must be added here as well as to Prop.
+
+    /** Copies the inherited properties ({@link Prop#inherited}, plus the line-height factor) of {@code parent}. */
+    public void copyInheritedFrom(ComputedStyle parent) {
+        visibility = parent.visibility;
+        color = parent.color;
+        fontFamily = parent.fontFamily;
+        fontSize = parent.fontSize;
+        fontWeight = parent.fontWeight;
+        fontItalic = parent.fontItalic;
+        lineHeight = parent.lineHeight;
+        lineHeightFactor = parent.lineHeightFactor;
+        letterSpacing = parent.letterSpacing;
+        wordSpacing = parent.wordSpacing;
+        textIndent = parent.textIndent;
+        textAlign = parent.textAlign;
+        textTransform = parent.textTransform;
+        underline = parent.underline;
+        lineThrough = parent.lineThrough;
+        whiteSpace = parent.whiteSpace;
+        wordBreak = parent.wordBreak;
+        textShadow = parent.textShadow;
+        cursor = parent.cursor;
+        pointerEvents = parent.pointerEvents;
+        userSelect = parent.userSelect;
+        imageRendering = parent.imageRendering;
+        accentColor = parent.accentColor;
+        tint = parent.tint;
+        scrollbarThumbColor = parent.scrollbarThumbColor;
+        scrollbarTrackColor = parent.scrollbarTrackColor;
+        customProperties = parent.customProperties;
+    }
+
+    /**
+     * Whether the inherited properties (those {@link #copyInheritedFrom} copies) equal {@code o}'s: a child that
+     * only inherits from its parent computes the same style under either.
+     */
+    public boolean sameInherited(ComputedStyle o) {
+        return this == o || visibility == o.visibility && color == o.color && fontFamily.equals(o.fontFamily)
+                && same(fontSize, o.fontSize) && fontWeight == o.fontWeight && fontItalic == o.fontItalic
+                && same(lineHeight, o.lineHeight) && same(lineHeightFactor, o.lineHeightFactor)
+                && same(letterSpacing, o.letterSpacing) && same(wordSpacing, o.wordSpacing)
+                && same(textIndent, o.textIndent) && textAlign == o.textAlign && textTransform == o.textTransform
+                && underline == o.underline && lineThrough == o.lineThrough && whiteSpace == o.whiteSpace
+                && wordBreak == o.wordBreak && textShadow.equals(o.textShadow) && cursor == o.cursor
+                && pointerEvents == o.pointerEvents && userSelect == o.userSelect
+                && imageRendering == o.imageRendering && accentColor == o.accentColor && tint == o.tint
+                && scrollbarThumbColor == o.scrollbarThumbColor && scrollbarTrackColor == o.scrollbarTrackColor
+                && customProperties.equals(o.customProperties);
+    }
+
+    /** Whether the properties that affect layout ({@link Prop#affectsLayout}) equal {@code o}'s. */
+    public boolean sameLayout(ComputedStyle o) {
+        return this == o || display == o.display && position == o.position && boxSizing == o.boxSizing
+                && width.equals(o.width) && height.equals(o.height) && minWidth.equals(o.minWidth)
+                && minHeight.equals(o.minHeight) && maxWidth.equals(o.maxWidth) && maxHeight.equals(o.maxHeight)
+                && top.equals(o.top) && right.equals(o.right) && bottom.equals(o.bottom) && left.equals(o.left)
+                && marginTop.equals(o.marginTop) && marginRight.equals(o.marginRight)
+                && marginBottom.equals(o.marginBottom) && marginLeft.equals(o.marginLeft)
+                && paddingTop.equals(o.paddingTop) && paddingRight.equals(o.paddingRight)
+                && paddingBottom.equals(o.paddingBottom) && paddingLeft.equals(o.paddingLeft)
+                && same(borderTopWidth, o.borderTopWidth) && same(borderRightWidth, o.borderRightWidth)
+                && same(borderBottomWidth, o.borderBottomWidth) && same(borderLeftWidth, o.borderLeftWidth)
+                && borderTopStyle == o.borderTopStyle && borderRightStyle == o.borderRightStyle
+                && borderBottomStyle == o.borderBottomStyle && borderLeftStyle == o.borderLeftStyle
+                && overflowX == o.overflowX && overflowY == o.overflowY && verticalAlign == o.verticalAlign
+                && same(aspectRatio, o.aspectRatio)
+                && flexDirection == o.flexDirection && flexWrap == o.flexWrap && justifyContent == o.justifyContent
+                && alignItems == o.alignItems && alignContent == o.alignContent && alignSelf == o.alignSelf
+                && justifyItems == o.justifyItems && justifySelf == o.justifySelf && same(flexGrow, o.flexGrow)
+                && same(flexShrink, o.flexShrink) && flexBasis.equals(o.flexBasis) && order == o.order
+                && rowGap.equals(o.rowGap) && columnGap.equals(o.columnGap)
+                && gridTemplateColumns.equals(o.gridTemplateColumns) && gridTemplateRows.equals(o.gridTemplateRows)
+                && Objects.equals(gridTemplateAreas, o.gridTemplateAreas)
+                && gridAutoColumns.equals(o.gridAutoColumns) && gridAutoRows.equals(o.gridAutoRows)
+                && gridAutoFlow == o.gridAutoFlow && gridColumnStart.equals(o.gridColumnStart)
+                && gridColumnEnd.equals(o.gridColumnEnd) && gridRowStart.equals(o.gridRowStart)
+                && gridRowEnd.equals(o.gridRowEnd)
+                && fontFamily.equals(o.fontFamily) && same(fontSize, o.fontSize) && fontWeight == o.fontWeight
+                && fontItalic == o.fontItalic && same(lineHeight, o.lineHeight)
+                && same(letterSpacing, o.letterSpacing) && same(wordSpacing, o.wordSpacing)
+                && same(textIndent, o.textIndent) && textAlign == o.textAlign && textTransform == o.textTransform
+                && whiteSpace == o.whiteSpace && wordBreak == o.wordBreak && lineClamp == o.lineClamp
+                && Objects.equals(content, o.content) && scrollbarWidth == o.scrollbarWidth;
+    }
+
+    /** Whether every property, and the engine's own fields, equal {@code o}'s. */
+    public boolean sameAs(ComputedStyle o) {
+        return this == o || sameLayout(o)
+                && borderTopColor == o.borderTopColor && borderRightColor == o.borderRightColor
+                && borderBottomColor == o.borderBottomColor && borderLeftColor == o.borderLeftColor
+                && radiusTopLeft.equals(o.radiusTopLeft) && radiusTopRight.equals(o.radiusTopRight)
+                && radiusBottomRight.equals(o.radiusBottomRight) && radiusBottomLeft.equals(o.radiusBottomLeft)
+                && zIndexAuto == o.zIndexAuto && (zIndexAuto || zIndex == o.zIndex) && same(opacity, o.opacity)
+                && visibility == o.visibility && objectFit == o.objectFit
+                && color == o.color && same(lineHeightFactor, o.lineHeightFactor) && underline == o.underline
+                && lineThrough == o.lineThrough && textOverflow == o.textOverflow && textShadow.equals(o.textShadow)
+                && cursor == o.cursor && pointerEvents == o.pointerEvents && userSelect == o.userSelect
+                && imageRendering == o.imageRendering && accentColor == o.accentColor
+                && backgroundColor == o.backgroundColor && backgroundLayers.equals(o.backgroundLayers)
+                && boxShadow.equals(o.boxShadow) && same(outlineWidth, o.outlineWidth)
+                && outlineStyle == o.outlineStyle && outlineColor == o.outlineColor
+                && same(outlineOffset, o.outlineOffset) && transform.equals(o.transform)
+                && transformOriginX.equals(o.transformOriginX) && transformOriginY.equals(o.transformOriginY)
+                && tint == o.tint && scrollSmooth == o.scrollSmooth && scrollbarThumbColor == o.scrollbarThumbColor
+                && scrollbarTrackColor == o.scrollbarTrackColor && transitions.equals(o.transitions)
+                && animations.equals(o.animations) && customProperties.equals(o.customProperties)
+                && isFlexOrGridItemHint == o.isFlexOrGridItemHint;
+    }
+
+    /** Float equality as boxed values compare: NaN (normal, auto) equals NaN. */
+    private static boolean same(float a, float b) {
+        return Float.compare(a, b) == 0;
     }
 
     // ---- Derived helpers used by layout and paint ----
