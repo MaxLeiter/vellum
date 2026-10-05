@@ -3,6 +3,7 @@ package dev.vellum.mod.client.replaced;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.EntityFocus;
 import dev.vellum.engine.style.EntityFraming;
+import dev.vellum.mod.client.VellumEntities;
 import dev.vellum.mod.client.render.McCanvas;
 import dev.vellum.mod.client.render.Scene;
 import net.minecraft.client.Minecraft;
@@ -21,7 +22,6 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiFunction;
 
 /**
  * Draws a live entity fitted into a box, as vanilla's inventory does for the player, as a {@link Scene} (a
@@ -48,7 +48,7 @@ public final class EntityPortrait {
     private static final float SIDE_MARGIN = 0.05f;
 
     /** Render state functions mods registered, by entity type. */
-    private static final Map<EntityType<?>, BiFunction<?, Float, ? extends @Nullable EntityRenderState>> STATES = new ConcurrentHashMap<>();
+    private static final Map<EntityType<?>, VellumEntities.PortraitState<?>> STATES = new ConcurrentHashMap<>();
 
     /**
      * How the entity is shown, in degrees. {@code yaw} turns it (0 faces the viewer, positive turns its front to the
@@ -69,8 +69,7 @@ public final class EntityPortrait {
     private EntityPortrait() {}
 
     /** For {@code VellumEntities.registerPortraitState}: GUI renders of {@code type} start from {@code state}. */
-    public static <T extends Entity> void registerState(EntityType<T> type,
-                                                        BiFunction<? super T, Float, ? extends @Nullable EntityRenderState> state) {
+    public static <T extends Entity> void registerState(EntityType<T> type, VellumEntities.PortraitState<? super T> state) {
         STATES.put(type, state);
     }
 
@@ -161,8 +160,7 @@ public final class EntityPortrait {
     /** The state the function registered for the entity's type makes, or null when there is none or it made none. */
     @SuppressWarnings("unchecked")
     private static @Nullable EntityRenderState supplied(Entity entity, float partialTick) {
-        BiFunction<Entity, Float, ? extends @Nullable EntityRenderState> state =
-                (BiFunction<Entity, Float, ? extends @Nullable EntityRenderState>) STATES.get(entity.getType());
-        return state == null ? null : state.apply(entity, partialTick);
+        VellumEntities.PortraitState<Entity> state = (VellumEntities.PortraitState<Entity>) STATES.get(entity.getType());
+        return state == null ? null : state.create(entity, partialTick);
     }
 }

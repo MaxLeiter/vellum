@@ -362,13 +362,17 @@ VellumEntities.registerPortraitState(MyEntities.AUTOMATON.get(), AutomatonRender
 ```
 
 ```java
-public static <T extends Entity> void registerPortraitState(EntityType<T> type,
-        BiFunction<? super T, Float, ? extends @Nullable EntityRenderState> state)
+public static <T extends Entity> void registerPortraitState(EntityType<T> type, PortraitState<? super T> state)
+
+@FunctionalInterface
+public interface PortraitState<T extends Entity> {   // VellumEntities.PortraitState
+    @Nullable EntityRenderState create(T entity, float partialTick);
+}
 ```
 
 The function gets the entity and the partial tick and runs every frame for every `<entity>` of that type that is on
 screen. Return null to fall back to the renderer's state for that frame. Registering the type again replaces the
-function.
+function. A method reference like the one above, or a lambda, fits it.
 
 Vellum then sets these fields on your state, as it does on its own:
 
