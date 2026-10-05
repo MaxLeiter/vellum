@@ -53,12 +53,13 @@ Packages in `engine/` (`dev.vellum.engine.*`):
 |---|---|
 | `dom` | `Node`, `Element`, `Text`, `Document` (the frame pipeline), `Scheduler` (timers, rAF) |
 | `event` | Event classes and the listener interface; dispatch lives in `Node.dispatchEvent` |
-| `host` | `Host` (what the engine needs from its environment), `FontMetrics`, `FontSpec`, `ReplacedContent`, `Urls` |
+| `host` | `Host` (what the engine needs from its environment), `FontMetrics`, `FontSpec`, `FontFamilies` (family names → Minecraft fonts), `MinecraftGlyphs`, `ReplacedContent`, `PixelSurface` (canvas pixels), `Urls`, `FileStamps` (reload on save) |
 | `style` | `ComputedStyle`, `Prop` (property registry), value types (`Length`, colours, enums, `Image`, `Shadow`...) |
 | `css` | Tokenizer, parser, selectors, cascade (`StyleEngine`), the user-agent stylesheet |
 | `html` | `HtmlParser`, `HtmlSerializer` |
 | `layout` | `LayoutEngine`, `Box`, `LineBox`, `Fragment`; block, inline, flex, grid, positioning |
 | `paint` | `Painter` (paint order + hit testing), `Canvas` (backend contract), `Shapes` (tessellation) |
+| `replaced` | The engine's replaced elements (`img`, `sprite`, `canvas`), the registry that adds the host's, `ImageSources` (image sizes, `canvas:` images), `Context2D` (the canvas 2D context) |
 | `anim` | `AnimationEngine`: transitions, @keyframes animations, `element.animate()` |
 | `input` | `InputHandler` (pointer, wheel, keyboard, focus), form controls, smooth scrolling |
 | `script` | `ScriptRuntime` contract, the Rhino-based runtime, DOM bindings, `vellum.*` API, template bindings |
@@ -82,6 +83,14 @@ host: frame(nowMs)                   every frame:
         input.afterLayout  after any layout (also one a script flushed): clamp scrolls, autofocus, re-target hover
 host: paint(canvas)                  every frame: painter walks boxes → canvas calls
 ```
+
+Replaced content is created when its element enters the document (not during layout), so a script can draw on a
+`<canvas>` as soon as it is parsed; the document keeps the live contents in a list, lets them catch up once per frame
+before layout (canvas uploads, images that resized) and disposes them when their element leaves.
+
+Hosts that can idle (the previewer) ask `Document.needsFrame(now)`: true while something would change what is painted
+(a pending restyle, relayout or repaint, due timers or animation frames, running animations, smooth scrolls, a
+blinking caret, template updates). Minecraft renders every frame anyway.
 
 Scripts reading styles or geometry call `flushStyle()` / `flushLayout()`, which run the same `updateStyle` /
 `updateLayout` stages and nothing else: no animation tick and no event-producing work, so no script runs inside a
@@ -148,12 +157,13 @@ Elements with behaviour:
 | `progress`, `meter` | Bars styled by CSS. |
 | `details` / `summary` | Toggle `open`. |
 | `dialog` | Hidden unless `open`; `showModal()` puts it in the top layer with a backdrop. |
-| `img src` | Texture (`ns:textures/...png`), sprite (`sprite:ns:path`), or canvas. |
-| `canvas width height` | 2D drawing surface (subset of CanvasRenderingContext2D: fillRect, clearRect, strokeRect, drawImage of sprites/textures/items, fillText, getImageData/putImageData, paths of lines and rects). Backed by a texture. |
+| `img src` | Texture (`ns:textures/...png`), sprite (`sprite:ns:path`), or canvas (`canvas:id`, the `<canvas>` with that id). The same URLs work in CSS `url()`; the engine reads the schemes (`Image.ofUrl`), hosts only see texture URLs. |
+| `sprite src` | A GUI sprite at its natural size. |
+| `canvas width height` | Pixels (300×150 by default, at most 2048 a side) in a host `PixelSurface` (in game a dynamic texture uploaded by the rows that changed). `getContext('2d')` is a subset of CanvasRenderingContext2D (`replaced.Context2D`): `fillStyle`/`strokeStyle` (CSS colours), `lineWidth`, `globalAlpha`, `save`/`restore`, `fillRect`, `strokeRect`, `clearRect`, `getImageData`/`putImageData`/`createImageData` (a `Uint8ClampedArray`), and `drawImage` of another canvas. Coordinates are pixels and edges snap to them; no text, paths, transforms or gradients. |
 | `template` | Inert content for scripts: its contents are not rendered, queried (`getElementById`, `querySelector`...) or run. |
 | `script`, `style`, `link rel=stylesheet` | As in HTML. Scripts run in document order after parsing (like `defer`). |
 
-Minecraft elements (provided by the Minecraft host as replaced content):
+Minecraft elements (the Minecraft host's replaced content, `Host.replacedElements`; the previewer draws stand-ins):
 
 | Element | Behaviour |
 |---|---|
@@ -162,7 +172,7 @@ Minecraft elements (provided by the Minecraft host as replaced content):
 | `<entity type="minecraft:pig">` / `<entity player>` / `<entity id="123">` | A live entity render, optional `follow-mouse`, `scale`, `rotate`. |
 | `<player-head name="..." uuid="...">` | A player's face from their skin. |
 | `<sprite src="ns:path">` | Shorthand for a GUI sprite at its natural size. |
-| `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated or component text, as a normal inline element. |
+| `<mc-text>` with `key="..."` and optional `args`, or `json='...'` | Translated (`Host.translate`) or component text (`Host.formatText` gives styled runs, which become spans), as a normal inline element. Expanded by the engine when the element is parsed or inserted and when those attributes change, so templates and scripts can use it. |
 
 ## 5. CSS
 
@@ -208,7 +218,8 @@ corner as a single Length — elliptical radii use the horizontal value), `backg
 
 Vellum extensions: `-mc-tint: <color>` (multiply images/sprites/items), `text-shadow: minecraft` (the game's
 native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
-<any font id>` (also the aliases `monospace` → uniform, `sans-serif`/`serif`/`system-ui` → default).
+<any font id>` (also the aliases `monospace` → uniform, `sans-serif`/`serif`/`system-ui` → default; names without a
+namespace are `minecraft:` ids). `host.FontFamilies` is the one mapping, used by the style engine and every host.
 
 ### User-agent stylesheet (`engine/src/main/resources/vellum/ua.css`)
 - `*, ::before, ::after { box-sizing: border-box }` (deliberate deviation: border-box everywhere).
@@ -277,7 +288,8 @@ Per box:
 4. Border: `fillBorder` with per-side colours; `inset`/`outset`/`groove`/`ridge` shade the sides (the classic
    Minecraft bevel: `border: 2px outset #c6c6c6`); `dashed`/`dotted` as segments.
 5. Form control painting (`input.Controls.paint`).
-6. Replaced content (`Canvas.drawReplaced`), with `object-fit`.
+6. Replaced content (`ReplacedContent.paint`), with `object-fit`. Minecraft content draws through the Minecraft
+   canvas, which its paint finds in one documented place (`McReplaced`).
 7. Children: clip to the padding box if `overflow` is not visible (rectangular clip; rounded clip is not supported),
    translate by `-scroll`, paint children and line fragments.
 8. Scrollbars (overlay), outline (`outline`, `outline-offset`; focus rings), and `::after` order handled by the box
@@ -376,27 +388,32 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   stack is only 16 deep); clip stack → `enableScissor`; alpha stack multiplied into colours; `fillRect` → `fill`
   (sub-pixel via pose translate); `fillQuads` → a custom `GuiElementRenderState` with `RenderPipelines.GUI`
   (submitted through a mixin accessor for `guiRenderState`/scissor); `drawText` → `Font` with a `Style` (font,
-  bold, italic, underline, strikethrough, colour) scaled by `size/8`; `drawImage` → `blit` (textures by id,
-  `canvas:` dynamic textures); `drawSprite` → `blitSprite`; `drawReplaced` → the element's own renderer.
-- **McFontMetrics**: `Font.getSplitter().stringWidth(FormattedText)` with the style (bold widens), scaled.
+  bold, italic, underline, strikethrough, colour) scaled by `size/8`, through Minecraft's bidi reordering only when
+  the text has right-to-left characters; `drawImage` → a textured quad (identifiers cached in `McImages`, canvases
+  are registered dynamic textures); `drawSprite` → `blitSprite`. Rectangles are one render state each, sharing a copy
+  of the transform until it changes.
+- **McFontMetrics**: `Font.getSplitter().stringWidth(...)` with the style (bold widens), scaled. Each `FontSpec` keeps
+  its resolved styles in its host slot; the shared table is keyed by families, bold and italic (not the size).
 - **Host**: resources from the resource manager (`assets/<ns>/...`; UIs conventionally in `assets/<ns>/vellum/`),
   `minecraft:`-style URLs, sounds, clipboard, cursor (`CursorTypes`), logging to the mod logger, translations.
-- **Replaced elements**: `item`, `slot`, `entity`, `player-head`, `sprite`, `img`, `canvas` (NativeImage +
-  DynamicTexture), `mc-text`.
+- **Replaced elements**: `item`, `slot`, `entity`, `player-head` (`McReplaced.ELEMENTS`); canvases are `McSurface`s
+  (NativeImage + DynamicTexture); `mc-text` JSON is formatted by `McText`.
 - **VellumScreen** (`Screen`): owns a `Document`, forwards input (SDL key codes → DOM key names), sets the viewport
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows).
 - **VellumContainerScreen** (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
-  slots after each layout (mutable `Slot.x/y` via mixin accessor), vanilla slot/item/tooltip/carried-item rendering
-  stays, and slots not present in the document are moved off-screen.
+  slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
+  `Slot.x/y` via mixin accessor); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
+  frame are moved off-screen. Slot data is sent to the page only when a stack changed.
 - **HUD layers**: `VellumHud.register(id, url)` shows a non-interactive document over the HUD (title cards, trackers).
 - **Networking**: `vellum:open` (server → client: UI url or inline HTML, initial JSON data, session id),
   `vellum:data` (server → client: JSON for a session), `vellum:message` (client → server: session, channel, JSON),
   `vellum:close`. Server API: `VellumServer.open(player, url, data)` returns a session handle with `push(data)`,
   `onMessage(channel, handler)`, `close()`; container screens open via a `MenuType` whose extra data carries the url.
 - **Resources and hot reload**: documents load through the resource manager and reload with resources (F3+T). In a
-  dev environment a file watcher on `src/main/resources` reloads open documents on save.
+  dev environment pages are read from `src/main/resources`, and the files they were read from are polled
+  (`FileStamps`) so saving one reloads open documents.
 - **Commands**: `/vellum open <url>` (client), `/vellum demo`, `/vellum inspect` (toggle inspector overlay).
 - **Inspector**: F12 inside a Vellum screen toggles an overlay that highlights the hovered element's margin, border,
   padding and content boxes and shows its selector and size.
