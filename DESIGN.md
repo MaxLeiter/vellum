@@ -256,7 +256,8 @@ corner as a single Length; elliptical radii use the horizontal value), `backgrou
 `object-position` takes a `<position>` (one to four values: keywords, lengths, percentages) and is stored per axis
 (`-vellum-object-position-x`/`-y`, as `transform-origin` is). An axis no rule set is `Length.AUTO`: it serialises as
 `50%` and centres content like the initial value, but content can tell it apart, so `<entity>` keeps its own default
-(below). It is paint-only and animates, an unset axis as `50%`.
+(below). It is paint-only and animates. An unset axis has no position to interpolate from, so a change to or from it
+applies at once (halfway through in `@keyframes`).
 
 Vellum extensions: `-mc-tint: <color>` (multiply images, sprites, entities and models; items cannot be tinted),
 `text-shadow: minecraft` (the game's native 1px shadow), `font-family: minecraft:default | minecraft:uniform | minecraft:alt | minecraft:illageralt |
