@@ -1,6 +1,21 @@
 // Mozilla Rhino, relocated to dev.vellum.shadow.rhino so it can never clash with another mod's copy (KubeJS's fork
 // lives in its own package, but other mods jar-in-jar plain org.mozilla:rhino). The relocated classes are copied
 // into the engine consumers' outputs (see multiloader-loader.gradle), not nested as a jar.
+//
+// Before relocation, Rhino's BigInt code is patched (patchRhino): BigInteger multiplications, powers, shifts and
+// parses in ScriptRuntime, NativeBigInt and TokenStream call VellumBigInts first, which refuses results over a size
+// limit. One BigInteger operation runs in Java, out of the script budget's sight, so without this a page could
+// freeze the game with a few lines of BigInt arithmetic (DESIGN.md, "Security").
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
+
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+
 plugins {
     id 'java'
     id 'com.gradleup.shadow' version '9.6.1'
@@ -12,8 +27,90 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version)
 }
 
+configurations {
+    rhinoOriginal { canBeConsumed = false; canBeResolved = true }
+}
+
 dependencies {
-    implementation("org.mozilla:rhino:${rhino_version}")
+    rhinoOriginal("org.mozilla:rhino:${rhino_version}")
+}
+
+/** The classes whose BigInteger calls go through VellumBigInts. */
+def bigIntClasses = ['org/mozilla/javascript/ScriptRuntime.class', 'org/mozilla/javascript/NativeBigInt.class',
+                     'org/mozilla/javascript/TokenStream.class']
+
+/** Rewrites the BigInteger calls of one class; returns the new bytes and how many calls were rewritten. */
+static List patchBigIntegers(byte[] bytes) {
+    String guard = 'org/mozilla/javascript/VellumBigInts'
+    int[] count = [0]
+    ClassReader reader = new ClassReader(bytes)
+    ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS)
+    reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+        @Override
+        MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
+            return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, desc, signature, exceptions)) {
+                @Override
+                void visitMethodInsn(int opcode, String owner, String method, String type, boolean itf) {
+                    if (owner == 'java/math/BigInteger') {
+                        if (opcode == Opcodes.INVOKEVIRTUAL && method in ['multiply', 'pow', 'shiftLeft', 'shiftRight']) {
+                            count[0]++
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, guard, method,
+                                    '(Ljava/math/BigInteger;' + type.substring(1), false)
+                            return
+                        }
+                        if (opcode == Opcodes.INVOKESPECIAL && method == '<init>' && type == '(Ljava/lang/String;I)V') {
+                            count[0]++
+                            super.visitInsn(Opcodes.DUP2)
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, guard, 'checkDigits', '(Ljava/lang/String;I)V', false)
+                        } else if (opcode == Opcodes.INVOKESPECIAL && method == '<init>' && type == '(Ljava/lang/String;)V') {
+                            count[0]++
+                            super.visitInsn(Opcodes.DUP)
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, guard, 'checkDigits', '(Ljava/lang/String;)V', false)
+                        }
+                    }
+                    super.visitMethodInsn(opcode, owner, method, type, itf)
+                }
+            }
+        }
+    }, 0)
+    return [writer.toByteArray(), count[0]]
+}
+
+def patchedJar = layout.buildDirectory.file("patched/rhino-${rhino_version}.jar")
+
+tasks.register('patchRhino') {
+    inputs.files(configurations.rhinoOriginal)
+    inputs.property('classes', bigIntClasses)
+    outputs.file(patchedJar)
+    doLast {
+        File out = patchedJar.get().asFile
+        out.parentFile.mkdirs()
+        Map<String, Integer> patched = [:]
+        new ZipFile(configurations.rhinoOriginal.singleFile).withCloseable { zip ->
+            new ZipOutputStream(new FileOutputStream(out)).withCloseable { zout ->
+                zip.entries().each { ZipEntry entry ->
+                    byte[] bytes = zip.getInputStream(entry).bytes
+                    if (bigIntClasses.contains(entry.name)) {
+                        def (byte[] rewritten, int count) = patchBigIntegers(bytes)
+                        bytes = rewritten
+                        patched[entry.name] = count
+                    }
+                    zout.putNextEntry(new ZipEntry(entry.name))
+                    zout.write(bytes)
+                    zout.closeEntry()
+                }
+            }
+        }
+        // A Rhino upgrade that moves this code must not silently drop the checks.
+        bigIntClasses.each { name ->
+            if (!patched[name]) throw new GradleException("patchRhino: no BigInteger calls rewritten in $name")
+        }
+        logger.info("patchRhino: rewrote BigInteger calls $patched")
+    }
+}
+
+dependencies {
+    implementation(files(tasks.named('patchRhino')))
 }
 
 tasks.named('shadowJar') {
