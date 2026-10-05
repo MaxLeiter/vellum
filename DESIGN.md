@@ -99,9 +99,15 @@ Automation asks `Document.settled()` instead: whether the page will still change
 (pending restyle, relayout or repaint, smooth scrolls and scroll events, template updates and `nextTick` callbacks,
 transitions and finite animations, drags and spinning turntables, a tooltip's delay) and leaves out what never does
 (infinite animations, timers, animation-frame callbacks, the caret), or pages with a clock or a spinner would never
-settle. `Document.pointerTarget(element)` is where automation points: the centre of `Element.visibleRect()` (the
-border box cut to the viewport and to the clips of the content holding it, `Coordinates.visibleRect`), scrolled into
-view when none of it shows, and only if the hit test there finds the element.
+settle. The work both predicates wait for is one private term, `Document.dirty()`, so a new kind of pending work is
+added there once; replaced content that is still loading (`ReplacedContent.loading()`) is part of it.
+
+`Element.getBoundingClientRect()` and `visibleRect()` lay out first when the document has changed, as browser
+geometry getters do; paint and input read the painted boxes directly. `Document.reveal(element, whole)` lays out and
+scrolls an element into view by the least instant scroll (always, or only when none of it shows) and returns its
+visible rect. `Document.pointerTarget(element)` is where automation points: the centre of what `reveal` returns
+(the border box cut to the viewport and to the clips of the content holding it, `Coordinates.visibleRect`), and only
+if the hit test there finds the element.
 
 Scripts reading styles or geometry call `flushStyle()` / `flushLayout()`, which run the same `updateStyle` /
 `updateLayout` stages and nothing else: no animation tick and no event-producing work, so no script runs inside a
@@ -594,12 +600,13 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   to the GUI-scaled size, enables SDL text input while a text field is focused, `Escape` closes unless cancelled,
   `isPauseScreen` configurable (default false), background: none (the page draws its own; `isInGameUi` true so the
   world shows). Minecraft tells a screen about the pointer only when it moves, and drops the first move after a
-  screen opens, so each frame the screen also passes the driver the pointer position it was rendered with
-  (`DocumentDriver.followPointer`, in `VellumContainerScreen` too). The page gets a move when it has had no pointer
-  since it loaded, or when the render's pointer changed since the last frame and is not where the page last had it.
-  A page opened under a resting cursor is hovered from its first frames, as vanilla widgets are, and a move sent from
-  code stays in effect until the real mouse moves. `VellumAutomation` moves the mouse handler along with
-  its events (so `leave()` stays off the page), and HUD overlays poll the pointer themselves.
+  screen opens, so every frame rendered with a pointer the driver compares the page's pointer
+  (`InputHandler.pointer()`, where the last pointer event put it) with the mouse handler's exact one, and sends a
+  move when they differ (`DocumentDriver.followPointer`, inside `extract`). Screens, container screens and
+  interactive HUD overlays all follow the pointer this way; an overlay drawn in the HUD layer passes no pointer. A
+  page opened under a resting cursor is hovered from its first frames, as vanilla widgets are. A move sent to a
+  screen without moving the mouse handler lasts one frame, so `VellumAutomation` moves the mouse handler along with
+  its events.
 - `VellumContainerScreen` (`AbstractContainerScreen`): same, plus `<slot index>` elements position the menu's
   slots where they are painted, every frame (`McCanvas.placeSlot`: after scrolling, transforms and clipping; mutable
   `Slot.x/y`, widened); vanilla slot/item/tooltip/carried-item rendering stays, and slots not painted this
@@ -618,7 +625,7 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   open screen. Over such a screen the loaders draw it after the screen (NeoForge `ScreenEvent.Render.Post` for the top screen, Fabric `ScreenEvents.afterExtract`) in a new
   stratum, flushing its own deferred tooltip (`extractDeferredElements`: the screen's pass is over), and route
   pointer events to it first (NeoForge `ScreenEvent.Mouse*.Pre`, cancelled when taken; Fabric
-  `ScreenMouseEvents.allowMouse*`). Hover follows the mouse position, polled each frame. A press goes to the topmost
+  `ScreenMouseEvents.allowMouse*`). Hover follows the mouse position each frame, as on a screen. A press goes to the topmost
   overlay with content under the pointer (`DocumentDriver.contentAt`: not `html`/`body`), which then gets its
   release and drags; otherwise the screen gets it. The wheel goes to the same overlay and falls through when unused.
   Without a screen, or under one the predicate rejects, the overlay is drawn in the HUD layer without a pointer
@@ -653,7 +660,8 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   run as HTML pages with Taffy's Chrome setup as a stylesheet and Ahem metrics.
 - `preview` snapshot tests render the canvas test sheet, `preview/src/test/resources/pages` and the demo UIs
   through the previewer's path (`ImageCanvas`, Java2D) with Minecraft's jar, ten frames 16 ms apart, and compare them
-  with goldens in `preview/src/test/snapshots` (`-Dvellum.updateSnapshots=true` rewrites them).
+  with goldens in `preview/src/test/snapshots` (`-Dvellum.updateSnapshots=true` rewrites them). The item and
+  `title-nowrap` tooltip snapshots render the autopilot's shop row page, which it also shows in game.
 - GameTests (both loaders, headless): networking codecs, server API, container menus.
 - Dev autopilot (`./gradlew :neoforge:runClient -Pautopilot`): opens each showcase page and demo UI in a real
   client (the 3D pages at GUI scales 2 and 3), screenshots it to `neoforge/runs/client/screenshots/`, and logs each
@@ -661,8 +669,11 @@ JavaScript, sandboxed. Engine choice and its reasons are in DECISIONS.md. The ru
   (body and eyes fits at several sizes, `object-position`) whose armour stands come from a render state the autopilot
   registers (`VellumEntities`: arms, one raised, no base plate). It drives pages through `VellumAutomation`
   (docs/API.md), the public client API for dev automation: it waits for pages to settle, hovers the showcase title
-  screen's first button for a burst of screenshots a tick apart, opens a page under a resting cursor (hovered within
-  its first frames), screenshots an item tooltip with a title's lines and plain and `title-nowrap` titles, closes a
-  page with an `onKey` handler, fills in the templates demo, clicks a Mobdex row scrolled out of its list, and
-  answers the demo toast overlay through chat, checking each result.
+  screen's first button for a burst of screenshots a tick apart, drags a turntable, opens a page under a resting
+  cursor (hovered within its first frames), screenshots an item tooltip with a title's lines and plain and
+  `title-nowrap` titles, closes a page with an `onKey` handler, fills in the templates demo, clicks a Mobdex row
+  scrolled out of its list, and answers the demo toast overlay through chat. Its own pages live in
+  `assets/vellum/vellum/dev/`. Each step runs on a client tick; a wait is a step that queues itself again until its
+  condition holds or it times out. Every check is logged, and the run ends with
+  `Vellum autopilot finished: N checks, M failed` (an error when M is not 0).
 - Previewer scripts (`--actions`, preview/README.md) drive a page headless with input and screenshots.
