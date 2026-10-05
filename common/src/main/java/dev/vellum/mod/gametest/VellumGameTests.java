@@ -42,7 +42,9 @@ public final class VellumGameTests {
 
     private VellumGameTests() {}
 
-    public static void init() {}
+    public static void init() {
+        SecurityGameTests.init();
+    }
 
     private static Entry<Consumer<GameTestHelper>> test(String name, Consumer<GameTestHelper> body) {
         return VellumRegistry.add(Registries.TEST_FUNCTION, name, () -> body);
@@ -193,11 +195,11 @@ public final class VellumGameTests {
 
     /** A player with a loopback connection; remove it with {@link #leave}. */
     @SuppressWarnings("removal")
-    private static ServerPlayer player(GameTestHelper h) {
+    static ServerPlayer player(GameTestHelper h) {
         return h.makeMockServerPlayerInLevel();
     }
 
-    private static void leave(GameTestHelper h, ServerPlayer player) {
+    static void leave(GameTestHelper h, ServerPlayer player) {
         h.getLevel().getServer().getPlayerList().remove(player);
     }
 }

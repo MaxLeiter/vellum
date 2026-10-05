@@ -2,9 +2,10 @@ package dev.vellum.mod.server;
 
 import com.google.gson.JsonElement;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.TokenBucket;
+import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.DataPayload;
-import dev.vellum.mod.net.OpenPayload;
 import dev.vellum.mod.net.VellumNetwork;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -19,16 +20,13 @@ import java.util.function.BiConsumer;
  * {@code vellum.send(channel, value)} messages, and close it. Use it on the server thread only.
  */
 public final class VellumSession {
-    /** Messages a page may send in a burst, and per second after that; extra messages are dropped. */
-    private static final int BURST = 40, PER_SECOND = 20;
-
     private final int id;
     private final ServerPlayer player;
     private final Map<String, List<BiConsumer<ServerPlayer, JsonElement>>> handlers = new HashMap<>();
     private final List<Runnable> closeHandlers = new ArrayList<>();
     private boolean open = true;
-    private double tokens = BURST;
-    private long lastRefill = System.nanoTime();
+    /** Messages the page may send: {@code server.messageBurst}, then {@code server.messagesPerSecond}. */
+    private final TokenBucket rate = new TokenBucket(VellumConfig.SERVER_MESSAGE_BURST.get(), VellumConfig.SERVER_MESSAGES_PER_SECOND.get());
     private boolean warnedRate;
 
     VellumSession(int id, ServerPlayer player) {
@@ -51,7 +49,7 @@ public final class VellumSession {
 
     /** Replaces {@code vellum.data} on the client; the page's {@code vellum.on('data', fn)} listeners run. */
     public VellumSession push(JsonElement data) {
-        if (open) VellumNetwork.sendToPlayer(player, new DataPayload(id, VellumServer.json(data, OpenPayload.MAX_DATA)));
+        if (open) VellumNetwork.sendToPlayer(player, new DataPayload(id, VellumServer.json(data)));
         return this;
     }
 
@@ -90,15 +88,9 @@ public final class VellumSession {
         }
     }
 
-    /** Token bucket: false when the page sends faster than {@link #PER_SECOND} after a {@link #BURST}. */
+    /** False when the page sends faster than its rate limit allows. */
     boolean tryAcquire() {
-        long now = System.nanoTime();
-        tokens = Math.min(BURST, tokens + (now - lastRefill) / 1e9 * PER_SECOND);
-        lastRefill = now;
-        if (tokens >= 1) {
-            tokens--;
-            return true;
-        }
+        if (rate.tryTake()) return true;
         if (!warnedRate) {
             warnedRate = true;
             Constants.LOG.warn("Vellum session {}: {} is sending too many messages; dropping some", id, player.getGameProfile().name());

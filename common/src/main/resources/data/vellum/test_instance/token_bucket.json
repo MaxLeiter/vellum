@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "vellum:token_bucket",
+  "max_ticks": 40,
+  "setup_ticks": 1,
+  "structure": "vellum:test/arena"
+}
