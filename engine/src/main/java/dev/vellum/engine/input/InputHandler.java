@@ -4,64 +4,341 @@ import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.event.Event;
+import dev.vellum.engine.event.KeyboardEvent;
 import dev.vellum.engine.event.Modifiers;
+import dev.vellum.engine.event.MouseEvent;
+import dev.vellum.engine.event.WheelEvent;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.paint.HitResult;
+
+import java.util.List;
 
 /**
  * Turns host input into DOM events and default actions: hover/active/focus state, click synthesis, wheel and
- * scrollbar scrolling (smooth), keyboard focus navigation, text editing in inputs, and the cursor.
- * STUB: implemented by the input workstream.
+ * scrollbar scrolling (smooth), keyboard focus navigation, form controls, text editing, and the cursor.
+ *
+ * <p>The work is split into focused collaborators: {@link Pointer} (hover, active, clicks, capture, cursor),
+ * {@link FocusNavigator} (tab order, focus-visible, autofocus), {@link Scroller} (wheel, smooth scrolling,
+ * scrollbars), {@link TextField} / {@link RangeControl} / {@link SelectPopup} (per-control behaviour) and
+ * {@link Activation} (click default actions). This class routes input between them.
  */
 public final class InputHandler {
+    /** Finds the element under a viewport point; {@link dev.vellum.engine.paint.Painter#hitTest} by default. */
+    @FunctionalInterface
+    public interface HitTester {
+        HitResult hitTest(float x, float y);
+    }
+
     private final Document document;
+    private final Pointer pointer;
+    private final Scroller scroller;
+    private final FocusNavigator focus;
+    private HitTester hitTester;
+    private SelectPopup popup;
+    /** Set when a keydown for a character was cancelled, so its charTyped is dropped (as browsers skip the input). */
+    private boolean suppressChar;
 
     public InputHandler(Document document) {
         this.document = document;
+        this.pointer = new Pointer(document);
+        this.scroller = new Scroller(document);
+        this.focus = new FocusNavigator(document, scroller);
+        this.hitTester = (x, y) -> document.painter().hitTest(x, y);
     }
 
+    /** Replaces hit testing (tests, or hosts with their own picking). */
+    public void setHitTester(HitTester hitTester) {
+        this.hitTester = hitTester;
+    }
+
+    // ---- Pointer ----
+
     /** Mouse moved to (x, y) in viewport px. Returns true if the document is under the pointer. */
-    public boolean mouseMove(float x, float y, Modifiers mods) { return false; }
-
-    /** A mouse button went down. {@code button}: 0 left, 1 middle, 2 right. Returns true if consumed. */
-    public boolean mouseDown(float x, float y, int button, Modifiers mods) { return false; }
-
-    public boolean mouseUp(float x, float y, int button, Modifiers mods) { return false; }
-
-    /** Wheel input; deltas in px, positive scrolls down/right. Returns true if consumed. */
-    public boolean wheel(float x, float y, float deltaX, float deltaY, Modifiers mods) { return false; }
-
-    /** A key went down. {@code key}/{@code code} use DOM names. Returns true if consumed (default prevented or handled). */
-    public boolean keyDown(String key, String code, int keyCode, boolean repeat, Modifiers mods) { return false; }
-
-    public boolean keyUp(String key, String code, int keyCode, Modifiers mods) { return false; }
-
-    /** Text input (already composed characters). Returns true if consumed. */
-    public boolean charTyped(String text) { return false; }
-
-    /** Per-frame work before restyle: smooth scrolling, caret blink, drag auto-scroll. */
-    public void tick(double nowMs) {}
-
-    /** Called after each relayout (re-validate hover under the pointer, clamp scroll offsets). */
-    public void afterLayout() {}
-
-    /** Called before a node leaves the document. */
-    public void nodeRemoving(Node node) {}
-
-    /** Default action for an uncancelled click on {@code target}. */
-    public void activationBehavior(Element target, Event event) {}
+    public boolean mouseMove(float x, float y, Modifiers mods) {
+        pointer.moveTo(x, y, mods);
+        if (pointer.drag() != null) pointer.drag().move(x, y);
+        if (popup != null) popup.hover(x, y);
+        Element target = trackHover();
+        if (target != null) pointer.fire("mousemove", target, 0, 0, null);
+        return target != null;
+    }
 
     /**
-     * Paints overlays above the whole document (open select dropdowns, the drag ghost...). The painter calls this
-     * last, with an identity transform.
+     * A mouse button went down. {@code button}: 0 left, 1 middle, 2 right. Returns true if the document is under the
+     * pointer (or an open dropdown took the press).
      */
-    public void paintOverlays(Canvas canvas) {}
+    public boolean mouseDown(float x, float y, int button, Modifiers mods) {
+        pointer.moveTo(x, y, mods);
+        if (popup != null) {
+            // Like a native dropdown, an open list swallows presses; one outside it closes it.
+            if (!popup.contains(x, y)) popup = null;
+            return true;
+        }
+        Element target = hitAt(x, y);
+        if (target == null) return false;
+        if (button == 0) {
+            Drag scrollbar = scroller.press(target, x, y);
+            if (scrollbar != null) {
+                pointer.capture(target, scrollbar);
+                return true;
+            }
+        }
+        int clicks = pointer.press(target, button);
+        MouseEvent down = pointer.fire("mousedown", target, button, clicks, null);
+        if (button == 2) pointer.fire("contextmenu", target, button, clicks, null);
+        if (button == 0 && !down.defaultPrevented()) pressDefault(target, clicks);
+        return true;
+    }
+
+    /** Default action of a primary mousedown: focus (or blur), then the control's own press behaviour. */
+    private void pressDefault(Element target, int clicks) {
+        focus.focusByPointer(Dom.closest(target, Element::isFocusable));
+        if (target.isDisabled()) return;
+        Drag drag = null;
+        if (Forms.isTextControl(target)) {
+            drag = TextField.of(target).press(pointer.x, pointer.y, clicks, pointer.mods().shift());
+        }
+        else if (Forms.isInput(target, "range")) drag = new RangeControl(target).press(pointer.x);
+        else if (target.tagName().equals("select")) openPopup(target);
+        if (drag != null) pointer.capture(target, drag);
+    }
+
+    /** A mouse button went up. Returns true if the document is under the pointer. */
+    public boolean mouseUp(float x, float y, int button, Modifiers mods) {
+        pointer.moveTo(x, y, mods);
+        Drag drag = pointer.releaseCapture();
+        if (drag != null) drag.end();
+        if (popup != null && popup.contains(x, y)) {
+            pointer.release(null, button);
+            if (popup.release(x, y)) popup = null;
+            return true;
+        }
+        Element target = hitAt(x, y);
+        Element clickTarget = pointer.release(target, button);
+        if (target != null) pointer.fire("mouseup", target, button, pointer.clicks(), null);
+        if (clickTarget != null && !clickTarget.isDisabled()) {
+            MouseEvent click = pointer.fire("click", clickTarget, button, pointer.clicks(), null);
+            if (!click.defaultPrevented()) document.activationBehavior(clickTarget, click);
+            if (pointer.clicks() == 2) pointer.fire("dblclick", clickTarget, button, 2, null);
+        }
+        if (drag != null) trackHover(); // the capture ended: hover follows the pointer again
+        return target != null;
+    }
+
+    /** Wheel input; deltas in px, positive scrolls down/right. Returns true if consumed (cancelled or scrolled). */
+    public boolean wheel(float x, float y, float deltaX, float deltaY, Modifiers mods) {
+        pointer.moveTo(x, y, mods);
+        float dx = deltaX, dy = deltaY;
+        if (mods.shift() && dx == 0) {
+            dx = dy;
+            dy = 0;
+        }
+        if (popup != null) {
+            if (popup.contains(x, y)) popup.wheel(dy);
+            return true;
+        }
+        Element target = hitAt(x, y);
+        if (target == null) return false;
+        if (pointer.dispatch(new WheelEvent(x, y, pointer.buttons(), mods, dx, dy), target).defaultPrevented()) return true;
+        boolean scrolled = target.tagName().equals("textarea") && dx == 0 && TextField.of(target).wheel(dy)
+                || scroller.wheel(target, dx, dy);
+        if (scrolled) trackHover();
+        return scrolled;
+    }
+
+    /** Re-targets hover at the pointer position (after moves, scrolls and relayouts). Returns the hovered element. */
+    private Element trackHover() {
+        if (!pointer.known()) return null;
+        Element target = hitAt(pointer.x, pointer.y);
+        boolean overScrollbar = pointer.captured() == null && scroller.hover(target, pointer.x, pointer.y);
+        pointer.hover(target);
+        pointer.updateCursor(target, overScrollbar);
+        return target;
+    }
+
+    /** The element under a point: the capturing element during drags, the select under its open list, else a hit test. */
+    private Element hitAt(float x, float y) {
+        if (pointer.captured() != null) return pointer.captured();
+        if (popup != null && popup.contains(x, y)) return popup.select();
+        HitResult hit = hitTester.hitTest(x, y);
+        return hit == null ? null : hit.element();
+    }
+
+    // ---- Keyboard ----
+
+    /** A key went down. {@code key}/{@code code} use DOM names. Returns true if consumed (default prevented or handled). */
+    public boolean keyDown(String key, String code, int keyCode, boolean repeat, Modifiers mods) {
+        suppressChar = false;
+        if (popup != null && popupKey(key)) return true;
+        Element target = keyTarget();
+        if (target == null) return false;
+        if (!target.dispatchEvent(new KeyboardEvent("keydown", key, code, keyCode, repeat, mods))) {
+            suppressChar = key.codePointCount(0, key.length()) == 1;
+            return true;
+        }
+        return keyDefault(document.focusedElement(), key, mods, repeat);
+    }
+
+    public boolean keyUp(String key, String code, int keyCode, Modifiers mods) {
+        Element target = keyTarget();
+        if (target == null) return false;
+        boolean prevented = !target.dispatchEvent(new KeyboardEvent("keyup", key, code, keyCode, false, mods));
+        return prevented || wantsKeyboard();
+    }
+
+    /** Text input (already composed characters). Returns true if consumed. */
+    public boolean charTyped(String text) {
+        if (suppressChar) {
+            suppressChar = false;
+            return true;
+        }
+        Element focused = document.focusedElement();
+        if (focused == null || !Forms.isTextControl(focused)) return false;
+        TextField.of(focused).type(text);
+        return true;
+    }
+
+    /** Keys while a dropdown is open; false lets the key continue (Tab closes the list and moves focus). */
+    private boolean popupKey(String key) {
+        switch (key) {
+            case "Escape" -> popup = null;
+            case "Enter", " " -> {
+                popup.commit();
+                popup = null;
+            }
+            case "Tab" -> {
+                popup = null;
+                return false;
+            }
+            default -> popup.navigate(key);
+        }
+        return true;
+    }
+
+    /** Default actions of an uncancelled keydown on the focused element (or with nothing focused). */
+    private boolean keyDefault(Element el, String key, Modifiers mods, boolean repeat) {
+        if (key.equals("Tab")) return focus.move(mods.shift());
+        if (el == null) return false;
+        if (Forms.isTextControl(el)) return TextField.of(el).keyDown(key, mods);
+        if (el.isDisabled()) return false;
+        if (el.tagName().equals("select")) {
+            boolean open = key.equals("Enter") || key.equals(" ")
+                    || mods.alt() && (key.equals("ArrowDown") || key.equals("ArrowUp"));
+            if (open) openPopup(el);
+            return open || SelectPopup.stepClosed(el, key);
+        }
+        if (Forms.isInput(el, "range")) return new RangeControl(el).keyDown(key);
+        if (Forms.isInput(el, "radio") && radioArrow(el, key)) return true;
+        boolean pushable = Forms.isButton(el) || Forms.isDetailsSummary(el);
+        boolean activate = switch (key) {
+            case "Enter" -> pushable || el.tagName().equals("a") && el.hasAttribute("href");
+            case " " -> !repeat && (pushable || Forms.isInput(el, "checkbox") || Forms.isInput(el, "radio"));
+            default -> false;
+        };
+        if (activate) el.click();
+        return activate;
+    }
+
+    /** Arrow keys in a radio group focus and check the next (or previous) enabled radio, wrapping. */
+    private boolean radioArrow(Element radio, String key) {
+        int dir = switch (key) {
+            case "ArrowDown", "ArrowRight" -> 1;
+            case "ArrowUp", "ArrowLeft" -> -1;
+            default -> 0;
+        };
+        if (dir == 0) return false;
+        List<Element> group = Forms.radioGroup(radio).stream().filter(r -> r == radio || !r.isDisabled()).toList();
+        Element next = group.get(Math.floorMod(group.indexOf(radio) + dir, group.size()));
+        focus.focusByKeyboard(next);
+        Forms.checkRadio(next);
+        return true;
+    }
+
+    private Element keyTarget() {
+        Element focused = document.focusedElement();
+        if (focused != null) return focused;
+        return document.body() != null ? document.body() : document.documentElement();
+    }
+
+    // ---- Select dropdown ----
+
+    private void openPopup(Element select) {
+        SelectPopup p = new SelectPopup(select);
+        if (p.isEmpty()) return;
+        popup = p;
+        Activation.playClick(document);
+    }
+
+    /**
+     * Paints overlays above the whole document (the open select dropdown). The painter calls this last, with an
+     * identity transform.
+     */
+    public void paintOverlays(Canvas canvas) {
+        if (popup != null) popup.paint(canvas);
+    }
+
+    // ---- Frame and document hooks ----
+
+    /** Per-frame work before restyle: smooth scrolling, drag auto-scroll, caret blink. */
+    public void tick(double nowMs) {
+        if (scroller.tick(nowMs)) trackHover();
+        if (pointer.drag() != null) pointer.drag().move(pointer.x, pointer.y);
+        Element focused = document.focusedElement();
+        if (focused != null && Forms.isTextControl(focused)) TextField.of(focused).blink(nowMs);
+    }
+
+    /** Called after each relayout: clamps scroll offsets, keeps the caret in view, autofocus, re-hit-tests hover. */
+    public void afterLayout() {
+        scroller.clampAll();
+        Element focused = document.focusedElement();
+        if (focused != null && Forms.isTextControl(focused)) TextField.of(focused).scrollToCaret();
+        if (popup != null && popup.select().box == null) popup = null;
+        focus.autofocus();
+        trackHover();
+    }
+
+    /** Called before a node leaves the document. */
+    public void nodeRemoving(Node node) {
+        pointer.forget(node);
+        scroller.forget(node);
+        if (popup != null && node.contains(popup.select())) popup = null;
+    }
+
+    /**
+     * Called by {@link Document#setFocus} when focus moves, before blur/focus events fire: text fields fire
+     * {@code change} on blur and remember their value on focus, a select losing focus closes its dropdown, and the
+     * newly focused element scrolls into view.
+     */
+    public void focusChanged(Element old, Element now) {
+        if (old != null && Forms.isTextControl(old)) TextField.of(old).blurred();
+        if (popup != null && popup.select() == old) popup = null;
+        if (now != null && Forms.isTextControl(now)) TextField.of(now).focused();
+        focus.focusChanged(now);
+    }
+
+    /** Default action for an uncancelled click on {@code target}. */
+    public void activationBehavior(Element target, Event event) {
+        Activation.run(target, event);
+    }
+
+    // ---- Queries ----
 
     /**
      * True when focus last moved by keyboard (Tab, arrows), false after pointer input. The style engine uses it for
      * {@code :focus-visible}.
      */
-    public boolean focusVisible() { return false; }
+    public boolean focusVisible() {
+        return focus.visible();
+    }
 
     /** True when a text field has focus, so hosts can suppress their own key bindings (e.g. inventory key). */
-    public boolean wantsKeyboard() { return false; }
+    public boolean wantsKeyboard() {
+        Element focused = document.focusedElement();
+        return focused != null && Forms.isEditable(focused);
+    }
+
+    /** True when the pointer is over (or dragging) a scroll container's scrollbar; the painter widens it. */
+    public boolean isScrollbarHovered(Element container, boolean vertical) {
+        return scroller.isHovered(container, vertical);
+    }
 }
