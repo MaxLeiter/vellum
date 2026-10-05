@@ -25,9 +25,9 @@ public interface ReplacedContent {
     void paint(Canvas canvas, float x, float y, float width, float height);
 
     /**
-     * A primary press on the element that no {@code mousedown} listener cancelled, at (x, y) in its border box (local px):
-     * return a drag to receive the pointer until the button is released (it gets viewport px), or null to leave the
-     * press alone. 3D content uses it to turn under the pointer ({@code rotatable}).
+     * A primary press on the element that no {@code mousedown} listener cancelled, at (x, y) in its border box (local
+     * px): return a drag to receive the pointer until the button is released (it gets viewport px), or null to leave
+     * the press alone. 3D content uses it to turn under the pointer ({@code rotatable}).
      */
     default Drag press(float x, float y) { return null; }
 

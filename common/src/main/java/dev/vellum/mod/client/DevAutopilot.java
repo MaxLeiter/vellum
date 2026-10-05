@@ -7,6 +7,8 @@ import net.minecraft.client.Options;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
@@ -110,6 +112,13 @@ public final class DevAutopilot {
         shoot(mc, "showcase_mobdex_gui3", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("mobdex"),
                 JsonParser.parseString("{\"start\": {\"mob\": \"ghast\"}}")));
         guiScale(mc, 2);
+        shoot(mc, "showcase_mobdex_unseen", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("mobdex"),
+                JsonParser.parseString("{\"start\": {\"mob\": \"warden\"}}")));
+        // Dragging the Turntable's big model (rotatable): it turns and tilts, and keeps turning when let go.
+        steps.add(() -> VellumScreens.open(VellumClientCommands.showcaseUrl("models")));
+        steps.add(() -> wait = SETTLE);
+        drag(mc, 700, 250, 760, 270);
+        shoot(mc, "showcase_models_dragged", () -> mc.gui.screen().mouseMoved(10, 10));
         // What 3D content costs: the logged fps of 48 spinning entities, models and items (2D, for comparison).
         for (String bench : List.of("entity type='minecraft:zombie'", "model block='minecraft:chest'", "item id='minecraft:chest'")) {
             String cell = "<" + bench + " style='width: 48px; height: 48px; animation: spin 4s linear infinite'></" + bench.split(" ")[0] + ">";
@@ -142,6 +151,21 @@ public final class DevAutopilot {
                     msg -> Constants.LOG.info("Vellum autopilot: {}", msg.getString()));
             wait = 5;
         });
+    }
+
+    /** Drags with the left button between two GUI points on the open screen, a step a tick, as a player would. */
+    private static void drag(Minecraft mc, double x0, double y0, double x1, double y1) {
+        MouseButtonInfo left = new MouseButtonInfo(1, 0); // SDL's left button
+        steps.add(() -> {
+            mc.gui.screen().mouseMoved(x0, y0);
+            mc.gui.screen().mouseClicked(new MouseButtonEvent(x0, y0, left), false);
+        });
+        int moves = 6;
+        for (int i = 1; i <= moves; i++) {
+            double x = x0 + (x1 - x0) * i / moves, y = y0 + (y1 - y0) * i / moves;
+            steps.add(() -> mc.gui.screen().mouseMoved(x, y));
+        }
+        steps.add(() -> mc.gui.screen().mouseReleased(new MouseButtonEvent(x1, y1, left)));
     }
 
     private static void guiScale(Minecraft mc, int scale) {
