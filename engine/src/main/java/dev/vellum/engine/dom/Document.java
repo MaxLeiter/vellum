@@ -331,6 +331,31 @@ public final class Document extends Node {
     }
 
     /**
+     * Where pointer input reaches {@code element}, {x, y} in viewport px: the centre of its
+     * {@link Element#visibleRect() visible part}. When none of it shows, it is first scrolled into view (instantly,
+     * by the least scroll). Null when it is not in this document, has no box or still does not show, or when the
+     * topmost element painted at that point is neither it nor inside it (something covers it, or it has
+     * {@code pointer-events: none}). Lays out first. For automation that sends real input to an element.
+     */
+    public float[] pointerTarget(Element element) {
+        return guarded(() -> {
+            if (element.ownerDocument() != this || !element.isConnected()) return null;
+            flushLayout();
+            float[] r = element.visibleRect();
+            if (r == null && element.box != null) {
+                // Scroll offsets apply when geometry is read, so no layout is needed before reading it again.
+                element.scrollIntoView(Element.ScrollAlign.NEAREST, Element.ScrollAlign.NEAREST,
+                        Element.ScrollBehavior.INSTANT);
+                r = element.visibleRect();
+            }
+            if (r == null) return null;
+            float x = r[0] + r[2] / 2, y = r[1] + r[3] / 2;
+            HitResult hit = painter.hitTest(x, y);
+            return hit != null && element.contains(hit.element()) ? new float[] {x, y} : null;
+        }, null);
+    }
+
+    /**
      * Incremented when an element's style changes paint order without a relayout (z-index, or opacity starting or
      * ending a stacking context); the painter keeps its stacking-context lists until this or the layout changes.
      */

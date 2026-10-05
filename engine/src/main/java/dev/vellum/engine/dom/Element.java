@@ -637,6 +637,16 @@ public class Element extends Node {
         return box == null ? new float[4] : Coordinates.boundingRect(box);
     }
 
+    /**
+     * The part of the border box that can show, {x, y, width, height} in viewport px: {@link #getBoundingClientRect()}
+     * cut to the viewport and to the scroll containers and other overflow clips it is in. Null without a box or when
+     * none of it can show. Content painted over it still counts as showing.
+     */
+    public float[] visibleRect() {
+        return box == null ? null
+                : Coordinates.visibleRect(box, ownerDocument.viewportWidth(), ownerDocument.viewportHeight());
+    }
+
     public float scrollWidth() { return box == null ? 0 : box.scrollWidth; }
     public float scrollHeight() { return box == null ? 0 : box.scrollHeight; }
     public float clientWidth() { return box == null ? 0 : box.paddingBoxWidth(); }
