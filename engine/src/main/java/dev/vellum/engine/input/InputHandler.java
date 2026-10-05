@@ -24,8 +24,8 @@ import java.util.Set;
  * {@link FocusNavigator} (tab order, focus-visible, autofocus), {@link Scroller} (wheel, smooth scrolling,
  * scrollbars), {@link TextField} / {@link RangeControl} / {@link SelectPopup} / {@link Turntable} (per-control
  * behaviour) and
- * {@link Activation} (click default actions), {@link Tooltips} ({@code title} tooltips). This class routes input
- * between them.
+ * {@link Activation} (click default actions), {@link Tooltips} ({@code title} tooltips), {@link Narration} (what the
+ * narrator reads). This class routes input between them.
  *
  * <p>The host methods (pointer, wheel and keys) run inside the document's error boundary
  * ({@link Document#guard}): they return false once the document has stopped.
@@ -39,6 +39,7 @@ public final class InputHandler {
     private final Scroller scroller;
     private final FocusNavigator focus;
     private final Tooltips tooltips = new Tooltips();
+    private final Narration narration;
     private SelectPopup popup;
     /** Set when a keydown for a character was cancelled, so its charTyped is dropped (as browsers skip the input). */
     private boolean suppressChar;
@@ -52,6 +53,7 @@ public final class InputHandler {
         this.pointer = new Pointer(document);
         this.scroller = new Scroller();
         this.focus = new FocusNavigator(document);
+        this.narration = new Narration(document, pointer, focus);
     }
 
     // ---- Pointer ----
@@ -422,6 +424,11 @@ public final class InputHandler {
     public Tooltip tooltip() {
         if (!pointer.known() || document.error() != null) return null;
         return tooltips.current(pointer.hoverTarget(), document.scheduler().now(), pointer.x, pointer.y);
+    }
+
+    /** What the page gives a narrator: the focused and hovered elements as it reads them, and live regions. */
+    public Narration narration() {
+        return narration;
     }
 
     /** Whether a tooltip becomes visible at {@code nowMs} that {@link #tooltip()} has not returned yet. */

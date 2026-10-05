@@ -71,12 +71,13 @@ final class Tooltips {
     }
 
     /** Whether {@code owner} (null for none) has a title to show: a non-blank {@code title} or {@code title-json}. */
-    private static boolean titled(Element owner) {
+    static boolean titled(Element owner) {
         return owner != null && (nonBlank(owner.getAttribute("title")) != null
                 || nonBlank(owner.getAttribute("title-json")) != null);
     }
 
-    private static Element owner(Element e) {
+    /** The element whose title applies to {@code e}: the nearest one with either attribute, from it up, or null. */
+    static Element owner(Element e) {
         for (; e != null; e = e.parentElement()) {
             if (e.hasAttribute("title") || e.hasAttribute("title-json")) return e;
         }

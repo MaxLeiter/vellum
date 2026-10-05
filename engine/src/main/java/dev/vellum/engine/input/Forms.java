@@ -34,6 +34,11 @@ final class Forms {
         return e.tagName().equals("summary") && e.parentElement() != null && e.parentElement().tagName().equals("details");
     }
 
+    /** Elements a {@code <label>} can label: inputs, selects, textareas, buttons, meters and progress bars. */
+    static boolean isLabelable(Element e) {
+        return LABELABLE.contains(e.tagName());
+    }
+
     /** The control a label activates: its {@code for} target, else its first labelable descendant. */
     static Element labeledControl(Element label) {
         String id = label.getAttribute("for");

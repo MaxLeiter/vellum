@@ -35,6 +35,13 @@ public interface ReplacedContent {
      */
     default boolean showsTooltip() { return false; }
 
+    /**
+     * What the narrator calls the content (an item's name, the item in a slot), or null when it has none (an empty
+     * slot). It names the element unless the page labels it ({@code aria-label}), and is read where the element is in
+     * text being narrated, as an image's {@code alt} is. Asked when narrating, so it can follow the content.
+     */
+    default String accessibleName() { return null; }
+
     /** Called every frame before layout; return true if the intrinsic size changed (e.g. an image finished loading). */
     default boolean update() { return false; }
 
