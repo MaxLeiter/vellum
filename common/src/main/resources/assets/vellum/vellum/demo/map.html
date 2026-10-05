@@ -44,6 +44,26 @@
       pointer-events: none;
     }
 
+    /* The hovered biome gets a fixed-width slot on its own line, so longer names don't reflow the page. */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 6px 0 2px;
+    }
+
+    .swatch {
+      width: 8px;
+      height: 8px;
+      border: 1px solid var(--line);
+    }
+
+    .biome {
+      display: inline-block;
+      width: 64px;
+      white-space: nowrap;
+    }
+
     canvas {
       width: 96px;
       height: 96px;
@@ -61,12 +81,16 @@
 
     <div class="maps">
       <div class="tiles">
-        <div class="tile" v-for="tile in tiles" v-key="tile.i" :style="'background:' + tile.color" @mouseover="hovered = tile.name"></div>
+        <div class="tile" v-for="tile in tiles" v-key="tile.i" :style="'background:' + tile.color" @mouseover="hovered = tile"></div>
         <div class="you"></div>
       </div>
       <canvas id="minimap" width="48" height="48"></canvas>
     </div>
-    <p class="muted">{{ hovered || 'Hover a tile' }}. The right map is a 48×48 canvas drawn by a script.</p>
+    <p class="status">
+      <span class="swatch" :style="'background:' + (hovered ? hovered.color : 'transparent')"></span>
+      Biome: <b class="biome">{{ hovered ? hovered.name : '—' }}</b>
+    </p>
+    <p class="muted">Left: a grid of divs. Right: a 48×48 canvas drawn by a script.</p>
   </main>
 
   <script>
@@ -97,7 +121,7 @@
         tiles.push({ i: y * 16 + x, name: b.name, color: b.color });
       }
     }
-    vellum.state({ tiles: tiles, hovered: '' });
+    vellum.state({ tiles: tiles, hovered: null });
 
     const ctx = document.getElementById('minimap').getContext('2d');
     for (let y = 0; y < 48; y++) {
