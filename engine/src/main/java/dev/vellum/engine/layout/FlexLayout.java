@@ -134,6 +134,17 @@ final class FlexLayout implements FormattingContext {
             return size;
         }
 
+        /**
+         * Whether the item's used height is definite for its children's percentages (§9.8). In a row: its own
+         * height resolves, or it is stretched in a single line of definite cross size. In a column: its flex basis
+         * or the container's height is definite.
+         */
+        boolean definiteHeight(Item it) {
+            if (!main.isHorizontal()) return it.definiteBasis || !Float.isNaN(percentHeight);
+            return !Float.isNaN(size(it, cross, cross.size(it.style)))
+                    || (it.stretched && !wrap && !Float.isNaN(percentHeight));
+        }
+
         /** The width a column item is measured at for its content height: stretched, else fit-content. */
         float measureWidth(Item it) {
             float available = contentWidth - Axis.HORIZONTAL.margins(it.box);
@@ -475,16 +486,13 @@ final class FlexLayout implements FormattingContext {
     }
 
     /**
-     * Lays out (or measures) an item at its final size and, for real layouts, positions it. Its height is imposed
-     * but only definite (for its children's percentages) as §9.8 and browsers say: a flexed main size when the
-     * container's main size or the item's flex basis is definite, a stretched cross size when the container is
-     * single-line with a definite cross size.
+     * Lays out (or measures) an item at its final size and, for real layouts, positions it. Its height is imposed,
+     * and definite for its children's percentages as {@link Container#definiteHeight} says.
      */
     private LayoutResult place(Container c, Line line, Item it, boolean measure) {
         float width = c.main.pick(it.targetMain, it.cross);
         float height = c.main.pick(it.cross, it.targetMain);
-        boolean definite = c.main.isHorizontal() ? it.stretched && !c.wrap && !Float.isNaN(c.percentHeight)
-                : it.definiteBasis || !Float.isNaN(c.percentHeight);
+        boolean definite = c.definiteHeight(it);
         if (measure) return pass.measure(it.box, width, height, definite, c.contentWidth, c.percentHeight);
         LayoutResult r = pass.layout(it.box, width, height, definite, c.contentWidth, c.percentHeight);
         float[] pos = itemPosition(c, line, it);

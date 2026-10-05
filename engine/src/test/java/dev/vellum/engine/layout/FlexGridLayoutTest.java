@@ -55,4 +55,19 @@ class FlexGridLayoutTest {
         assertRect(page.byId("small"), 70, 0, 30, 10);
         assertRect(page.byId("last"), 70, 10, 30, 10);
     }
+
+    @Test
+    void percentHeightsResolveAgainstAnItemsOwnHeight() {
+        // An item's own definite height is a percentage basis for its children (§9.8), in rows and columns alike,
+        // and so is a grid item's.
+        Page page = new TestHost().load("""
+                <div style="display: flex"><div style="height: 30px; padding: 2px"><div id=row style="height: 100%"></div></div></div>
+                <div style="display: flex; align-items: flex-start"><div style="width: 100px; height: 6px"><div id=start style="height: 100%; width: 50%"></div></div></div>
+                <div style="display: flex; flex-direction: column"><div style="height: 20px"><div id=column style="height: 50%"></div></div></div>
+                <div style="display: grid; align-items: start"><div style="height: 10px"><div id=grid style="height: 100%"></div></div></div>""");
+        assertEquals(26, page.byId("row").box.height, 0.01);
+        assertRect(page.byId("start"), 0, 30, 50, 6);
+        assertEquals(10, page.byId("column").box.height, 0.01);
+        assertEquals(10, page.byId("grid").box.height, 0.01);
+    }
 }
