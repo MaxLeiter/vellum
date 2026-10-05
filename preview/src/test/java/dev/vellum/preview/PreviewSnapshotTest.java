@@ -1,6 +1,5 @@
 package dev.vellum.preview;
 
-import dev.vellum.engine.event.Modifiers;
 import dev.vellum.engine.dom.Viewport;
 import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.MinecraftAssets;
@@ -67,20 +66,15 @@ class PreviewSnapshotTest {
     @Test
     void titleTooltipMatchesGolden() throws IOException, URISyntaxException {
         assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
-        Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/tooltip.html").toURI());
-        try (MinecraftAssets assets = MinecraftAssets.open(List.of(), JAR)) {
-            MinecraftFont font = new MinecraftFont(assets);
-            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
-                    new Viewport(CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE));
-            FrameRenderer renderer = new FrameRenderer(assets, font);
-            renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 0, null);
-            float[] at = scene.document().getElementById("rich").getBoundingClientRect();
-            scene.input(in -> in.mouseMove(at[0] + 10, at[1] + 5, Modifiers.NONE));
-            renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 400, null);
-            assertNull(scene.document().input().tooltip(), "not before the delay");
-            assertTrue(scene.needsFrame(520), "the delay ending needs a frame");
-            BufferedImage image = renderer.render(scene, CanvasTest.WIDTH * SCALE, CanvasTest.HEIGHT * SCALE, SCALE, 520, null);
-            assertNull(scene.error(), () -> "failed: " + scene.error());
+        try (TestScene t = tooltipPage("tooltip.html")) {
+            t.render(0);
+            float[] at = t.scene().document().getElementById("rich").getBoundingClientRect();
+            t.hover(new float[] {at[0] + 10, at[1] + 5});
+            t.render(400);
+            assertNull(t.scene().document().input().tooltip(), "not before the delay");
+            assertTrue(t.scene().needsFrame(520), "the delay ending needs a frame");
+            BufferedImage image = t.render(520);
+            assertNull(t.scene().error(), () -> "failed: " + t.scene().error());
             Snapshots.assertMatches("tooltip", image);
         }
     }
@@ -92,25 +86,23 @@ class PreviewSnapshotTest {
     @Test
     void itemAndNowrapTooltipsMatchGoldens() throws IOException, URISyntaxException {
         assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
-        Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/item.html").toURI());
-        try (MinecraftAssets assets = MinecraftAssets.open(List.of(), JAR)) {
-            MinecraftFont font = new MinecraftFont(assets);
-            PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
-                    new Viewport(CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE));
-            FrameRenderer renderer = new FrameRenderer(assets, font);
-            int width = CanvasTest.WIDTH * SCALE, height = CanvasTest.HEIGHT * SCALE;
-            renderer.render(scene, width, height, SCALE, 0, null);
-            float[] item = scene.document().pointerTarget(scene.document().querySelector("item"));
-            scene.input(in -> in.mouseMove(item[0], item[1], Modifiers.NONE));
-            BufferedImage image = renderer.render(scene, width, height, SCALE, 16, null);
-            assertNull(scene.error(), () -> "failed: " + scene.error());
+        try (TestScene t = tooltipPage("item.html")) {
+            t.render(0);
+            t.hover(t.scene().document().pointerTarget(t.scene().document().querySelector("item")));
+            BufferedImage image = t.render(16);
+            assertNull(t.scene().error(), () -> "failed: " + t.scene().error());
             Snapshots.assertMatches("item-tooltip", image);
 
-            float[] button = scene.document().pointerTarget(scene.document().getElementById("nowrap"));
-            scene.input(in -> in.mouseMove(button[0], button[1], Modifiers.NONE));
-            renderer.render(scene, width, height, SCALE, 32, null);
-            Snapshots.assertMatches("nowrap-tooltip", renderer.render(scene, width, height, SCALE, 540, null));
+            t.hover(t.scene().document().pointerTarget(t.scene().document().getElementById("nowrap")));
+            t.render(32);
+            Snapshots.assertMatches("nowrap-tooltip", t.render(540));
         }
+    }
+
+    /** A page of {@code src/test/resources/tooltip}, at the canvas test's size. */
+    private static TestScene tooltipPage(String name) throws URISyntaxException {
+        Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/" + name).toURI());
+        return TestScene.open(page, JAR, CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE);
     }
 
     /** Ten frames, 16 ms apart from t = 0, at 427×240 GUI px: load-time timers have run and animations are under way. */
