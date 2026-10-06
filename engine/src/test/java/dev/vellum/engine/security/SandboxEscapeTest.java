@@ -1,5 +1,6 @@
 package dev.vellum.engine.security;
 
+import dev.vellum.engine.Limits;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class SandboxEscapeTest {
      */
     @Test
     void nothingReachableIsAJavaObject() {
+        // The walk takes about a second, near the default time budget, and this test is about escapes, not budgets.
+        Page page = new TestHost().limits(Limits.DEFAULTS.with("timeBudgetMs", 30_000).with("instructionBudget", 1L << 40))
+                .load("<div id=d data-x=1><canvas id=c></canvas></div>");
         String result = page.eval("""
                 (function () {
                   var global = (function () { return this })(), d = document.getElementById('d');

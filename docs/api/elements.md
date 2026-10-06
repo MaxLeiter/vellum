@@ -50,6 +50,24 @@ model:hover { -mc-yaw: 180deg; -mc-pitch: 20deg; }
 With `rotatable`, dragging adds to these: sideways turns it, up and down tilts the view (up to 60°), and a flick
 keeps it spinning for a moment. A `mousedown` listener that calls `preventDefault()` stops the drag.
 
+
+## Vanilla look
+
+Built-in classes that match vanilla's GUI. Buttons, text fields, sliders, checkboxes and `<slot>` already look vanilla
+without a class.
+
+| Class | What it gives you |
+|---|---|
+| `mc-panel` | The light grey container panel with its raised bevel and black outline, as in a chest |
+| `mc-label` | Container label text: dark grey, no shadow ("Inventory") |
+| `mc-inset` | The sunken bevel around slots |
+| `mc-tooltip` | The tooltip box: near-black with the purple frame |
+| `mc-dark` | The translucent dark panel behind lists in menus |
+| `mc-dim` | The dim over the world behind in-game menus (put it on `html`) |
+| `mc-center` | Centers the page's content in the screen, as vanilla centers container GUIs (put it on `body`) |
+
+A vanilla chest is a few lines with these. See [demo/chest.html](../../common/src/main/resources/assets/vellum/vellum/demo/chest.html).
+
 ## Placing entities and models
 
 `object-position` places every Minecraft element in its box as it places an image: one to four values, keywords,

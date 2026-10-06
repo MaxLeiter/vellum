@@ -144,3 +144,7 @@ progress, meter { width: 150px; height: 8px; background-color: #202020; border: 
 .mc-dark { background-color: rgba(0, 0, 0, 0.5); }
 /* Container labels ("Inventory"): dark grey, no shadow. */
 .mc-label { color: #404040; text-shadow: none; }
+/* The dim vanilla draws over the world behind in-game menus and containers. Put it on html. */
+.mc-dim { background: linear-gradient(#101010c0, #101010d0); }
+/* Centers the content in the screen, as vanilla centers container GUIs. Put it on body. */
+.mc-center { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
