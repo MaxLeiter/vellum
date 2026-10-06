@@ -13,18 +13,44 @@ pluginManagement {
                 includeGroupAndSubgroups('net.fabricmc')
             }
         }
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'KikuGie'
+                    url = uri('https://maven.kikugie.dev/releases')
+                }
+            }
+            filter {
+                includeGroupAndSubgroups('dev.kikugie')
+            }
+        }
     }
 }
 
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+    // https://maven.kikugie.dev/#/releases/dev/kikugie/stonecutter
+    id 'dev.kikugie.stonecutter' version '0.9.8'
 }
 
 rootProject.name = 'vellum'
 includeBuild('build-logic')
+// Version-independent: one build for every Minecraft version.
 include('rhino')
 include('engine')
-include('common')
-include('fabric')
-include('neoforge')
 include('preview')
+
+// common, neoforge and fabric build once per Minecraft version, from one source tree: the subprojects are
+// :common:26.3, :neoforge:26.3, :fabric:26.3 and so on, in <branch>/versions/<version>/. Per-version settings are in
+// stonecutter.properties.toml; the sources are written for vcsVersion, with Stonecutter comments for the others.
+def minecraftVersions = ['26.3', '1.21.1']
+stonecutter {
+    create(rootProject) {
+        vcsVersion = '26.3'
+        for (String name in ['common', 'neoforge', 'fabric']) {
+            branch(name) {
+                for (String v in minecraftVersions) version(v)
+            }
+        }
+    }
+}

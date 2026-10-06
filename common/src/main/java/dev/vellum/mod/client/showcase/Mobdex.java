@@ -23,7 +23,10 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.item.Item;
+//? if >=26 {
 import net.minecraft.world.item.component.TypedEntityData;
+//?} else
+//import net.minecraft.world.item.SpawnEggItem;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -113,10 +116,16 @@ public final class Mobdex {
     /** The spawn egg item id of each entity type that has one (as {@code SpawnEggItem.byId}, in one pass). */
     private static Map<EntityType<?>, String> eggs() {
         Map<EntityType<?>, String> eggs = new HashMap<>();
+        //? if >=26 {
         for (Holder<Item> item : BuiltInRegistries.ITEM.componentLookup().findAll(DataComponents.ENTITY_DATA)) {
             TypedEntityData<EntityType<?>> data = item.components().get(DataComponents.ENTITY_DATA);
             if (data != null) eggs.putIfAbsent(data.type(), item.getRegisteredName());
         }
+        //?} else {
+        /*for (SpawnEggItem egg : SpawnEggItem.eggs()) {
+            eggs.putIfAbsent(egg.getType(egg.getDefaultInstance()), BuiltInRegistries.ITEM.getKey(egg).toString());
+        }
+        *///?}
         return eggs;
     }
 

@@ -94,6 +94,7 @@ public final class MinecraftAssets implements AutoCloseable {
         List<Path> artifactDirs = new ArrayList<>();
         // Walk up from the working directory so this repository's build is found from any module or worktree.
         for (Path dir = Path.of("").toAbsolutePath(); dir != null; dir = dir.getParent()) {
+            artifactDirs.add(dir.resolve("common/versions/" + MINECRAFT_VERSION + "/build/moddev/artifacts")); // Stonecutter's
             artifactDirs.add(dir.resolve("common/build/moddev/artifacts"));
         }
         artifactDirs.add(home.resolve("Documents/mod/common/build/moddev/artifacts"));

@@ -1,8 +1,8 @@
 package dev.vellum.mod.client.replaced;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.mod.client.McClient;
 import dev.vellum.mod.client.render.McCanvas;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -45,7 +45,7 @@ final class SlotContent extends McReplaced {
     /** The narrator reads the slot by the name of the item in it, in the open container screen's menu; none when empty. */
     @Override
     public @Nullable String accessibleName() {
-        if (index < 0 || !(Minecraft.getInstance().gui.screen() instanceof AbstractContainerScreen<?> screen)) return null;
+        if (index < 0 || !(McClient.screen() instanceof AbstractContainerScreen<?> screen)) return null;
         List<Slot> slots = screen.getMenu().slots;
         ItemStack stack = index < slots.size() ? slots.get(index).getItem() : ItemStack.EMPTY;
         return stack.isEmpty() ? null : stack.getHoverName().getString();

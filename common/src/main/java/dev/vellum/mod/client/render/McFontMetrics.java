@@ -6,6 +6,7 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
 import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
+//? if >=26
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.Style;
@@ -93,6 +94,7 @@ public final class McFontMetrics implements FontMetrics {
         return new Style[] {base, underlined, base.withStrikethrough(true), underlined.withStrikethrough(true)};
     }
 
+    //? if >=26 {
     private FontDescription font(List<String> families) {
         for (String family : families) {
             Identifier id = Identifier.tryParse(FontFamilies.fontId(family));
@@ -102,6 +104,15 @@ public final class McFontMetrics implements FontMetrics {
         }
         return FontDescription.DEFAULT;
     }
+    //?} else {
+    /*private Identifier font(List<String> families) {
+        for (String family : families) {
+            Identifier id = Identifier.tryParse(FontFamilies.fontId(family));
+            if (id != null && knownFonts.computeIfAbsent(id, McFontMetrics::exists)) return id;
+        }
+        return Style.DEFAULT_FONT;
+    }
+    *///?}
 
     private static boolean exists(Identifier font) {
         Identifier file = Identifier.fromNamespaceAndPath(font.getNamespace(), "font/" + font.getPath() + ".json");

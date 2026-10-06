@@ -3,12 +3,22 @@ plugins {
     id 'maven-publish'
 }
 
+// Applied to the Stonecutter version subprojects (:common:26.3, :neoforge:1.21.1...): the parent project is the
+// loader (or common), and the project's own name is the Minecraft version.
+def platform = project.parent.name
+// The published group (gradle.properties `group`).
+def mavenGroup = project.group.toString()
+// Every version subproject of every branch is named after its Minecraft version, and Gradle takes projects with the
+// same group, name and version for the same module, so each branch gets a group of its own. Publications keep
+// mavenGroup.
+group = "${mavenGroup}.${platform}"
+
 base {
-    archivesName = "${mod_id}-${project.name}-${minecraft_version}"
+    archivesName = "${mod_id}-${platform}-${minecraft_version}"
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
     withSourcesJar()
 }
 
@@ -25,7 +35,7 @@ jar {
                 'Specification-Title'   : mod_name,
                 'Specification-Vendor'  : mod_author,
                 'Specification-Version' : project.jar.archiveVersion,
-                'Implementation-Title'  : project.name,
+                'Implementation-Title'  : platform,
                 'Implementation-Version': project.jar.archiveVersion,
                 'Implementation-Vendor' : mod_author,
                 'Built-On-Minecraft'    : minecraft_version
@@ -36,9 +46,10 @@ jar {
 processResources {
     var expandProps = [
             'version'                      : version,
-            'group'                        : project.group, //Else we target the task's group.
+            'group'                        : mavenGroup, //Else we target the task's group.
             'minecraft_version'            : minecraft_version,
             'minecraft_version_range'      : minecraft_version_range,
+            'fabric_minecraft_version'     : fabric_minecraft_version,
             'fabric_version'               : fabric_version,
             'fabric_loader_version'        : fabric_loader_version,
             'mod_name'                     : mod_name,
@@ -71,9 +82,15 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+dependencies {
+    // 26.x ships JSpecify with Minecraft; older versions don't.
+    if (stonecutter.current.parsed < '26') compileOnly('org.jspecify:jspecify:1.0.0')
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
+            groupId = mavenGroup
             artifactId base.archivesName.get()
             from components.java
         }

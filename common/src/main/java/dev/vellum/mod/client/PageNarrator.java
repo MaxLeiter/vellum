@@ -9,6 +9,7 @@ import net.minecraft.client.GameNarrator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+//? if >=26
 import net.minecraft.client.gui.narration.NarrationTrigger;
 import net.minecraft.client.gui.narration.ScreenNarrationCollector;
 import net.minecraft.network.chat.CommonComponents;
@@ -94,7 +95,10 @@ final class PageNarrator {
     /** What vanilla's narration of a screen says now, all of it, from its {@code updateNarrationState}. */
     static String collect(Consumer<NarrationElementOutput> updateNarrationState) {
         ScreenNarrationCollector collector = new ScreenNarrationCollector();
+        //? if >=26 {
         collector.update(updateNarrationState, NarrationTrigger.MOUSE);
+        //?} else
+        //collector.update(updateNarrationState);
         return collector.collectNarrationText(true);
     }
 
@@ -154,8 +158,13 @@ final class PageNarrator {
         Constants.LOG.debug("Vellum narrates{}: {}", interrupt ? " at once" : "", said);
         if (recording != null) recording.add(said);
         GameNarrator narrator = Minecraft.getInstance().getNarrator();
+        //? if >=26 {
         if (interrupt) narrator.saySystemNow(text);
         else narrator.saySystemQueued(text);
+        //?} else {
+        /*if (interrupt) narrator.sayNow(text);
+        else narrator.say(text);
+        *///?}
     }
 
     /** Starts recording what Vellum hands the narrator, if it was not already, and returns the list it records into. */

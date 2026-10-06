@@ -1,10 +1,10 @@
 package dev.vellum.mod.client.replaced;
 
+import dev.vellum.mod.client.render.McGui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -25,8 +25,7 @@ public final class ItemTooltips {
         void set(GuiGraphicsExtractor g, Font font, List<Component> lines, ItemStack stack, int x, int y);
     }
 
-    private static Setter setter = (g, font, lines, stack, x, y) ->
-            g.setTooltipForNextFrame(font, lines, stack.getTooltipImage(), x, y, stack.get(DataComponents.TOOLTIP_STYLE), true);
+    private static Setter setter = McGui::itemTooltip;
 
     private ItemTooltips() {}
 
@@ -40,7 +39,7 @@ public final class ItemTooltips {
 
     /**
      * Shows {@code stack}'s tooltip at GUI point ({@code x}, {@code y}) for this frame, with {@code extra} after it.
-     * Without extra lines it is vanilla's item tooltip ({@code setTooltipForNextFrame(Font, ItemStack, int, int)}).
+     * Without extra lines it is vanilla's item tooltip.
      */
     static void show(GuiGraphicsExtractor g, ItemStack stack, List<Component> extra, int x, int y) {
         Minecraft mc = Minecraft.getInstance();

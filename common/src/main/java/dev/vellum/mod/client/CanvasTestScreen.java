@@ -14,7 +14,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.ResolvableProfile;
 
 import org.jspecify.annotations.Nullable;
 
@@ -50,7 +49,9 @@ final class CanvasTestScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
+    public void /*? if >=26 {*/extractRenderState/*?} else {*//*render*//*?}*/(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
+        //? if <26
+        //renderBackground(g, mouseX, mouseY, a);
         McCanvas c = new McCanvas(g, mouseX, mouseY);
         try {
             int columns = Math.max(1, (width - 4) / CELL_W);
@@ -175,7 +176,7 @@ final class CanvasTestScreen extends Screen {
 
     private void face(McCanvas c) {
         Minecraft mc = Minecraft.getInstance();
-        Identifier skin = mc.playerSkinRenderCache().getOrDefault(ResolvableProfile.createResolved(mc.getGameProfile())).playerSkin().body().texturePath();
+        Identifier skin = McClient.localSkin();
         float px = 1 / 64f;
         c.blit(skin, 0, 0, 32, 32, 8 * px, 8 * px, 16 * px, 16 * px, -1, false);
         c.blit(skin, 0, 0, 32, 32, 40 * px, 8 * px, 48 * px, 16 * px, -1, false);

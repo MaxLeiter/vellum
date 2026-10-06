@@ -151,7 +151,7 @@ final class ServerPages {
             pending = null;
         }
         Constants.LOG.warn("Vellum: the server reopened pages as they were closed; blocking its pages for {} s", seconds);
-        Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(Component.translatable("vellum.serverPages.blocked", seconds));
+        McClient.systemMessage(Component.translatable("vellum.serverPages.blocked", seconds));
         return true;
     }
 
@@ -159,7 +159,7 @@ final class ServerPages {
         OpenPayload p = pending;
         if (p == null || asking) return;
         Minecraft mc = Minecraft.getInstance();
-        if (!replaceable(mc.gui.screen())) return;
+        if (!replaceable(McClient.screen())) return;
         if (VellumConfig.CLIENT_SERVER_PAGES.get() == VellumConfig.ServerPages.ASK && allowed == null) {
             ask(mc);
             return;
@@ -177,7 +177,7 @@ final class ServerPages {
         // The screen this replaces reports its session closed; that is not the player closing it.
         replacing = true;
         try {
-            mc.gui.setScreen(screen);
+            McClient.setScreen(screen);
         } finally {
             replacing = false;
         }
@@ -191,10 +191,10 @@ final class ServerPages {
     /** Asks once per server visit; the question replaces the screen, as the page would have. */
     private static void ask(Minecraft mc) {
         asking = true;
-        mc.gui.setScreen(new ConfirmScreen(yes -> {
+        McClient.setScreen(new ConfirmScreen(yes -> {
             asking = false;
             allowed = yes;
-            mc.gui.setScreen(null);
+            McClient.setScreen(null);
             if (!yes && pending != null) {
                 refuse(pending.session());
                 pending = null;
@@ -229,7 +229,7 @@ final class ServerPages {
     }
 
     private static @Nullable VellumScreen sessionScreen(int session) {
-        return Minecraft.getInstance().gui.screen() instanceof VellumScreen s && s.driver().session() == session ? s : null;
+        return McClient.screen() instanceof VellumScreen s && s.driver().session() == session ? s : null;
     }
 
     private static long now() {

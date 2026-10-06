@@ -39,10 +39,20 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
         driver.resize(width, height);
     }
 
+    //? if >=26 {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
         driver.extract(g, mouseX, mouseY);
     }
+    //?} else {
+    /*@Override
+    public void render(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
+        // The background as 26.x draws it for this screen: the world dimmed, else the panorama and menu background.
+        if (minecraft.level != null) renderTransparentBackground(g);
+        else renderBackground(g, mouseX, mouseY, a);
+        driver.extract(g, mouseX, mouseY);
+    }
+    *///?}
 
     /**
      * Whether this screen pauses a singleplayer world while it is open, like a vanilla book. Off by default, since
@@ -76,10 +86,12 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
         return pauses;
     }
 
+    //? if >=26 {
     @Override
     public boolean isInGameUi() {
         return minecraft.level != null;
     }
+    //?}
 
     @Override
     public void removed() {
@@ -104,6 +116,12 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
     }
 
     @Override
+    public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        return driver.mouseScrolled(x, y, scrollX, scrollY);
+    }
+
+    //? if >=26 {
+    @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         return driver.mouseClicked(event);
     }
@@ -111,11 +129,6 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         return driver.mouseReleased(event);
-    }
-
-    @Override
-    public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
-        return driver.mouseScrolled(x, y, scrollX, scrollY);
     }
 
     @Override
@@ -132,4 +145,30 @@ public class VellumScreen extends Screen implements DocumentDriver.Owner {
     public boolean charTyped(CharacterEvent event) {
         return driver.charTyped(event);
     }
+    //?} else {
+    /*@Override
+    public boolean mouseClicked(double x, double y, int button) {
+        return driver.mouseClicked(MouseButtonEvent.now(x, y, button));
+    }
+
+    @Override
+    public boolean mouseReleased(double x, double y, int button) {
+        return driver.mouseReleased(MouseButtonEvent.now(x, y, button));
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scancode, int modifiers) {
+        return driver.keyPressed(new KeyEvent(key, scancode, modifiers)) || super.keyPressed(key, scancode, modifiers);
+    }
+
+    @Override
+    public boolean keyReleased(int key, int scancode, int modifiers) {
+        return driver.keyReleased(new KeyEvent(key, scancode, modifiers));
+    }
+
+    @Override
+    public boolean charTyped(char c, int modifiers) {
+        return driver.charTyped(new CharacterEvent(c));
+    }
+    *///?}
 }

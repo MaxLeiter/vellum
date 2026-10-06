@@ -2,20 +2,19 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.server.VellumServer;
 import dev.vellum.mod.server.VellumSession;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Options;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.input.KeyEvent;
+//? if >=26
 import net.minecraft.client.renderer.entity.state.ArmorStandRenderState;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Rotations;
@@ -42,7 +41,7 @@ import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
 /**
- * Dev-only visual check ({@code ./gradlew :neoforge:runClient -Pautopilot} or {@code :fabric:runClient -Pautopilot},
+ * Dev-only visual check ({@code ./gradlew :neoforge:26.3:runClient -Pautopilot}, or {@code :fabric:26.3}, {@code :neoforge:1.21.1}, {@code :fabric:1.21.1},
  * i.e. {@code -Dvellum.autopilot=true}): creates a superflat creative world, opens the canvas test, every showcase
  * page and demo, screenshots each to {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas
  * test and the 3D pages also at 3), logs the frame rate of each (and of benchmark pages of 3D content), and quits.
@@ -80,8 +79,8 @@ public final class DevAutopilot {
     private static int wait;
     /** How many render states the autopilot's armour stand function made. */
     private static int standStates;
-    /** The checks made so far ({@link #check}) and how many of them failed. */
-    private static int checks, failures;
+    /** The checks made so far ({@link #check}), how many of them failed, and the checks left out ({@link #skip}). */
+    private static int checks, failures, skipped;
 
     private DevAutopilot() {}
 
@@ -90,7 +89,7 @@ public final class DevAutopilot {
         if (!ENABLED || finished) return;
         if (!started) {
             // A fresh run directory first shows the accessibility onboarding screen instead of the title screen.
-            if (!(mc.gui.screen() instanceof TitleScreen || mc.gui.screen() instanceof AccessibilityOnboardingScreen)) return;
+            if (!(McClient.screen() instanceof TitleScreen || McClient.screen() instanceof AccessibilityOnboardingScreen)) return;
             started = true;
             mc.options.onboardingAccessibilityFinished();
             // The window may never have focus while the autopilot runs; don't pause or show tutorial toasts.
@@ -100,10 +99,18 @@ public final class DevAutopilot {
             mc.options.enableVsync().set(false);
             mc.options.framerateLimit().set(Options.UNLIMITED_FRAMERATE_CUTOFF);
             String id = "vellum-autopilot";
+            //? if >=26 {
             LevelSettings settings = new LevelSettings(id, GameType.CREATIVE,
                     new LevelSettings.DifficultySettings(Difficulty.PEACEFUL, false, false), true, WorldDataConfiguration.DEFAULT);
             mc.createWorldOpenFlows().createFreshLevel(id, settings, new WorldOptions(0, false, false),
-                    WorldPresets::createTestWorldDimensions, mc.gui.screen());
+                    WorldPresets::createTestWorldDimensions, McClient.screen());
+            //?} else {
+            /*LevelSettings settings = new LevelSettings(id, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,
+                    new net.minecraft.world.level.GameRules(), WorldDataConfiguration.DEFAULT);
+            mc.createWorldOpenFlows().createFreshLevel(id, settings, new WorldOptions(0, false, false),
+                    registries -> registries.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+                            .getHolderOrThrow(WorldPresets.FLAT).value().createWorldDimensions(), McClient.screen());
+            *///?}
             return;
         }
         if (!loaded) {
@@ -120,8 +127,9 @@ public final class DevAutopilot {
         Runnable step = steps.poll();
         if (step == null) {
             finished = true;
-            if (failures == 0) Constants.LOG.info("Vellum autopilot finished: {} checks, {} failed", checks, failures);
-            else Constants.LOG.error("Vellum autopilot finished: {} checks, {} failed", checks, failures);
+            String skips = skipped == 0 ? "" : ", " + skipped + " skipped (not ported to this Minecraft version)";
+            if (failures == 0) Constants.LOG.info("Vellum autopilot finished: {} checks, {} failed{}", checks, failures, skips);
+            else Constants.LOG.error("Vellum autopilot finished: {} checks, {} failed{}", checks, failures, skips);
             mc.stop();
             return;
         }
@@ -133,6 +141,7 @@ public final class DevAutopilot {
     }
 
     private static void plan(Minecraft mc) {
+        //? if >=26 {
         VellumEntities.registerPortraitState(EntityTypes.ARMOR_STAND, (stand, partialTick) -> {
             if (!(mc.getEntityRenderDispatcher().getRenderer(stand).createRenderState(stand, partialTick)
                     instanceof ArmorStandRenderState state)) return null;
@@ -142,6 +151,7 @@ public final class DevAutopilot {
             state.rightArmPose = new Rotations(-150, 0, 15);
             return state;
         });
+        //?}
         command(mc, "gamerule send_command_feedback false");
         command(mc, "time set 6000");
         awardKills(mc);
@@ -152,7 +162,7 @@ public final class DevAutopilot {
         }
         guiScale(mc, 2);
         serverPages(mc);
-        shoot(mc, "canvastest", () -> mc.gui.setScreen(new CanvasTestScreen()));
+        shoot(mc, "canvastest", () -> McClient.setScreen(new CanvasTestScreen()));
         guiScale(mc, 3);
         shoot(mc, "canvastest_gui3", () -> {});
         guiScale(mc, 2);
@@ -210,12 +220,12 @@ public final class DevAutopilot {
         settle("the filled-in templates demo", 0);
         grab(mc, "templates_input", 5);
         shoot(mc, "chest", () -> {
-            mc.gui.setScreen(null);
+            McClient.setScreen(null);
             command(mc, "vellum demo chest");
         });
         // The demo HUD's card fades in and out over four seconds, then closes: shoot it a second in, not settled.
         steps.add(() -> {
-            mc.gui.setScreen(null);
+            McClient.setScreen(null);
             VellumHud.show(VellumClient.DEMO_HUD);
         });
         steps.add(() -> wait = SETTLE);
@@ -243,8 +253,11 @@ public final class DevAutopilot {
             grab(mc, "showcase_models_portraits" + suffix, 5);
         }
         guiScale(mc, 2);
+        //? if >=26 {
         steps.add(() -> check(standStates > 0, "armour stands drawn from the registered render state",
                 "the registered armour stand render state was never used"));
+        //?} else
+        //steps.add(() -> skip("armour stands drawn from a registered render state", "entity render states are 26.x only"));
     }
 
     /**
@@ -256,9 +269,7 @@ public final class DevAutopilot {
     private static void firstHover(Minecraft mc) {
         steps.add(() -> {
             Window w = mc.getWindow();
-            MouseHandler mouse = mc.mouseHandler;
-            mouse.setIgnoreFirstMove(); // takes the position without a move event
-            mouse.onMove(w.handle(), w.getScreenWidth() / 2.0, w.getScreenHeight() / 2.0, 0, 0);
+            McClient.moveMouse(w.getScreenWidth() / 2.0, w.getScreenHeight() / 2.0); // the position without a move event
             VellumScreens.open(devUrl("first_hover"));
         });
         onPage("the first hover page", page -> {
@@ -365,7 +376,7 @@ public final class DevAutopilot {
         open("the mod keys page", () -> {
             book[0] = VellumScreens.open(devUrl("mod_keys"));
             book[0].driver().onKey(e -> {
-                String key = KeyNames.key(e.key(), e.keycode(), e.hasShiftDown());
+                String key = KeyNames.key(e);
                 asked.add(key);
                 if (!key.equals("j")) return false;
                 book[0].onClose();
@@ -379,11 +390,11 @@ public final class DevAutopilot {
             page.click("p"); // nothing focused
             page.leave();
             page.key("ArrowLeft");
-            check(typed.equals("j") && asked.isEmpty() && mc.gui.screen() == book[0],
+            check(typed.equals("j") && asked.isEmpty() && McClient.screen() == book[0],
                     "keys the page uses (typing, a cancelled key) don't reach the mod's handler",
                     "the field has '{}', the mod's handler was asked about {}", typed, asked);
             page.key("j");
-            check(mc.gui.screen() != book[0] && asked.equals(List.of("j")), "the mod's key handler closed the page",
+            check(McClient.screen() != book[0] && asked.equals(List.of("j")), "the mod's key handler closed the page",
                     "J left the page open; the mod's handler was asked about {}", asked);
         });
     }
@@ -441,14 +452,14 @@ public final class DevAutopilot {
         String allow = Component.translatable("gui.narrate.button", "Allow").getString();
         steps.add(() -> VellumAutomation.recordNarration().clear());
         steps.add(() -> {
-            mc.gui.setScreen(null);
+            McClient.setScreen(null);
             VellumHud.show(VellumClient.DEMO_TOAST).onMessage("answer", value -> answer[0] = value.getAsString());
         });
         settle("the toast", toast, 0);
         steps.add(() -> {
             check(!toast.get().map(page -> page.hover(ALLOW)).orElse(false), "the toast takes no pointer with no screen open",
                     "the toast took the pointer with no screen open");
-            mc.gui.setScreen(new ChatScreen("", false));
+            McClient.setScreen(chatScreen());
         });
         until("the toast took the pointer over chat", ticks -> toast.get().map(page -> page.hover(ALLOW)).orElse(false));
         settle("the toast's hover and tooltip", toast, 0);
@@ -472,7 +483,7 @@ public final class DevAutopilot {
         steps.add(() -> {
             check("once".equals(answer[0]), "HUD overlay input works", "the toast answered {}, expected once", answer[0]);
             if (VellumHud.isShown(VellumClient.DEMO_TOAST)) VellumHud.hide(VellumClient.DEMO_TOAST);
-            mc.gui.setScreen(null);
+            McClient.setScreen(null);
         });
     }
 
@@ -559,10 +570,15 @@ public final class DevAutopilot {
     /** Saves a screenshot of the last frame as {@code vellum_<name>.png}, then waits {@code ticks}. */
     private static void grab(Minecraft mc, String name, int ticks) {
         steps.add(() -> {
-            mc.gui.hud.getChat().clearMessages(false);
+            McClient.chat().clearMessages(false);
             Constants.LOG.info("Vellum autopilot: {} at {} fps", name, mc.getFps());
+            //? if >=26 {
             Screenshot.grab(mc.gameDirectory, "vellum_" + name + ".png", mc.gameRenderer.mainRenderTarget(), 1,
                     msg -> Constants.LOG.info("Vellum autopilot: {}", msg.getString()));
+            //?} else {
+            /*Screenshot.grab(mc.gameDirectory, "vellum_" + name + ".png", mc.getMainRenderTarget(),
+                    msg -> Constants.LOG.info("Vellum autopilot: {}", msg.getString()));
+            *///?}
             wait = ticks;
         });
     }
@@ -570,7 +586,10 @@ public final class DevAutopilot {
     private static void guiScale(Minecraft mc, int scale) {
         steps.add(() -> {
             mc.options.guiScale().set(scale);
+            //? if >=26 {
             mc.resizeGui();
+            //?} else
+            //mc.resizeDisplay();
             wait = 5;
         });
     }
@@ -588,6 +607,15 @@ public final class DevAutopilot {
         }
         checks++;
         Constants.LOG.info("Vellum autopilot: " + pass, args);
+    }
+
+    /**
+     * A check this Minecraft version can't make yet (the feature isn't ported to it): logged as skipped, with why, and
+     * counted apart from the checks.
+     */
+    private static void skip(String what, String why) {
+        skipped++;
+        Constants.LOG.warn("Vellum autopilot: SKIPPED {}: {}", what, why);
     }
 
     /** A failed check: logs {@code message} as an error (a throwable last in {@code args} with its stack trace). */
@@ -617,12 +645,12 @@ public final class DevAutopilot {
      * deeper than {@code client.maxDataDepth} is dropped; a page's messages are capped per screen, across reloads.
      */
     private static void serverPages(Minecraft mc) {
-        Supplier<Integer> session = () -> mc.gui.screen() instanceof VellumScreen s ? s.driver().session() : -1;
+        Supplier<Integer> session = () -> McClient.screen() instanceof VellumScreen s ? s.driver().session() : -1;
         // Shift+Escape: closes at once, and the page never sees it.
         steps.add(() -> serverOpen(mc, STUBBORN_PAGE));
         until("the server's page is shown", ticks -> session.get() >= 0);
         steps.add(() -> pressEscape(mc, true));
-        until("Shift+Escape closed the server's page", ticks -> mc.gui.screen() == null && serverLog.contains("closed"));
+        until("Shift+Escape closed the server's page", ticks -> McClient.screen() == null && serverLog.contains("closed"));
         steps.add(() -> check(serverLog.stream().noneMatch(e -> e.startsWith("key")), "the page never saw Shift+Escape",
                 "the page saw Shift+Escape: {}", serverLog));
         // Escape three times: the page keeps the first two. (Waits between closing and opening, so the reopen
@@ -635,29 +663,29 @@ public final class DevAutopilot {
         steps.add(() -> pressEscape(mc, false));
         steps.add(() -> check(session.get() >= 0, "the page kept two Escapes", "two Escapes closed the page"));
         steps.add(() -> pressEscape(mc, false));
-        until("three Escapes closed the page", ticks -> mc.gui.screen() == null);
+        until("three Escapes closed the page", ticks -> McClient.screen() == null);
         steps.add(() -> wait = 30);
         // A page the server opens while chat is open waits until chat closes.
-        steps.add(() -> mc.gui.setScreen(new ChatScreen("", false)));
+        steps.add(() -> McClient.setScreen(chatScreen()));
         steps.add(() -> serverOpen(mc, "<p>After chat</p>"));
         steps.add(() -> wait = 10);
-        steps.add(() -> check(mc.gui.screen() instanceof ChatScreen, "a server page waits while chat is open",
+        steps.add(() -> check(McClient.screen() instanceof ChatScreen, "a server page waits while chat is open",
                 "a server page replaced chat"));
-        steps.add(() -> mc.gui.setScreen(null));
+        steps.add(() -> McClient.setScreen(null));
         until("the waiting page is shown once chat closed", ticks -> session.get() >= 0);
         // A script can't open a web link by itself.
         steps.add(() -> serverOpen(mc, "<script>setTimeout(() => location.href = 'https://example.com/', 50)</script><p>Link</p>"));
         steps.add(() -> wait = 20);
         steps.add(() -> check(session.get() >= 0, "a script's web link without a click was ignored",
-                "a script opened {} without a click", mc.gui.screen()));
+                "a script opened {} without a click", McClient.screen()));
         // Data nested past client.maxDataDepth is dropped.
         steps.add(() -> serverRun(mc, player -> {
             VellumSession s = VellumServer.openInline(player, "<p>Data</p>", JsonParser.parseString("{\"ok\": 1}"));
             s.push(JsonParser.parseString("[".repeat(100) + "]".repeat(100)));
         }));
-        until("the data page is shown", ticks -> mc.gui.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject);
+        until("the data page is shown", ticks -> McClient.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject);
         steps.add(() -> wait = 5);
-        steps.add(() -> check(mc.gui.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject o && o.has("ok"),
+        steps.add(() -> check(McClient.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject o && o.has("ok"),
                 "deeply nested data was dropped", "deeply nested data reached the page"));
         // vellum.send is capped per screen (client.messageBurst), and reloading the page doesn't reset the count.
         steps.add(() -> {
@@ -667,7 +695,7 @@ public final class DevAutopilot {
         until("the spamming page is shown", ticks -> session.get() >= 0);
         steps.add(() -> wait = 5);
         steps.add(() -> {
-            if (mc.gui.screen() instanceof VellumScreen v) v.driver().reload();
+            if (McClient.screen() instanceof VellumScreen v) v.driver().reload();
         });
         steps.add(() -> wait = 5);
         steps.add(() -> {
@@ -678,7 +706,7 @@ public final class DevAutopilot {
         });
         // Typing into a server's page shows Vellum's notice over it.
         steps.add(() -> serverOpen(mc, "<body style='background:#2a2a40;padding:20px'><p>Sign in</p><input autofocus></body>"));
-        until("the sign-in page is shown", ticks -> session.get() >= 0 && mc.gui.screen() instanceof VellumScreen v && v.driver().typing());
+        until("the sign-in page is shown", ticks -> session.get() >= 0 && McClient.screen() instanceof VellumScreen v && v.driver().typing());
         onPage("the sign-in page", page -> page.type("hunter2"));
         grab(mc, "server_page_typing", 5);
         // A server that reopens its page whenever it is closed is stopped after client.reopenStrikes reopens.
@@ -696,7 +724,7 @@ public final class DevAutopilot {
         }
         steps.add(() -> {
             reopen = false;
-            check(mc.gui.screen() == null && ServerPages.blocked(), "the reopen loop was stopped after {} opens",
+            check(McClient.screen() == null && ServerPages.blocked(), "the reopen loop was stopped after {} opens",
                     "the reopen loop went on: {} opens", serverLog.stream().filter("opened"::equals).count());
         });
     }
@@ -728,10 +756,9 @@ public final class DevAutopilot {
 
     /** Escape through Minecraft's keyboard handler, as the player presses it. */
     private static void pressEscape(Minecraft mc, boolean shift) {
-        KeyEvent event = new KeyEvent(InputConstants.KEY_ESCAPE, 0, shift ? InputConstants.MOD_SHIFT : 0);
-        long window = mc.getWindow().handle();
-        mc.keyboardHandler.keyPress(window, InputConstants.PRESS, event);
-        mc.keyboardHandler.keyPress(window, InputConstants.RELEASE, event);
+        KeyEvent event = KeyNames.escape(shift);
+        McClient.key(event, true);
+        McClient.key(event, false);
     }
 
     // ---- World ----
@@ -752,6 +779,14 @@ public final class DevAutopilot {
                 player.awardStat(Stats.ENTITY_KILLED_BY.get(type), 1);
             }
         });
+    }
+
+    /** An empty chat screen, as T opens it. */
+    private static ChatScreen chatScreen() {
+        //? if >=26 {
+        return new ChatScreen("", false);
+        //?} else
+        //return new ChatScreen("");
     }
 
     private static void command(Minecraft mc, String cmd) {

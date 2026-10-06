@@ -133,7 +133,7 @@ public final class VellumScreens {
 
     private static VellumScreen show(VellumScreen screen, @Nullable String data) {
         if (data != null) screen.driver().pushData(data);
-        Minecraft.getInstance().gui.setScreen(screen);
+        McClient.setScreen(screen);
         return screen;
     }
 }
