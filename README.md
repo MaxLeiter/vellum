@@ -1,12 +1,41 @@
 # Vellum
 
-*Minecraft GUIs in HTML, CSS and JavaScript.* A Minecraft mod for 26.3 and 1.21.1 (NeoForge and Fabric) with a small web engine inside. You write a screen, inventory, HUD or map as a web page, and Vellum lays it out, animates it, runs its scripts and paints it with the regular GUI renderer.
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui) · [Modrinth](https://modrinth.com/mod/vellum-gui) · [Docs](docs/API.md)
 
-The layout is _most_ CSS: block, inline, flexbox, grid and positioning, plus transitions and `@keyframes`. This is a 90-10 solution.
+Vellum is a small web engine inside Minecraft. Screens, inventories, HUD and map can be expressed as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the normal GUI renderer. It runs on Minecraft 26.3 and 1.21.1, on NeoForge and Fabric.
 
-Scripts run in a Rhino sandbox with no Java access and no network.
+You may not need to install this yourself. It's a library for other mods.
 
-LLMs were used extensively in the development of Vellum.
+The inspiration for Vellum was two-fold:
+
+- I'm a web developer and my Minecraft GUIs have always looked bad
+- LLMs are better at web development than Minecraft GUI development
+
+Vellum helps in both these cases.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/title-screen.jpg" alt="A title screen"></td>
+    <td width="50%"><img src="docs/images/turntable.jpg" alt="A 3D entity turntable"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/mobdex.jpg" alt="A mobdex"></td>
+    <td width="50%"><img src="docs/images/trader.jpg" alt="A trader's shop"></td>
+  </tr>
+</table>
+
+### What you get
+
+- Most of CSS: block, inline, flexbox, grid and positioning, transitions and `@keyframes`. Its goal is to be a 90-10 solution compared to a complete browser.
+- The game's own look by default. Buttons, text fields, panels, slots and tooltips use vanilla sprites and the game font, so an unstyled page already fits in.
+- Put `<slot index="0">` wherever you want a slot and vanilla mechanics will Just Work(tm): clicking, dragging, shift-clicking and tooltips.
+- Minecraft-specific elements: `<item>`, `<slot>`, 3D `<entity>` and `<model>`, sprites, translations and player heads.
+- JavaScript with Vue-style templates (`v-for`, `v-if`, `v-model`, `@click`).
+- HUD overlays, narration/accessibility support, and a standalone previewer with hot reload, so you (or your agent) can build a page without launching the game.
+- Pure Java with the JS engine relocated, so it won't clash with anything in a big modpack.
+- Speed. A few hundred elements restyle and relayout in well under a millisecond.
+
+Where Vellum behaves differently from a browser, the docs say so.
 
 ```html
 <div class="mc-panel chest">
@@ -24,19 +53,13 @@ LLMs were used extensively in the development of Vellum.
 </style>
 ```
 
-Vellum is in development. Other mods (Chronicle, claudemons) use it as a library, and a server can send a page to its players.
+### For mod developers
 
-## Goals
+Vellum is in development. Other mods (Chronicle, claudemons) use it as a library. [`docs/API.md`](docs/API.md) covers the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
 
-- Write Minecraft UIs the way you'd write a web page, and lean on what you already know about the web. Where Vellum behaves differently from a browser, the docs say so.
-- Look vanilla by default. Buttons, inputs, panels, slots and tooltips use the game's own sprites, so an unstyled page already fits in.
-- Make inventories easy. Put `<slot index="0">` where you want a slot and vanilla's clicking, dragging, shift-clicking and tooltips keep working. Items, entities, sprites, translations and player heads have their own elements too.
-- Let servers open pages, push JSON to them and get messages back. That's why scripts are sandboxed.
-- Stay pure Java with the JS engine relocated, so it won't clash with anything in a big modpack.
-- Be fast enough that you never think about it. A few hundred elements restyle and relayout in well under a millisecond.
-- Build and check UIs without launching the game, using the previewer and snapshot tests.
+### Servers
 
-It isn't trying to be a browser.
+A server mod can open a page on a player's client, push data to it and get messages back. Since a server might be hostile, scripts run in a Rhino sandbox with no Java access, no network access, no file access, and sensible resource caps. Players can always close a page with Shift+Esc, and `config/vellum.properties` lets them block server pages entirely.
 
 ## Try it
 
@@ -64,7 +87,8 @@ You can also build pages without launching Minecraft. The previewer renders a pa
 
 Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README.md).
 
-## Layout
+## Modules
+
 | Module | What |
 |---|---|
 | `engine/` | No Minecraft dependencies. Contains the DOM, HTML and CSS parsers, cascade, layout, animation, painting to an abstract canvas, input and forms, sandboxed scripting |
@@ -74,9 +98,8 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 | `<loader>/versions/<minecraft>/` | Where Stonecutter builds each Minecraft version, and the code of one version only (see Versions) |
 | `preview/` | The standalone previewer |
 
-For mod authors, [`docs/API.md`](docs/API.md) is the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) a guide to porting hand-drawn screens.
-
 ## Building
+
 You need JDK 25 or newer and git; Gradle provisions the toolchains (25 for 26.3, 21 for 1.21.1).
 
 Vellum uses a patched Rhino. The build downloads the upstream source pinned in `gradle.properties` (once, checked
@@ -124,7 +147,7 @@ Everything works on 1.21.1, with these differences:
 
 ## Releases
 
-`CHANGELOG.md` has what changed in each version. To release one:
+[`CHANGELOG.md`](CHANGELOG.md) has what changed in each version. To release one:
 
 1. Set `version` in `gradle.properties` and add a `## <version>` section to `CHANGELOG.md`.
 2. Commit, then tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
@@ -136,6 +159,8 @@ Running the workflow by hand is a dry run, and so is `./gradlew publishMods -Ppu
 would be uploaded and upload nothing.
 
 ## License
+
+LLMs were used in the development of Vellum.
 
 Vellum is MIT (`LICENSE`). The jars bundle Mozilla Rhino, which is MPL-2.0: it is built from the upstream commit
 pinned in `gradle.properties` (Rhino 1.9.1) with the patches in [`rhino/patches`](rhino/patches), and its license,

@@ -57,7 +57,7 @@ stylesheet linked from every page.
 | chest-style menus | `VellumScreens.registerContainer(menuType, url)` and `<slot index="n">` wherever the slots go |
 | English literals | `<mc-text key="…">` or `vellum.t(key, …args)` (Minecraft language files) |
 
-## 4. Porting a screen, step by step
+## 4. How to port a screen
 
 1. List what the screen shows and every action it sends. Write the view-model JSON shape down (often it
    already exists as a payload or record).
