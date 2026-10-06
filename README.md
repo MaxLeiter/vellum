@@ -1,6 +1,6 @@
 # Vellum
 
-[CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui) · [Modrinth](https://modrinth.com/mod/vellum-gui) · [Docs](docs/API.md)
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui) | [Modrinth](https://modrinth.com/mod/vellum-gui) | [Docs](docs/API.md)
 
 Vellum is a small web engine inside Minecraft. Screens, inventories, HUD and map can be expressed as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the normal GUI renderer. It runs on Minecraft 26.3 and 1.21.1, on NeoForge and Fabric.
 
