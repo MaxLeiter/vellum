@@ -20,5 +20,8 @@ runs
 # agent worktrees
 .ws/
 
+# Rhino working copy, see rhino/README.md
+rhino/work/
+
 # demo videos (large binaries)
 media/

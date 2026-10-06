@@ -1,0 +1,270 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Max Leiter <8675906+MaxLeiter@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 17:47:05 -0700
+Subject: [PATCH] Size limit on BigInt arithmetic and parsing
+
+A single BigInteger multiplication, power, shift or parse runs in Java,
+out of sight of the instruction observer, and its cost grows faster than
+its operands. VellumBigInts checks the size of each result first and
+throws a RangeError past VellumBigInts.setMaxBits. The limit is
+process-wide and unlimited by default.
+
+diff --git a/rhino/src/main/java/org/mozilla/javascript/NativeBigInt.java b/rhino/src/main/java/org/mozilla/javascript/NativeBigInt.java
+index 30edaff79f3b..1719f98d4dc2 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/NativeBigInt.java
++++ b/rhino/src/main/java/org/mozilla/javascript/NativeBigInt.java
+@@ -101,7 +101,7 @@ final class NativeBigInt extends ScriptableObject {
+             return BigInteger.ZERO;
+         }
+ 
+-        BigInteger modulus = BigInteger.ONE.shiftLeft(bits); // 2^bits
++        BigInteger modulus = VellumBigInts.shiftLeft(BigInteger.ONE, bits); // 2^bits
+ 
+         if (isSigned) {
+             return asSignedN(bigInt, bits, modulus);
+@@ -124,7 +124,7 @@ final class NativeBigInt extends ScriptableObject {
+ 
+     private static BigInteger asSignedN(BigInteger bigInt, int bits, BigInteger modulus) {
+         // For signed: use two's complement representation
+-        BigInteger halfModulus = BigInteger.ONE.shiftLeft(bits - 1); // 2^(bits-1)
++        BigInteger halfModulus = VellumBigInts.shiftLeft(BigInteger.ONE, bits - 1); // 2^(bits-1)
+         BigInteger minValue = halfModulus.negate(); // -2^(bits-1)
+         BigInteger maxValue = halfModulus.subtract(BigInteger.ONE); // 2^(bits-1) - 1
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+index ad7d84099591..8243b518cbf4 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+@@ -797,7 +797,7 @@ public class ScriptRuntime {
+                 }
+                 if (radix != -1) {
+                     try {
+-                        return new BigInteger(s.substring(start + 2, end + 1), radix);
++                        return VellumBigInts.parse(s.substring(start + 2, end + 1), radix);
+                     } catch (NumberFormatException ex) {
+                         throw syntaxErrorById("msg.bigint.bad.form");
+                     }
+@@ -819,7 +819,7 @@ public class ScriptRuntime {
+             throw syntaxErrorById("msg.bigint.bad.form");
+         }
+         try {
+-            return new BigInteger(sub);
++            return VellumBigInts.parse(sub);
+         } catch (NumberFormatException ex) {
+             throw syntaxErrorById("msg.bigint.bad.form");
+         }
+@@ -3776,7 +3776,7 @@ public class ScriptRuntime {
+ 
+     public static Number multiply(Number val1, Number val2) {
+         if (val1 instanceof BigInteger && val2 instanceof BigInteger) {
+-            return ((BigInteger) val1).multiply((BigInteger) val2);
++            return VellumBigInts.multiply((BigInteger) val1, (BigInteger) val2);
+         } else if (val1 instanceof BigInteger || val2 instanceof BigInteger) {
+             throw ScriptRuntime.typeErrorById("msg.cant.convert.to.number", "BigInt");
+         } else if (val1 instanceof Integer && val2 instanceof Integer) {
+@@ -3856,7 +3856,7 @@ public class ScriptRuntime {
+ 
+             try {
+                 int intVal2 = ((BigInteger) val2).intValueExact();
+-                return ((BigInteger) val1).pow(intVal2);
++                return VellumBigInts.pow((BigInteger) val1, intVal2);
+             } catch (ArithmeticException e) {
+                 // This is outside the scope of the ECMA262 specification.
+                 throw ScriptRuntime.rangeErrorById("msg.bigint.out.of.range.arithmetic");
+@@ -3930,7 +3930,7 @@ public class ScriptRuntime {
+         if (val1 instanceof BigInteger && val2 instanceof BigInteger) {
+             try {
+                 int intVal2 = ((BigInteger) val2).intValueExact();
+-                return ((BigInteger) val1).shiftLeft(intVal2);
++                return VellumBigInts.shiftLeft((BigInteger) val1, intVal2);
+             } catch (ArithmeticException e) {
+                 // This is outside the scope of the ECMA262 specification.
+                 throw ScriptRuntime.rangeErrorById("msg.bigint.out.of.range.arithmetic");
+@@ -3956,7 +3956,7 @@ public class ScriptRuntime {
+         if (val1 instanceof BigInteger && val2 instanceof BigInteger) {
+             try {
+                 int intVal2 = ((BigInteger) val2).intValueExact();
+-                return ((BigInteger) val1).shiftRight(intVal2);
++                return VellumBigInts.shiftRight((BigInteger) val1, intVal2);
+             } catch (ArithmeticException e) {
+                 // This is outside the scope of the ECMA262 specification.
+                 throw ScriptRuntime.rangeErrorById("msg.bigint.out.of.range.arithmetic");
+diff --git a/rhino/src/main/java/org/mozilla/javascript/TokenStream.java b/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
+index 45f9b91d6e4d..d5a0d487445d 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
++++ b/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
+@@ -963,7 +963,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
+                 }
+ 
+                 if (isBigInt) {
+-                    this.bigInt = new BigInteger(numString, base);
++                    this.bigInt = VellumBigInts.parse(numString, base);
+                     return Token.BIGINT;
+                 }
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/VellumBigInts.java b/rhino/src/main/java/org/mozilla/javascript/VellumBigInts.java
+new file mode 100644
+index 000000000000..f711a19aaf96
+--- /dev/null
++++ b/rhino/src/main/java/org/mozilla/javascript/VellumBigInts.java
+@@ -0,0 +1,66 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript;
++
++import java.math.BigInteger;
++
++/**
++ * Size checks for BigInt arithmetic. A single BigInteger operation runs in Java, out of sight of
++ * the instruction observer, and its cost grows faster than its operands: squaring a value 30 times,
++ * or {@code 1n << 2n ** 30n}, would take minutes or exhaust the heap. Every BigInt multiplication,
++ * power, shift and parse from text goes through here first, and results larger than {@link
++ * #maxBits} throw a RangeError.
++ */
++public final class VellumBigInts {
++    /** The largest BigInt, in bits; process-wide, and unlimited unless an embedding sets it. */
++    private static volatile long maxBits = Long.MAX_VALUE;
++
++    private VellumBigInts() {}
++
++    public static void setMaxBits(long bits) {
++        maxBits = bits;
++    }
++
++    public static long maxBits() {
++        return maxBits;
++    }
++
++    private static void check(long bits) {
++        if (bits > maxBits)
++            throw ScriptRuntime.rangeError("BigInt larger than " + maxBits + " bits");
++    }
++
++    public static BigInteger multiply(BigInteger a, BigInteger b) {
++        check((long) a.bitLength() + b.bitLength());
++        return a.multiply(b);
++    }
++
++    public static BigInteger pow(BigInteger a, int exponent) {
++        if (a.abs().compareTo(BigInteger.ONE) > 0) check((long) (a.bitLength() - 1) * exponent + 1);
++        return a.pow(exponent);
++    }
++
++    public static BigInteger shiftLeft(BigInteger a, int n) {
++        if (n > 0 && a.signum() != 0) check((long) a.bitLength() + n);
++        return a.shiftLeft(n);
++    }
++
++    public static BigInteger shiftRight(BigInteger a, int n) {
++        if (n < 0 && a.signum() != 0) check((long) a.bitLength() - (long) n);
++        return a.shiftRight(n);
++    }
++
++    /** Parses {@code text} in {@code radix}; parsing is quadratic in the number of digits. */
++    public static BigInteger parse(String text, int radix) {
++        check((long) Math.ceil(text.length() * (Math.log(Math.max(2, radix)) / Math.log(2))));
++        return new BigInteger(text, radix);
++    }
++
++    public static BigInteger parse(String text) {
++        return parse(text, 10);
++    }
++}
+diff --git a/rhino/src/test/java/org/mozilla/javascript/tests/es6/BigIntLimitTest.java b/rhino/src/test/java/org/mozilla/javascript/tests/es6/BigIntLimitTest.java
+new file mode 100644
+index 000000000000..245ce9ff1cd2
+--- /dev/null
++++ b/rhino/src/test/java/org/mozilla/javascript/tests/es6/BigIntLimitTest.java
+@@ -0,0 +1,88 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript.tests.es6;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.parallel.ResourceLock;
++import org.mozilla.javascript.VellumBigInts;
++import org.mozilla.javascript.testutils.Utils;
++
++/** The size limit on BigInt arithmetic and parsing. */
++@ResourceLock("VellumBigInts")
++public class BigIntLimitTest {
++    private long saved;
++
++    @BeforeEach
++    public void limit() {
++        saved = VellumBigInts.maxBits();
++        VellumBigInts.setMaxBits(1024);
++    }
++
++    @AfterEach
++    public void restore() {
++        VellumBigInts.setMaxBits(saved);
++    }
++
++    private static void assertRangeError(String script) {
++        Utils.assertWithAllModes_ES6(
++                "RangeError: BigInt larger than 1024 bits",
++                "try { " + script + "; 'no error' } catch (e) { e.name + ': ' + e.message }");
++    }
++
++    @Test
++    public void smallValuesWork() {
++        Utils.assertWithAllModes_ES6("1024", "String(2n ** 10n)");
++        Utils.assertWithAllModes_ES6("8", "String((1n << 4n) >> 1n)");
++        Utils.assertWithAllModes_ES6(true, "BigInt('123456789') * 2n === 246913578n");
++    }
++
++    @Test
++    public void multiplicationIsCapped() {
++        assertRangeError("var x = 2n ** 1000n; x * x");
++    }
++
++    @Test
++    public void powerIsCapped() {
++        assertRangeError("2n ** 2000n");
++        assertRangeError("3n ** 1000000n");
++    }
++
++    @Test
++    public void shiftsAreCapped() {
++        assertRangeError("1n << 5000n");
++        assertRangeError("1n >> -5000n");
++        Utils.assertWithAllModes_ES6("0", "String(1n >> 5000n)");
++    }
++
++    @Test
++    public void asUintNIsCapped() {
++        assertRangeError("BigInt.asUintN(100000, 5n)");
++    }
++
++    @Test
++    public void parsingIsCapped() {
++        assertRangeError("BigInt('9'.repeat(1000))");
++        Utils.assertWithAllModes_ES6(true, "BigInt('9'.repeat(100)) > 0n");
++    }
++
++    @Test
++    public void literalsAreCapped() {
++        Utils.assertEcmaErrorES6(
++                "RangeError: BigInt larger than 1024 bits", "var x = " + "9".repeat(1000) + "n;");
++    }
++
++    @Test
++    public void limitIsAdjustable() {
++        VellumBigInts.setMaxBits(4096);
++        assertEquals(4096, VellumBigInts.maxBits());
++        Utils.assertWithAllModes_ES6(true, "2n ** 2000n > 0n");
++    }
++}

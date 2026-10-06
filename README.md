@@ -68,7 +68,7 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 | Module | What |
 |---|---|
 | `engine/` | No Minecraft dependencies. Contains the DOM, HTML and CSS parsers, cascade, layout, animation, painting to an abstract canvas, input and forms, sandboxed scripting |
-| `rhino/` | Mozilla Rhino 1.9.1, relocated to `dev.vellum.shadow.rhino` |
+| `rhino/` | Mozilla Rhino 1.9.1 with Vellum's patches, relocated to `dev.vellum.shadow.rhino` |
 | `common/` | Vanilla-only Minecraft code: the canvas over Minecraft's GUI drawing, screens, container screens, HUD overlays, networking, the public API, demos |
 | `neoforge/`, `fabric/` | Loader entrypoints |
 | `<loader>/versions/<minecraft>/` | Where Stonecutter builds each Minecraft version, and the code of one version only (see Versions) |
@@ -77,7 +77,11 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 For mod authors, [`docs/API.md`](docs/API.md) is the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) a guide to porting hand-drawn screens.
 
 ## Building
-You need JDK 25 or newer; Gradle provisions the toolchains (25 for 26.3, 21 for 1.21.1).
+You need JDK 25 or newer and git; Gradle provisions the toolchains (25 for 26.3, 21 for 1.21.1).
+
+Vellum uses a patched Rhino. The build downloads the upstream source pinned in `gradle.properties` (once, checked
+against its SHA-256), applies the patches in `rhino/patches` and compiles it, so there is nothing to install first.
+[`rhino/README.md`](rhino/README.md) says what the patches do and how to change them.
 
 ```bash
 ./gradlew :engine:test                 # engine tests
