@@ -65,8 +65,10 @@ sourceSets.configureEach {
     }
 }
 
-// Minecraft's artifacts are made with the access transformer, which Stonecutter generates for versions other than
-// the active one.
-tasks.named('createMinecraftArtifacts') {
-    dependsOn(tasks.named('stonecutterGenerate'))
+// For versions other than the active one, Minecraft's artifacts read the access transformer from the resources
+// Stonecutter generates.
+if (!stonecutter.current.isActive) {
+    tasks.named('createMinecraftArtifacts') {
+        dependsOn(tasks.named('stonecutterGenerate'))
+    }
 }
