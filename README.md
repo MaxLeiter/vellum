@@ -121,3 +121,22 @@ Everything works on 1.21.1, with these differences:
 - Fabric draws HUD overlays after the whole HUD, since 1.21.1 has no HUD layers.
 - Key events are GLFW's: `DocumentDriver.onKey` handlers get `dev.vellum.mod.client.input.KeyEvent` with GLFW key codes.
 - The dev tour (`-Ptour`) is 26.3 only.
+
+## Releases
+
+`CHANGELOG.md` has what changed in each version. To release one:
+
+1. Set `version` in `gradle.properties` and add a `## <version>` section to `CHANGELOG.md`.
+2. Commit, then tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
+
+The tag runs `.github/workflows/release.yml`, which builds, uploads the four jars to Modrinth and CurseForge (the
+project ids are `modrinth_id` and `curseforge_id` in `gradle.properties`, the tokens the `MODRINTH_TOKEN` and
+`CURSEFORGE_TOKEN` secrets) and makes a GitHub release. Versions are betas until `release_type` says otherwise.
+Running the workflow by hand is a dry run, and so is `./gradlew publishMods -PpublishDryRun` locally: both show what
+would be uploaded and upload nothing.
+
+## License
+
+Vellum is MIT (`LICENSE`). The jars bundle Mozilla Rhino, which is MPL-2.0: it is built from the upstream commit
+pinned in `gradle.properties` (Rhino 1.9.1) with the patches in [`rhino/patches`](rhino/patches), and its license,
+notices and a note on where that source is ship in each jar under `META-INF/licenses/rhino/`.
