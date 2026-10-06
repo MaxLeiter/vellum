@@ -220,7 +220,7 @@ shows the item's tooltip by itself.
 
 Minecraft's narrator reads the page's title, the focused or hovered element by its name and role (`aria-label`,
 `aria-labelledby`, `role`, `aria-hidden`), and live regions (`aria-live`, `role="status"`, `"log"`, `"alert"`) when
-their text changes. docs/API.md has the rules. Scripts change what it reads by changing these attributes and the
+their text changes. [Narration](api/narration.md) has the rules. Scripts change what it reads by changing these attributes and the
 regions' text.
 
 ## Animations
@@ -384,7 +384,7 @@ field. While the field has focus, text that only a modifier changes is left as t
 ## Limits
 
 Scripts are sandboxed because pages can come from servers. The numbers below are the defaults; players and server
-owners can change them in `config/vellum.properties` (docs/API.md, Settings).
+owners can change them in `config/vellum.properties` ([Settings](api/security.md#settings)).
 
 - No Java access: `java`, `Packages` and friends do not exist, and no Java object is ever visible to scripts.
   Rhino's non-standard globals (`Continuation`, `Script`, `With`, `Call`, `JavaException`) are removed too.

@@ -1,11 +1,11 @@
 # Moving a mod's GUI to Vellum
 
 How to port a hand-drawn screen (a custom `Screen` subclass with layout math, manual text wrapping, hit testing and
-scroll state) to a Vellum page. Read `docs/API.md` (the Java side) first, then `docs/SCRIPTING.md` (the JavaScript dialect and templates).
+scroll state) to a Vellum page. Read the [Java API docs](index.md) first, then `docs/SCRIPTING.md` (the JavaScript dialect and templates).
 
 ## 1. Set up the dependency
 
-Publish Vellum locally from a Vellum checkout, then depend on it (see `docs/API.md`, "Depending on Vellum"):
+Publish Vellum locally from a Vellum checkout, then depend on it (see [Setting up](api/setup.md)):
 
 ```bash
 ./gradlew publishToMavenLocal

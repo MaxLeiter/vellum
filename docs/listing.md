@@ -29,7 +29,7 @@ Modrinth
 - License: MIT
 - Source: https://github.com/MaxLeiter/vellum
 - Issues: https://github.com/MaxLeiter/vellum/issues
-- Wiki: https://github.com/MaxLeiter/vellum/blob/main/docs/API.md
+- Wiki: https://github.com/MaxLeiter/vellum/blob/main/docs/index.md
 
 CurseForge
 - Class: Mods
@@ -76,7 +76,7 @@ VellumScreens.open("mymod:vellum/journal.html", data).driver()
         .onMessage("save", value -> Journal.save(value.getAsJsonObject()));
 ```
 
-Docs: [API](https://github.com/MaxLeiter/vellum/blob/main/docs/API.md), [scripting](https://github.com/MaxLeiter/vellum/blob/main/docs/SCRIPTING.md), [porting an existing screen](https://github.com/MaxLeiter/vellum/blob/main/docs/MIGRATING.md).
+Docs: [API](https://github.com/MaxLeiter/vellum/blob/main/docs/index.md), [scripting](https://github.com/MaxLeiter/vellum/blob/main/docs/SCRIPTING.md), [porting an existing screen](https://github.com/MaxLeiter/vellum/blob/main/docs/MIGRATING.md).
 
 ### Servers
 
