@@ -272,10 +272,13 @@ public final class DevAutopilot {
             McClient.moveMouse(w.getScreenWidth() / 2.0, w.getScreenHeight() / 2.0); // the position without a move event
             VellumScreens.open(devUrl("first_hover"));
         });
+        // The page may take a tick or two to load and draw; judge its first frames once it has drawn a few.
+        until("the first hover page drew its first frames", ticks -> VellumAutomation.screen()
+                .flatMap(page -> page.eval("frames")).map(JsonElement::getAsInt).orElse(0) >= 4);
         onPage("the first hover page", page -> {
             int at = page.eval("hoveredAt").map(JsonElement::getAsInt).orElse(-1);
             check(at >= 1 && at <= 3, "a page opened under a resting cursor is hovered from frame {}",
-                    "the button under the resting cursor was not hovered in the first frames ({})", at);
+                    "the button under the resting cursor was not hovered in its first frames (hovered at frame {})", at);
         });
         settle("the first hover's tooltip", 0);
         grab(mc, "first_hover", 0);
