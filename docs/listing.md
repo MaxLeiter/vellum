@@ -47,7 +47,7 @@ Paste this as the long description on both sites. It's Markdown; CurseForge take
 
 Vellum is a small web engine inside Minecraft. You write a screen, inventory, HUD or map as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the game's own GUI renderer.
 
-**You probably don't need to install this yourself.** It's a library: mods that use it either list it as a dependency or bundle it in their own jar. If you have more than one copy, the newest one wins.
+You don't need to install this on its own. It's a library: mods that use it list it as a dependency, and launchers install it with them.
 
 ### What you get
 
@@ -75,6 +75,8 @@ VellumScreens.registerContainer(MyMenus.CHEST, "mymod:vellum/chest.html");
 VellumScreens.open("mymod:vellum/journal.html", data).driver()
         .onMessage("save", value -> Journal.save(value.getAsJsonObject()));
 ```
+
+Depend on it from [maven.maxleiter.com](https://maven.maxleiter.com) (`dev.vellum:vellum-neoforge-26.3:0.4.1`, and the same for Fabric and 1.21.1), and make it a required dependency of your mod rather than bundling it.
 
 Docs: [API](https://github.com/MaxLeiter/vellum/blob/main/docs/index.md), [scripting](https://github.com/MaxLeiter/vellum/blob/main/docs/SCRIPTING.md), [porting an existing screen](https://github.com/MaxLeiter/vellum/blob/main/docs/MIGRATING.md).
 
