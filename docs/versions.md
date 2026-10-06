@@ -30,3 +30,26 @@ Everything works on 1.21.1, with these differences:
 - Fabric draws HUD overlays after the whole HUD, since 1.21.1 has no HUD layers.
 - Key events are GLFW's: `DocumentDriver.onKey` handlers get `dev.vellum.mod.client.input.KeyEvent` with GLFW key codes.
 - The dev tour (`-Ptour`) is 26.3 only.
+
+## Adding a Minecraft version
+
+1. Add the version to `minecraftVersions` in `settings.gradle`.
+2. Add a `["<version>"]` table to `stonecutter.properties.toml` with the same keys as the others. NeoForge and
+   NeoForm versions are on [projects.neoforged.net](https://projects.neoforged.net/neoforged/neoforge), Fabric's on
+   [fabricmc.net/develop](https://fabricmc.net/develop/). Fabric picks its Loom plugin itself: plain Loom for 26.x,
+   the remapping one for older, obfuscated versions.
+3. Make it compile: `./gradlew :common:<version>:compileJava`, then the loaders. Small differences are Stonecutter
+   comments (`//? if >=26.3 {`) or renames in `stonecutter.gradle`. For the per-version files (`McGui`, `McClient`,
+   `KeyNames`, `Scene`, `EntityPortrait`, `GameTests`), copy the nearest version's `common/versions/<minecraft>/src`
+   and fix what changed. The access transformer and access widener are shared by every version.
+4. `./gradlew build` builds and tests every version on both loaders, including the GameTests. Then look at the
+   demos in the game: `./gradlew :neoforge:<version>:runClient -Pautopilot` and the same for `:fabric:<version>`.
+   On macOS, copy `options.txt` (with `enableVsync:false`) and `config/fml.toml` (with `earlyWindowControl = false`)
+   from `neoforge/versions/26.3/runs/client` into the new version's run directory first, or the client hangs.
+5. Add the version to the table at the top of this file, list anything that works differently on it, and add a line
+   to `CHANGELOG.md` under the next version.
+
+Commit with the sources on 26.3. Publishing needs nothing more: CI, `publishToMavenLocal` and the release workflow
+build every version in `settings.gradle`, each version's jars are uploaded to Modrinth and CurseForge tagged with its
+Minecraft version, and the GitHub release lists them. If one jar also runs on other Minecraft versions, list them all
+in that version's table as `publish_minecraft_versions = "26.2, 26.2.1"`.

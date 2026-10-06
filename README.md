@@ -126,9 +126,9 @@ Minecraft 26.3 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). A f
 1. Set `version` in `gradle.properties` and add a `## <version>` section to `CHANGELOG.md`.
 2. Commit, then tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
 
-The tag runs `.github/workflows/release.yml`, which builds, uploads the four jars to Modrinth and CurseForge (the
+The tag runs `.github/workflows/release.yml`, which builds, uploads a NeoForge and a Fabric jar per Minecraft version to Modrinth and CurseForge (the
 project ids are `modrinth_id` and `curseforge_id` in `gradle.properties`, the tokens the `MODRINTH_TOKEN` and
-`CURSEFORGE_TOKEN` secrets) and makes a GitHub release. Versions are betas until `release_type` says otherwise.
+`CURSEFORGE_TOKEN` secrets) and makes a GitHub release. `release_type` in `gradle.properties` picks release, beta or alpha.
 Running the workflow by hand is a dry run, and so is `./gradlew publishMods -PpublishDryRun` locally: both show what
 would be uploaded and upload nothing.
 

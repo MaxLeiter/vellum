@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag v<version> (the version in gradle.properties) builds Vellum, makes a GitHub release with the four jars
+# Pushing a tag v<version> (the version in gradle.properties) builds Vellum, makes a GitHub release with the jars
 # and the version's CHANGELOG.md section, then uploads the jars to Modrinth and CurseForge. The store uploads are skipped,
 # with a warning, while MODRINTH_TOKEN and CURSEFORGE_TOKEN aren't set.
 #
@@ -82,7 +82,9 @@ jobs:
           mkdir -p dist
           cp neoforge/versions/*/build/libs/vellum-*-"$VERSION".jar fabric/versions/*/build/libs/vellum-*-"$VERSION".jar dist/
           ls -l dist
-          test "$(find dist -name '*.jar' | wc -l)" -eq 4
+          # A NeoForge and a Fabric jar for each Minecraft version.
+          expected=$(find neoforge/versions fabric/versions -mindepth 1 -maxdepth 1 -type d | wc -l)
+          test "$(find dist -name '*.jar' | wc -l)" -eq "$expected"
           # This version's section of CHANGELOG.md, without its heading, then where to get it and which jar is which.
           {
             awk -v v="$VERSION" '$0 ~ "^## " { if (found) exit; if ($2 == v) { found = 1; next } } found' CHANGELOG.md
