@@ -1,3 +1,12 @@
 plugins {
     id 'groovy-gradle-plugin'
 }
+
+repositories {
+    gradlePluginPortal()
+}
+
+dependencies {
+    // https://modmuss50.github.io/mod-publish-plugin/ (multiloader-publish)
+    implementation 'me.modmuss50.mod-publish-plugin:me.modmuss50.mod-publish-plugin.gradle.plugin:2.2.1'
+}

@@ -1,0 +1,106 @@
+name: Release
+
+# Pushing a tag v<version> (the version in gradle.properties) builds Vellum, uploads the four jars to Modrinth and
+# CurseForge, and makes a GitHub release with them. Run it by hand ("Run workflow") for a dry run: it builds and
+# shows what it would upload, without uploading or releasing anything.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run (build and show the uploads, upload nothing)
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the version
+        id: version
+        run: |
+          version=$(sed -n 's/^version=//p' gradle.properties)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME doesn't match the version in gradle.properties ($version). Tag v$version, or change the version."
+              exit 1
+            fi
+          elif [ "$DRY_RUN" != true ]; then
+            echo "::error::Only a tag publishes. Run this from tag v$version, or as a dry run."
+            exit 1
+          fi
+          if ! grep -q "^## $version\b" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section."
+            exit 1
+          fi
+          # Pre-release on GitHub unless the version is a release (no -alpha/-beta suffix and release_type=release).
+          release_type=$(sed -n 's/^release_type=//p' gradle.properties | tr -d '[:space:]')
+          case "$version" in
+            *-alpha*|*-beta*) prerelease=true ;;
+            *) [ "$release_type" = release ] && prerelease=false || prerelease=true ;;
+          esac
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      # Gradle provisions the per-version toolchains (Java 25 for 26.3, Java 21 for 1.21.1) itself; this JDK runs Gradle.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - run: ./gradlew build --stacktrace
+
+      - name: Publish to Modrinth and CurseForge
+        run: ./gradlew publishMods --stacktrace
+        env:
+          PUBLISH_DRY_RUN: ${{ env.DRY_RUN }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+
+      - name: Collect the jars and release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          cp neoforge/versions/*/build/libs/vellum-*-"$VERSION".jar fabric/versions/*/build/libs/vellum-*-"$VERSION".jar dist/
+          ls -l dist
+          test "$(find dist -name '*.jar' | wc -l)" -eq 4
+          # This version's section of CHANGELOG.md, without its heading.
+          awk -v v="$VERSION" '$0 ~ "^## " { if (found) exit; if ($2 == v) { found = 1; next } } found' CHANGELOG.md > dist/notes.md
+          cat dist/notes.md
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release-${{ steps.version.outputs.version }}
+          path: |
+            dist/
+            neoforge/versions/*/build/publishMods/
+            fabric/versions/*/build/publishMods/
+          if-no-files-found: warn
+
+      - name: GitHub release
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          flags=()
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          gh release create "v$VERSION" dist/*.jar --title "Vellum $VERSION" --notes-file dist/notes.md --verify-tag "${flags[@]}"

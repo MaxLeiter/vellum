@@ -107,6 +107,16 @@ def prepareRhinoSources = tasks.register('prepareRhinoSources') {
         project.delete(dest)
         dest.mkdirs()
         unpack(archiveFile, 'rhino/src/main/', dest)
+        // Rhino's license and notices ship in the jar, with where the patched source is (MPL-2.0 section 3.2).
+        unpack(archiveFile, 'LICENSE.txt', dest)
+        unpack(archiveFile, 'NOTICE.txt', dest)
+        new File(dest, 'SOURCE.txt').text = """\
+            Vellum includes Mozilla Rhino, relocated to dev.vellum.shadow.rhino and modified. Rhino is licensed under
+            the Mozilla Public License 2.0 (LICENSE.txt); NOTICE.txt lists the other code it contains.
+
+            Source: the upstream commit https://github.com/mozilla/rhino/tree/${upstreamCommit}
+            with the patches in rhino/patches of https://github.com/MaxLeiter/vellum applied in order.
+            """.stripIndent()
         // A repository of its own, so that git apply never looks at an enclosing one.
         git(dest, 'git init', ['init', '-q'])
         patchFiles(patchesDir.asFile).each { File patch ->
@@ -136,6 +146,11 @@ tasks.named('shadowJar') {
     relocate('org.mozilla.javascript', 'dev.vellum.shadow.rhino')
     relocate('org.mozilla.classfile', 'dev.vellum.shadow.rhino.classfile')
     mergeServiceFiles()
+    dependsOn(prepareRhinoSources)
+    from(sourceDir) {
+        include('LICENSE.txt', 'NOTICE.txt', 'SOURCE.txt')
+        into('META-INF/licenses/rhino')
+    }
     exclude('module-info.class', 'META-INF/versions/*/module-info.class', 'META-INF/maven/**')
 }
 

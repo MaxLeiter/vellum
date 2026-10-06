@@ -1,0 +1,112 @@
+import me.modmuss50.mpp.PublishModTask
+import me.modmuss50.mpp.ReleaseType
+
+plugins {
+    id 'me.modmuss50.mod-publish-plugin'
+}
+
+// Uploads this loader and Minecraft version's jar to Modrinth and CurseForge: `./gradlew publishMods` from the root
+// makes four uploads to each site, one per jar. The release workflow (.github/workflows/release.yml) runs it for a
+// v* tag. `-PpublishDryRun` (or PUBLISH_DRY_RUN=true) does everything but upload: the files and what would be sent
+// go to build/publishMods/ and the log.
+//
+// Project ids are modrinth_id and curseforge_id in gradle.properties. The tokens are only ever read from the
+// environment: MODRINTH_TOKEN and CURSEFORGE_TOKEN.
+
+// Applied to the Stonecutter version subprojects: the parent project is the loader, this one is the Minecraft version.
+def loader = project.parent.name
+def loaderName = [neoforge: 'NeoForge', fabric: 'Fabric'][loader]
+def modVersion = project.version.toString()
+def isDryRun = providers.gradleProperty('publishDryRun').isPresent() ||
+        providers.environmentVariable('PUBLISH_DRY_RUN').getOrElse('false') == 'true'
+
+// The game version each site is told. Both sites list 26.3 and 1.21.1 under those names; if one ever names a version
+// differently, set publish_minecraft_versions (comma-separated) for that version in stonecutter.properties.toml.
+def gameVersions = (findProperty('publish_minecraft_versions') ?: minecraft_version).toString()
+        .split(',').collect { it.trim() }.findAll { it }
+
+// -alpha and -beta versions are alphas and betas; any other version is release_type in gradle.properties (alpha,
+// beta or release).
+def releaseType = modVersion.contains('-alpha') ? 'alpha'
+        : modVersion.contains('-beta') ? 'beta'
+        : findProperty('release_type').toString().trim()
+
+// A required gradle.properties value, read only when an upload runs, so builds never need it. A dry run without it
+// says so and goes on.
+def required = { String key, String what ->
+    providers.provider {
+        def value = findProperty(key)?.toString()?.trim()
+        if (value) return value
+        if (isDryRun) {
+            logger.warn("$key is not set in gradle.properties; a real upload would stop here.")
+            return "($key unset)"
+        }
+        throw new GradleException("Set $key in gradle.properties to the $what before publishing.")
+    }
+}
+
+// This version's section of CHANGELOG.md: from its "## <version>" heading up to the next "## " heading.
+def changelogSection = providers.fileContents(rootProject.layout.projectDirectory.file('CHANGELOG.md')).asText.map { text ->
+    def lines = text.readLines()
+    def start = lines.findIndexOf { it ==~ /##\s+\[?${java.util.regex.Pattern.quote(modVersion)}\]?(\s.*)?/ }
+    if (start < 0) throw new GradleException("CHANGELOG.md has no \"## $modVersion\" section.")
+    def rest = lines.drop(start + 1)
+    def end = rest.findIndexOf { it.startsWith('## ') }
+    def body = (end < 0 ? rest : rest.take(end)).join('\n').trim()
+    if (!body) throw new GradleException("The \"## $modVersion\" section of CHANGELOG.md is empty.")
+    body
+}
+
+publishMods {
+    // 26.x and NeoForge publish the jar as built; Fabric on obfuscated versions publishes Loom's remapped jar (below).
+    file = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    modLoaders.add(loader)
+    // Modrinth wants a version number of its own per upload; the mod itself is still plain modVersion.
+    version = "${modVersion}+${loader}-${minecraft_version}"
+    displayName = "${mod_name} ${modVersion} (${loaderName} ${minecraft_version})"
+    type = ReleaseType.of(releaseType == 'release' ? 'stable' : releaseType)
+    changelog = changelogSection
+    dryRun = isDryRun
+
+    modrinth {
+        projectId = required('modrinth_id', 'Modrinth project id')
+        accessToken = providers.environmentVariable('MODRINTH_TOKEN')
+        minecraftVersions.addAll(gameVersions)
+        if (loader == 'fabric') requires('fabric-api')
+    }
+
+    curseforge {
+        projectId = required('curseforge_id', 'CurseForge project id')
+        accessToken = providers.environmentVariable('CURSEFORGE_TOKEN')
+        minecraftVersions.addAll(gameVersions)
+        client = true
+        server = true
+        if (loader == 'fabric') requires('fabric-api')
+    }
+}
+
+plugins.withId('net.fabricmc.fabric-loom-remap') {
+    publishMods.file = tasks.named('remapJar').flatMap { it.archiveFile }
+}
+
+// A real upload checks the ids and tokens before anything runs, so a missing one can't leave a release half published.
+gradle.taskGraph.whenReady { graph ->
+    if (isDryRun || !graph.allTasks.any { it instanceof PublishModTask && it.project == project }) return
+    def missing = []
+    ['modrinth_id', 'curseforge_id'].each { if (!findProperty(it)?.toString()?.trim()) missing << "$it in gradle.properties" }
+    ['MODRINTH_TOKEN', 'CURSEFORGE_TOKEN'].each { if (!providers.environmentVariable(it).getOrNull()) missing << "$it in the environment" }
+    if (missing) throw new GradleException("Can't publish ${project.path}: set ${missing.join(', ')}. For a dry run, pass -PpublishDryRun.")
+}
+
+// The plugin's dry run logs the files, name, version and changelog; this adds where each upload goes and as what.
+tasks.withType(PublishModTask).configureEach { task ->
+    def platform = task.platform
+    def summary = providers.provider {
+        def lines = ["${task.path}:",
+                     "  project ${platform.projectId.get()}, ${platform.type.get().toString().toLowerCase()}",
+                     "  loaders ${platform.modLoaders.get()}, Minecraft ${platform.minecraftVersions.get()}"]
+        lines << "  dependencies ${platform.dependencies.get().collect { "${it.type.get().toString().toLowerCase()} ${it.slug.get()}" }}"
+        lines.join('\n')
+    }
+    doFirst { logger.lifecycle(summary.get()) }
+}
