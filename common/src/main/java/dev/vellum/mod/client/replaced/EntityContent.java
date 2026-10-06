@@ -3,20 +3,21 @@ package dev.vellum.mod.client.replaced;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.client.render.McCanvas;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.TypedDataComponent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-//? if <26
-//import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
+//? if >=26 {
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.TypedDataComponent;
+import net.minecraft.nbt.StringTag;
+//?} else
+//import net.minecraft.world.item.DyeColor;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Set;

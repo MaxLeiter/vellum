@@ -23,8 +23,8 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.RegisterEvent;
-
-import java.util.function.Consumer;
+//? if <26
+//import java.util.function.Consumer;
 
 @Mod(Constants.MOD_ID)
 public final class VellumNeoForge {
