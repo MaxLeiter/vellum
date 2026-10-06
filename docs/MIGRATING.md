@@ -5,23 +5,20 @@ scroll state) to a Vellum page. Read the [Java API docs](index.md) first, then `
 
 ## 1. Set up the dependency
 
-Publish Vellum locally from a Vellum checkout, then depend on it (see [Setting up](api/setup.md)):
-
-```bash
-./gradlew publishToMavenLocal
-```
+Add Vellum's maven and depend on it (see [Setting up](api/setup.md) for every artifact):
 
 ```groovy
-repositories { mavenLocal() }
+repositories { maven { url = "https://maven.maxleiter.com"; content { includeGroup("dev.vellum") } } }
 // common/
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.3.0") }   // or vellum-common-1.21.1
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.4.1") }   // or vellum-common-1.21.1
 // neoforge/ and fabric/
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.3.0") }   // or vellum-fabric-26.3, and the 1.21.1 ones
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.4.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
 If most of your UI moves to Vellum, make it a required dependency (`type="required"` in `neoforge.mods.toml`,
 `"depends"` in `fabric.mod.json`) rather than keeping a vanilla fallback for every screen. Two UIs for one feature is the
-duplication you are porting to get rid of.
+duplication you are porting to get rid of. Don't bundle Vellum in your jar; list it as a required dependency on your
+Modrinth and CurseForge pages too.
 
 ## 2. The shape of a Vellum screen
 

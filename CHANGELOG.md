@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Vellum is on maven.maxleiter.com. Mods should make it a required dependency instead of bundling it.
+- `.mc-dim` and `.mc-center` give a page vanilla's dimmed background and centered layout.
+
 ## 0.4.1
 
 - First release on CurseForge and Modrinth.

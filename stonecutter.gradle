@@ -54,3 +54,17 @@ stonecutter.parameters { sc ->
         spec.replace('accessWidener v2 named', 'accessWidener v2 official')
     }
 }
+
+// maven.maxleiter.com is a static site (the MaxLeiter/maven repo on GitHub Pages). The release workflow checks it out
+// and publishes every artifact into it with -Pvellum_maven_dir=<checkout>: publishAllPublicationsToVellumMavenRepository.
+def vellumMavenDir = findProperty('vellum_maven_dir')
+if (vellumMavenDir) {
+    allprojects {
+        plugins.withId('maven-publish') {
+            publishing.repositories.maven {
+                name = 'vellumMaven'
+                url = rootProject.file(vellumMavenDir).toURI()
+            }
+        }
+    }
+}

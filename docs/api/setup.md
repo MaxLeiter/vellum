@@ -4,18 +4,25 @@ How to depend on Vellum, and which parts of its API are stable. [All docs](../in
 
 ## Depending on Vellum
 
-Gradle (until Vellum is on a public maven, publish it locally with `./gradlew publishToMavenLocal` from a Vellum
-checkout):
+Vellum is on [maven.maxleiter.com](https://maven.maxleiter.com):
 
 ```groovy
-repositories { mavenLocal() }
+repositories {
+    maven {
+        url = "https://maven.maxleiter.com"
+        content { includeGroup("dev.vellum") }
+    }
+}
 
 // common/ (compiles against vanilla): the API, plus the engine types it exposes
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.3.0") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.4.1") }
 
 // neoforge/ and fabric/: the loader jar, so dev runs load Vellum as a mod (it bundles the engine and Rhino)
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.3.0") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.4.1") }   // or vellum-fabric-26.3
 ```
+
+To build against an unreleased Vellum, run `./gradlew publishToMavenLocal` in a Vellum checkout and add
+`mavenLocal()` to your repositories.
 
 Each Minecraft version has its own artifacts, all at the same Vellum version:
 
@@ -36,16 +43,21 @@ both versions, except:
 - `VellumScreen` and `VellumContainerScreen` override 1.21.1's screen methods (`render`, `mouseClicked(double, double,
   int)`...), so subclasses override those there.
 
-Declare the dependency in your mod metadata: `[[dependencies.<modid>]] modId="vellum" type="optional"` (or
-`"required"`) in `neoforge.mods.toml`, and `"suggests": {"vellum": "*"}` (or `"depends"`) in `fabric.mod.json`.
-Players install Vellum like any other mod; don't nest its jar in yours.
+Make Vellum a required dependency: `[[dependencies.<modid>]] modId="vellum" type="required"` in `neoforge.mods.toml`,
+`"depends": {"vellum": ">=0.4.1"}` in `fabric.mod.json`, and a required dependency on your Modrinth and CurseForge
+pages, so launchers install it with your mod. Don't bundle Vellum in your jar (`jarJar` or `include`). Players then
+get Vellum fixes without waiting for every mod that bundles it, and a modpack has one copy.
 
-- Treat Vellum as an optional dependency unless your mod is built around it. Check that it is loaded before
-  touching `dev.vellum` classes:
+If your mod works without Vellum, make it optional instead (`type="optional"`, `"suggests"`), and:
+
+- Check that Vellum is loaded before touching `dev.vellum` classes:
   - NeoForge: `ModList.get().isLoaded("vellum")`
   - Fabric: `FabricLoader.getInstance().isModLoaded("vellum")`
 - Put your Vellum-facing code in a separate class. It is then only class-loaded when Vellum is present, and you can
   fall back to a vanilla screen otherwise.
+
+Either way:
+
 - Server calls run on the server thread; client calls run on the render thread.
 - A page URL is a resource id: `mymod:vellum/shop.html` is
   `assets/mymod/vellum/shop.html` in your jar (or in a resource pack, which can restyle your UI). Stylesheets,

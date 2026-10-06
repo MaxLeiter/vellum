@@ -1,8 +1,9 @@
 name: Release
 
 # Pushing a tag v<version> (the version in gradle.properties) builds Vellum, makes a GitHub release with the jars
-# and the version's CHANGELOG.md section, then uploads the jars to Modrinth and CurseForge. The store uploads are skipped,
-# with a warning, while MODRINTH_TOKEN and CURSEFORGE_TOKEN aren't set.
+# and the version's CHANGELOG.md section, publishes the Maven artifacts to maven.maxleiter.com, then uploads the jars
+# to Modrinth and CurseForge. Each upload is skipped, with a warning, while its secret (MAVEN_DEPLOY_KEY,
+# MODRINTH_TOKEN, CURSEFORGE_TOKEN) isn't set.
 #
 # Run it by hand ("Run workflow") for a dry run, which builds and shows what it would upload. Run it by hand on a tag
 # with dry run off to redo a release: the GitHub release's jars and notes are replaced, and "skip stores" leaves
@@ -101,7 +102,7 @@ jobs:
               echo "| \`$name\` | $loader | $mc |"
             done
             echo
-            echo "Mods that bundle Vellum keep working when it's installed on its own too; the newest copy wins."
+            echo "For mod developers, the \`dev.vellum\` artifacts are on https://maven.maxleiter.com. See [setup](https://github.com/MaxLeiter/vellum/blob/main/docs/api/setup.md)."
           } > dist/notes.md
           cat dist/notes.md
 
@@ -129,6 +130,34 @@ jobs:
             flags=()
             [ "$PRERELEASE" = true ] && flags+=(--prerelease)
             gh release create "v$VERSION" dist/*.jar --title "Vellum $VERSION" --notes-file dist/notes.md --verify-tag "${flags[@]}"
+          fi
+
+      # maven.maxleiter.com is the MaxLeiter/maven repo on GitHub Pages. MAVEN_DEPLOY_KEY is a deploy key with write
+      # access to it.
+      - name: Publish to maven.maxleiter.com
+        if: env.DRY_RUN != 'true'
+        env:
+          MAVEN_DEPLOY_KEY: ${{ secrets.MAVEN_DEPLOY_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -z "$MAVEN_DEPLOY_KEY" ]; then
+            echo "::warning::MAVEN_DEPLOY_KEY isn't set, so nothing was published to maven.maxleiter.com."
+            exit 0
+          fi
+          key="$RUNNER_TEMP/maven_key"
+          printf '%s\n' "$MAVEN_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone --depth 1 git@github.com:MaxLeiter/maven.git "$RUNNER_TEMP/maven"
+          ./gradlew publishAllPublicationsToVellumMavenRepository -Pvellum_maven_dir="$RUNNER_TEMP/maven" --stacktrace
+          cd "$RUNNER_TEMP/maven"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "maven.maxleiter.com already has Vellum $VERSION."
+          else
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -q -m "Vellum $VERSION"
+            git push
           fi
 
       - name: Publish to Modrinth and CurseForge

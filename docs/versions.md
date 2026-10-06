@@ -12,7 +12,7 @@ Vellum builds for two Minecraft versions from one source tree, with [Stonecutter
 Each version has its own Gradle projects, named after it: `:common:1.21.1`, `:neoforge:1.21.1`, `:fabric:1.21.1`.
 Their settings are in `stonecutter.properties.toml`. The engine, Rhino and the previewer are built once and shared.
 The jars are `vellum-<loader>-<minecraft>-<version>.jar` (`vellum-neoforge-1.21.1-0.3.0.jar`) in
-`<loader>/versions/<minecraft>/build/libs/`, and `./gradlew publishToMavenLocal` publishes
+`<loader>/versions/<minecraft>/build/libs/`, and a release publishes
 `dev.vellum:vellum-{common,neoforge,fabric}-<minecraft>` for both versions at the same Vellum version.
 
 The sources are written for 26.3. Where 1.21.1 differs, Stonecutter comments (`//? if >=26 {`) pick the code, and
@@ -49,7 +49,7 @@ Everything works on 1.21.1, with these differences:
 5. Add the version to the table at the top of this file, list anything that works differently on it, and add a line
    to `CHANGELOG.md` under the next version.
 
-Commit with the sources on 26.3. Publishing needs nothing more: CI, `publishToMavenLocal` and the release workflow
-build every version in `settings.gradle`, each version's jars are uploaded to Modrinth and CurseForge tagged with its
-Minecraft version, and the GitHub release lists them. If one jar also runs on other Minecraft versions, list them all
-in that version's table as `publish_minecraft_versions = "26.2, 26.2.1"`.
+Commit with the sources on 26.3. Publishing needs nothing more. CI and the release workflow build every version in
+`settings.gradle`. A release publishes each version's artifacts to maven.maxleiter.com, uploads its jars to Modrinth
+and CurseForge tagged with its Minecraft version, and lists them in the GitHub release. If one jar also runs on other
+Minecraft versions, list them all in that version's table as `publish_minecraft_versions = "26.2, 26.2.1"`.

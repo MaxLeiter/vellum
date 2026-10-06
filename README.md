@@ -4,7 +4,7 @@
 
 Vellum is a small web engine inside Minecraft. Screens, inventories, HUD and map can be expressed as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the normal GUI renderer. It runs on Minecraft 26.3 and 1.21.1, on NeoForge and Fabric.
 
-You may not need to install this yourself. It's a library for other mods.
+You don't need to install this on its own. It's a library: mods that use it list it as a dependency, and launchers install it with them.
 
 The inspiration for Vellum was two-fold:
 
@@ -55,7 +55,14 @@ Where Vellum behaves differently from a browser, the docs say so.
 
 ### For mod developers
 
-Vellum is in development. Other mods (Chronicle, claudemons) use it as a library. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
+Vellum is in development. Other mods (Chronicle, claudemons) use it as a library. It's on [maven.maxleiter.com](https://maven.maxleiter.com):
+
+```groovy
+repositories { maven { url = "https://maven.maxleiter.com"; content { includeGroup("dev.vellum") } } }
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.4.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
+```
+
+Make it a required dependency of your mod, here and on Modrinth and CurseForge, rather than bundling it. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
 
 ### Servers
 
@@ -126,11 +133,12 @@ Minecraft 26.3 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). A f
 1. Set `version` in `gradle.properties` and add a `## <version>` section to `CHANGELOG.md`.
 2. Commit, then tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
 
-The tag runs `.github/workflows/release.yml`, which builds, uploads a NeoForge and a Fabric jar per Minecraft version to Modrinth and CurseForge (the
-project ids are `modrinth_id` and `curseforge_id` in `gradle.properties`, the tokens the `MODRINTH_TOKEN` and
-`CURSEFORGE_TOKEN` secrets) and makes a GitHub release. `release_type` in `gradle.properties` picks release, beta or alpha.
-Running the workflow by hand is a dry run, and so is `./gradlew publishMods -PpublishDryRun` locally: both show what
-would be uploaded and upload nothing.
+The tag runs `.github/workflows/release.yml`. It builds, makes a GitHub release, publishes the Maven artifacts to
+[maven.maxleiter.com](https://github.com/MaxLeiter/maven), and uploads a NeoForge and a Fabric jar per Minecraft
+version to Modrinth and CurseForge. The secrets are `MAVEN_DEPLOY_KEY`, `MODRINTH_TOKEN` and `CURSEFORGE_TOKEN`, and
+the store project ids are `modrinth_id` and `curseforge_id` in `gradle.properties`. `release_type` there picks
+release, beta or alpha. Running the workflow by hand is a dry run, and so is `./gradlew publishMods -PpublishDryRun`
+locally: both show what would be uploaded and upload nothing.
 
 ## License
 

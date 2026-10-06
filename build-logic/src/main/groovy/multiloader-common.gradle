@@ -95,9 +95,4 @@ publishing {
             from components.java
         }
     }
-    repositories {
-        maven {
-            url System.getenv('local_maven_url')
-        }
-    }
 }
