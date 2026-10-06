@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      # Gradle provisions the per-version toolchains (Java 25 for 26.3, Java 21 for 1.21.1) itself; this JDK runs Gradle.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      # Caches Gradle, the Minecraft artifacts and the pinned Rhino source archive (in the Gradle user home).
+      - uses: gradle/actions/setup-gradle@v5
+
+      # Engine and previewer tests, both Minecraft versions on both loaders, and Fabric's GameTests.
+      - run: ./gradlew build --stacktrace
+
+      - if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jars
+          path: |
+            neoforge/versions/*/build/libs/*.jar
+            fabric/versions/*/build/libs/*.jar
+          if-no-files-found: warn
