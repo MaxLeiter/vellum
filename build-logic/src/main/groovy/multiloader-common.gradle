@@ -59,6 +59,7 @@ processResources {
             'description'                  : project.description,
             'neoforge_version'             : neoforge_version,
             'neoforge_loader_version_range': neoforge_loader_version_range,
+            'neoforge_logo_key'            : neoforge_logo_key,
             'credits'                      : credits,
             'java_version'                 : java_version
     ]

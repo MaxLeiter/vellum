@@ -4,6 +4,7 @@
 
 - Vellum is on maven.maxleiter.com. Mods should make it a required dependency instead of bundling it.
 - `.mc-dim` and `.mc-center` give a page vanilla's dimmed background and centered layout.
+- Vellum now runs on Minecraft 26.2 as well as 26.3 and 1.21.1, on NeoForge (26.2.0.88) and Fabric (Fabric API 0.161.0+26.2). Everything works on 26.2 except the dev tour (`-Ptour`), which stays 26.3 only; docs/versions.md lists the differences.
 
 ## 0.4.1
 

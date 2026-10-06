@@ -1,7 +1,7 @@
 # Vellum docs
 
 Vellum shows HTML, CSS and JavaScript pages as Minecraft screens, inventories and HUD overlays. The Java API is the same
-on NeoForge and Fabric, and on Minecraft 26.3 and 1.21.1 apart from the differences listed where they apply.
+on NeoForge and Fabric, and on Minecraft 26.3, 26.2 and 1.21.1 apart from the differences listed where they apply.
 
 ## Java API
 
@@ -21,6 +21,6 @@ on NeoForge and Fabric, and on Minecraft 26.3 and 1.21.1 apart from the differen
 
 ## Internals
 
-- [Minecraft versions](versions.md): what differs on 1.21.1, and how both versions build from one source tree.
+- [Minecraft versions](versions.md): what differs on 26.2 and 1.21.1, and how the versions build from one source tree.
 - [Minecraft 26.3 GUI notes](MC_26_3_GUI_API.md): how the 26.3 GUI renderer works, for working on Vellum itself.
 - [Previewer](../preview/README.md) and [patched Rhino](../rhino/README.md).

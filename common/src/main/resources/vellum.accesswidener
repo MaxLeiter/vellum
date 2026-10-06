@@ -10,7 +10,20 @@ accessible field net/minecraft/client/gui/GuiGraphicsExtractor scissorStack Lnet
 accessible class net/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack
 
 # GuiSceneRenderer blits its pictures with a colour (vanilla's picture renderers blit white).
+#? if >=26.3 {
 accessible field net/minecraft/client/gui/render/pip/PictureInPictureRenderer textureView Lcom/mojang/renderpearl/api/textures/GpuTextureView;
+#?} else {
+#accessible field net/minecraft/client/gui/render/pip/PictureInPictureRenderer textureView Lcom/mojang/blaze3d/textures/GpuTextureView;
+#?}
+
+#? if <26.3 {
+## VellumAutomation sends input through the mouse and keyboard handlers, as the window's callbacks do (private on 26.2).
+#accessible method net/minecraft/client/MouseHandler onButton (JLnet/minecraft/client/input/MouseButtonInfo;I)V
+#accessible method net/minecraft/client/MouseHandler onScroll (JDD)V
+#accessible method net/minecraft/client/MouseHandler onMove (JDD)V
+#accessible method net/minecraft/client/KeyboardHandler keyPress (JILnet/minecraft/client/input/KeyEvent;)V
+#accessible method net/minecraft/client/KeyboardHandler charTyped (JLnet/minecraft/client/input/CharacterEvent;)V
+#?}
 
 # VellumContainerScreen's GUI area is the page's content, which JEI and REI read to lay out beside it.
 mutable field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen imageWidth I
@@ -24,6 +37,7 @@ mutable field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
 ## VellumAutomation sends input through the mouse and keyboard handlers, as GLFW's callbacks do.
 #accessible method net/minecraft/client/MouseHandler onPress (JIII)V
 #accessible method net/minecraft/client/MouseHandler onScroll (JDD)V
+#accessible method net/minecraft/client/MouseHandler onMove (JDD)V
 #accessible method net/minecraft/client/MouseHandler onMove (JDD)V
 #accessible method net/minecraft/client/KeyboardHandler charTyped (JII)V
 #

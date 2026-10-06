@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Gradle provisions the per-version toolchains (Java 25 for 26.3, Java 21 for 1.21.1) itself; this JDK runs Gradle.
+      # Gradle provisions the per-version toolchains (Java 25 for 26.3 and 26.2, Java 21 for 1.21.1) itself; this JDK runs Gradle.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

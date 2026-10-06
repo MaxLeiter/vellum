@@ -29,17 +29,21 @@ Each Minecraft version has its own artifacts, all at the same Vellum version:
 | Minecraft | Common | NeoForge | Fabric |
 |---|---|---|---|
 | 26.3 | `dev.vellum:vellum-common-26.3` | `dev.vellum:vellum-neoforge-26.3` | `dev.vellum:vellum-fabric-26.3` |
+| 26.2 | `dev.vellum:vellum-common-26.2` | `dev.vellum:vellum-neoforge-26.2` | `dev.vellum:vellum-fabric-26.2` |
 | 1.21.1 | `dev.vellum:vellum-common-1.21.1` | `dev.vellum:vellum-neoforge-1.21.1` | `dev.vellum:vellum-fabric-1.21.1` |
 
 On 1.21.1 the Fabric jar is remapped to intermediary names like any Fabric mod for an obfuscated version: depend on it
 with `modImplementation`, and compile against Mojang's mappings, as `vellum-common-1.21.1` is. The API is the same on
-both versions, except:
+every version, except:
 
 - `VellumEntities.registerPortraitState` is 26.3 only (1.21.1 has no entity render states; see
   [Entity render states](elements.md#entity-render-states)).
 - `DocumentDriver.onKey` handlers get Vellum's `dev.vellum.mod.client.input.KeyEvent` on 1.21.1, a record with
   the shape of 26.3's `net.minecraft.client.input.KeyEvent` (`key()`, `modifiers()`, `isEscape()`,
   `hasShiftDown()`...) whose `key()` is a GLFW key code and whose `scancode()` replaces `keycode()`.
+- On 26.2 the input events are Minecraft's own, as on 26.3, but 26.2 uses GLFW: `KeyEvent.key()` is a GLFW key code and
+  `scancode()` replaces 26.3's `keycode()`; its render API is in `com.mojang.blaze3d.*` where 26.3's is in
+  `com.mojang.renderpearl.api.*`.
 - `VellumScreen` and `VellumContainerScreen` override 1.21.1's screen methods (`render`, `mouseClicked(double, double,
   int)`...), so subclasses override those there.
 

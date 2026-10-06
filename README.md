@@ -2,7 +2,7 @@
 
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui) | [Modrinth](https://modrinth.com/mod/vellum-gui) | [Docs](docs/index.md)
 
-Vellum is a small web engine inside Minecraft. Screens, inventories, HUD and map can be expressed as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the normal GUI renderer. It runs on Minecraft 26.3 and 1.21.1, on NeoForge and Fabric.
+Vellum is a small web engine inside Minecraft. Screens, inventories, HUD and map can be expressed as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the normal GUI renderer. It runs on Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric.
 
 You don't need to install this on its own. It's a library: mods that use it list it as a dependency, and launchers install it with them.
 
@@ -108,7 +108,7 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 
 ## Building
 
-You need JDK 25 or newer and git; Gradle provisions the toolchains (25 for 26.3, 21 for 1.21.1).
+You need JDK 25 or newer and git; Gradle provisions the toolchains (25 for 26.3 and 26.2, 21 for 1.21.1).
 
 Vellum uses a patched Rhino. The build downloads the upstream source pinned in `gradle.properties` (once, checked
 against its SHA-256), applies the patches in `rhino/patches` and compiles it, so there is nothing to install first.
@@ -116,7 +116,7 @@ against its SHA-256), applies the patches in `rhino/patches` and compiles it, so
 
 ```bash
 ./gradlew :engine:test                 # engine tests
-./gradlew build                        # everything, both Minecraft versions, including Fabric's headless GameTests
+./gradlew build                        # everything, every Minecraft version, including Fabric's headless GameTests
 ./gradlew :neoforge:26.3:runClient     # dev client (or :fabric:26.3, :neoforge:1.21.1, :fabric:1.21.1)
 ./gradlew :neoforge:26.3:runGameTestServer   # NeoForge's GameTests
 ./gradlew :preview:installDist         # previewer, at preview/build/install/preview/bin/preview
@@ -124,7 +124,7 @@ against its SHA-256), applies the patches in `rhino/patches` and compiles it, so
 
 ## Versions
 
-Minecraft 26.3 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). A few things differ on 1.21.1; [docs/versions.md](docs/versions.md) lists them and how the two versions are built.
+Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). A few things differ on 26.2 and 1.21.1; [docs/versions.md](docs/versions.md) lists them and how the versions are built.
 
 ## Releases
 

@@ -48,8 +48,13 @@ public final class VellumNeoForgeClient {
         //? if >=26 {
         VellumClient.init(payload -> ClientPacketDistributor.sendToServer(payload));
         // <item tooltip>: pass the stack on to NeoForge's tooltip events, as vanilla's item tooltips do.
+        //? if >=26.3 {
         ItemTooltips.install((g, font, lines, stack, x, y) -> g.setTooltipForNextFrame(font, lines, stack.getTooltipImage(),
                 stack, x, y, stack.get(DataComponents.TOOLTIP_STYLE), true));
+        //?} else {
+        /*ItemTooltips.install((g, font, lines, stack, x, y) -> g.setTooltipForNextFrame(font, lines, stack.getTooltipImage(),
+                stack, x, y, stack.get(DataComponents.TOOLTIP_STYLE)));
+        *///?}
         modBus.addListener(VellumNeoForgeClient::registerPayloadHandlers);
         modBus.addListener((RegisterPictureInPictureRenderersEvent e) -> e.register(GuiSceneRenderState.class, GuiSceneRenderer::new));
         modBus.addListener((AddClientReloadListenersEvent e) ->

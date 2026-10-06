@@ -23,7 +23,7 @@ Modrinth
 - Project type: Mod
 - Categories: Library (primary), Utility
 - Loaders: NeoForge, Fabric
-- Game versions: 26.3, 1.21.1
+- Game versions: 26.3, 26.2, 1.21.1
 - Client side: Required
 - Server side: Optional (only needed for pages a server opens)
 - License: MIT
@@ -86,7 +86,7 @@ A server mod can open a page on a player's client, push data to it and get messa
 
 ### Versions
 
-Minecraft 26.3 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). 3D models can't fade on 1.21.1, and a couple of entity hooks are 26.3 only.
+Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). 3D models can't fade on 1.21.1, and a couple of entity hooks are 26.3 only.
 
 LLMs were used extensively in the development of Vellum.
 
