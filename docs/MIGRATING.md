@@ -10,9 +10,9 @@ Add Vellum's maven and depend on it (see [Setting up](api/setup.md) for every ar
 ```groovy
 repositories { maven { url = "https://maven.maxleiter.com"; content { includeGroup("dev.vellum") } } }
 // common/
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.4.1") }   // or vellum-common-1.21.1
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.5.1") }   // or vellum-common-1.21.1
 // neoforge/ and fabric/
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.4.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.5.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
 If most of your UI moves to Vellum, make it a required dependency (`type="required"` in `neoforge.mods.toml`,

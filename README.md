@@ -59,10 +59,10 @@ Vellum is in development. Other mods (Chronicle, claudemons) use it as a library
 
 ```groovy
 repositories { maven { url = "https://maven.maxleiter.com"; content { includeGroup("dev.vellum") } } }
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.4.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.5.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
-Make it a required dependency of your mod, here and on Modrinth and CurseForge, rather than bundling it. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
+Make it a required dependency of your mod, here and on Modrinth and CurseForge, rather than bundling it. [`template/`](template/README.md) has small NeoForge and Fabric mods to start from. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
 
 ### Servers
 

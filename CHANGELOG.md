@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+- `list-style` and `list-style-type` work: `none` removes a list's bullets, and `disc`, `circle` and `square` pick them.
+- Enter in a text field submits its form, as in browsers.
+- NeoForge 26.3 no longer warns about Vellum's deprecated `logoFile` at startup.
+- `template/` has example mods for NeoForge and Fabric that depend on Vellum from the maven.
+
 ## 0.5.0
 
 - Vellum is on maven.maxleiter.com. Mods should make it a required dependency instead of bundling it.

@@ -14,7 +14,7 @@ import java.util.function.Function;
 
 /**
  * The shorthand registry and expanders. Expanders only route component values to longhands (see {@link Shorthand});
- * validation happens when each longhand parses its part. {@code list-style} is accepted and ignored.
+ * validation happens when each longhand parses its part. {@code list-style} only sets {@code list-style-type}.
  */
 final class Shorthands {
     /** The value given to longhands a shorthand omits. */
@@ -22,6 +22,7 @@ final class Shorthands {
     private static final List<ComponentValue> AUTO = values("auto"), ZERO = values("0"), ONE = values("1"),
             ZERO_PERCENT = values("0%"), COMMA = values(",");
     private static final Set<String> POSITION_KEYWORDS = Set.of("left", "right", "top", "bottom", "center");
+    private static final Set<String> LIST_STYLE_TYPES = Set.of("disc", "circle", "square", "none");
     private static final Set<String> DECORATION_STYLES = Set.of("solid", "double", "dotted", "dashed", "wavy",
             "auto", "from-font");
     private static final Longhand BG_COLOR = Properties.longhand("background-color"),
@@ -100,7 +101,7 @@ final class Shorthands {
         list("animation", ListGroup.ANIMATION, "animation-timing-function", "animation-duration", "animation-delay",
                 "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state",
                 "animation-name");
-        register("list-style", List.of(), (l, v) -> Map.of());
+        register("list-style", List.of(Properties.longhand("list-style-type")), Shorthands::listStyle);
     }
 
     private Shorthands() {}
@@ -384,6 +385,16 @@ final class Shorthands {
             ys.add(axes.get(1));
         }
         return Map.of(BG_X, joinCommas(xs), BG_Y, joinCommas(ys));
+    }
+
+    /** {@code list-style}: its type keyword goes to {@code list-style-type}; position and image are ignored. */
+    private static Map<Longhand, List<ComponentValue>> listStyle(List<Longhand> l, List<ComponentValue> v) {
+        for (ComponentValue c : v) {
+            if (c instanceof Token t && t.is(Type.IDENT) && LIST_STYLE_TYPES.contains(t.lower)) {
+                return Map.of(l.get(0), List.of(c));
+            }
+        }
+        return Map.of(l.get(0), INITIAL);
     }
 
     /** Layers of {@code <image> || <position> [/ <size>] || <repeat> || <attachment> || <box>{1,2}}, then a colour. */

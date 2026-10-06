@@ -30,7 +30,6 @@ differences, which live in `common/versions/26.2/src` (copies of the 26.3 files,
 - `PoseStack` has `mulPose(Quaternionfc)` but no `rotate` or `rotateDegrees`; `SubmitNodeCollection` has a no-argument constructor and `submitModel` takes a sprite and a crumbling overlay where 26.3 takes a `UvMapping`.
 - `GuiGraphicsExtractor.setTooltipForNextFrame` has no `replaceExisting` overload with an item style (NeoForge's takes the stack and style only); `ScreenNarrationCollector.update` has no `NarrationTrigger`.
 - `MouseHandler.onButton`, `onScroll`, `onMove` and `KeyboardHandler.keyPress`, `charTyped` are private: they are widened (`#? if <26.3`), and `PictureInPictureRenderer.textureView` is widened with the `blaze3d` type.
-- NeoForge 26.2 deprecates `logoFile` in neoforge.mods.toml, so 26.2 uses `iconFile` (`neoforge_logo_key`).
 - The dev tour is off: `DevTour` and `TourCursor` are the 1.21.1 stubs, since the tour hides and reads the system cursor through SDL.
 
 Everything works on 1.21.1, with these differences:
@@ -55,8 +54,8 @@ Everything works on 1.21.1, with these differences:
    `KeyNames`, `Scene`, `EntityPortrait`, `GameTests`), copy the nearest version's `common/versions/<minecraft>/src`
    and fix what changed. The access transformer and access widener are shared by every version, with `#? if` blocks
    for what one version needs (a disabled block's lines are commented with `##`, not `#`: the widener parser rejects
-   the leading space a single `#` leaves behind). Check the mod metadata too: 26.2 needed `iconFile` instead of
-   `logoFile` in `neoforge.mods.toml` (`neoforge_logo_key`), since NeoForge's deprecation warning screen stops the
+   the leading space a single `#` leaves behind). Check the mod metadata too: NeoForge 26.x needs `iconFile` instead
+   of `logoFile` in `neoforge.mods.toml` (`neoforge_logo_key`), since NeoForge's deprecation warning screen stops the
    client at startup. Typical breakage between neighbouring 26.x versions: package moves (`blaze3d` to `renderpearl`),
    private input handlers that need widening, and changed signatures in tooltip and model submission code;
    26.2 is a worked example (`common/versions/26.2/src` and the `>=26.3` comments).

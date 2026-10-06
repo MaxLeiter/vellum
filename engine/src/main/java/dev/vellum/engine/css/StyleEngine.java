@@ -152,6 +152,7 @@ public final class StyleEngine {
         for (Entry e : matched) {
             if (e.selector().pseudoElement != which) continue;
             s = cascade.compute(el, style, style, rem, matched, which, null, null);
+            if (s.content == ComputedStyle.LIST_MARKER) s.content = s.listStyleType.marker;
             if (which != PseudoElement.PLACEHOLDER && s.content == null) s = null;
             break;
         }

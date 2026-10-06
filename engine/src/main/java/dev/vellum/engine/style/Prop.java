@@ -147,6 +147,7 @@ public enum Prop {
     TRANSITION("transition", false, false, Interp.NONE, s -> s.transitions, (s, v) -> s.transitions = (List<TransitionSpec>) v),
     ANIMATION("animation", false, false, Interp.NONE, s -> s.animations, (s, v) -> s.animations = (List<AnimationSpec>) v),
     CONTENT("content", false, true, Interp.DISCRETE, s -> s.content, (s, v) -> s.content = (String) v),
+    LIST_STYLE_TYPE("list-style-type", true, false, Interp.DISCRETE, s -> s.listStyleType, (s, v) -> s.listStyleType = (ListStyleType) v),
     CUSTOM_PROPERTIES("--*", true, false, Interp.NONE, s -> s.customProperties, (s, v) -> s.customProperties = (Map<String, String>) v);
 
     /** How a property animates. DISCRETE flips at the midpoint; NONE is not animatable. */

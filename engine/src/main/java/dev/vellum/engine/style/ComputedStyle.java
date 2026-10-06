@@ -168,6 +168,7 @@ public final class ComputedStyle implements Cloneable {
      * vanilla shows a slot's item.
      */
     public float tooltipDelay = 500f;
+    public ListStyleType listStyleType = ListStyleType.DISC;
 
     // ---- Animation ----
     public List<TransitionSpec> transitions = List.of();
@@ -176,6 +177,11 @@ public final class ComputedStyle implements Cloneable {
     // ---- Generated content and custom properties ----
     /** {@code content} for ::before / ::after; null means none. */
     public String content;
+    /**
+     * {@code content: -vellum-list-marker}: the marker of the element's {@code list-style-type}. The style engine
+     * replaces it with the marker text (or no box, for none) when it computes a ::before or ::after.
+     */
+    public static final String LIST_MARKER = new String("-vellum-list-marker");
     /** Custom properties ({@code --name}), raw token text. Inherited; treat as immutable and replace on write. */
     public Map<String, String> customProperties = Map.of();
 
@@ -231,6 +237,7 @@ public final class ComputedStyle implements Cloneable {
         scrollbarThumbColor = parent.scrollbarThumbColor;
         scrollbarTrackColor = parent.scrollbarTrackColor;
         tooltipDelay = parent.tooltipDelay;
+        listStyleType = parent.listStyleType;
         customProperties = parent.customProperties;
     }
 
@@ -249,7 +256,8 @@ public final class ComputedStyle implements Cloneable {
                 && pointerEvents == o.pointerEvents && userSelect == o.userSelect
                 && imageRendering == o.imageRendering && accentColor == o.accentColor && tint == o.tint
                 && scrollbarThumbColor == o.scrollbarThumbColor && scrollbarTrackColor == o.scrollbarTrackColor
-                && same(tooltipDelay, o.tooltipDelay) && customProperties.equals(o.customProperties);
+                && same(tooltipDelay, o.tooltipDelay) && listStyleType == o.listStyleType
+                && customProperties.equals(o.customProperties);
     }
 
     /**
@@ -317,6 +325,7 @@ public final class ComputedStyle implements Cloneable {
                 && same(gazeLimitDown, o.gazeLimitDown) && scrollSmooth == o.scrollSmooth
                 && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && same(tooltipDelay, o.tooltipDelay)
+                && listStyleType == o.listStyleType
                 && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
                 && isFlexOrGridItemHint == o.isFlexOrGridItemHint;

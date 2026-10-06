@@ -212,7 +212,10 @@ final class TextField {
             case "Backspace", "Delete" -> perform(editor.planDelete(key.equals("Delete"), word));
             case "Enter" -> {
                 if (multiline) perform(editor.planInsert("\n", "insertLineBreak"));
-                else commitChange();
+                else {
+                    commitChange();
+                    Forms.submitImplicitly(element);
+                }
             }
             default -> { }
         }

@@ -1,6 +1,7 @@
 package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.event.Event;
 import dev.vellum.engine.event.InputEvent;
 
 import java.util.Set;
@@ -27,6 +28,30 @@ final class Forms {
             case "submit", "reset", "button", "image" -> true;
             default -> false;
         };
+    }
+
+    /** Submit buttons: {@code <button>} without a type (or type=submit) and input types submit and image. */
+    static boolean isSubmit(Element e) {
+        if (e.tagName().equals("button")) {
+            String type = e.getAttribute("type");
+            return type == null || !(type.equalsIgnoreCase("button") || type.equalsIgnoreCase("reset"));
+        }
+        return e.inputType().equals("submit") || e.inputType().equals("image");
+    }
+
+    /**
+     * Enter in a single-line text field submits its form, as in browsers: it clicks the form's first submit button,
+     * or, when the form has none, submits the form if the field is its only one.
+     */
+    static void submitImplicitly(Element field) {
+        Element form = field.form();
+        if (form == null) return;
+        Element button = form.firstDescendant(Forms::isSubmit);
+        if (button != null) {
+            if (!button.isDisabled()) button.click();
+        } else if (form.descendants(d -> d.tagName().equals("input") && d.isTextControl()).size() == 1) {
+            form.dispatchEvent(new Event("submit", true, true));
+        }
     }
 
     /** True for a {@code <summary>} that toggles its parent {@code <details>}. */

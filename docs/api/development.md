@@ -16,8 +16,9 @@ Commands, hot reload, and driving pages from code for autopilots and tests. [All
 
 - When a page fails to load or the engine throws, the screen shows the error and its stack instead of crashing;
   `/vellum reload` tries again.
-- In a development environment Vellum reads pages from `common/src/main/resources/assets` directly and reloads open
-  pages when a file they were read from is saved.
+- In a development environment Vellum reads pages straight from your sources and reloads open pages when a file
+  they were read from is saved. It looks for `src/main/resources/assets` and `common/src/main/resources/assets` from
+  the run directory up to the project root (the directory with `settings.gradle`).
 - `config/vellum.properties`: `client.reducedMotion=true` makes pages match `@media (prefers-reduced-motion: reduce)`.
   The file holds every other setting too ([Settings](security.md#settings)).
 

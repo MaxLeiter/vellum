@@ -164,6 +164,19 @@ class UserAgentSheetTest {
     }
 
     @Test
+    void listStyleTypeSetsTheBullet() {
+        Page page = new TestHost().load("<style>.none { list-style: none } .sq { list-style-type: square }"
+                + " .circle { list-style: circle inside }</style>"
+                + "<ul class=none><li id=a>a</li></ul><ul class=sq><li id=b>b</li></ul><ul class=circle><li id=c>c</li></ul>"
+                + "<ul><li id=d style='list-style: none'>d</li><li id=e>e</li></ul>");
+        assertNull(page.query("#a").beforeStyle, "list-style: none on the list removes its bullets");
+        assertEquals("▪ ", page.query("#b").beforeStyle.content);
+        assertEquals("◦ ", page.query("#c").beforeStyle.content, "position keywords in the shorthand are ignored");
+        assertNull(page.query("#d").beforeStyle, "or on one item");
+        assertEquals("• ", page.query("#e").beforeStyle.content);
+    }
+
+    @Test
     void utilityClasses() {
         Page page = new TestHost().load("<div class=mc-panel><span class=mc-label>Inventory</span></div><div class=mc-inset></div>"
                 + "<div class=mc-tooltip></div><div class=mc-dark></div>");

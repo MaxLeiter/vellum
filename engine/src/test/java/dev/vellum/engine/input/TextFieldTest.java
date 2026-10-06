@@ -313,4 +313,22 @@ class TextFieldTest {
         page.frame(1800);
         assertTrue(field.caretOn());
     }
+
+    @Test
+    void enterSubmitsTheFormAsInBrowsers() {
+        Page p = new TestHost().load("""
+                <form id=a><input id=a1><input id=a2><button id=ab type=button>no</button><button id=go>go</button></form>
+                <form id=b><input id=b1></form>
+                <form id=c><input id=c1><input id=c2></form>
+                <form id=d><input id=d1><button disabled>go</button></form>
+                <form id=e><textarea id=e1></textarea></form>""");
+        for (String id : List.of("a", "b", "c", "d", "e")) p.listen(p.byId(id), "submit");
+        p.listen(p.byId("go"), "click");
+        for (String id : List.of("a2", "b1", "c1", "d1", "e1")) {
+            p.byId(id).focus();
+            p.input.keyDown("Enter", "Enter", NONE);
+        }
+        assertEquals(List.of("click:go", "submit:a", "submit:b"), p.log,
+                "the first submit button is clicked; a form without one submits when it has a single field");
+    }
 }

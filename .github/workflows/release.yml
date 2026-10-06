@@ -54,6 +54,12 @@ jobs:
             echo "::error::Only a tag publishes. Run this from tag v$version, or as a dry run."
             exit 1
           fi
+          for loader in neoforge fabric; do
+            if ! grep -q "^vellum_version=$version$" "template/$loader/gradle.properties"; then
+              echo "::error::template/$loader/gradle.properties should have vellum_version=$version, so new mods start on this release."
+              exit 1
+            fi
+          done
           if ! grep -q "^## $version\b" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no '## $version' section."
             exit 1

@@ -13,7 +13,7 @@ fabric_loader_version = "0.19.5"
 # NeoForge, see https://projects.neoforged.net/neoforged/neoforge
 neoforge_version = "26.3.0.26-beta"
 neoforge_loader_version_range = "[4,)"
-neoforge_logo_key = "logoFile"
+neoforge_logo_key = "iconFile"
 
 ["26.2"]
 minecraft_version = "26.2"

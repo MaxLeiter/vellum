@@ -32,7 +32,7 @@ blockquote { margin: 0 0 8px; padding-left: 6px; border-left: 2px solid rgba(255
 hr { height: 0; margin: 4px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.3); }
 ul, ol { margin: 0 0 8px; padding-left: 12px; }
 dd { margin-left: 12px; }
-ul > li::before { content: "• "; }
+ul > li::before { content: -vellum-list-marker; }
 fieldset { margin: 0 0 8px; padding: 4px; border: 1px solid rgba(255, 255, 255, 0.3); }
 legend { padding: 0 2px; }
 summary { cursor: pointer; }

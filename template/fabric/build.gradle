@@ -1,0 +1,38 @@
+plugins {
+    // Loom for 26.x, which is unobfuscated. https://fabricmc.net/develop/
+    id 'net.fabricmc.fabric-loom' version '1.18.2'
+}
+
+version = mod_version
+group = mod_group_id
+base.archivesName = mod_id
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    // Vellum's maven. Only dev.vellum comes from it.
+    maven {
+        url = 'https://maven.maxleiter.com'
+        content { includeGroup('dev.vellum') }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    // Vellum for this Minecraft version. Players install it as its own mod: don't bundle it (include).
+    implementation "dev.vellum:vellum-fabric-${minecraft_version}:${vellum_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    def props = [minecraft_version: minecraft_version, fabric_loader_version: fabric_loader_version,
+                 vellum_version: vellum_version, mod_id: mod_id, mod_name: mod_name, mod_version: mod_version,
+                 mod_authors: mod_authors, mod_description: mod_description, mod_license: mod_license]
+    inputs.properties(props)
+    filesMatching('fabric.mod.json') { expand(props) }
+}

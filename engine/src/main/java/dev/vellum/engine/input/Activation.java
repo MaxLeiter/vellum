@@ -35,7 +35,7 @@ final class Activation {
                     Forms.fireInputAndChange(e);
                 } else if (e.inputType().equals("radio")) {
                     Forms.checkRadio(e);
-                } else if (isSubmit(e)) {
+                } else if (Forms.isSubmit(e)) {
                     Element form = e.form();
                     if (form != null) form.dispatchEvent(new Event("submit", true, true));
                 }
@@ -66,14 +66,5 @@ final class Activation {
         if (control == null || event.target() != null && control.contains(event.target())) return;
         if (control.isFocusable()) control.focus();
         control.click();
-    }
-
-    /** Submit buttons: {@code <button>} without a type (or type=submit) and input types submit and image. */
-    private static boolean isSubmit(Element e) {
-        if (e.tagName().equals("button")) {
-            String type = e.getAttribute("type");
-            return type == null || !(type.equalsIgnoreCase("button") || type.equalsIgnoreCase("reset"));
-        }
-        return e.inputType().equals("submit") || e.inputType().equals("image");
     }
 }

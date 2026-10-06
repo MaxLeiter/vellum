@@ -12,6 +12,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -19,13 +21,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * Where pages, stylesheets and scripts come from. A URL {@code ns:path/file.css} is the resource
  * {@code assets/ns/path/file.css}, read through the resource manager (so resource packs can restyle UIs).
  *
- * <p>In a dev environment the source tree ({@code common/src/main/resources/assets}, found from the run directory)
- * is read first, and the source files pages were read from are watched: saving one reloads open documents without a
- * rebuild.
+ * <p>In a dev environment the source trees are read first: every {@code src/main/resources/assets} and
+ * {@code common/src/main/resources/assets} between the run directory and the project root (the directory with
+ * {@code settings.gradle}). The source files pages were read from are watched: saving one reloads open documents
+ * without a rebuild.
  */
 public final class VellumResources {
     private static final long POLL_MS = 200;
-    private static @Nullable Path sourceAssets;
+    private static List<Path> sourceAssets = List.of();
     /** Source files read for pages, which the watcher polls. */
     private static final Set<Path> SOURCES_READ = ConcurrentHashMap.newKeySet();
 
@@ -34,7 +37,7 @@ public final class VellumResources {
     static void init() {
         if (!Services.PLATFORM.isDevelopmentEnvironment()) return;
         sourceAssets = findSourceAssets();
-        if (sourceAssets == null) return;
+        if (sourceAssets.isEmpty()) return;
         Constants.LOG.info("Vellum: dev mode, reading UI sources from {} and reloading pages when they are saved", sourceAssets);
         Thread watcher = new Thread(VellumResources::watch, "Vellum source watcher");
         watcher.setDaemon(true);
@@ -63,18 +66,27 @@ public final class VellumResources {
     }
 
     private static @Nullable Path sourceFile(Identifier id) {
-        if (sourceAssets == null) return null;
-        Path p = sourceAssets.resolve(id.getNamespace()).resolve(id.getPath()).normalize();
-        return p.startsWith(sourceAssets) && Files.isRegularFile(p) ? p : null;
-    }
-
-    /** Dev runs use {@code <loader>/runs/client} as the working directory; look a few levels up for the sources. */
-    private static @Nullable Path findSourceAssets() {
-        for (Path dir = Path.of("").toAbsolutePath(); dir != null; dir = dir.getParent()) {
-            Path candidate = dir.resolve("common/src/main/resources/assets");
-            if (Files.isDirectory(candidate)) return candidate;
+        for (Path root : sourceAssets) {
+            Path p = root.resolve(id.getNamespace()).resolve(id.getPath()).normalize();
+            if (p.startsWith(root) && Files.isRegularFile(p)) return p;
         }
         return null;
+    }
+
+    /**
+     * Dev runs use a directory such as {@code runs/client} or {@code <loader>/runs/client} as the working directory:
+     * the asset source trees from there up to the project root, nearest first.
+     */
+    private static List<Path> findSourceAssets() {
+        List<Path> roots = new ArrayList<>();
+        for (Path dir = Path.of("").toAbsolutePath(); dir != null; dir = dir.getParent()) {
+            for (String tree : List.of("src/main/resources/assets", "common/src/main/resources/assets")) {
+                Path candidate = dir.resolve(tree);
+                if (Files.isDirectory(candidate)) roots.add(candidate);
+            }
+            if (Files.isRegularFile(dir.resolve("settings.gradle")) || Files.isRegularFile(dir.resolve("settings.gradle.kts"))) break;
+        }
+        return List.copyOf(roots);
     }
 
     private static void watch() {

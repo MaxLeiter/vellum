@@ -1,0 +1,52 @@
+plugins {
+    id 'java-library'
+    // https://projects.neoforged.net/neoforged/moddevgradle
+    id 'net.neoforged.moddev' version '2.0.147'
+}
+
+version = mod_version
+group = mod_group_id
+base.archivesName = mod_id
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    // Vellum's maven. Only dev.vellum comes from it.
+    maven {
+        url = 'https://maven.maxleiter.com'
+        content { includeGroup('dev.vellum') }
+    }
+}
+
+neoForge {
+    version = neoforge_version
+    runs {
+        client {
+            client()
+            gameDirectory = file('runs/client')
+        }
+    }
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+dependencies {
+    // Vellum for this Minecraft version. Players install it as its own mod: don't bundle it (jarJar).
+    implementation "dev.vellum:vellum-neoforge-${minecraft_version}:${vellum_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    def props = [minecraft_version_range: minecraft_version_range, neoforge_version: neoforge_version,
+                 neoforge_loader_version_range: neoforge_loader_version_range, vellum_version: vellum_version,
+                 mod_id: mod_id, mod_name: mod_name, mod_version: mod_version, mod_authors: mod_authors,
+                 mod_description: mod_description, mod_license: mod_license]
+    inputs.properties(props)
+    filesMatching('META-INF/neoforge.mods.toml') { expand(props) }
+}

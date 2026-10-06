@@ -6,6 +6,7 @@ import dev.vellum.engine.css.Longhand.Parser;
 import dev.vellum.engine.css.Token.Type;
 import dev.vellum.engine.host.FontFamilies;
 import dev.vellum.engine.style.Align;
+import dev.vellum.engine.style.ListStyleType;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.BorderStyle;
@@ -266,6 +267,7 @@ final class Properties {
         add(Prop.TEXT_DECORATION_UNDERLINE, decorationLine("underline"), TEXT);
         add(Prop.TEXT_DECORATION_LINE_THROUGH, decorationLine("line-through"), TEXT);
         add(Prop.WHITE_SPACE, Keywords.parser(WhiteSpace.class), KEYWORD);
+        add(Prop.LIST_STYLE_TYPE, Keywords.parser(ListStyleType.class), KEYWORD);
         add(Prop.WORD_BREAK, Keywords.parser(WordBreak.class, Map.of("keep-all", WordBreak.NORMAL,
                 "anywhere", WordBreak.BREAK_WORD)), KEYWORD);
         add(Prop.TEXT_OVERFLOW, Keywords.parser(TextOverflow.class), KEYWORD);
@@ -493,9 +495,13 @@ final class Properties {
         return Keywords.read(r, CURSORS);
     }
 
-    /** Generated content: strings, {@code attr()}, quotes; {@code counter()} renders as nothing. */
+    /**
+     * Generated content: strings, {@code attr()}, quotes, and {@code -vellum-list-marker} (the user agent's list bullets);
+     * {@code counter()} renders as nothing.
+     */
     private static Object content(ValueReader r, ValueContext ctx) {
         if (r.ident("normal") || r.ident("none")) return Longhand.None.VALUE;
+        if (r.ident("-vellum-list-marker")) return ComputedStyle.LIST_MARKER;
         StringBuilder sb = new StringBuilder();
         while (!r.atEnd()) {
             ComponentValue v = r.next();

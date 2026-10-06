@@ -1,0 +1,43 @@
+<!doctype html>
+<html class="mc-dim">
+<head>
+  <title>Notes</title>
+  <style>
+    .notes { width: 220px; padding: 7px; }
+    ul { margin: 6px 0; padding: 0; list-style: none; }
+    li { display: flex; align-items: center; gap: 4px; padding: 1px 0; animation: slide-in .2s ease-out; }
+    li span { flex: 1; overflow-wrap: anywhere; }
+    li button { width: 20px; }
+    .empty { margin: 6px 0; }
+    form { display: flex; gap: 4px; }
+    form input { flex: 1; }
+    @keyframes slide-in { from { opacity: 0; transform: translateX(-6px); } }
+  </style>
+</head>
+<body class="mc-center">
+  <div class="mc-panel notes">
+    <h2 class="mc-label">{{ player }}'s notes</h2>
+    <p v-if="notes.length === 0" class="mc-label empty">Nothing yet.</p>
+    <ul v-else>
+      <li v-for="(note, i) in notes" :key="i">
+        <span>{{ note }}</span>
+        <button title="Remove" @click="vellum.send('remove', i)">x</button>
+      </li>
+    </ul>
+    <form @submit.prevent="add()">
+      <input v-model="draft" placeholder="Write a note" maxlength="100">
+      <button>Add</button>
+    </form>
+  </div>
+  <script>
+    // Page state for the templates. vellum.data (player and notes) comes from the mod.
+    const page = vellum.state({ draft: '' });
+
+    function add() {
+      const text = page.draft.trim();
+      if (text) vellum.send('add', text);
+      page.draft = '';
+    }
+  </script>
+</body>
+</html>

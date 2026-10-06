@@ -1,0 +1,6 @@
+// CI: builds template/ against the Vellum just published to mavenLocal, ahead of the maven.
+allprojects {
+    repositories {
+        mavenLocal { content { includeGroup('dev.vellum') } }
+    }
+}
