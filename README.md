@@ -61,20 +61,21 @@ Vellum is in development. Other mods (Chronicle, claudemons) use it as a library
 
 A server mod can open a page on a player's client, push data to it and get messages back. Since a server might be hostile, scripts run in a Rhino sandbox with no Java access, no network access, no file access, and sensible resource caps. Players can always close a page with Shift+Esc, and `config/vellum.properties` lets them block server pages entirely.
 
-## Try it
+## Examples
 
-Start a dev client (see Building) and run these in a world:
+Full pages, opened in game with `/vellum showcase <name>`:
 
-| Command | What |
-|---|---|
-| `/vellum showcase` | A gallery of six full pages: a title screen, a HUD kit, a trader's market, a mobdex, a journal and a chat console for a robot. `/vellum showcase <name>` opens one directly. |
-| `/vellum demo` | The feature demos: settings, layout, animation, templates, a map and a HUD overlay. `/vellum demo <name>` opens one. |
-| `/vellum demo chest` | A chest-style inventory made of `<slot>`s (operators only) |
-| `/vellum demo live` | A page the server pushes live data to (operators only) |
-| `/vellum open <url>` | Any page, by resource id, for example `vellum:vellum/demo/map.html` |
-| `/vellum reload` | Reload pages without restarting the client |
+- [Title screen](common/src/main/resources/assets/vellum/vellum/showcase/title.html): the main menu with a parallax landscape
+- [Turntable](common/src/main/resources/assets/vellum/vellum/showcase/models.html): blocks, items and mobs in 3D, turned by CSS
+- [Mobdex](common/src/main/resources/assets/vellum/vellum/showcase/mobdex.html): a Pokédex for mobs, with live entities ([Java side](common/src/main/java/dev/vellum/mod/client/showcase/Mobdex.java))
+- [Trader's market](common/src/main/resources/assets/vellum/vellum/showcase/shop.html): a shop with a satchel and checkout
+- [Journal](common/src/main/resources/assets/vellum/vellum/showcase/journal.html): a quest book
+- [HUD kit](common/src/main/resources/assets/vellum/vellum/showcase/hud.html): quest tracker, compass, boss bar and toasts
+- [Console](common/src/main/resources/assets/vellum/vellum/showcase/console.html): a chat console for a robot
 
-In a dev environment pages are read from `src/main/resources`, so saving one reloads it in the open screen.
+Smaller demos of one feature each, opened with `/vellum demo <name>`: [settings](common/src/main/resources/assets/vellum/vellum/demo/settings.html), [layout](common/src/main/resources/assets/vellum/vellum/demo/layout.html), [animation](common/src/main/resources/assets/vellum/vellum/demo/animation.html), [templates](common/src/main/resources/assets/vellum/vellum/demo/templates.html), [map](common/src/main/resources/assets/vellum/vellum/demo/map.html), [HUD overlay](common/src/main/resources/assets/vellum/vellum/demo/hud.html), [toast over chat](common/src/main/resources/assets/vellum/vellum/demo/toast.html) and a [vanilla chest](common/src/main/resources/assets/vellum/vellum/demo/chest.html) built from `<slot>`s ([server side](common/src/main/java/dev/vellum/mod/server/VellumDemos.java)).
+
+`/vellum open <resource id>` opens any page and `/vellum reload` reloads them. In a dev client, saving a page under `src/main/resources` reloads it in the open screen.
 
 ## Previewer
 
@@ -116,34 +117,7 @@ against its SHA-256), applies the patches in `rhino/patches` and compiles it, so
 
 ## Versions
 
-Vellum builds for two Minecraft versions from one source tree, with [Stonecutter](https://stonecutter.kikugie.dev):
-
-| Minecraft | NeoForge | Fabric | Java |
-|---|---|---|---|
-| 26.3 | 26.3.0.26-beta | Loader 0.19.5, Fabric API 0.161.0+26.3 | 25 |
-| 1.21.1 | 21.1.255 | Loader 0.19.5, Fabric API 0.116.17+1.21.1 | 21 |
-
-Each version has its own Gradle projects, named after it: `:common:1.21.1`, `:neoforge:1.21.1`, `:fabric:1.21.1`.
-Their settings are in `stonecutter.properties.toml`. The engine, Rhino and the previewer are built once and shared.
-The jars are `vellum-<loader>-<minecraft>-<version>.jar` (`vellum-neoforge-1.21.1-0.3.0.jar`) in
-`<loader>/versions/<minecraft>/build/libs/`, and `./gradlew publishToMavenLocal` publishes
-`dev.vellum:vellum-{common,neoforge,fabric}-<minecraft>` for both versions at the same Vellum version.
-
-The sources are written for 26.3. Where 1.21.1 differs, Stonecutter comments (`//? if >=26 {`) pick the code, and
-renames such as `Identifier`/`ResourceLocation` are replacements in `stonecutter.gradle`. Code that differs a lot
-lives in one file per version under `common/versions/<minecraft>/src`: `McGui` (drawing), `McClient` (screens and
-input), `KeyNames`, `Scene` and `EntityPortrait` (3D), `GameTests`. Keep committed sources on 26.3: if you switch
-Stonecutter's active version to work on 1.21.1, switch back before committing.
-
-Everything works on 1.21.1, with these differences:
-
-- `<entity>` and `<model>` can't fade: under half opacity they aren't drawn, as items aren't on either version. `-mc-tint` works.
-- `VellumEntities.registerPortraitState` doesn't exist, since 1.21.1 has no entity render states. Entity `components`
-  are ignored, and `variant` and `color` are set through the entity's NBT.
-- The CSS `cursor` shows over screens only, not over HUD overlays.
-- Fabric draws HUD overlays after the whole HUD, since 1.21.1 has no HUD layers.
-- Key events are GLFW's: `DocumentDriver.onKey` handlers get `dev.vellum.mod.client.input.KeyEvent` with GLFW key codes.
-- The dev tour (`-Ptour`) is 26.3 only.
+Minecraft 26.3 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). A few things differ on 1.21.1; [docs/versions.md](docs/versions.md) lists them and how the two versions are built.
 
 ## Releases
 

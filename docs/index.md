@@ -21,5 +21,6 @@ on NeoForge and Fabric, and on Minecraft 26.3 and 1.21.1 apart from the differen
 
 ## Internals
 
+- [Minecraft versions](versions.md): what differs on 1.21.1, and how both versions build from one source tree.
 - [Minecraft 26.3 GUI notes](MC_26_3_GUI_API.md): how the 26.3 GUI renderer works, for working on Vellum itself.
 - [Previewer](../preview/README.md) and [patched Rhino](../rhino/README.md).
