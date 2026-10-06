@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The HTML5/CSS3 badge shield, in Vellum's dusk purple, with a V where the number goes. -->
+  <g transform="translate(20.5 20.5) scale(0.92)">
+    <path d="M71 460L30 0h452l-41 460-185 52z" fill="#5b2fb3"/>
+    <path d="M256 472l149-41 35-394H256z" fill="#7a4fe0"/>
+    <path d="M120 92h92l44 196v128h-36z" fill="#fff"/>
+    <path d="M392 92h-92l-44 196v128h36z" fill="#ebebeb"/>
+  </g>
+</svg>
