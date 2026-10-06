@@ -1,8 +1,12 @@
 name: Release
 
-# Pushing a tag v<version> (the version in gradle.properties) builds Vellum, uploads the four jars to Modrinth and
-# CurseForge, and makes a GitHub release with them. Run it by hand ("Run workflow") for a dry run: it builds and
-# shows what it would upload, without uploading or releasing anything.
+# Pushing a tag v<version> (the version in gradle.properties) builds Vellum, makes a GitHub release with the four jars
+# and the version's CHANGELOG.md section, then uploads the jars to Modrinth and CurseForge. The store uploads are skipped,
+# with a warning, while MODRINTH_TOKEN and CURSEFORGE_TOKEN aren't set.
+#
+# Run it by hand ("Run workflow") for a dry run, which builds and shows what it would upload. Run it by hand on a tag
+# with dry run off to redo a release: the GitHub release's jars and notes are replaced, and "skip stores" leaves
+# Modrinth and CurseForge alone (for a version already uploaded there).
 
 on:
   push:
@@ -13,6 +17,10 @@ on:
         description: Dry run (build and show the uploads, upload nothing)
         type: boolean
         default: true
+      skip_stores:
+        description: Skip Modrinth and CurseForge (only make the GitHub release)
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ github.ref }}
@@ -27,6 +35,7 @@ jobs:
     timeout-minutes: 90
     env:
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      SKIP_STORES: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_stores }}
     steps:
       - uses: actions/checkout@v5
 
@@ -66,13 +75,6 @@ jobs:
 
       - run: ./gradlew build --stacktrace
 
-      - name: Publish to Modrinth and CurseForge
-        run: ./gradlew publishMods --stacktrace
-        env:
-          PUBLISH_DRY_RUN: ${{ env.DRY_RUN }}
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
-
       - name: Collect the jars and release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -81,8 +83,24 @@ jobs:
           cp neoforge/versions/*/build/libs/vellum-*-"$VERSION".jar fabric/versions/*/build/libs/vellum-*-"$VERSION".jar dist/
           ls -l dist
           test "$(find dist -name '*.jar' | wc -l)" -eq 4
-          # This version's section of CHANGELOG.md, without its heading.
-          awk -v v="$VERSION" '$0 ~ "^## " { if (found) exit; if ($2 == v) { found = 1; next } } found' CHANGELOG.md > dist/notes.md
+          # This version's section of CHANGELOG.md, without its heading, then where to get it and which jar is which.
+          {
+            awk -v v="$VERSION" '$0 ~ "^## " { if (found) exit; if ($2 == v) { found = 1; next } } found' CHANGELOG.md
+            echo
+            echo "Also on [Modrinth](https://modrinth.com/mod/vellum-gui) and [CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui)."
+            echo
+            echo "| Jar | Loader | Minecraft |"
+            echo "|---|---|---|"
+            for jar in dist/*.jar; do
+              name=$(basename "$jar")
+              loader=$(echo "$name" | cut -d- -f2)
+              mc=$(echo "$name" | cut -d- -f3)
+              case "$loader" in neoforge) loader=NeoForge ;; fabric) loader="Fabric (needs Fabric API)" ;; esac
+              echo "| \`$name\` | $loader | $mc |"
+            done
+            echo
+            echo "Mods that bundle Vellum keep working when it's installed on its own too; the newest copy wins."
+          } > dist/notes.md
           cat dist/notes.md
 
       - uses: actions/upload-artifact@v5
@@ -101,6 +119,25 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          flags=()
-          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
-          gh release create "v$VERSION" dist/*.jar --title "Vellum $VERSION" --notes-file dist/notes.md --verify-tag "${flags[@]}"
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            # A rerun: replace the jars and notes.
+            gh release upload "v$VERSION" dist/*.jar --clobber
+            gh release edit "v$VERSION" --title "Vellum $VERSION" --notes-file dist/notes.md --prerelease="$PRERELEASE"
+          else
+            flags=()
+            [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+            gh release create "v$VERSION" dist/*.jar --title "Vellum $VERSION" --notes-file dist/notes.md --verify-tag "${flags[@]}"
+          fi
+
+      - name: Publish to Modrinth and CurseForge
+        if: env.SKIP_STORES != 'true'
+        env:
+          PUBLISH_DRY_RUN: ${{ env.DRY_RUN }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        run: |
+          if [ "$PUBLISH_DRY_RUN" != true ] && { [ -z "$MODRINTH_TOKEN" ] || [ -z "$CURSEFORGE_TOKEN" ]; }; then
+            echo "::warning::MODRINTH_TOKEN or CURSEFORGE_TOKEN isn't set, so nothing was uploaded to Modrinth or CurseForge."
+            exit 0
+          fi
+          ./gradlew publishMods --stacktrace
