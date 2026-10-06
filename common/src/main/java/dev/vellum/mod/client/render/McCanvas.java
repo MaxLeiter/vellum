@@ -26,8 +26,9 @@ import java.util.Arrays;
  *       intersected with the enclosing clip and the area the renderer draws ({@link ScissorStack}). A clip with
  *       nothing left is not pushed, and nothing inside it is drawn. Rounded clips are not supported.</li>
  *   <li>Opacity: there are no offscreen groups; the alpha stack is multiplied into every colour. Vanilla
- *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes are
- *       pictures blitted with a colour, so they fade (and tint).</li>
+ *       skips text with alpha 0, and items cannot fade, so items are hidden below half opacity. 3D scenes tint;
+ *       on 26.x they are pictures blitted with a colour, so they fade too, while on 1.21.1 they are drawn in place
+ *       and hide below half opacity, as items do.</li>
  *   <li>Geometry: rectangles and quads are drawn with their own vertices, so fractional positions, rotations and
  *       per-vertex colours all work. Consecutive primitives share one copy of the transform.</li>
  * </ul>
