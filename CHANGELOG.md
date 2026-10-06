@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- First release on CurseForge and Modrinth.
+- Vellum has a mod icon.
+- The jars include Rhino's license and notice, and say where the patched Rhino source is.
+
 ## 0.4.0
 
 - Vellum now runs on Minecraft 1.21.1 as well as 26.3, on NeoForge and Fabric. Everything works on 1.21.1; the README lists the few differences.
