@@ -4,7 +4,7 @@ Vellum pages can carry JavaScript: `<script>` elements (inline or `src`), inline
 Vue-style templates that bind HTML to data without writing any script at all. This guide covers what scripts can
 use, how templates work, and where Vellum differs from a browser.
 
-Scripts run in [Mozilla Rhino](https://github.com/mozilla/rhino) 1.9 inside a sandbox, because pages can come from
+Scripts run in [Mozilla Rhino](https://github.com/mozilla/rhino) 1.9, with Vellum's patches, inside a sandbox, because pages can come from
 servers.
 
 - [The language](#the-language)
@@ -19,55 +19,49 @@ servers.
 
 ## The language
 
-Rhino implements most of ES2015 and a good part of later editions. These all work:
+Rhino implements most of ES2015 and a good part of later editions. Vellum builds it with patches
+(`rhino/patches`) for the parts pages use most that upstream lacks. These all work:
 
-- `let` and `const`, arrow functions, template literals (and `String.raw`), default and rest parameters
+- `let` and `const`, block scoped, with a fresh binding in each loop iteration (`for (let i ...)`,
+  `for (const x of list)`, `for (const k in obj)`), so closures made in a loop see their own iteration's values
+- arrow functions, template literals (and `String.raw`), default and rest parameters
 - destructuring with defaults (`const {a, b: [c] = []} = obj`), spread in array and object literals
-  (`[...a, 1]`, `{...defaults, size: 2}`)
-- `for (let x of list)`, `for...in`, generators and custom iterables, labels
-- optional chaining `a?.b?.()`, nullish coalescing `??` and `??=`, `**`, optional `catch {}` bindings
+  (`[...a, 1]`, `{...defaults, size: 2}`) and in calls (`f(...args)`, `new C(...args)`)
+- `class`: constructors, methods, getters and setters, static members, computed names, `extends` (also of
+  built-ins such as `Error`, `Array` and `Map`), `super(...)`, `super.method()`, public instance and static fields,
+  `static {}` blocks, `new.target` in constructors
+- `async function`, async arrows and async methods, `await`; an `await` resumes when the promise settles, in the same
+  entry if it already has (see [How scripts run](#how-scripts-run))
+- generators and custom iterables, labels, optional chaining `a?.b?.()`, nullish coalescing `??` and `??=`, `**`,
+  optional `catch {}` bindings
 - `Map`, `Set`, `WeakMap`, `Symbol`, `Promise` (including `all`, `allSettled`, `any`), `Proxy`, `Reflect`, `BigInt`
 - getters, setters, shorthand methods and computed keys in object literals; named capture groups and lookbehind in
   regular expressions
 - modern library methods: `Array.prototype.flat/includes/findLast/at/toSorted`, `Object.entries/fromEntries/hasOwn`,
   `String.prototype.padStart/replaceAll/at`...
 
-These do **not** work. Each is a syntax error unless noted:
+These do not work. Each is a syntax error unless noted:
 
 | Not supported | Write instead |
 |---|---|
-| `class A {}` | constructor functions and prototypes, or factory functions returning objects |
-| `async function`, `await`, `async () => ...` | `promise.then(...)` |
-| spread in calls: `f(...args)` | `f.apply(null, args)` |
-| `for (const x of list)`, `for (const k in obj)` | `for (let x of list)` |
+| private class members: `#count`, `this.#count` | an ordinary property, `_count` by convention |
+| async generators (`async function*`), `for await` | an async function that loops over an array of promises |
+| `await` outside an async function, including at the top of a script | `(async () => { ... })()` |
 | object rest in destructuring: `const {a, ...rest} = obj` | copy and `delete`, or pick the fields you need |
 | `import` / `export` | several `<script>` elements; they share one global scope |
 | `Intl` (it is undefined) | format numbers and dates yourself |
 
-Two scoping rules differ from what you may expect. A `const` is scoped to the enclosing function or script, not to
-its block. So a `const` in a loop body is initialised once and keeps its first value in every later iteration, and two `const`s
-with the same name in sibling blocks of one function or script (two loops, two `if` branches) are a
-`SyntaxError: redeclaration of const`, which stops the whole script. Use `let` for anything declared inside a
-block:
+Some things behave differently from a browser:
 
-```js
-for (let i = 0; i < 3; i++) { const b = i * 2; out.push(b); }  // pushes 0, 0, 0
-for (let i = 0; i < 3; i++) { let b = i * 2; out.push(b); }    // pushes 0, 2, 4
-for (let x of a) { const n = x.name; }
-for (let y of b) { const n = y.name; }                         // SyntaxError: redeclaration of const n
-```
-
-A `const` in a callback (`list.forEach(x => { const n = ... })`) is fine: every call is a new function.
-
-A `let` in a loop head is one binding for the whole loop, not one per iteration, so closures created in the loop
-all see the final value:
-
-```js
-const handlers = [];
-for (let i = 0; i < 3; i++) handlers.push(() => i);  // all three return 3
-for (let x of [1, 2]) handlers.push(() => x);        // both return 2
-[0, 1, 2].forEach(i => handlers.push(() => i));      // 0, 1, 2: forEach gives each call its own i
-```
+- Reading a `let`, `const` or `class` binding before its declaration gives `undefined` instead of a
+  `ReferenceError`, so `new Shop()` above `class Shop {}` fails with a `TypeError` (not a constructor).
+- Assigning to a `const` is not always an error: outside strict code it can be ignored or change the value.
+  Don't rely on either.
+- Class fields are set as `this.x = value` would set them, so a setter with the same name on a parent class runs.
+  A computed field name (`[key] = 1`) is evaluated for each new instance, not once.
+- A function or method called without a receiver gets the global object as `this`, even in a class body.
+- `new.target` is only available inside class constructors (and arrow functions in them); elsewhere it is a syntax
+  error.
 
 ## How scripts run
 
@@ -82,7 +76,7 @@ Everything runs on one thread: the game's render thread. Each time the engine ca
 `<script>`, an event listener, an inline handler, a timer, an animation frame, a message from the server) is an
 **entry**. When an entry finishes, Vellum
 
-1. runs the microtask queue (promise callbacks and `queueMicrotask`),
+1. runs the microtask queue (promise callbacks, `queueMicrotask`, and async functions resuming after an `await`),
 2. re-renders templates (see [Templates](#templates)),
 3. reports promise rejections that nobody handled.
 
@@ -397,7 +391,8 @@ owners can change them in `config/vellum.properties` (docs/API.md, Settings).
 - No network, files or other pages: the only way out is `vellum.send`.
 - CPU: each entry may run about 50 million instructions or 1 second, whichever comes first. A script that runs over
   is stopped (its `catch` and `finally` blocks do not run), the error is reported, and the page stays usable. The
-  limit covers everything the entry does, including microtasks, template updates and regular expressions. Two kinds
+  limit covers everything the entry does, including microtasks, template updates and regular expressions; an async
+  function stopped this way does not resume. Two kinds
   of one-off work, which a game that has just started makes slow, are kept off the clock: compiling (scripts,
   handlers, and templates the first time they show) counts one instruction per character of source instead of its
   time, and the entries that load the page (its scripts, the first template render, `DOMContentLoaded`) may take 10
