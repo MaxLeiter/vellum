@@ -74,7 +74,7 @@ public final class VellumNeoForge {
         //? if >=26 {
         registrar.playToClient(c.type(), c.codec());
         //?} else
-        /*registrar.playToClient(c.type(), c.codec(), (payload, context) -> clientHandler.accept(payload));*/
+        //registrar.playToClient(c.type(), c.codec(), (payload, context) -> clientHandler.accept(payload));
     }
 
     /** Serverbound handlers run on the server thread (the registrar's default HandlerThread.MAIN). */

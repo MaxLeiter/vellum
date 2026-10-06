@@ -35,7 +35,7 @@ import net.neoforged.neoforge.client.event.RegisterPictureInPictureRenderersEven
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 //?} else {
-/*import dev.vellum.mod.client.input.MouseButtonEvent;
+/*import net.minecraft.client.input.MouseButtonEvent;
 import dev.vellum.neoforge.VellumNeoForge;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.network.PacketDistributor;

@@ -41,7 +41,7 @@ public final class VellumFabric implements ModInitializer {
             //? if >=26 {
             Registry registry = BuiltInRegistries.REGISTRY.getValue(entry.registry().identifier());
             //?} else
-            /*Registry registry = BuiltInRegistries.REGISTRY.get(entry.registry().location());*/
+            //Registry registry = BuiltInRegistries.REGISTRY.get(entry.registry().location());
             if (registry == null) throw new IllegalStateException("Unknown registry " + entry.registry());
             Registry.register(registry, entry.id(), entry.create());
         }
@@ -51,14 +51,14 @@ public final class VellumFabric implements ModInitializer {
         //? if >=26 {
         PayloadTypeRegistry.clientboundPlay().register(c.type(), c.codec());
         //?} else
-        /*PayloadTypeRegistry.playS2C().register(c.type(), c.codec());*/
+        //PayloadTypeRegistry.playS2C().register(c.type(), c.codec());
     }
 
     private static <T extends CustomPacketPayload> void serverbound(VellumNetwork.Serverbound<T> s) {
         //? if >=26 {
         PayloadTypeRegistry.serverboundPlay().register(s.type(), s.codec());
         //?} else
-        /*PayloadTypeRegistry.playC2S().register(s.type(), s.codec());*/
+        //PayloadTypeRegistry.playC2S().register(s.type(), s.codec());
         ServerPlayNetworking.registerGlobalReceiver(s.type(),
                 (payload, context) -> context.server().execute(() -> s.handler().accept(context.player(), payload)));
     }

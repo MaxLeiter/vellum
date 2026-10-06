@@ -80,7 +80,7 @@ final class McText {
         //? if >=26 {
         if (style.getFont() instanceof FontDescription.Resource font && !font.equals(FontDescription.DEFAULT)) css.append("font-family:").append(font.id()).append(';');
         //?} else
-        /*if (!style.getFont().equals(Style.DEFAULT_FONT)) css.append("font-family:").append(style.getFont()).append(';');*/
+        //if (!style.getFont().equals(Style.DEFAULT_FONT)) css.append("font-family:").append(style.getFont()).append(';');
         return css.toString();
     }
 }

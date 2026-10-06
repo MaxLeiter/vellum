@@ -56,7 +56,7 @@ final class ItemStacks {
             //? if >=26 {
             return TagParser.parseCompoundFully(text);
             //?} else
-            /*return TagParser.parseTag(text);*/
+            //return TagParser.parseTag(text);
         } catch (CommandSyntaxException e) {
             Constants.LOG.warn("Vellum: {} is not SNBT: {}", what, e.getMessage());
             return null;

@@ -78,7 +78,7 @@ public final class McImages {
         //? if >=26 {
         TextureAtlasSprite sprite = Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(AtlasIds.GUI).getSprite(id);
         //?} else
-        /*TextureAtlasSprite sprite = Minecraft.getInstance().getGuiSprites().getSprite(id);*/
+        //TextureAtlasSprite sprite = Minecraft.getInstance().getGuiSprites().getSprite(id);
         // A missing sprite comes back as the atlas's missing sprite.
         return sprite.contents().name().equals(id) ? new float[] {sprite.contents().width(), sprite.contents().height()} : UNKNOWN;
     }

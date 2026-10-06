@@ -229,7 +229,7 @@ public final class VellumAutomation {
                 //? if >=26 {
                 screen.mouseDragged(event, x - px, y - py);
                 //?} else
-                /*screen.mouseDragged(x, y, LEFT.button(), x - px, y - py);*/
+                //screen.mouseDragged(x, y, LEFT.button(), x - px, y - py);
             }
             px = x;
             py = y;

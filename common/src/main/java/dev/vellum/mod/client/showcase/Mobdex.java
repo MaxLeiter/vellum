@@ -26,7 +26,7 @@ import net.minecraft.world.item.Item;
 //? if >=26 {
 import net.minecraft.world.item.component.TypedEntityData;
 //?} else
-/*import net.minecraft.world.item.SpawnEggItem;*/
+//import net.minecraft.world.item.SpawnEggItem;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;

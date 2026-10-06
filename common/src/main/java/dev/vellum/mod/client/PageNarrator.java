@@ -98,7 +98,7 @@ final class PageNarrator {
         //? if >=26 {
         collector.update(updateNarrationState, NarrationTrigger.MOUSE);
         //?} else
-        /*collector.update(updateNarrationState);*/
+        //collector.update(updateNarrationState);
         return collector.collectNarrationText(true);
     }
 

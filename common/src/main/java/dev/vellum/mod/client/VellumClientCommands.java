@@ -95,7 +95,7 @@ public final class VellumClientCommands {
         //? if >=26 {
         Minecraft.getInstance().schedule(action);
         //?} else
-        /*Minecraft.getInstance().tell(action);*/
+        //Minecraft.getInstance().tell(action);
         return 1;
     }
 }

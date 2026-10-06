@@ -257,7 +257,7 @@ public final class DevAutopilot {
         steps.add(() -> check(standStates > 0, "armour stands drawn from the registered render state",
                 "the registered armour stand render state was never used"));
         //?} else
-        /*steps.add(() -> skip("armour stands drawn from a registered render state", "entity render states are 26.x only"));*/
+        //steps.add(() -> skip("armour stands drawn from a registered render state", "entity render states are 26.x only"));
     }
 
     /**
@@ -589,7 +589,7 @@ public final class DevAutopilot {
             //? if >=26 {
             mc.resizeGui();
             //?} else
-            /*mc.resizeDisplay();*/
+            //mc.resizeDisplay();
             wait = 5;
         });
     }
@@ -786,7 +786,7 @@ public final class DevAutopilot {
         //? if >=26 {
         return new ChatScreen("", false);
         //?} else
-        /*return new ChatScreen("");*/
+        //return new ChatScreen("");
     }
 
     private static void command(Minecraft mc, String cmd) {

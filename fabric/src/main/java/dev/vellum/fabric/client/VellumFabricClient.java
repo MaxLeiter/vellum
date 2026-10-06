@@ -27,7 +27,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 //?} else {
-/*import dev.vellum.mod.client.input.MouseButtonEvent;
+/*import net.minecraft.client.input.MouseButtonEvent;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
@@ -45,7 +45,7 @@ public final class VellumFabricClient implements ClientModInitializer {
         PictureInPictureRendererRegistry.register(context -> new GuiSceneRenderer());
         HudElementRegistry.attachElementAfter(VanillaHudElements.TITLE_AND_SUBTITLE, Constants.id("hud"), VellumHud::extract);
         //?} else
-        /*HudRenderCallback.EVENT.register(VellumHud::extract); // 1.21.1 has no HUD layers: after the whole HUD*/
+        //HudRenderCallback.EVENT.register(VellumHud::extract); // 1.21.1 has no HUD layers: after the whole HUD
         // Interactive HUD overlays: drawn above every screen and given its pointer input first (per-screen events).
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             //? if >=26 {

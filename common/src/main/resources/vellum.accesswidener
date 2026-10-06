@@ -17,16 +17,16 @@ mutable field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
 mutable field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen imageHeight I
 #?} else {
 ## McCanvas clips to the scissor vanilla has pushed.
-#accessible field net/minecraft/client/gui/GuiGraphics scissorStack Lnet/minecraft/client/gui/GuiGraphics$ScissorStack;
-#accessible class net/minecraft/client/gui/GuiGraphics$ScissorStack
-#accessible field net/minecraft/client/gui/GuiGraphics$ScissorStack stack Ljava/util/Deque;
-
+#accessible field net/minecraft/client/gui/GuiGraphicsExtractor scissorStack Lnet/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack;
+#accessible class net/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack
+#accessible field net/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack stack Ljava/util/Deque;
+#
 ## VellumAutomation sends input through the mouse and keyboard handlers, as GLFW's callbacks do.
 #accessible method net/minecraft/client/MouseHandler onPress (JIII)V
 #accessible method net/minecraft/client/MouseHandler onScroll (JDD)V
 #accessible method net/minecraft/client/MouseHandler onMove (JDD)V
 #accessible method net/minecraft/client/KeyboardHandler charTyped (JII)V
-
+#
 ## EntityPortrait sets an entity's walk to the pose's for the draw.
 #accessible field net/minecraft/world/entity/WalkAnimationState position F
 #?}
