@@ -1,8 +1,8 @@
 # Minecraft 26.3 client GUI API notes
 
-Notes for the Minecraft backend in `common/`. Checked against vanilla 26.3 (NeoForm 26.3-1), NeoForge 26.3.0.26-beta and Fabric API 0.161.0+26.3. Working examples live in Chronicle (`~/Documents/mod/common/src/main/java/dev/chronicle/mod/client/`) and claudemons (`~/Documents/claudemons/common/src/main/java/dev/claudemons/mod/client/AutomatonScreen.java`).
+Notes for the Minecraft backend in `common/`. Checked against vanilla 26.3 (NeoForm 26.3-1), NeoForge 26.3.0.26-beta and Fabric API 0.161.0+26.3.
 
-Decompiled vanilla sources: unzip `~/Documents/mod/common/build/moddev/artifacts/vanilla-26.3-1-sources.jar` (after the first build, also `common/build/moddev/artifacts/` in this repo). NeoForge-patched sources: `~/Documents/mod/neoforge/build/moddev/artifacts/minecraft-patched-26.3.0.26-beta-sources.jar`.
+Decompiled vanilla sources: after the first build, unzip `vanilla-26.3-1-sources.jar` from `common/versions/26.3/build/moddev/artifacts/`. NeoForge-patched sources: `minecraft-patched-26.3.0.26-beta-sources.jar` from `neoforge/versions/26.3/build/moddev/artifacts/`.
 
 ## 0. What changed in 26.x
 - `GuiGraphics` is now **`net.minecraft.client.gui.GuiGraphicsExtractor`**. Drawing is *extraction*: every call records a render-state object into a `GuiRenderState`; `GuiRenderer` batches and draws later.

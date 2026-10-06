@@ -80,8 +80,8 @@ public final class MinecraftAssets implements AutoCloseable {
 
     /**
      * Finds a Minecraft {@value #MINECRAFT_VERSION} client jar that contains assets: the one named by
-     * {@value #JAR_PROPERTY} or {@value #JAR_ENV}, else the jars ModDevGradle builds (in this repository, or
-     * Chronicle's in {@code ~/Documents/mod}), else the launcher's copy.
+     * {@value #JAR_PROPERTY} or {@value #JAR_ENV}, else the jars ModDevGradle builds in this repository,
+     * else the launcher's copy.
      */
     public static Optional<Path> findClientJar() {
         String explicit = System.getProperty(JAR_PROPERTY, System.getenv(JAR_ENV));
@@ -97,7 +97,6 @@ public final class MinecraftAssets implements AutoCloseable {
             artifactDirs.add(dir.resolve("common/versions/" + MINECRAFT_VERSION + "/build/moddev/artifacts")); // Stonecutter's
             artifactDirs.add(dir.resolve("common/build/moddev/artifacts"));
         }
-        artifactDirs.add(home.resolve("Documents/mod/common/build/moddev/artifacts"));
         String launcherJar = "versions/" + MINECRAFT_VERSION + "/" + MINECRAFT_VERSION + ".jar";
         List<Path> launcher = new ArrayList<>(List.of(
                 home.resolve("Library/Application Support/minecraft").resolve(launcherJar),
