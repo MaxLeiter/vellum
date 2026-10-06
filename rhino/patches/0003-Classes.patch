@@ -1,0 +1,2586 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Max Leiter <8675906+MaxLeiter@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 17:29:17 -0700
+Subject: [PATCH] Classes
+
+Class declarations and expressions, with constructors, methods, getters
+and setters, static members, computed names, generator methods, extends
+(including built-ins such as Error, Array and Map), super(...),
+super.method() and super.prop, public instance and static fields,
+static blocks and new.target in constructors.
+
+A class body is parsed as two object literals, the prototype members and
+the static members, so methods get their home object for super the way
+object literal methods do. Field initializers and static blocks become
+methods of those literals. ClassFunction.create makes the class at run
+time: the prototype literal becomes the class's prototype, its members
+are made non-enumerable, and the statics are copied onto the class.
+
+A class constructor runs with a Construction as this. Every read of this
+resolves to the instance, which a base class creates before the body
+runs and a derived class gets from super(...), so arrow functions made
+before super(...) work, and reading this too early is a ReferenceError.
+Calling a class without new is a TypeError. Reflect.construct passes
+new.target on.
+
+Class bodies are strict. A class declaration binds its name like let; a
+named class expression binds its name inside the class. Private names
+(#x) are a SyntaxError that says they are not supported.
+
+Known differences: fields are set by assignment, not defined; computed
+field names are evaluated for each instance; reading a class before its
+declaration gives undefined rather than a ReferenceError; new.target is
+only available in class constructors.
+
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ClassFunction.java b/rhino/src/main/java/org/mozilla/javascript/ClassFunction.java
+new file mode 100644
+index 000000000000..b0ea1e8c8011
+--- /dev/null
++++ b/rhino/src/main/java/org/mozilla/javascript/ClassFunction.java
+@@ -0,0 +1,328 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript;
++
++import java.util.EnumSet;
++
++/**
++ * The constructor of a class. It can only be called with {@code new}. Its body, the class's {@code
++ * constructor} method, runs with a {@link Construction} as {@code this}, which every read of {@code
++ * this} resolves to the instance; a derived class gets its instance from {@code super(...)}.
++ */
++final class ClassFunction extends BaseFunction {
++    private static final long serialVersionUID = 1L;
++
++    /** The key under which a class body passes its field initializers to {@link #create}. */
++    static final String FIELDS_KEY = "\u0000fields";
++
++    static final int EXTENDS = 1;
++    static final int HAS_CONSTRUCTOR = 2;
++
++    private final String name;
++    private final JSFunction body;
++    private final boolean derived;
++    private final Callable fieldInitializer;
++
++    private ClassFunction(
++            String name, JSFunction body, boolean derived, Callable fieldInitializer) {
++        this.name = name;
++        this.body = body;
++        this.derived = derived;
++        this.fieldInitializer = fieldInitializer;
++    }
++
++    /** What a class constructor's {@code this} refers to while it runs. */
++    static final class Construction extends ScriptableObject {
++        private static final long serialVersionUID = 1L;
++
++        final ClassFunction cls;
++        final Scriptable newTarget;
++        Scriptable instance;
++
++        Construction(ClassFunction cls, Scriptable newTarget) {
++            this.cls = cls;
++            this.newTarget = newTarget;
++        }
++
++        @Override
++        public String getClassName() {
++            return "Object";
++        }
++    }
++
++    /**
++     * Creates a class from the object literals holding its prototype members and static members.
++     * The prototype literal becomes the class's prototype, so that its methods' home object, used
++     * by {@code super}, is right.
++     */
++    static ClassFunction create(
++            Object heritage,
++            Object protoLiteral,
++            Object staticLiteral,
++            int flags,
++            String name,
++            Context cx,
++            Scriptable scope) {
++        Scriptable top = ScriptableObject.getTopLevelScope(scope);
++        boolean hasHeritage = (flags & EXTENDS) != 0;
++        Scriptable protoParent = ScriptableObject.getObjectPrototype(top);
++        Scriptable constructorParent = ScriptableObject.getFunctionPrototype(top);
++        if (hasHeritage) {
++            if (heritage == null) {
++                protoParent = null;
++            } else {
++                if (!AbstractEcmaObjectOperations.isConstructor(cx, heritage)) {
++                    throw ScriptRuntime.typeErrorById(
++                            "msg.class.bad.extends", ScriptRuntime.toString(heritage));
++                }
++                Object parentProto =
++                        ScriptableObject.getProperty((Scriptable) heritage, "prototype");
++                if (parentProto == null) {
++                    protoParent = null;
++                } else if (parentProto instanceof Scriptable
++                        && !ScriptRuntime.isSymbol(parentProto)
++                        && !Undefined.isUndefined(parentProto)) {
++                    protoParent = (Scriptable) parentProto;
++                } else {
++                    throw ScriptRuntime.typeErrorById(
++                            "msg.class.bad.extends", ScriptRuntime.toString(heritage));
++                }
++                constructorParent = (Scriptable) heritage;
++            }
++        }
++
++        ScriptableObject proto = (ScriptableObject) protoLiteral;
++        ScriptableObject statics = (ScriptableObject) staticLiteral;
++        JSFunction body = null;
++        if ((flags & HAS_CONSTRUCTOR) != 0) {
++            body = (JSFunction) proto.get("constructor", proto);
++            proto.delete("constructor");
++        }
++        Callable fields = take(proto, FIELDS_KEY);
++        Callable staticInitializer = take(statics, FIELDS_KEY);
++
++        ClassFunction cls = new ClassFunction(name, body, hasHeritage, fields);
++        ScriptRuntime.setFunctionProtoAndParent(cls, cx, scope, false);
++        cls.setPrototype(constructorParent);
++
++        proto.setPrototype(protoParent);
++        for (Object id : allIds(proto)) {
++            hide(proto, id);
++        }
++        proto.defineProperty("constructor", cls, DONTENUM);
++        cls.setPrototypeProperty(proto);
++        cls.setPrototypePropertyAttributes(DONTENUM | READONLY | PERMANENT);
++
++        for (Object id : allIds(statics)) {
++            DescriptorInfo d = statics.getOwnPropertyDescriptor(cx, id);
++            cls.defineOwnProperty(
++                    cx,
++                    id,
++                    new DescriptorInfo(
++                            Boolean.FALSE,
++                            d.writable,
++                            d.configurable,
++                            d.getter,
++                            d.setter,
++                            d.value));
++        }
++        // static methods find the parent's statics through super
++        statics.setPrototype(constructorParent);
++
++        if (staticInitializer != null) {
++            staticInitializer.call(cx, scope, cls, ScriptRuntime.emptyArgs);
++        }
++        return cls;
++    }
++
++    private static Object[] allIds(ScriptableObject obj) {
++        try (var map = obj.startCompoundOp(false)) {
++            return obj.getIds(map, true, true);
++        }
++    }
++
++    private static Callable take(ScriptableObject literal, String key) {
++        Object value = literal.get(key, literal);
++        if (value == NOT_FOUND) {
++            return null;
++        }
++        literal.delete(key);
++        return (Callable) value;
++    }
++
++    private static void hide(ScriptableObject obj, Object id) {
++        if (id instanceof Symbol) {
++            obj.setAttributes((Symbol) id, obj.getAttributes((Symbol) id) | DONTENUM);
++        } else if (id instanceof Integer) {
++            obj.setAttributes((Integer) id, obj.getAttributes((Integer) id) | DONTENUM);
++        } else {
++            String key = (String) id;
++            obj.setAttributes(key, obj.getAttributes(key) | DONTENUM);
++        }
++    }
++
++    @Override
++    public String getClassName() {
++        return "Function";
++    }
++
++    @Override
++    public String getFunctionName() {
++        return name;
++    }
++
++    @Override
++    String decompile(int indent, EnumSet<DecompilerFlag> flags) {
++        return name.isEmpty() ? "class { }" : "class " + name + " { }";
++    }
++
++    @Override
++    public int getLength() {
++        return body == null ? 0 : body.getLength();
++    }
++
++    @Override
++    public int getArity() {
++        return getLength();
++    }
++
++    @Override
++    public Object call(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
++        throw ScriptRuntime.typeErrorById("msg.class.not.new", name);
++    }
++
++    @Override
++    public Scriptable construct(Context cx, Scriptable scope, Object[] args) {
++        return construct(cx, scope, args, this);
++    }
++
++    /** Runs the constructor for {@code new.target} {@code newTarget}. */
++    Scriptable construct(Context cx, Scriptable scope, Object[] args, Scriptable newTarget) {
++        Construction construction = new Construction(this, newTarget);
++        if (!derived) {
++            construction.instance = createInstance(newTarget);
++            initializeFields(cx, scope, construction.instance);
++        }
++        if (body == null) {
++            if (derived) {
++                superCall(cx, scope, construction, args);
++            }
++        } else {
++            Callable code =
++                    (c, s, thisObj, a) ->
++                            body.getDescriptor()
++                                    .getCode()
++                                    .execute(c, body, newTarget, s, thisObj, a);
++            Object result =
++                    ScriptRuntime.hasTopCall(cx)
++                            ? code.call(cx, scope, construction, args)
++                            : ScriptRuntime.doTopCall(code, cx, scope, construction, args, true);
++            if (ScriptRuntime.isObject(result)) {
++                return (Scriptable) result;
++            }
++            if (derived && !Undefined.isUndefined(result)) {
++                throw ScriptRuntime.typeErrorById("msg.class.ctor.result", name);
++            }
++        }
++        if (construction.instance == null) {
++            throw referenceError("msg.class.no.super", name);
++        }
++        return construction.instance;
++    }
++
++    private Scriptable createInstance(Scriptable newTarget) {
++        Scriptable obj = new NativeObject();
++        Object proto = ScriptableObject.getProperty(newTarget, "prototype");
++        if (!(proto instanceof Scriptable) || ScriptRuntime.isSymbol(proto)) {
++            proto = ScriptableObject.getObjectPrototype(newTarget);
++        }
++        obj.setPrototype((Scriptable) proto);
++        obj.setParentScope(ScriptableObject.getTopLevelScope(this));
++        return obj;
++    }
++
++    private void initializeFields(Context cx, Scriptable scope, Scriptable instance) {
++        if (fieldInitializer != null) {
++            fieldInitializer.call(cx, scope, instance, ScriptRuntime.emptyArgs);
++        }
++    }
++
++    /** {@code super(...args)} in the constructor of a derived class. */
++    static Scriptable superCall(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
++        if (!(thisObj instanceof Construction)) {
++            throw ScriptRuntime.syntaxErrorById("msg.class.bad.super");
++        }
++        Construction construction = (Construction) thisObj;
++        if (construction.instance != null) {
++            throw referenceError("msg.class.super.twice");
++        }
++        Scriptable parent = construction.cls.getPrototype();
++        if (!AbstractEcmaObjectOperations.isConstructor(cx, parent)) {
++            throw ScriptRuntime.typeErrorById(
++                    "msg.class.bad.extends", ScriptRuntime.toString(parent));
++        }
++        Scriptable instance = construct(cx, scope, parent, args, construction.newTarget);
++        if (construction.instance != null) {
++            throw referenceError("msg.class.super.twice");
++        }
++        construction.instance = instance;
++        construction.cls.initializeFields(cx, scope, instance);
++        return instance;
++    }
++
++    /** Constructs {@code target} as if by {@code Reflect.construct(target, args, newTarget)}. */
++    static Scriptable construct(
++            Context cx, Scriptable scope, Scriptable target, Object[] args, Scriptable newTarget) {
++        if (target instanceof ClassFunction) {
++            return ((ClassFunction) target).construct(cx, scope, args, newTarget);
++        }
++        if (target instanceof JSFunction && ((JSFunction) target).getConstructor() != null) {
++            JSFunction f = (JSFunction) target;
++            Scriptable obj = f.createObject(cx, scope);
++            if (newTarget != target) {
++                Object proto = ScriptableObject.getProperty(newTarget, "prototype");
++                if (proto instanceof Scriptable && !ScriptRuntime.isSymbol(proto)) {
++                    obj.setPrototype((Scriptable) proto);
++                }
++            }
++            Object result = f.getConstructor().execute(cx, f, newTarget, scope, obj, args);
++            return ScriptRuntime.isObject(result) ? (Scriptable) result : obj;
++        }
++        Scriptable obj = ((Constructable) target).construct(cx, scope, args);
++        if (newTarget != target) {
++            Object proto = ScriptableObject.getProperty(newTarget, "prototype");
++            if (proto instanceof Scriptable && !ScriptRuntime.isSymbol(proto)) {
++                obj.setPrototype((Scriptable) proto);
++            }
++        }
++        return obj;
++    }
++
++    /** The value of {@code this}: inside a class constructor, the instance being made. */
++    static Scriptable resolveThis(Scriptable thisObj) {
++        if (thisObj instanceof Construction) {
++            Construction construction = (Construction) thisObj;
++            if (construction.instance == null) {
++                throw referenceError("msg.class.this.before.super");
++            }
++            return construction.instance;
++        }
++        return thisObj;
++    }
++
++    private static EcmaError referenceError(String messageId, Object... args) {
++        return ScriptRuntime.referenceError(ScriptRuntime.getMessageById(messageId, args));
++    }
++
++    /** The value of {@code new.target}. */
++    static Object newTarget(Scriptable thisObj) {
++        if (thisObj instanceof Construction) {
++            return ((Construction) thisObj).newTarget;
++        }
++        return Undefined.instance;
++    }
++}
+diff --git a/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java b/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
+index 999d89eeb691..f6d4fb9a8514 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
++++ b/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
+@@ -1152,6 +1152,42 @@ class CodeGenerator<T extends ScriptOrFn<T>> extends Icode {
+                 visitTemplateLiteral(node);
+                 break;
+ 
++            case Token.CLASS:
++                // heritage, prototype members, static members -> class
++                visitExpression(child, 0);
++                visitExpression(child.getNext(), 0);
++                visitExpression(child.getNext().getNext(), 0);
++                addStringPrefix((String) node.getProp(Node.NAME_PROP));
++                addIndexOp(Icode_CLASS, node.getIntProp(Node.CLASS_FLAGS, 0));
++                stackChange(-2);
++                break;
++
++            case Token.SUPER_CALL:
++                {
++                    int argCount = 0;
++                    if (node.getIntProp(Node.SPREAD_ARGS, 0) == 1) {
++                        visitExpression(child, 0);
++                        addIcode(Icode_SPREAD_ARGS);
++                        stackChange(-1);
++                    } else {
++                        for (; child != null; child = child.getNext()) {
++                            visitExpression(child, 0);
++                            ++argCount;
++                        }
++                    }
++                    addIndexOp(Icode_SUPER_CALL, argCount);
++                    stackChange(1 - argCount);
++                    if (argCount > itsData.itsMaxCalleeArgs) {
++                        itsData.itsMaxCalleeArgs = argCount;
++                    }
++                }
++                break;
++
++            case Token.NEW_TARGET:
++                addIcode(Icode_NEW_TARGET);
++                stackChange(1);
++                break;
++
+             case Token.NULLISH_COALESCING:
+                 {
+                     visitExpression(child, 0);
+diff --git a/rhino/src/main/java/org/mozilla/javascript/IRFactory.java b/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
+index cdeb74d8f3f8..5b4b1892172e 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
++++ b/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
+@@ -22,6 +22,7 @@ import org.mozilla.javascript.ast.BigIntLiteral;
+ import org.mozilla.javascript.ast.Block;
+ import org.mozilla.javascript.ast.BreakStatement;
+ import org.mozilla.javascript.ast.CatchClause;
++import org.mozilla.javascript.ast.ClassNode;
+ import org.mozilla.javascript.ast.ComputedPropertyKey;
+ import org.mozilla.javascript.ast.ConditionalExpression;
+ import org.mozilla.javascript.ast.ContinueStatement;
+@@ -161,6 +162,10 @@ public final class IRFactory {
+                 return transformBreak((BreakStatement) node);
+             case Token.CALL:
+                 return transformFunctionCall((FunctionCall) node);
++            case Token.CLASS:
++                return transformClass((ClassNode) node);
++            case Token.NEW_TARGET:
++                return node;
+             case Token.CONTINUE:
+                 return transformContinue((ContinueStatement) node);
+             case Token.DO:
+@@ -738,6 +743,14 @@ public final class IRFactory {
+     private Node transformFunctionCall(FunctionCall node) {
+         astNodePos.push(node);
+         try {
++            if (node.getTarget().getType() == Token.SUPER
++                    && node.getIntProp(Node.CONSTRUCTION_THIS, 0) == 1) {
++                // super(...) in a derived class constructor
++                Node call = new Node(Token.SUPER_CALL);
++                call.setLineColumnNumber(node.getLineno(), node.getColumn());
++                addArguments(call, node.getArguments());
++                return call;
++            }
+             Node transformedTarget = transform(node.getTarget());
+             Node call = createCallOrNew(Token.CALL, transformedTarget);
+             call.setLineColumnNumber(node.getLineno(), node.getColumn());
+@@ -786,6 +799,46 @@ public final class IRFactory {
+         call.removeProp(Node.SPECIALCALL_PROP);
+     }
+ 
++    /**
++     * A class becomes a CLASS node, whose children are the heritage (or undefined), and the object
++     * literals of the prototype members and the static members; ClassFunction.create makes the
++     * class from them at run time.
++     */
++    private Node transformClass(ClassNode node) {
++        Scope inner = node.getInnerScope();
++        if (inner != null) {
++            parser.pushScope(inner);
++        }
++        try {
++            Node heritage =
++                    node.getHeritage() != null
++                            ? transform(node.getHeritage())
++                            : new Node(Token.UNDEFINED);
++            Node proto = transformObjectLiteral(node.getPrototypeMembers());
++            Node statics = transformObjectLiteral(node.getStaticMembers());
++            Node cls = new Node(Token.CLASS, heritage, proto, statics);
++            cls.setLineColumnNumber(node.getLineno(), node.getColumn());
++            int flags = 0;
++            if (node.getHeritage() != null) flags |= ClassFunction.EXTENDS;
++            if (node.hasConstructor()) flags |= ClassFunction.HAS_CONSTRUCTOR;
++            cls.putIntProp(Node.CLASS_FLAGS, flags);
++            Name name = node.getClassName();
++            cls.putProp(Node.NAME_PROP, name == null ? "" : name.getIdentifier());
++            if (inner == null) {
++                return cls;
++            }
++            // (let (C) C = class C {...}), so that the class sees its own name
++            String id = name.getIdentifier();
++            inner.addChildToBack(new Node(Token.LET, Node.newString(Token.NAME, id)));
++            inner.addChildToBack(createAssignment(Token.ASSIGN, parser.createName(id), cls));
++            return inner;
++        } finally {
++            if (inner != null) {
++                parser.popScope();
++            }
++        }
++    }
++
+     private Node transformGenExpr(GeneratorExpression node) {
+         Node pn;
+ 
+@@ -2572,6 +2625,13 @@ public final class IRFactory {
+             return;
+         }
+ 
++        if (left instanceof Name
++                && right != null
++                && right.type == Token.CLASS
++                && "".equals(right.getProp(Node.NAME_PROP))) {
++            right.putProp(Node.NAME_PROP, ((Name) left).getIdentifier());
++            return;
++        }
+         if (left instanceof Name && right != null && right.type == Token.FUNCTION) {
+             Name name = (Name) left;
+             if (name.getIdentifier().equals(NativeObject.PROTO_PROPERTY)) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Icode.java b/rhino/src/main/java/org/mozilla/javascript/Icode.java
+index 19d6ce5ecd3d..687772bd50b1 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Icode.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Icode.java
+@@ -174,8 +174,17 @@ abstract class Icode {
+             // Pop an array whose elements are the arguments of the next call or new
+             Icode_SPREAD_ARGS = Icode_COPY_BLOCK - 1,
+ 
++            // Make a class; string register: its name, index register: its flags
++            Icode_CLASS = Icode_SPREAD_ARGS - 1,
++
++            // super(...) in a class constructor; index register: argument count
++            Icode_SUPER_CALL = Icode_CLASS - 1,
++
++            // new.target
++            Icode_NEW_TARGET = Icode_SUPER_CALL - 1,
++
+             // Last icode
+-            MIN_ICODE = Icode_SPREAD_ARGS;
++            MIN_ICODE = Icode_NEW_TARGET;
+ 
+     static String bytecodeName(int bytecode) {
+         if (!validBytecode(bytecode)) {
+@@ -373,6 +382,12 @@ abstract class Icode {
+                 return "COPY_BLOCK";
+             case Icode_SPREAD_ARGS:
+                 return "SPREAD_ARGS";
++            case Icode_CLASS:
++                return "CLASS";
++            case Icode_SUPER_CALL:
++                return "SUPER_CALL";
++            case Icode_NEW_TARGET:
++                return "NEW_TARGET";
+         }
+ 
+         // icode without name
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+index a2b5bf7b70d0..ed5a4adec8bd 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+@@ -1732,6 +1732,9 @@ public final class Interpreter extends Icode implements Evaluator {
+         instructionObjs[base + Icode_ENTER_BLOCK] = new DoEnterBlock();
+         instructionObjs[base + Icode_COPY_BLOCK] = new DoCopyBlock();
+         instructionObjs[base + Icode_SPREAD_ARGS] = new DoSpreadArgs();
++        instructionObjs[base + Icode_CLASS] = new DoClass();
++        instructionObjs[base + Icode_SUPER_CALL] = new DoSuperCall();
++        instructionObjs[base + Icode_NEW_TARGET] = new DoNewTarget();
+         instructionObjs[base + Icode_CLOSURE_EXPR] = new DoClosureExpr();
+         instructionObjs[base + Icode_METHOD_EXPR] = new DoMethodExpr();
+         instructionObjs[base + Icode_CLOSURE_STMT] = new DoClosureStatement();
+@@ -3522,7 +3525,7 @@ public final class Interpreter extends Icode implements Evaluator {
+                 // used to lookup the function. Now that that's done, we
+                 // discard it and invoke the function with the current
+                 // "this".
+-                funThisObj = frame.thisObj;
++                funThisObj = ClassFunction.resolveThis(frame.thisObj);
+             }
+ 
+             if (op == Token.REF_CALL) {
+@@ -4118,7 +4121,58 @@ public final class Interpreter extends Icode implements Evaluator {
+     private static class DoThis extends InstructionClass {
+         @Override
+         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+-            frame.stack[++state.stackTop] = frame.thisObj;
++            frame.stack[++state.stackTop] = ClassFunction.resolveThis(frame.thisObj);
++            return null;
++        }
++    }
++
++    private static class DoClass extends InstructionClass {
++        @Override
++        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
++            Object heritage = frame.stack[state.stackTop - 2];
++            if (heritage == DOUBLE_MARK) {
++                heritage = ScriptRuntime.wrapNumber(frame.sDbl[state.stackTop - 2]);
++            }
++            Object proto = frame.stack[state.stackTop - 1];
++            Object statics = frame.stack[state.stackTop];
++            state.stackTop -= 2;
++            frame.stack[state.stackTop] =
++                    ClassFunction.create(
++                            heritage,
++                            proto,
++                            statics,
++                            state.indexReg,
++                            state.stringReg,
++                            cx,
++                            frame.scope);
++            return null;
++        }
++    }
++
++    private static class DoSuperCall extends InstructionClass {
++        @Override
++        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
++            if (state.instructionCounting) {
++                cx.instructionCount += INVOCATION_COST;
++            }
++            Object[] args = state.spreadArgs;
++            if (args != null) {
++                state.spreadArgs = null;
++            } else {
++                int first = state.stackTop - state.indexReg + 1;
++                args = getArgsArray(frame.stack, frame.sDbl, first, state.indexReg);
++                state.stackTop = first - 1;
++            }
++            frame.stack[++state.stackTop] =
++                    ClassFunction.superCall(cx, frame.scope, frame.thisObj, args);
++            return null;
++        }
++    }
++
++    private static class DoNewTarget extends InstructionClass {
++        @Override
++        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
++            frame.stack[++state.stackTop] = ClassFunction.newTarget(frame.thisObj);
+             return null;
+         }
+     }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/NativeReflect.java b/rhino/src/main/java/org/mozilla/javascript/NativeReflect.java
+index 94dde4c8321b..32123dc6158f 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/NativeReflect.java
++++ b/rhino/src/main/java/org/mozilla/javascript/NativeReflect.java
+@@ -117,6 +117,14 @@ final class NativeReflect extends ScriptableObject {
+ 
+         Object[] callArgs = ScriptRuntime.getApplyArguments(cx, args[1]);
+ 
++        if (ctor instanceof ClassFunction) {
++            Scriptable newTarget =
++                    args.length > 2
++                            ? ScriptableObject.ensureScriptable(args[2])
++                            : (Scriptable) ctor;
++            return ((ClassFunction) ctor).construct(cx, scope, callArgs, newTarget);
++        }
++
+         Object newTargetPrototype = null;
+         if (args.length > 2) {
+             Scriptable newTarget = ScriptableObject.ensureScriptable(args[2]);
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Node.java b/rhino/src/main/java/org/mozilla/javascript/Node.java
+index be5253e06e96..730537ed1aea 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Node.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Node.java
+@@ -71,7 +71,9 @@ public class Node implements Iterable<Node> {
+             NUMBER_OF_SPREAD = 32,
+             BLOCK_SCOPE_PROP = 33, // const names of a block scope entered by ENTERWITH
+             SPREAD_ARGS = 34, // the arguments of a call or new are one array to spread
+-            LAST_PROP = SPREAD_ARGS,
++            CONSTRUCTION_THIS = 35, // function whose this may be a class construction
++            CLASS_FLAGS = 36, // flags of a CLASS node, see ClassFunction
++            LAST_PROP = CLASS_FLAGS,
+             FIRST_PROP = FUNCTION_PROP;
+ 
+     // values of ISNUMBER_PROP to specify
+@@ -461,6 +463,10 @@ public class Node implements Iterable<Node> {
+                 return "block_scope";
+             case SPREAD_ARGS:
+                 return "spread_args";
++            case CONSTRUCTION_THIS:
++                return "construction_this";
++            case CLASS_FLAGS:
++                return "class_flags";
+             case NUMBER_OF_SPREAD:
+                 return "number_of_spread";
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Parser.java b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+index 3146cafa6576..87d4f5295173 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Parser.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+@@ -26,6 +26,7 @@ import org.mozilla.javascript.ast.BigIntLiteral;
+ import org.mozilla.javascript.ast.Block;
+ import org.mozilla.javascript.ast.BreakStatement;
+ import org.mozilla.javascript.ast.CatchClause;
++import org.mozilla.javascript.ast.ClassNode;
+ import org.mozilla.javascript.ast.Comment;
+ import org.mozilla.javascript.ast.ComputedPropertyKey;
+ import org.mozilla.javascript.ast.ConditionalExpression;
+@@ -145,6 +146,14 @@ public class Parser {
+     // during function parsing.  See PerFunctionVariables class below.
+     ScriptNode currentScriptOrFn;
+     private boolean insideMethod;
++    // whether the statement being parsed is the body of an if, loop, with or label
++    private boolean inSingleStatementContext;
++    // whether the code being parsed is a class constructor, or an arrow function in one
++    private int classConstructorKind;
++    // the kind of constructor that the next method parsed is
++    private int pendingConstructorKind;
++    private static final int BASE_CONSTRUCTOR = 1;
++    private static final int DERIVED_CONSTRUCTOR = 2;
+     Scope currentScope;
+     private int endFlags;
+     // block scopes, with the names of the vars and functions hoisted out of them
+@@ -1010,6 +1019,12 @@ public class Parser {
+         PerFunctionVariables savedVars = new PerFunctionVariables(fnNode);
+         boolean wasInsideMethod = insideMethod;
+         insideMethod = isMethodDefiniton;
++        int savedConstructorKind = classConstructorKind;
++        classConstructorKind = isMethodDefiniton ? pendingConstructorKind : 0;
++        pendingConstructorKind = 0;
++        if (classConstructorKind != 0) {
++            fnNode.putIntProp(Node.CONSTRUCTION_THIS, 1);
++        }
+         try {
+             parseFunctionParams(fnNode);
+             AstNode body = parseFunctionBody(type, fnNode);
+@@ -1028,6 +1043,7 @@ public class Parser {
+         } finally {
+             savedVars.restore();
+             insideMethod = wasInsideMethod;
++            classConstructorKind = savedConstructorKind;
+         }
+ 
+         if (memberExprNode != null) {
+@@ -1068,6 +1084,10 @@ public class Parser {
+         FunctionNode fnNode = new FunctionNode(functionSourceStart);
+         fnNode.setFunctionType(FunctionNode.ARROW_FUNCTION);
+         fnNode.setJsDocNode(getAndResetJsDoc());
++        if (classConstructorKind != 0) {
++            // this, super(...) and new.target are the constructor's
++            fnNode.putIntProp(Node.CONSTRUCTION_THIS, 1);
++        }
+ 
+         // Would prefer not to call createDestructuringAssignment until codegen,
+         // but the symbol definitions have to happen now, before body is parsed.
+@@ -1314,6 +1334,8 @@ public class Parser {
+         AstNode pn = null;
+         int tt = peekToken(), pos = ts.tokenBeg;
+         int lineno, column;
++        boolean singleStatement = inSingleStatementContext;
++        inSingleStatementContext = false;
+ 
+         switch (tt) {
+             case Token.IF:
+@@ -1334,6 +1356,13 @@ public class Parser {
+             case Token.TRY:
+                 return tryStatement();
+ 
++            case Token.CLASS:
++                if (singleStatement) {
++                    reportError("msg.class.not.in.block");
++                }
++                consumeToken();
++                return classDeclaration();
++
+             case Token.THROW:
+                 pn = throwStatement();
+                 break;
+@@ -1464,6 +1493,7 @@ public class Parser {
+                 consumeToken();
+             }
+             elsePos = ts.tokenBeg - pos;
++            inSingleStatementContext = true;
+             ifFalse = statement();
+         }
+         int end = getNodeEnd(ifFalse != null ? ifFalse : ifTrue);
+@@ -1626,6 +1656,7 @@ public class Parser {
+     }
+ 
+     private AstNode getNextStatementAfterInlineComments(AstNode pn) throws IOException {
++        inSingleStatementContext = currentToken != Token.TRY;
+         AstNode body = statement();
+         if (Token.COMMENT == body.getType()) {
+             AstNode commentNode = body;
+@@ -2311,6 +2342,7 @@ public class Parser {
+         try {
+             currentLabel = bundle;
+             if (stmt == null) {
++                inSingleStatementContext = true;
+                 stmt = statementHelper();
+                 int ntt = peekToken();
+                 if (ntt == Token.COMMENT
+@@ -3043,6 +3075,19 @@ public class Parser {
+         } else {
+             consumeToken();
+             int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
++            if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
++                    && matchToken(Token.DOT, true)) {
++                if (!matchToken(Token.NAME, true) || !"target".equals(ts.getString())) {
++                    reportError("msg.syntax");
++                }
++                if (classConstructorKind == 0) {
++                    reportError("msg.class.new.target");
++                }
++                KeywordLiteral newTarget =
++                        new KeywordLiteral(pos, ts.tokenEnd - pos, Token.NEW_TARGET);
++                newTarget.setLineColumnNumber(lineno, column);
++                return memberExprTail(allowCallSyntax, newTarget);
++            }
+             NewExpression nx = new NewExpression(pos);
+ 
+             AstNode target = memberExpr(false);
+@@ -3158,6 +3203,10 @@ public class Parser {
+ 
+     private FunctionCall makeFunctionCall(AstNode pn, int pos, boolean isOptionalChain)
+             throws IOException {
++        boolean superCall = pn.getType() == Token.SUPER;
++        if (superCall && classConstructorKind == BASE_CONSTRUCTOR) {
++            reportError("msg.class.super.call");
++        }
+         consumeToken();
+         checkCallRequiresActivation(pn);
+         FunctionCall f = new FunctionCall(pos);
+@@ -3166,6 +3215,9 @@ public class Parser {
+         List<AstNode> args = argumentList();
+         if (args != null && args.size() > ARGC_LIMIT) reportError("msg.too.many.function.args");
+         f.setArguments(args);
++        if (superCall && classConstructorKind == DERIVED_CONSTRUCTOR) {
++            f.putIntProp(Node.CONSTRUCTION_THIS, 1);
++        }
+         f.setRp(ts.tokenBeg - pos);
+         f.setLength(ts.tokenEnd - pos);
+         if (isOptionalChain) {
+@@ -3492,6 +3544,10 @@ public class Parser {
+                 consumeToken();
+                 return objectLiteral();
+ 
++            case Token.CLASS:
++                consumeToken();
++                return classExpression();
++
+             case Token.LET:
+                 consumeToken();
+                 return let(false, ts.tokenBeg);
+@@ -3930,6 +3986,315 @@ public class Parser {
+     private static final int SET_ENTRY = 4;
+     private static final int METHOD_ENTRY = 8;
+ 
++    /** Parses a class declaration, after the {@code class} keyword, as a let declaration. */
++    private AstNode classDeclaration() throws IOException {
++        int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
++        if (!matchToken(Token.NAME, true)) {
++            reportError("msg.class.no.name");
++        }
++        Name name = createNameNode(true, Token.NAME);
++        defineSymbol(Token.LET, name.getIdentifier());
++        ClassNode cls = classTail(pos, name, lineno, column);
++        Name target = new Name(name.getPosition(), name.getIdentifier());
++        target.setLineColumnNumber(name.getLineno(), name.getColumn());
++        VariableInitializer vi = new VariableInitializer(pos, getNodeEnd(cls) - pos);
++        vi.setTarget(target);
++        vi.setInitializer(cls);
++        vi.setType(Token.LET);
++        vi.setLineColumnNumber(lineno, column);
++        VariableDeclaration decl = new VariableDeclaration(pos, getNodeEnd(cls) - pos);
++        decl.setType(Token.LET);
++        decl.addVariable(vi);
++        decl.setIsStatement(true);
++        decl.setLineColumnNumber(lineno, column);
++        return decl;
++    }
++
++    /** Parses a class expression, after the {@code class} keyword. */
++    private ClassNode classExpression() throws IOException {
++        int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
++        Name name = null;
++        Scope inner = null;
++        if (matchToken(Token.NAME, true)) {
++            name = createNameNode(true, Token.NAME);
++            // the name of a class expression is bound inside the class only
++            inner = createScopeNode(Token.LETEXPR, lineno, column);
++            pushScope(inner);
++            defineSymbol(Token.LET, name.getIdentifier(), true);
++        }
++        try {
++            ClassNode cls = classTail(pos, name, lineno, column);
++            cls.setInnerScope(inner);
++            return cls;
++        } finally {
++            if (inner != null) {
++                popScope();
++            }
++        }
++    }
++
++    private ClassNode classTail(int pos, Name name, int lineno, int column) throws IOException {
++        ClassNode cls = new ClassNode(pos);
++        cls.setClassName(name);
++        cls.setLineColumnNumber(lineno, column);
++        boolean savedStrict = inUseStrictDirective;
++        inUseStrictDirective = true;
++        try {
++            if (matchToken(Token.EXTENDS, true)) {
++                cls.setHeritage(memberExpr(true));
++            }
++            mustMatchToken(Token.LC, "msg.class.no.brace", true);
++            classBody(cls);
++            mustMatchToken(Token.RC, "msg.class.no.brace.after", true);
++            cls.setLength(ts.tokenEnd - pos);
++        } finally {
++            inUseStrictDirective = savedStrict;
++        }
++        return cls;
++    }
++
++    private void classBody(ClassNode cls) throws IOException {
++        int bodyPos = ts.tokenBeg;
++        List<AbstractObjectProperty> protoMembers = new ArrayList<>();
++        List<AbstractObjectProperty> staticMembers = new ArrayList<>();
++        FunctionNode fields = null;
++        FunctionNode staticInit = null;
++        boolean derived = cls.getHeritage() != null;
++        for (; ; ) {
++            int tt = peekToken();
++            if (tt == Token.COMMENT) {
++                consumeToken();
++                continue;
++            }
++            if (tt == Token.SEMI) {
++                consumeToken();
++                continue;
++            }
++            if (tt == Token.RC || tt == Token.EOF || tt == Token.ERROR) {
++                break;
++            }
++            int memberPos = ts.tokenBeg;
++            int memberLine = ts.getLineno(), memberColumn = ts.getTokenColumn();
++            boolean isStatic = false;
++            AstNode pname = null;
++            if ((tt == Token.NAME || tt == Token.RESERVED) && "static".equals(ts.getString())) {
++                consumeToken();
++                int next = peekToken();
++                if (next == Token.LC) {
++                    // static initialization block
++                    if (staticInit == null) {
++                        staticInit = createClassInitializer(memberPos, memberLine, memberColumn);
++                    }
++                    ((Block) staticInit.getBody())
++                            .addStatement(parseInClassInitializer(staticInit, null));
++                    continue;
++                }
++                if (next == Token.LP
++                        || next == Token.ASSIGN
++                        || next == Token.SEMI
++                        || next == Token.RC) {
++                    // a member named "static"
++                    pname = new Name(memberPos, "static");
++                    pname.setLineColumnNumber(memberLine, memberColumn);
++                } else {
++                    isStatic = true;
++                }
++            }
++            if (pname == null) {
++                pname = classElementName();
++                if (pname == null) {
++                    reportError("msg.class.bad.member");
++                    return;
++                }
++                consumeToken();
++                if (pname instanceof Name || pname instanceof StringLiteral) {
++                    pname.setLineColumnNumber(lineNumber(), columnNumber());
++                }
++            }
++            int entryKind = METHOD_ENTRY;
++            int peeked = peekToken();
++            boolean isGenerator = pname instanceof GeneratorMethodDefinition;
++            if (peeked != Token.LP && !isGenerator) {
++                if (pname instanceof Name
++                        && ("get".equals(pname.getString()) || "set".equals(pname.getString()))
++                        && peeked != Token.ASSIGN
++                        && peeked != Token.SEMI
++                        && peeked != Token.RC
++                        && (peekFlaggedToken() & TI_AFTER_EOL) == 0) {
++                    entryKind = "get".equals(pname.getString()) ? GET_ENTRY : SET_ENTRY;
++                    pname = classElementName();
++                    if (pname == null) {
++                        reportError("msg.class.bad.member");
++                        return;
++                    }
++                    consumeToken();
++                } else {
++                    // a field
++                    if (isStatic) {
++                        if (staticInit == null) {
++                            staticInit =
++                                    createClassInitializer(memberPos, memberLine, memberColumn);
++                        }
++                        ((Block) staticInit.getBody())
++                                .addStatement(parseInClassInitializer(staticInit, pname));
++                    } else {
++                        if (fields == null) {
++                            fields = createClassInitializer(memberPos, memberLine, memberColumn);
++                        }
++                        ((Block) fields.getBody())
++                                .addStatement(parseInClassInitializer(fields, pname));
++                    }
++                    continue;
++                }
++            }
++            boolean isConstructor =
++                    !isStatic
++                            && !(pname instanceof ComputedPropertyKey)
++                            && ((pname instanceof Name
++                                            && "constructor".equals(((Name) pname).getIdentifier()))
++                                    || (pname instanceof StringLiteral
++                                            && "constructor"
++                                                    .equals(((StringLiteral) pname).getValue())));
++            if (isConstructor) {
++                if (entryKind != METHOD_ENTRY || isGenerator) {
++                    reportError("msg.class.bad.constructor");
++                }
++                if (cls.hasConstructor()) {
++                    reportError("msg.class.dup.constructor");
++                }
++                cls.setHasConstructor(true);
++                pendingConstructorKind = derived ? DERIVED_CONSTRUCTOR : BASE_CONSTRUCTOR;
++            }
++            ObjectProperty member;
++            try {
++                member = methodDefinition(memberPos, pname, entryKind, isGenerator, true);
++            } finally {
++                pendingConstructorKind = 0;
++            }
++            ((FunctionNode) member.getValue()).setInStrictMode(true);
++            if (isConstructor) {
++                protoMembers.add(0, member);
++            } else if (isStatic) {
++                staticMembers.add(member);
++            } else {
++                protoMembers.add(member);
++            }
++        }
++        if (fields != null) {
++            protoMembers.add(classInitializerProperty(fields));
++        }
++        if (staticInit != null) {
++            staticMembers.add(classInitializerProperty(staticInit));
++        }
++        ObjectLiteral proto = new ObjectLiteral(bodyPos, ts.tokenBeg - bodyPos);
++        proto.setElements(protoMembers);
++        proto.setLineColumnNumber(cls.getLineno(), cls.getColumn());
++        ObjectLiteral statics = new ObjectLiteral(bodyPos, ts.tokenBeg - bodyPos);
++        statics.setElements(staticMembers);
++        statics.setLineColumnNumber(cls.getLineno(), cls.getColumn());
++        cls.setPrototypeMembers(proto);
++        cls.setStaticMembers(statics);
++    }
++
++    /** The name of a class member: as in an object literal, but not a spread. */
++    private AstNode classElementName() throws IOException {
++        if (peekToken() == Token.DOTDOTDOT) {
++            return null;
++        }
++        return objliteralProperty();
++    }
++
++    /**
++     * Makes the method that a class runs to initialize its fields, on each instance or once on the
++     * class itself for static fields and blocks.
++     */
++    private FunctionNode createClassInitializer(int pos, int lineno, int column) {
++        FunctionNode fn = new FunctionNode(pos);
++        fn.setFunctionType(FunctionNode.FUNCTION_EXPRESSION);
++        fn.setMethodDefinition(true);
++        fn.setFunctionIsNormalMethod();
++        fn.setIsShorthand();
++        fn.setInStrictMode(true);
++        fn.setSourceName(sourceURI);
++        fn.setLineColumnNumber(lineno, column);
++        Block body = new Block(pos);
++        body.setLineColumnNumber(lineno, column);
++        fn.setBody(body);
++        return fn;
++    }
++
++    /**
++     * Parses, as part of a class initializer method, a field initializer (when {@code key} is not
++     * null) or a static block.
++     */
++    private AstNode parseInClassInitializer(FunctionNode fn, AstNode key) throws IOException {
++        PerFunctionVariables savedVars = new PerFunctionVariables(fn);
++        boolean wasInsideMethod = insideMethod;
++        int savedConstructorKind = classConstructorKind;
++        insideMethod = true;
++        classConstructorKind = 0;
++        ++nestingOfFunction;
++        try {
++            if (key == null) {
++                return block();
++            }
++            int pos = key.getPosition(), lineno = key.getLineno(), column = key.getColumn();
++            AstNode value;
++            if (matchToken(Token.ASSIGN, true)) {
++                value = assignExpr();
++            } else {
++                NumberLiteral zero = new NumberLiteral(pos, "0", 0.0);
++                zero.setLineColumnNumber(lineno, column);
++                value = new UnaryExpression(Token.VOID, pos, zero);
++                value.setLineColumnNumber(lineno, column);
++            }
++            int tt = peekFlaggedToken();
++            if ((tt & CLEAR_TI_MASK) == Token.SEMI) {
++                consumeToken();
++            } else if ((tt & CLEAR_TI_MASK) != Token.RC && (tt & TI_AFTER_EOL) == 0) {
++                reportError("msg.class.bad.member");
++            }
++            KeywordLiteral thisNode = new KeywordLiteral(pos, 0, Token.THIS);
++            thisNode.setLineColumnNumber(lineno, column);
++            AstNode target;
++            if (key instanceof Name) {
++                Name property = new Name(pos, ((Name) key).getIdentifier());
++                property.setLineColumnNumber(lineno, column);
++                target = new PropertyGet(thisNode, property);
++            } else if (key instanceof ComputedPropertyKey) {
++                target = new ElementGet(thisNode, ((ComputedPropertyKey) key).getExpression());
++            } else {
++                target = new ElementGet(thisNode, key);
++            }
++            target.setLineColumnNumber(lineno, column);
++            Assignment assignment = new Assignment(Token.ASSIGN, target, value, pos);
++            assignment.setLineColumnNumber(lineno, column);
++            ExpressionStatement statement = new ExpressionStatement(assignment, false);
++            statement.setLineColumnNumber(lineno, column);
++            return statement;
++        } finally {
++            --nestingOfFunction;
++            classConstructorKind = savedConstructorKind;
++            insideMethod = wasInsideMethod;
++            savedVars.restore();
++        }
++    }
++
++    private ObjectProperty classInitializerProperty(FunctionNode fn) {
++        int end = ts.tokenBeg;
++        fn.setRawSourceBounds(fn.getPosition(), end);
++        fn.setLength(end - fn.getPosition());
++        fn.setEndLineno(lineNumber());
++        StringLiteral key = new StringLiteral(fn.getPosition(), 0);
++        key.setValue(ClassFunction.FIELDS_KEY);
++        key.setQuoteCharacter('"');
++        key.setLineColumnNumber(fn.getLineno(), fn.getColumn());
++        ObjectProperty property = new ObjectProperty(fn.getPosition());
++        property.setIsNormalMethod();
++        property.setKeyAndValue(key, fn);
++        return property;
++    }
++
+     private ObjectLiteral objectLiteral() throws IOException {
+         int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
+         int afterComma = -1;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+index ab892820fb3b..ad7d84099591 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+@@ -1747,6 +1747,7 @@ public class ScriptRuntime {
+ 
+     public static Object getSuperElem(
+             Object superObject, Object elem, Context cx, Scriptable scope, Object thisObject) {
++        thisObject = resolveSuperThis(thisObject);
+         Scriptable superScriptable =
+                 asScriptableOrThrowUndefReadError(cx, scope, superObject, elem);
+         Scriptable thisScriptable = asScriptableOrThrowUndefReadError(cx, scope, thisObject, elem);
+@@ -1837,6 +1838,7 @@ public class ScriptRuntime {
+             Scriptable scope,
+             Object thisObject,
+             boolean noWarn) {
++        thisObject = resolveSuperThis(thisObject);
+         Scriptable superScriptable =
+                 asScriptableOrThrowUndefReadError(cx, scope, superObject, property);
+         Scriptable thisScriptable =
+@@ -1898,6 +1900,7 @@ public class ScriptRuntime {
+ 
+     public static Object getSuperIndex(
+             Object superObject, double dblIndex, Context cx, Scriptable scope, Object thisObject) {
++        thisObject = resolveSuperThis(thisObject);
+         Scriptable superScriptable =
+                 asScriptableOrThrowUndefReadError(cx, scope, superObject, dblIndex);
+         Scriptable thisScriptable =
+@@ -1964,6 +1967,7 @@ public class ScriptRuntime {
+             Context cx,
+             Scriptable scope,
+             Object thisObject) {
++        thisObject = resolveSuperThis(thisObject);
+         Scriptable superScriptable =
+                 asScriptableOrThrowUndefWriteError(cx, scope, superObject, elem, value);
+         Scriptable thisScriptable =
+@@ -2024,6 +2028,7 @@ public class ScriptRuntime {
+             Context cx,
+             Scriptable scope,
+             Object thisObject) {
++        thisObject = resolveSuperThis(thisObject);
+         verifyIsScriptableOrComplainWriteErrorInEs5Strict(superObject, property, value, cx);
+         verifyIsScriptableOrComplainWriteErrorInEs5Strict(thisObject, property, value, cx);
+ 
+@@ -2081,6 +2086,7 @@ public class ScriptRuntime {
+             Context cx,
+             Scriptable scope,
+             Object thisObject) {
++        thisObject = resolveSuperThis(thisObject);
+         Scriptable superScriptable =
+                 asScriptableOrThrowUndefWriteError(cx, scope, superObject, dblIndex, value);
+         Scriptable thisScriptable =
+@@ -3474,6 +3480,43 @@ public class ScriptRuntime {
+                         || ScriptableObject.hasProperty(obj, "length"));
+     }
+ 
++    private static Object resolveSuperThis(Object thisObject) {
++        if (thisObject instanceof ClassFunction.Construction) {
++            return ClassFunction.resolveThis((Scriptable) thisObject);
++        }
++        return thisObject;
++    }
++
++    /**
++     * Makes a class from its heritage and the object literals of its prototype and static members.
++     */
++    public static Scriptable createClass(
++            Object heritage,
++            Object protoLiteral,
++            Object staticLiteral,
++            int flags,
++            String name,
++            Context cx,
++            Scriptable scope) {
++        return ClassFunction.create(heritage, protoLiteral, staticLiteral, flags, name, cx, scope);
++    }
++
++    /** {@code super(...args)} in a class constructor whose {@code this} is {@code thisObj}. */
++    public static Scriptable superCall(
++            Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
++        return ClassFunction.superCall(cx, scope, thisObj, args);
++    }
++
++    /** The value of {@code this} in a function that may run as part of a class constructor. */
++    public static Scriptable resolveThis(Scriptable thisObj) {
++        return ClassFunction.resolveThis(thisObj);
++    }
++
++    /** The value of {@code new.target}. */
++    public static Object newTarget(Scriptable thisObj) {
++        return ClassFunction.newTarget(thisObj);
++    }
++
+     /** The arguments of a call with spread arguments, gathered in an array. */
+     public static Object[] spreadArguments(Object array, Context cx) {
+         return cx.getElements((Scriptable) array);
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Token.java b/rhino/src/main/java/org/mozilla/javascript/Token.java
+index fac3c7808a40..ef4313d8844f 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Token.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Token.java
+@@ -246,7 +246,11 @@ public class Token {
+             NULLISH_COALESCING = DOTDOTDOT + 1, // nullish coalescing (??)
+             QUESTION_DOT = NULLISH_COALESCING + 1, // optional chaining operator (?.)
+             BLOCK_SCOPE_COPY = QUESTION_DOT + 1, // fresh copy of a loop's block scope
+-            LAST_TOKEN = BLOCK_SCOPE_COPY + 1;
++            CLASS = BLOCK_SCOPE_COPY + 1, // class keyword, and class definition
++            EXTENDS = CLASS + 1, // extends keyword
++            SUPER_CALL = EXTENDS + 1, // super(...) in a class constructor
++            NEW_TARGET = SUPER_CALL + 1, // new.target
++            LAST_TOKEN = NEW_TARGET + 1;
+ 
+     /**
+      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
+@@ -651,6 +655,14 @@ public class Token {
+                 return "QUESTION_DOT";
+             case BLOCK_SCOPE_COPY:
+                 return "BLOCK_SCOPE_COPY";
++            case CLASS:
++                return "CLASS";
++            case EXTENDS:
++                return "EXTENDS";
++            case SUPER_CALL:
++                return "SUPER_CALL";
++            case NEW_TARGET:
++                return "NEW_TARGET";
+         }
+ 
+         // Token without name
+@@ -716,6 +728,10 @@ public class Token {
+                 return "while";
+             case Token.WITH:
+                 return "with";
++            case Token.CLASS:
++                return "class";
++            case Token.EXTENDS:
++                return "extends";
+             case Token.YIELD:
+                 return "yield";
+             case Token.SUPER:
+diff --git a/rhino/src/main/java/org/mozilla/javascript/TokenStream.java b/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
+index b7290479a7b2..b0010a6572d6 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
++++ b/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
+@@ -364,7 +364,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
+                 Id_break = Token.BREAK,
+                 Id_case = Token.CASE,
+                 Id_catch = Token.CATCH,
+-                Id_class = Token.RESERVED,
++                Id_class = Token.CLASS,
+                 Id_const = Token.CONST,
+                 Id_continue = Token.CONTINUE,
+                 Id_debugger = Token.DEBUGGER,
+@@ -373,7 +373,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
+                 Id_do = Token.DO,
+                 Id_else = Token.ELSE,
+                 Id_export = Token.RESERVED,
+-                Id_extends = Token.RESERVED,
++                Id_extends = Token.EXTENDS,
+                 Id_finally = Token.FINALLY,
+                 Id_for = Token.FOR,
+                 Id_function = Token.FUNCTION,
+@@ -1156,6 +1156,13 @@ class TokenStream implements Parser.CurrentPositionReporter {
+                 return Token.COMMENT;
+             }
+ 
++            if (c == '#'
++                    && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
++                    && Character.isJavaIdentifierStart(peekChar())) {
++                parser.addError("msg.private.name");
++                return Token.ERROR;
++            }
++
+             switch (c) {
+                 case ';':
+                     return Token.SEMI;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ast/ClassNode.java b/rhino/src/main/java/org/mozilla/javascript/ast/ClassNode.java
+new file mode 100644
+index 000000000000..935b98798bd1
+--- /dev/null
++++ b/rhino/src/main/java/org/mozilla/javascript/ast/ClassNode.java
+@@ -0,0 +1,128 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript.ast;
++
++import org.mozilla.javascript.Token;
++
++/**
++ * A class declaration or expression. Node type is {@link Token#CLASS}.
++ *
++ * <p>The members are kept as two object literals: one holds the constructor, methods and accessors
++ * of the prototype, the other the static methods and accessors. Field initializers and static
++ * blocks are gathered into methods of those literals, which the class runs on each new instance and
++ * once on the class.
++ */
++public class ClassNode extends AstNode {
++
++    private Name className;
++    private AstNode heritage;
++    private ObjectLiteral prototypeMembers;
++    private ObjectLiteral staticMembers;
++    private boolean hasConstructor;
++    private Scope innerScope;
++
++    {
++        type = Token.CLASS;
++    }
++
++    public ClassNode() {}
++
++    public ClassNode(int pos) {
++        super(pos);
++    }
++
++    public ClassNode(int pos, int len) {
++        super(pos, len);
++    }
++
++    /** Returns the class name, or {@code null} for an anonymous class expression. */
++    public Name getClassName() {
++        return className;
++    }
++
++    public void setClassName(Name className) {
++        this.className = className;
++        if (className != null) className.setParent(this);
++    }
++
++    /** Returns the expression after {@code extends}, or {@code null}. */
++    public AstNode getHeritage() {
++        return heritage;
++    }
++
++    public void setHeritage(AstNode heritage) {
++        this.heritage = heritage;
++        if (heritage != null) heritage.setParent(this);
++    }
++
++    public ObjectLiteral getPrototypeMembers() {
++        return prototypeMembers;
++    }
++
++    public void setPrototypeMembers(ObjectLiteral prototypeMembers) {
++        assertNotNull(prototypeMembers);
++        this.prototypeMembers = prototypeMembers;
++        prototypeMembers.setParent(this);
++    }
++
++    public ObjectLiteral getStaticMembers() {
++        return staticMembers;
++    }
++
++    public void setStaticMembers(ObjectLiteral staticMembers) {
++        assertNotNull(staticMembers);
++        this.staticMembers = staticMembers;
++        staticMembers.setParent(this);
++    }
++
++    /** Whether the prototype members include an explicit {@code constructor} method. */
++    public boolean hasConstructor() {
++        return hasConstructor;
++    }
++
++    public void setHasConstructor(boolean hasConstructor) {
++        this.hasConstructor = hasConstructor;
++    }
++
++    /**
++     * Returns the scope that binds a class expression's own name inside the class, or {@code null}.
++     */
++    public Scope getInnerScope() {
++        return innerScope;
++    }
++
++    public void setInnerScope(Scope innerScope) {
++        this.innerScope = innerScope;
++    }
++
++    @Override
++    public String toSource(int depth) {
++        StringBuilder sb = new StringBuilder();
++        sb.append(makeIndent(depth));
++        sb.append("class");
++        if (className != null) {
++            sb.append(" ").append(className.toSource(0));
++        }
++        if (heritage != null) {
++            sb.append(" extends ").append(heritage.toSource(0));
++        }
++        sb.append(" { ").append(prototypeMembers.toSource(0));
++        sb.append(" static ").append(staticMembers.toSource(0)).append(" }");
++        return sb.toString();
++    }
++
++    /** Visits this node, the name, the heritage, then the member literals. */
++    @Override
++    public void visit(NodeVisitor v) {
++        if (v.visit(this)) {
++            if (className != null) className.visit(v);
++            if (heritage != null) heritage.visit(v);
++            prototypeMembers.visit(v);
++            staticMembers.visit(v);
++        }
++    }
++}
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ast/KeywordLiteral.java b/rhino/src/main/java/org/mozilla/javascript/ast/KeywordLiteral.java
+index 2cb92dc23ddf..0ac573b4f04b 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ast/KeywordLiteral.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ast/KeywordLiteral.java
+@@ -49,7 +49,8 @@ public class KeywordLiteral extends AstNode {
+                 || nodeType == Token.UNDEFINED
+                 || nodeType == Token.TRUE
+                 || nodeType == Token.FALSE
+-                || nodeType == Token.DEBUGGER))
++                || nodeType == Token.DEBUGGER
++                || nodeType == Token.NEW_TARGET))
+             throw new IllegalArgumentException("Invalid node type: " + nodeType);
+         type = nodeType;
+         return this;
+@@ -71,6 +72,9 @@ public class KeywordLiteral extends AstNode {
+             case Token.SUPER:
+                 sb.append("super");
+                 break;
++            case Token.NEW_TARGET:
++                sb.append("new.target");
++                break;
+             case Token.NULL:
+                 sb.append("null");
+                 break;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java b/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
+index 4158674d4737..7371b135717b 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
++++ b/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
+@@ -1081,6 +1081,53 @@ class BodyCodegen {
+ 
+             case Token.THIS:
+                 cfw.addALoad(thisObjLocal);
++                if (fnCurrent != null
++                        && fnCurrent.fnode.getIntProp(Node.CONSTRUCTION_THIS, 0) == 1) {
++                    addScriptRuntimeInvoke(
++                            "resolveThis",
++                            "(Lorg/mozilla/javascript/Scriptable;"
++                                    + ")Lorg/mozilla/javascript/Scriptable;");
++                }
++                break;
++
++            case Token.NEW_TARGET:
++                cfw.addALoad(thisObjLocal);
++                addScriptRuntimeInvoke(
++                        "newTarget", "(Lorg/mozilla/javascript/Scriptable;)Ljava/lang/Object;");
++                break;
++
++            case Token.SUPER_CALL:
++                cfw.addALoad(contextLocal);
++                cfw.addALoad(variableObjectLocal);
++                cfw.addALoad(thisObjLocal);
++                generateCallArgArray(node, child, false);
++                addScriptRuntimeInvoke(
++                        "superCall",
++                        "(Lorg/mozilla/javascript/Context;"
++                                + "Lorg/mozilla/javascript/Scriptable;"
++                                + "Lorg/mozilla/javascript/Scriptable;"
++                                + "[Ljava/lang/Object;"
++                                + ")Lorg/mozilla/javascript/Scriptable;");
++                break;
++
++            case Token.CLASS:
++                generateExpression(child, node);
++                generateExpression(child.getNext(), node);
++                generateExpression(child.getNext().getNext(), node);
++                cfw.addPush(node.getIntProp(Node.CLASS_FLAGS, 0));
++                cfw.addPush((String) node.getProp(Node.NAME_PROP));
++                cfw.addALoad(contextLocal);
++                cfw.addALoad(variableObjectLocal);
++                addScriptRuntimeInvoke(
++                        "createClass",
++                        "(Ljava/lang/Object;"
++                                + "Ljava/lang/Object;"
++                                + "Ljava/lang/Object;"
++                                + "I"
++                                + "Ljava/lang/String;"
++                                + "Lorg/mozilla/javascript/Context;"
++                                + "Lorg/mozilla/javascript/Scriptable;"
++                                + ")Lorg/mozilla/javascript/Scriptable;");
+                 break;
+ 
+             case Token.SUPER:
+@@ -2740,6 +2787,9 @@ class BodyCodegen {
+                     "getCallable",
+                     "()Lorg/mozilla/javascript/Callable;");
+             cfw.addALoad(thisObjLocal);
++            addScriptRuntimeInvoke(
++                    "resolveThis",
++                    "(Lorg/mozilla/javascript/Scriptable;)Lorg/mozilla/javascript/Scriptable;");
+         } else {
+             popFunctionAndThis();
+         }
+diff --git a/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties b/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties
+index d7bceec97f76..4680a3fef9a0 100644
+--- a/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties
++++ b/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties
+@@ -480,6 +480,57 @@ msg.reserved.id =\
+ msg.super.shorthand.function =\
+     super should be inside a shorthand function
+ 
++msg.private.name =\
++    private class members (#name) are not supported
++
++msg.class.no.name =\
++    missing name after class
++
++msg.class.not.in.block =\
++    a class declaration must be directly in a block
++
++msg.class.no.brace =\
++    missing '{' before class body
++
++msg.class.no.brace.after =\
++    missing '}' after class body
++
++msg.class.bad.member =\
++    invalid class member
++
++msg.class.bad.constructor =\
++    a class constructor cannot be a getter, setter or generator
++
++msg.class.dup.constructor =\
++    a class can only have one constructor
++
++msg.class.super.call =\
++    super(...) is only valid in the constructor of a derived class
++
++msg.class.new.target =\
++    new.target is only supported in class constructors
++
++msg.class.bad.extends =\
++    Class extends value {0} is not a constructor or null
++
++msg.class.not.new =\
++    Class constructor {0} cannot be invoked without ''new''
++
++msg.class.ctor.result =\
++    Derived constructor {0} may only return an object or undefined
++
++msg.class.no.super =\
++    Derived constructor {0} must call super() before it returns
++
++msg.class.bad.super =\
++    ''super'' keyword unexpected here
++
++msg.class.super.twice =\
++    Super constructor may only be called once
++
++msg.class.this.before.super =\
++    Must call super constructor in derived class before accessing ''this''
++
+ msg.optional.super =\
+     super is not allowed in an optional chaining expression
+ 
+diff --git a/rhino/src/test/java/org/mozilla/javascript/tests/es6/ClassTest.java b/rhino/src/test/java/org/mozilla/javascript/tests/es6/ClassTest.java
+new file mode 100644
+index 000000000000..e1ad511a2839
+--- /dev/null
++++ b/rhino/src/test/java/org/mozilla/javascript/tests/es6/ClassTest.java
+@@ -0,0 +1,367 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript.tests.es6;
++
++import org.junit.jupiter.api.Test;
++import org.mozilla.javascript.Context;
++import org.mozilla.javascript.testutils.Utils;
++
++/** Class declarations and expressions. */
++public class ClassTest {
++
++    private static void check(Object expected, String script) {
++        Utils.assertWithAllModes_ES6(expected, script);
++        Utils.assertWithAllModes(Context.VERSION_ECMASCRIPT, null, expected, script);
++        Utils.assertWithAllModes_ES6(
++                expected, "(function() { return eval(" + quote(script) + "); })()");
++    }
++
++    private static String quote(String s) {
++        return "'" + s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n") + "'";
++    }
++
++    @Test
++    public void declarationWithConstructorAndMethods() {
++        check(
++                "2:3",
++                "class A { constructor(x) { this.x = x; } get y() { return this.x + 1; }"
++                        + " static z() { return 3; } }\n"
++                        + "new A(1).y + ':' + A.z()");
++    }
++
++    @Test
++    public void classExpression() {
++        check("1", "var A = class { m() { return 1; } }; String(new A().m())");
++        check("B", "var A = class B { m() { return B.name; } }; new A().m()");
++        check("A", "var A = class {}; A.name");
++    }
++
++    @Test
++    public void namedClassExpressionSeesItsOwnName() {
++        check(
++                true,
++                "var A = class B { static make() { return new B(); } };"
++                        + " var C = A; A = null; C.make() instanceof C");
++    }
++
++    @Test
++    public void methodsAreNotEnumerable() {
++        check(
++                "x|",
++                "class A { constructor() { this.x = 1; } m() {} get g() { return 1; } static s() {} }\n"
++                        + "var keys = []; for (var k in new A()) keys.push(k);\n"
++                        + "keys.join() + '|' + Object.keys(A).join()");
++    }
++
++    @Test
++    public void prototypeAndConstructorLinks() {
++        check(
++                "true,true,function,false",
++                "class A {}\n"
++                        + "[A.prototype.constructor === A, Object.getPrototypeOf(new A()) === A.prototype,"
++                        + " typeof A, Object.getOwnPropertyDescriptor(A, 'prototype').writable].join()");
++    }
++
++    @Test
++    public void computedNamesAndSymbols() {
++        check(
++                "1,2,3",
++                "var k = 'dyn';\n"
++                        + "class A { [k + 'amic']() { return 1; } static ['s' + 1]() { return 2; }\n"
++                        + "  *[Symbol.iterator]() { yield 3; } }\n"
++                        + "[new A().dynamic(), A.s1(), ...new A()].join()");
++    }
++
++    @Test
++    public void gettersAndSetters() {
++        check(
++                "10:5",
++                "class A { constructor() { this._v = 0; } get v() { return this._v * 2; }"
++                        + " set v(x) { this._v = x; } static get s() { return 5; } }\n"
++                        + "var a = new A(); a.v = 5; a.v + ':' + A.s");
++    }
++
++    @Test
++    public void extendsAndSuper() {
++        check(
++                3,
++                "class A { f() { return 1; } }\n"
++                        + "class B extends A { constructor() { super(); this.k = 2; }"
++                        + " f() { return super.f() + this.k; } }\n"
++                        + "new B().f()");
++    }
++
++    @Test
++    public void superConstructorArguments() {
++        check(
++                "1,2,3",
++                "class A { constructor(...a) { this.a = a; } }\n"
++                        + "class B extends A { constructor(x) { super(x, ...[2, 3]); } }\n"
++                        + "new B(1).a.join()");
++    }
++
++    @Test
++    public void defaultDerivedConstructorPassesArguments() {
++        check(
++                "1,2",
++                "class A { constructor(a, b) { this.v = [a, b]; } }\n"
++                        + "class B extends A {}\n"
++                        + "new B(1, 2).v.join()");
++    }
++
++    @Test
++    public void superPropertyAndStaticSuper() {
++        check(
++                "p:c|sp:sc",
++                "class P { get name() { return 'p'; } static who() { return 'sp'; } }\n"
++                        + "class C extends P { get name() { return super.name + ':c'; }"
++                        + " static who() { return super.who() + ':sc'; } }\n"
++                        + "new C().name + '|' + C.who()");
++    }
++
++    @Test
++    public void superMethodSeesSubclassThis() {
++        check(
++                "B",
++                "class A { who() { return this.constructor.name; } }\n"
++                        + "class B extends A { who() { return super.who(); } }\n"
++                        + "new B().who()");
++    }
++
++    @Test
++    public void superInObjectLiteralMethods() {
++        check(
++                "base+lit",
++                "var base = { f() { return 'base'; } };\n"
++                        + "var lit = { __proto__: base, f() { return super.f() + '+lit'; } };\n"
++                        + "lit.f()");
++    }
++
++    @Test
++    public void staticInheritance() {
++        check(
++                "1:true",
++                "class A { static one() { return 1; } } class B extends A {}\n"
++                        + "B.one() + ':' + (Object.getPrototypeOf(B) === A)");
++    }
++
++    @Test
++    public void instanceAndStaticFields() {
++        check(3, "class A { x = 1; static y = 2; } new A().x + A.y");
++        check(
++                "1,2,undefined,3",
++                "class A { a = 1; b = this.a + 1; c; ['d'] = 3; }\n"
++                        + "var o = new A(); [o.a, o.b, o.c, o.d].map(String).join()");
++    }
++
++    @Test
++    public void fieldsRunBeforeBaseConstructorBody() {
++        check(
++                "1:2",
++                "class A { x = 1; constructor() { this.seen = this.x; this.x = 2; } }\n"
++                        + "var a = new A(); a.seen + ':' + a.x");
++    }
++
++    @Test
++    public void derivedFieldsRunAfterSuper() {
++        check(
++                "undefined:5",
++                "class A { constructor() { this.seen = this.y; } }\n"
++                        + "class B extends A { y = 5; }\n"
++                        + "var b = new B(); b.seen + ':' + b.y");
++    }
++
++    @Test
++    public void fieldArrowFunctionsBindThis() {
++        check(7, "class A { v = 7; get = () => this.v; } var g = new A().get; g()");
++    }
++
++    @Test
++    public void staticFieldsAndBlocks() {
++        check(
++                "1,2,A",
++                "class A { static a = 1; static { this.b = this.a + 1; } static c = this.name; }\n"
++                        + "[A.a, A.b, A.c].join()");
++    }
++
++    @Test
++    public void extendsBuiltIns() {
++        check(
++                "true,true,MyError,boom",
++                "class MyError extends Error {\n"
++                        + "  constructor(m) { super(m); this.name = 'MyError'; } }\n"
++                        + "var e = new MyError('boom');\n"
++                        + "[e instanceof MyError, e instanceof Error, e.name, e.message].join()");
++        check(
++                "3,true,1",
++                "class Stack extends Array { top() { return this[this.length - 1]; } }\n"
++                        + "var s = new Stack(); s.push(1, 2, 3);\n"
++                        + "[s.length, s instanceof Array, s.top() - 2].join()");
++        check(
++                "2,true",
++                "class Counter extends Map { inc(k) { this.set(k, (this.get(k) || 0) + 1); } }\n"
++                        + "var c = new Counter(); c.inc('a'); c.inc('a');\n"
++                        + "[c.get('a'), c instanceof Map].join()");
++    }
++
++    @Test
++    public void extendsPlainFunction() {
++        check(
++                "1,2,true",
++                "function P(a) { this.a = a; } P.prototype.getA = function() { return this.a; };\n"
++                        + "class C extends P { constructor() { super(1); this.b = 2; } }\n"
++                        + "var c = new C(); [c.getA(), c.b, c instanceof P].join()");
++    }
++
++    @Test
++    public void newTarget() {
++        check(
++                "A,B",
++                "var seen = [];\n"
++                        + "class A { constructor() { seen.push(new.target.name); } }\n"
++                        + "class B extends A {}\n"
++                        + "new A(); new B(); seen.join()");
++    }
++
++    @Test
++    public void arrowFunctionsInConstructor() {
++        check(
++                "1:1",
++                "class A { constructor() { var f = () => this; this.v = 1; this.f = f; } }\n"
++                        + "class B extends A { constructor() { var g = () => super(); g(); this.w = this.v; } }\n"
++                        + "var b = new B(); b.w + ':' + b.f().v");
++    }
++
++    @Test
++    public void callingClassWithoutNewThrows() {
++        Utils.assertEcmaErrorES6(
++                "TypeError: Class constructor A cannot be invoked without 'new'", "class A {} A()");
++    }
++
++    @Test
++    public void thisBeforeSuperThrows() {
++        Utils.assertEcmaErrorES6(
++                "ReferenceError: Must call super constructor in derived class before accessing"
++                        + " 'this'",
++                "class A {} class B extends A { constructor() { this.x = 1; super(); } } new B()");
++    }
++
++    @Test
++    public void missingSuperThrows() {
++        Utils.assertEcmaErrorES6(
++                "ReferenceError: Derived constructor B must call super() before it returns",
++                "class A {} class B extends A { constructor() {} } new B()");
++    }
++
++    @Test
++    public void superTwiceThrows() {
++        Utils.assertEcmaErrorES6(
++                "ReferenceError: Super constructor may only be called once",
++                "class A {} class B extends A { constructor() { super(); super(); } } new B()");
++    }
++
++    @Test
++    public void constructorMayReturnAnObject() {
++        check(1, "class A { constructor() { return { v: 1 }; } } new A().v");
++        check(1, "class A {} class B extends A { constructor() { return { v: 1 }; } } new B().v");
++    }
++
++    @Test
++    public void extendsNonConstructorThrows() {
++        Utils.assertEcmaErrorES6(
++                "TypeError: Class extends value 1 is not a constructor or null",
++                "class A extends 1 {}");
++    }
++
++    @Test
++    public void superCallOutsideDerivedConstructorIsSyntaxError() {
++        Utils.assertEvaluatorExceptionES6(
++                "super(...) is only valid in the constructor of a derived class",
++                "class A { constructor() { super(); } }");
++        Utils.assertEvaluatorExceptionES6(
++                "super should be inside a shorthand function",
++                "class A extends Object { m() { super(); } }");
++    }
++
++    @Test
++    public void classBodyIsStrict() {
++        Utils.assertEcmaErrorES6(
++                "ReferenceError: Assignment to undefined \"undeclared\" in strict mode",
++                "class A { m() { undeclared = 1; } } new A().m()");
++    }
++
++    @Test
++    public void classIsBlockScoped() {
++        check(
++                "outer",
++                "var r; class A { } { class A { static n() { return 'inner'; } } } "
++                        + "r = typeof A.n === 'undefined' ? 'outer' : 'inner'; r");
++    }
++
++    @Test
++    public void classUsedBeforeDeclarationThrows() {
++        Utils.assertEcmaErrorES6("TypeError", "new A(); class A {}");
++    }
++
++    @Test
++    public void constructorNamedByString() {
++        check(2, "class A { 'constructor'() { this.v = 2; } } new A().v");
++    }
++
++    @Test
++    public void memberNamedStatic() {
++        check(
++                "1,2",
++                "class A { static() { return 1; } static static() { return 2; } }\n"
++                        + "[new A().static(), A.static()].join()");
++    }
++
++    @Test
++    public void methodsCannotBeConstructed() {
++        Utils.assertEcmaErrorES6("TypeError", "class A { m() {} } new (new A().m)()");
++    }
++
++    @Test
++    public void reflectConstructWithClasses() {
++        check(
++                "true,B",
++                "class A { constructor() { this.t = new.target.name; } } class B {}\n"
++                        + "var o = Reflect.construct(A, [], B);\n"
++                        + "[o instanceof B, o.t].join()");
++    }
++
++    @Test
++    public void accessorsAndSuperInClassExpression() {
++        check(
++                "x!",
++                "var Base = class { greet() { return 'x'; } };\n"
++                        + "var D = class extends Base { greet() { return super.greet() + '!'; } };\n"
++                        + "new D().greet()");
++    }
++
++    @Test
++    public void privateNamesAreSyntaxErrors() {
++        Utils.assertEvaluatorExceptionES6(
++                "private class members (#name) are not supported", "class A { #x = 1; }");
++        Utils.assertEvaluatorExceptionES6(
++                "private class members (#name) are not supported",
++                "class A { m() { return this.#x; } }");
++    }
++
++    @Test
++    public void classDeclarationNeedsABlock() {
++        Utils.assertEvaluatorExceptionES6(
++                "a class declaration must be directly in a block", "if (true) class A {}");
++        Utils.assertEvaluatorExceptionES6(
++                "a class declaration must be directly in a block", "label: class A {}");
++    }
++
++    @Test
++    public void toStringOfInstances() {
++        check("[object Object]", "class A {} String(new A())");
++    }
++}
+diff --git a/tests/testsrc/test262.properties b/tests/testsrc/test262.properties
+index 35c2c62cabe8..72571fac0292 100644
+--- a/tests/testsrc/test262.properties
++++ b/tests/testsrc/test262.properties
+@@ -449,12 +449,11 @@ harness 21/116 (18.1%)
+ built-ins/AggregateError 1/25 (4.0%)
+     proto-from-ctor-realm.js
+ 
+-built-ins/Array 255/3077 (8.29%)
++built-ins/Array 254/3077 (8.25%)
+     fromAsync 95/95 (100.0%)
+     length/define-own-prop-length-coercion-order-set.js
+     prototype/at/coerced-index-resize.js {unsupported: [resizable-arraybuffer]}
+     prototype/at/typed-array-resizable-buffer.js {unsupported: [resizable-arraybuffer]}
+-    prototype/concat/Array.prototype.concat_non-array.js
+     prototype/concat/create-proto-from-ctor-realm-array.js
+     prototype/concat/create-proxy.js
+     prototype/copyWithin/coerced-values-start-change-start.js
+@@ -1073,7 +1072,7 @@ built-ins/GeneratorPrototype 6/61 (9.84%)
+ 
+ built-ins/Infinity 0/6 (0.0%)
+ 
+-built-ins/Iterator 392/432 (90.74%)
++built-ins/Iterator 380/432 (87.96%)
+     concat/arguments-checked-in-order.js
+     concat/fresh-iterator-result.js
+     concat/get-iterator-method-only-once.js
+@@ -1103,7 +1102,24 @@ built-ins/Iterator 392/432 (90.74%)
+     concat/throws-typeerror-when-generator-is-running-return.js
+     concat/throws-typeerror-when-iterator-not-an-object.js
+     concat/zero-arguments.js
+-    from 19/19 (100.0%)
++    from/callable.js
++    from/get-next-method-only-once.js
++    from/get-next-method-throws.js
++    from/get-return-method-when-call-return.js
++    from/is-function.js
++    from/iterable-primitives.js
++    from/iterable-to-iterator-fallback.js
++    from/length.js
++    from/name.js
++    from/primitives.js
++    from/prop-desc.js
++    from/proto.js
++    from/result-proto.js
++    from/return-method-calls-base-return-method.js
++    from/return-method-returns-iterator-result.js
++    from/return-method-throws-for-invalid-this.js
++    from/supports-iterable.js
++    from/supports-iterator.js
+     prototype/constructor 2/2 (100.0%)
+     prototype/drop/argument-effect-order.js
+     prototype/drop/argument-validation-failure-closes-underlying.js
+@@ -1126,7 +1142,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/drop/next-method-returns-throwing-value.js
+     prototype/drop/next-method-returns-throwing-value-done.js
+     prototype/drop/next-method-throws.js
+-    prototype/drop/non-constructible.js
+     prototype/drop/prop-desc.js
+     prototype/drop/proto.js
+     prototype/drop/result-is-iterator.js
+@@ -1154,7 +1169,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/every/next-method-returns-throwing-value.js
+     prototype/every/next-method-returns-throwing-value-done.js
+     prototype/every/next-method-throws.js
+-    prototype/every/non-constructible.js
+     prototype/every/predicate-args.js
+     prototype/every/predicate-returns-falsey.js
+     prototype/every/predicate-returns-non-boolean.js
+@@ -1183,7 +1197,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/filter/next-method-returns-throwing-value.js
+     prototype/filter/next-method-returns-throwing-value-done.js
+     prototype/filter/next-method-throws.js
+-    prototype/filter/non-constructible.js
+     prototype/filter/predicate-args.js
+     prototype/filter/predicate-filters.js
+     prototype/filter/predicate-returns-non-boolean.js
+@@ -1217,7 +1230,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/find/next-method-returns-throwing-value.js
+     prototype/find/next-method-returns-throwing-value-done.js
+     prototype/find/next-method-throws.js
+-    prototype/find/non-constructible.js
+     prototype/find/predicate-args.js
+     prototype/find/predicate-returns-falsey.js
+     prototype/find/predicate-returns-falsey-then-truthy.js
+@@ -1256,7 +1268,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/flatMap/next-method-returns-throwing-value.js
+     prototype/flatMap/next-method-returns-throwing-value-done.js
+     prototype/flatMap/next-method-throws.js
+-    prototype/flatMap/non-constructible.js
+     prototype/flatMap/prop-desc.js
+     prototype/flatMap/proto.js
+     prototype/flatMap/result-is-iterator.js
+@@ -1288,7 +1299,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/forEach/next-method-returns-throwing-value.js
+     prototype/forEach/next-method-returns-throwing-value-done.js
+     prototype/forEach/next-method-throws.js
+-    prototype/forEach/non-constructible.js
+     prototype/forEach/prop-desc.js
+     prototype/forEach/proto.js
+     prototype/forEach/result-is-undefined.js
+@@ -1313,7 +1323,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/map/next-method-returns-throwing-value.js
+     prototype/map/next-method-returns-throwing-value-done.js
+     prototype/map/next-method-throws.js
+-    prototype/map/non-constructible.js
+     prototype/map/prop-desc.js
+     prototype/map/proto.js
+     prototype/map/result-is-iterator.js
+@@ -1344,7 +1353,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/reduce/next-method-returns-throwing-value-done.js
+     prototype/reduce/next-method-throws.js
+     prototype/reduce/non-callable-reducer.js
+-    prototype/reduce/non-constructible.js
+     prototype/reduce/prop-desc.js
+     prototype/reduce/proto.js
+     prototype/reduce/reducer-args-initial-value.js
+@@ -1370,7 +1378,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/some/next-method-returns-throwing-value.js
+     prototype/some/next-method-returns-throwing-value-done.js
+     prototype/some/next-method-throws.js
+-    prototype/some/non-constructible.js
+     prototype/some/predicate-args.js
+     prototype/some/predicate-returns-falsey.js
+     prototype/some/predicate-returns-falsey-then-truthy.js
+@@ -1406,7 +1413,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/take/next-method-returns-throwing-value.js
+     prototype/take/next-method-returns-throwing-value-done.js
+     prototype/take/next-method-throws.js
+-    prototype/take/non-constructible.js
+     prototype/take/prop-desc.js
+     prototype/take/proto.js
+     prototype/take/result-is-iterator.js
+@@ -1430,7 +1436,6 @@ built-ins/Iterator 392/432 (90.74%)
+     prototype/toArray/next-method-returns-throwing-value.js
+     prototype/toArray/next-method-returns-throwing-value-done.js
+     prototype/toArray/next-method-throws.js
+-    prototype/toArray/non-constructible.js
+     prototype/toArray/prop-desc.js
+     prototype/toArray/proto.js
+     prototype/toArray/this-plain-iterator.js
+@@ -1622,7 +1627,7 @@ built-ins/Object 118/3410 (3.46%)
+     proto-from-ctor-realm.js
+     subclass-object-arg.js {unsupported: [class]}
+ 
+-built-ins/Promise 383/639 (59.94%)
++built-ins/Promise 377/639 (59.0%)
+     allSettled/capability-resolve-throws-reject.js {unsupported: [async]}
+     allSettled/ctx-ctor.js {unsupported: [class]}
+     allSettled/does-not-invoke-array-setters.js {unsupported: [async]}
+@@ -1671,7 +1676,6 @@ built-ins/Promise 383/639 (59.94%)
+     allSettled/resolve-poisoned-then.js {unsupported: [async]}
+     allSettled/resolve-thenable.js {unsupported: [async]}
+     allSettled/resolve-throws-iterator-return-is-not-callable.js
+-    allSettled/resolve-throws-iterator-return-null-or-undefined.js
+     allSettled/resolved-all-fulfilled.js {unsupported: [async]}
+     allSettled/resolved-all-mixed.js {unsupported: [async]}
+     allSettled/resolved-all-rejected.js {unsupported: [async]}
+@@ -1729,7 +1733,6 @@ built-ins/Promise 383/639 (59.94%)
+     all/resolve-poisoned-then.js {unsupported: [async]}
+     all/resolve-thenable.js {unsupported: [async]}
+     all/resolve-throws-iterator-return-is-not-callable.js
+-    all/resolve-throws-iterator-return-null-or-undefined.js
+     all/S25.4.4.1_A2.2_T1.js {unsupported: [async]}
+     all/S25.4.4.1_A2.3_T1.js {unsupported: [async]}
+     all/S25.4.4.1_A2.3_T2.js {unsupported: [async]}
+@@ -1806,7 +1809,6 @@ built-ins/Promise 383/639 (59.94%)
+     any/resolve-non-thenable.js {unsupported: [async]}
+     any/resolve-not-callable-reject-with-typeerror.js {unsupported: [async]}
+     any/resolve-throws-iterator-return-is-not-callable.js
+-    any/resolve-throws-iterator-return-null-or-undefined.js
+     any/resolved-sequence.js {unsupported: [async]}
+     any/resolved-sequence-extra-ticks.js {unsupported: [async]}
+     any/resolved-sequence-mixed.js {unsupported: [async]}
+@@ -1825,8 +1827,6 @@ built-ins/Promise 383/639 (59.94%)
+     prototype/finally/species-constructor.js {unsupported: [async]}
+     prototype/finally/subclass-reject-count.js {unsupported: [async]}
+     prototype/finally/subclass-resolve-count.js {unsupported: [async]}
+-    prototype/finally/subclass-species-constructor-reject-count.js
+-    prototype/finally/subclass-species-constructor-resolve-count.js
+     prototype/then/capability-executor-called-twice.js {unsupported: [class]}
+     prototype/then/capability-executor-not-callable.js {unsupported: [class]}
+     prototype/then/ctor-access-count.js {unsupported: [async]}
+@@ -1935,7 +1935,6 @@ built-ins/Promise 383/639 (59.94%)
+     race/resolve-self.js {unsupported: [async]}
+     race/resolve-thenable.js {unsupported: [async]}
+     race/resolve-throws-iterator-return-is-not-callable.js
+-    race/resolve-throws-iterator-return-null-or-undefined.js
+     race/resolved-sequence.js {unsupported: [async]}
+     race/resolved-sequence-extra-ticks.js {unsupported: [async]}
+     race/resolved-sequence-mixed.js {unsupported: [async]}
+@@ -2088,7 +2087,7 @@ built-ins/Reflect 12/153 (7.84%)
+     set/return-false-if-receiver-is-not-writable.js
+     set/return-false-if-target-is-not-writable.js
+ 
+-built-ins/RegExp 974/1868 (52.14%)
++built-ins/RegExp 972/1868 (52.03%)
+     CharacterClassEscapes 12/12 (100.0%)
+     dotall 4/4 (100.0%)
+     escape 20/20 (100.0%)
+@@ -2106,8 +2105,6 @@ built-ins/RegExp 974/1868 (52.14%)
+     match-indices/indices-groups-properties.js
+     match-indices/indices-property.js
+     named-groups/duplicate-names-match-indices.js
+-    named-groups/groups-object-subclass.js
+-    named-groups/groups-object-subclass-sans.js
+     property-escapes/generated/strings 28/28 (100.0%)
+     property-escapes/generated 431/431 (100.0%)
+     property-escapes 144/144 (100.0%)
+@@ -2239,51 +2236,23 @@ built-ins/RegExp 974/1868 (52.14%)
+ 
+ built-ins/RegExpStringIteratorPrototype 0/17 (0.0%)
+ 
+-built-ins/Set 46/381 (12.07%)
+-    prototype/difference/allows-set-like-class.js
+-    prototype/difference/receiver-not-set.js
++built-ins/Set 18/381 (4.72%)
+     prototype/difference/set-like-class-mutation.js
+     prototype/difference/set-like-class-order.js
+-    prototype/difference/subclass.js
+-    prototype/difference/subclass-receiver-methods.js
+-    prototype/difference/subclass-symbol-species.js
+-    prototype/intersection/allows-set-like-class.js
+-    prototype/intersection/receiver-not-set.js
+     prototype/intersection/set-like-class-mutation.js
+     prototype/intersection/set-like-class-order.js
+-    prototype/intersection/subclass.js
+-    prototype/intersection/subclass-receiver-methods.js
+-    prototype/intersection/subclass-symbol-species.js
+-    prototype/isDisjointFrom/allows-set-like-class.js
+-    prototype/isDisjointFrom/receiver-not-set.js
+     prototype/isDisjointFrom/set-like-class-order.js
+-    prototype/isDisjointFrom/subclass-receiver-methods.js
+-    prototype/isSubsetOf/allows-set-like-class.js
+-    prototype/isSubsetOf/receiver-not-set.js
+     prototype/isSubsetOf/set-like-class-order.js
+-    prototype/isSubsetOf/subclass-receiver-methods.js
+-    prototype/isSupersetOf/allows-set-like-class.js
+-    prototype/isSupersetOf/receiver-not-set.js
+     prototype/isSupersetOf/set-like-array.js
+     prototype/isSupersetOf/set-like-class-order.js
+-    prototype/isSupersetOf/subclass-receiver-methods.js
+     prototype/symmetricDifference/allows-set-like-class.js
+     prototype/symmetricDifference/allows-set-like-object.js
+     prototype/symmetricDifference/converts-negative-zero.js
+-    prototype/symmetricDifference/receiver-not-set.js
+     prototype/symmetricDifference/set-like-array.js
+     prototype/symmetricDifference/set-like-class-mutation.js
+     prototype/symmetricDifference/set-like-class-order.js
+-    prototype/symmetricDifference/subclass.js
+-    prototype/symmetricDifference/subclass-receiver-methods.js
+-    prototype/symmetricDifference/subclass-symbol-species.js
+-    prototype/union/allows-set-like-class.js
+-    prototype/union/receiver-not-set.js
+     prototype/union/set-like-class-mutation.js
+     prototype/union/set-like-class-order.js
+-    prototype/union/subclass.js
+-    prototype/union/subclass-receiver-methods.js
+-    prototype/union/subclass-symbol-species.js
+     proto-from-ctor-realm.js
+     valid-values.js
+ 
+@@ -2356,12 +2325,11 @@ built-ins/StringIteratorPrototype 0/7 (0.0%)
+ 
+ ~built-ins/SuppressedError 22/22 (100.0%)
+ 
+-built-ins/Symbol 5/94 (5.32%)
++built-ins/Symbol 4/94 (4.26%)
+     asyncDispose/prop-desc.js
+     asyncIterator/prop-desc.js
+     dispose/prop-desc.js
+     keyFor/arg-non-symbol.js
+-    species/subclassing.js
+ 
+ built-ins/Temporal 4255/4255 (100.0%)
+ 
+@@ -2624,7 +2592,7 @@ built-ins/TypedArray 256/1434 (17.85%)
+     resizable-buffer-length-tracking-1.js {unsupported: [resizable-arraybuffer]}
+     resizable-buffer-length-tracking-2.js {unsupported: [resizable-arraybuffer]}
+ 
+-built-ins/TypedArrayConstructors 198/736 (26.9%)
++built-ins/TypedArrayConstructors 197/736 (26.77%)
+     ctors-bigint/buffer-arg/bufferbyteoffset-throws-from-modulo-element-size-sab.js {unsupported: [SharedArrayBuffer]}
+     ctors-bigint/buffer-arg/byteoffset-is-negative-throws-sab.js {unsupported: [SharedArrayBuffer]}
+     ctors-bigint/buffer-arg/byteoffset-is-negative-zero-sab.js {unsupported: [SharedArrayBuffer]}
+@@ -2746,7 +2714,6 @@ built-ins/TypedArrayConstructors 198/736 (26.9%)
+     ctors/typedarray-arg/src-typedarray-resizable-buffer.js {unsupported: [resizable-arraybuffer]}
+     ctors/typedarray-arg/throw-type-error-before-custom-proto-access.js
+     ctors/typedarray-arg/use-custom-proto-if-object.js
+-    ctors/no-species.js
+     from/BigInt/mapfn-this-without-thisarg-non-strict.js non-strict
+     from/mapfn-this-without-thisarg-non-strict.js non-strict
+     from/nan-conversion.js
+@@ -2923,7 +2890,7 @@ built-ins/undefined 0/8 (0.0%)
+ 
+ ~intl402
+ 
+-language/arguments-object 177/263 (67.3%)
++language/arguments-object 137/263 (52.09%)
+     mapped/mapped-arguments-nonconfigurable-3.js non-strict
+     mapped/mapped-arguments-nonconfigurable-delete-1.js non-strict
+     mapped/mapped-arguments-nonconfigurable-delete-2.js non-strict
+@@ -2996,26 +2963,6 @@ language/arguments-object 177/263 (67.3%)
+     cls-decl-async-private-gen-meth-static-args-trailing-comma-single-args.js {unsupported: [async-iteration, class, async]}
+     cls-decl-async-private-gen-meth-static-args-trailing-comma-spread-operator.js {unsupported: [async-iteration, class, async]}
+     cls-decl-async-private-gen-meth-static-args-trailing-comma-undefined.js {unsupported: [async-iteration, class, async]}
+-    cls-decl-gen-meth-args-trailing-comma-multiple.js
+-    cls-decl-gen-meth-args-trailing-comma-null.js
+-    cls-decl-gen-meth-args-trailing-comma-single-args.js
+-    cls-decl-gen-meth-args-trailing-comma-spread-operator.js
+-    cls-decl-gen-meth-args-trailing-comma-undefined.js
+-    cls-decl-gen-meth-static-args-trailing-comma-multiple.js
+-    cls-decl-gen-meth-static-args-trailing-comma-null.js
+-    cls-decl-gen-meth-static-args-trailing-comma-single-args.js
+-    cls-decl-gen-meth-static-args-trailing-comma-spread-operator.js
+-    cls-decl-gen-meth-static-args-trailing-comma-undefined.js
+-    cls-decl-meth-args-trailing-comma-multiple.js
+-    cls-decl-meth-args-trailing-comma-null.js
+-    cls-decl-meth-args-trailing-comma-single-args.js
+-    cls-decl-meth-args-trailing-comma-spread-operator.js
+-    cls-decl-meth-args-trailing-comma-undefined.js
+-    cls-decl-meth-static-args-trailing-comma-multiple.js
+-    cls-decl-meth-static-args-trailing-comma-null.js
+-    cls-decl-meth-static-args-trailing-comma-single-args.js
+-    cls-decl-meth-static-args-trailing-comma-spread-operator.js
+-    cls-decl-meth-static-args-trailing-comma-undefined.js
+     cls-decl-private-gen-meth-args-trailing-comma-multiple.js {unsupported: [class]}
+     cls-decl-private-gen-meth-args-trailing-comma-null.js {unsupported: [class]}
+     cls-decl-private-gen-meth-args-trailing-comma-single-args.js {unsupported: [class]}
+@@ -3061,26 +3008,6 @@ language/arguments-object 177/263 (67.3%)
+     cls-expr-async-private-gen-meth-static-args-trailing-comma-single-args.js {unsupported: [async-iteration, class, async]}
+     cls-expr-async-private-gen-meth-static-args-trailing-comma-spread-operator.js {unsupported: [async-iteration, class, async]}
+     cls-expr-async-private-gen-meth-static-args-trailing-comma-undefined.js {unsupported: [async-iteration, class, async]}
+-    cls-expr-gen-meth-args-trailing-comma-multiple.js
+-    cls-expr-gen-meth-args-trailing-comma-null.js
+-    cls-expr-gen-meth-args-trailing-comma-single-args.js
+-    cls-expr-gen-meth-args-trailing-comma-spread-operator.js
+-    cls-expr-gen-meth-args-trailing-comma-undefined.js
+-    cls-expr-gen-meth-static-args-trailing-comma-multiple.js
+-    cls-expr-gen-meth-static-args-trailing-comma-null.js
+-    cls-expr-gen-meth-static-args-trailing-comma-single-args.js
+-    cls-expr-gen-meth-static-args-trailing-comma-spread-operator.js
+-    cls-expr-gen-meth-static-args-trailing-comma-undefined.js
+-    cls-expr-meth-args-trailing-comma-multiple.js
+-    cls-expr-meth-args-trailing-comma-null.js
+-    cls-expr-meth-args-trailing-comma-single-args.js
+-    cls-expr-meth-args-trailing-comma-spread-operator.js
+-    cls-expr-meth-args-trailing-comma-undefined.js
+-    cls-expr-meth-static-args-trailing-comma-multiple.js
+-    cls-expr-meth-static-args-trailing-comma-null.js
+-    cls-expr-meth-static-args-trailing-comma-single-args.js
+-    cls-expr-meth-static-args-trailing-comma-spread-operator.js
+-    cls-expr-meth-static-args-trailing-comma-undefined.js
+     cls-expr-private-gen-meth-args-trailing-comma-multiple.js {unsupported: [class]}
+     cls-expr-private-gen-meth-args-trailing-comma-null.js {unsupported: [class]}
+     cls-expr-private-gen-meth-args-trailing-comma-single-args.js {unsupported: [class]}
+@@ -3176,10 +3103,16 @@ language/comments 9/52 (17.31%)
+     multi-line-asi-line-separator.js
+     multi-line-asi-paragraph-separator.js
+ 
+-language/computed-property-names 31/48 (64.58%)
+-    class/accessor 4/4 (100.0%)
+-    class/method 11/11 (100.0%)
+-    class/static 14/14 (100.0%)
++language/computed-property-names 11/48 (22.92%)
++    class/method/constructor.js
++    class/method/constructor-can-be-getter.js strict
++    class/method/generator.js
++    class/method/number.js
++    class/method/string.js
++    class/method/symbol.js
++    class/static/method-number-order.js
++    class/static/method-string-order.js
++    class/static/method-symbol-order.js
+     to-name-side-effects/class.js
+     to-name-side-effects/numbers-class.js
+ 
+@@ -3445,7 +3378,7 @@ language/expressions/addition 0/48 (0.0%)
+ 
+ language/expressions/array 0/52 (0.0%)
+ 
+-language/expressions/arrow-function 108/343 (31.49%)
++language/expressions/arrow-function 105/343 (30.61%)
+     dstr/ary-ptrn-elem-ary-elision-init.js
+     dstr/ary-ptrn-elem-ary-rest-init.js
+     dstr/ary-ptrn-elem-ary-rest-iter.js
+@@ -3541,9 +3474,6 @@ language/expressions/arrow-function 108/343 (31.49%)
+     lexical-new.target.js {unsupported: [new.target]}
+     lexical-new.target-closure-returned.js {unsupported: [new.target]}
+     lexical-super-call-from-within-constructor.js
+-    lexical-super-property.js
+-    lexical-super-property-from-within-constructor.js
+-    lexical-supercall-from-immediately-invoked-arrow.js
+     object-destructuring-param-strict-body.js
+     param-dflt-yield-expr.js
+     param-dflt-yield-id-non-strict.js non-strict
+@@ -3555,7 +3485,7 @@ language/expressions/arrow-function 108/343 (31.49%)
+     unscopables-with.js non-strict
+     unscopables-with-in-nested-fn.js non-strict
+ 
+-language/expressions/assignment 183/485 (37.73%)
++language/expressions/assignment 182/485 (37.53%)
+     destructuring/default-expr-throws-iterator-return-get-throws.js
+     destructuring/iterator-destructuring-property-reference-target-evaluation-order.js
+     destructuring/keyed-destructuring-property-reference-target-evaluation-order.js
+@@ -3736,7 +3666,6 @@ language/expressions/assignment 183/485 (37.73%)
+     fn-name-class.js {unsupported: [class]}
+     target-cover-newtarget.js {unsupported: [new.target]}
+     target-newtarget.js {unsupported: [new.target]}
+-    target-super-computed-reference.js
+     target-super-computed-reference-null.js
+     target-super-identifier-reference-null.js
+ 
+@@ -4290,7 +4219,7 @@ language/expressions/less-than-or-equal 0/47 (0.0%)
+ language/expressions/logical-and 1/18 (5.56%)
+     tco-right.js {unsupported: [tail-call-optimization]}
+ 
+-language/expressions/logical-assignment 40/78 (51.28%)
++language/expressions/logical-assignment 37/78 (47.44%)
+     left-hand-side-private-reference-accessor-property-and.js {unsupported: [class-fields-private]}
+     left-hand-side-private-reference-accessor-property-nullish.js {unsupported: [class-fields-private]}
+     left-hand-side-private-reference-accessor-property-or.js {unsupported: [class-fields-private]}
+@@ -4314,20 +4243,17 @@ language/expressions/logical-assignment 40/78 (51.28%)
+     left-hand-side-private-reference-readonly-accessor-property-short-circuit-or.js {unsupported: [class-fields-private]}
+     lgcl-and-arguments-strict.js strict
+     lgcl-and-assignment-operator-lhs-before-rhs.js
+-    lgcl-and-assignment-operator-namedevaluation-class-expression.js
+     lgcl-and-assignment-operator-no-set-put.js strict
+     lgcl-and-assignment-operator-non-extensible.js strict
+     lgcl-and-assignment-operator-non-simple-lhs.js
+     lgcl-and-assignment-operator-non-writeable.js strict
+     lgcl-nullish-arguments-strict.js strict
+     lgcl-nullish-assignment-operator-lhs-before-rhs.js
+-    lgcl-nullish-assignment-operator-namedevaluation-class-expression.js
+     lgcl-nullish-assignment-operator-no-set-put.js strict
+     lgcl-nullish-assignment-operator-non-simple-lhs.js
+     lgcl-nullish-assignment-operator-non-writeable.js strict
+     lgcl-or-arguments-strict.js strict
+     lgcl-or-assignment-operator-lhs-before-rhs.js
+-    lgcl-or-assignment-operator-namedevaluation-class-expression.js
+     lgcl-or-assignment-operator-no-set-put.js strict
+     lgcl-or-assignment-operator-non-simple-lhs.js
+     lgcl-or-assignment-operator-non-writeable.js strict
+@@ -4347,7 +4273,7 @@ language/expressions/new 0/59 (0.0%)
+ 
+ ~language/expressions/new.target
+ 
+-language/expressions/object 612/1170 (52.31%)
++language/expressions/object 611/1170 (52.22%)
+     dstr/async-gen-meth-ary-init-iter-close.js {unsupported: [async-iteration, async]}
+     dstr/async-gen-meth-ary-init-iter-get-err.js {unsupported: [async-iteration]}
+     dstr/async-gen-meth-ary-init-iter-get-err-array-prototype.js {unsupported: [async-iteration]}
+@@ -4932,7 +4858,6 @@ language/expressions/object 612/1170 (52.31%)
+     fn-name-cover.js
+     getter-body-strict-inside.js non-strict
+     getter-param-dflt.js
+-    ident-name-prop-name-literal-await-static-init.js
+     identifier-shorthand-await-strict-mode.js non-strict
+     identifier-shorthand-static-init-await-valid.js
+     let-non-strict-access.js non-strict
+@@ -4961,8 +4886,7 @@ language/expressions/object 612/1170 (52.31%)
+     yield-non-strict-access.js non-strict
+     yield-non-strict-syntax.js non-strict
+ 
+-language/expressions/optional-chaining 15/38 (39.47%)
+-    call-expression.js
++language/expressions/optional-chaining 13/38 (34.21%)
+     early-errors-tail-position-null-optchain-template-string.js
+     early-errors-tail-position-null-optchain-template-string-esi.js
+     early-errors-tail-position-optchain-template-string.js
+@@ -4976,7 +4900,6 @@ language/expressions/optional-chaining 15/38 (39.47%)
+     new-target-optional-call.js
+     optional-chain-async-optional-chain-square-brackets.js {unsupported: [async]}
+     optional-chain-async-square-brackets.js {unsupported: [async]}
+-    super-property-optional-call.js
+ 
+ language/expressions/postfix-decrement 9/37 (24.32%)
+     arguments.js strict
+@@ -5036,7 +4959,7 @@ language/expressions/strict-equals 0/30 (0.0%)
+ 
+ language/expressions/subtraction 0/38 (0.0%)
+ 
+-language/expressions/super 73/94 (77.66%)
++language/expressions/super 30/94 (31.91%)
+     call-arg-evaluation-err.js {unsupported: [class]}
+     call-bind-this-value.js {unsupported: [class]}
+     call-bind-this-value-twice.js {unsupported: [class]}
+@@ -5045,50 +4968,8 @@ language/expressions/super 73/94 (77.66%)
+     call-expr-value.js {unsupported: [class]}
+     call-poisoned-underscore-proto.js {unsupported: [class]}
+     call-proto-not-ctor.js {unsupported: [class]}
+-    call-spread-err-mult-err-expr-throws.js
+-    call-spread-err-mult-err-iter-get-value.js
+-    call-spread-err-mult-err-itr-get-call.js
+-    call-spread-err-mult-err-itr-get-get.js
+-    call-spread-err-mult-err-itr-step.js
+-    call-spread-err-mult-err-itr-value.js
+-    call-spread-err-mult-err-obj-unresolvable.js
+-    call-spread-err-mult-err-unresolvable.js
+-    call-spread-err-sngl-err-expr-throws.js
+-    call-spread-err-sngl-err-itr-get-call.js
+-    call-spread-err-sngl-err-itr-get-get.js
+-    call-spread-err-sngl-err-itr-get-value.js
+-    call-spread-err-sngl-err-itr-step.js
+-    call-spread-err-sngl-err-itr-value.js
+-    call-spread-err-sngl-err-obj-unresolvable.js
+-    call-spread-err-sngl-err-unresolvable.js
+-    call-spread-mult-empty.js
+-    call-spread-mult-expr.js
+-    call-spread-mult-iter.js
+-    call-spread-mult-literal.js
+-    call-spread-mult-obj-ident.js
+-    call-spread-mult-obj-null.js
+-    call-spread-mult-obj-undefined.js
+-    call-spread-obj-getter-descriptor.js
+-    call-spread-obj-getter-init.js
+-    call-spread-obj-manipulate-outter-obj-in-getter.js
+-    call-spread-obj-mult-spread.js
+-    call-spread-obj-mult-spread-getter.js
+-    call-spread-obj-null.js
+-    call-spread-obj-override-immutable.js
+-    call-spread-obj-overrides-prev-properties.js
+-    call-spread-obj-skip-non-enumerable.js
+-    call-spread-obj-spread-order.js
+-    call-spread-obj-symbol-property.js
+-    call-spread-obj-undefined.js
+-    call-spread-obj-with-overrides.js
+-    call-spread-sngl-empty.js
+-    call-spread-sngl-expr.js
+-    call-spread-sngl-iter.js
+-    call-spread-sngl-literal.js
+-    call-spread-sngl-obj-ident.js
+     prop-dot-cls-null-proto.js {unsupported: [class]}
+     prop-dot-cls-ref-strict.js {unsupported: [class]}
+-    prop-dot-cls-ref-this.js
+     prop-dot-cls-this-uninit.js {unsupported: [class]}
+     prop-dot-cls-val.js {unsupported: [class]}
+     prop-dot-cls-val-from-arrow.js {unsupported: [class]}
+@@ -5097,7 +4978,6 @@ language/expressions/super 73/94 (77.66%)
+     prop-expr-cls-key-err.js {unsupported: [class]}
+     prop-expr-cls-null-proto.js {unsupported: [class]}
+     prop-expr-cls-ref-strict.js {unsupported: [class]}
+-    prop-expr-cls-ref-this.js
+     prop-expr-cls-this-uninit.js {unsupported: [class]}
+     prop-expr-cls-unresolvable.js {unsupported: [class]}
+     prop-expr-cls-val.js {unsupported: [class]}
+@@ -5238,11 +5118,10 @@ language/function-code 96/217 (44.24%)
+ 
+ language/future-reserved-words 0/55 (0.0%)
+ 
+-language/global-code 26/42 (61.9%)
++language/global-code 24/42 (57.14%)
+     block-decl-strict.js strict
+     decl-lex.js
+     decl-lex-configurable-global.js
+-    decl-lex-deletion.js non-strict
+     decl-lex-restricted-global.js
+     invalid-private-names-call-expression-bad-reference.js {unsupported: [class-fields-private]}
+     invalid-private-names-call-expression-this.js {unsupported: [class-fields-private]}
+@@ -5254,7 +5133,6 @@ language/global-code 26/42 (61.9%)
+     script-decl-func-err-non-configurable.js
+     script-decl-func-err-non-extensible.js non-strict
+     script-decl-lex.js
+-    script-decl-lex-deletion.js non-strict
+     script-decl-lex-lex.js
+     script-decl-lex-restricted-global.js
+     script-decl-lex-var.js
+@@ -5427,12 +5305,11 @@ language/reserved-words 2/27 (7.41%)
+     await-module.js {unsupported: [module]}
+     await-script.js
+ 
+-language/rest-parameters 5/11 (45.45%)
++language/rest-parameters 4/11 (36.36%)
+     array-pattern.js
+     arrow-function.js
+     no-alias-arguments.js non-strict
+     object-pattern.js
+-    with-new-target.js
+ 
+ language/source-text 0/1 (0.0%)
+ 
+@@ -6503,7 +6380,7 @@ language/statements/let 62/145 (42.76%)
+ language/statements/return 1/16 (6.25%)
+     tco.js {unsupported: [tail-call-optimization]}
+ 
+-language/statements/switch 56/111 (50.45%)
++language/statements/switch 55/111 (49.55%)
+     syntax/redeclaration/async-function-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/async-function-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration, async-functions]}
+     syntax/redeclaration/async-function-name-redeclaration-attempt-with-class.js {unsupported: [async-functions]}
+@@ -6553,7 +6430,6 @@ language/statements/switch 56/111 (50.45%)
+     cptn-no-dflt-no-match.js
+     scope-lex-async-function.js
+     scope-lex-async-generator.js
+-    scope-lex-class.js
+     scope-lex-generator.js
+     scope-lex-open-case.js
+     scope-lex-open-dflt.js

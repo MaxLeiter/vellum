@@ -1,0 +1,1650 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Max Leiter <8675906+MaxLeiter@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 17:10:40 -0700
+Subject: [PATCH] Fresh let and const bindings in each loop iteration
+
+From ES6 on, const is block scoped like let, and for, for-in and
+for-of heads may declare const.
+
+Closures made in a loop now see the binding of their own iteration:
+
+- for (let ...; ...; ...) copies its block scope before the first test
+  and before each increment, when the loop contains a function or a
+  call to eval;
+- a let or const head of a for-in or for-of loop is bound in a block of
+  its own for each iteration.
+
+Without closures the bindings live in local variables. There, a let
+without initializer is set to undefined each time its declaration runs,
+and a block scoped const is an ordinary variable, so a loop body sees a
+fresh value on each pass.
+
+Block scopes whose bindings live in an object now use BlockScope. Its
+object has no prototype, so names such as valueOf no longer resolve to
+Object.prototype members, and a function called through a block binding
+gets the global object as this, as it would from an activation.
+
+A var or function declared in a block nested in one that declares the
+same name with let or const is a SyntaxError.
+
+diff --git a/rhino/src/main/java/org/mozilla/javascript/BlockScope.java b/rhino/src/main/java/org/mozilla/javascript/BlockScope.java
+new file mode 100644
+index 000000000000..767618325b23
+--- /dev/null
++++ b/rhino/src/main/java/org/mozilla/javascript/BlockScope.java
+@@ -0,0 +1,61 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript;
++
++/**
++ * The scope of a block that declares let, const or class bindings, when they cannot be kept in
++ * local variables. It works like a {@code with} scope over an object holding the bindings, except
++ * that the object has no prototype, so names such as {@code toString} are not found in it, and a
++ * function called through one of its bindings does not get the object as {@code this}.
++ */
++final class BlockScope extends NativeWith {
++    private static final long serialVersionUID = 1L;
++
++    BlockScope(Scriptable parent, Scriptable bindings) {
++        super(parent, bindings);
++    }
++
++    @Override
++    public String getClassName() {
++        return "Block";
++    }
++
++    /**
++     * Enters a block scope over {@code bindings}, an object literal holding the block's bindings.
++     * The names in {@code constNames}, separated by spaces, become uninitialized constants.
++     */
++    static Scriptable enter(Object bindings, String constNames, Scriptable parent) {
++        ScriptableObject obj = (ScriptableObject) bindings;
++        obj.setPrototype(null);
++        if (!constNames.isEmpty()) {
++            for (String name : constNames.split(" ", -1)) {
++                obj.delete(name);
++                obj.defineConst(name, obj);
++            }
++        }
++        return new BlockScope(parent, obj);
++    }
++
++    /** Makes a block scope with the same parent and a copy of this scope's bindings. */
++    BlockScope copy() {
++        ScriptableObject from = (ScriptableObject) getPrototype();
++        NativeObject to = new NativeObject();
++        to.setParentScope(from.getParentScope());
++        for (Object id : from.getAllIds()) {
++            String name = (String) id;
++            int attributes = from.getAttributes(name);
++            Object value = from.get(name, from);
++            if ((attributes & ScriptableObject.UNINITIALIZED_CONST) != 0) {
++                to.defineConst(name, to);
++            } else {
++                to.defineProperty(name, value, attributes);
++            }
++        }
++        to.setPrototype(null);
++        return new BlockScope(getParentScope(), to);
++    }
++}
+diff --git a/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java b/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
+index a9d91b85cee0..698ced3acc39 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
++++ b/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
+@@ -323,9 +323,11 @@ class CodeGenerator<T extends ScriptOrFn<T>> extends Icode {
+                 break;
+ 
+             case Token.ENTERWITH:
+-                visitExpression(child, 0);
+-                addToken(Token.ENTERWITH);
+-                stackChange(-1);
++                visitEnterWith(node);
++                break;
++
++            case Token.BLOCK_SCOPE_COPY:
++                addIcode(Icode_COPY_BLOCK);
+                 break;
+ 
+             case Token.LEAVEWITH:
+@@ -1131,9 +1133,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> extends Icode {
+                 {
+                     Node enterWith = node.getFirstChild();
+                     Node with = enterWith.getNext();
+-                    visitExpression(enterWith.getFirstChild(), 0);
+-                    addToken(Token.ENTERWITH);
+-                    stackChange(-1);
++                    visitEnterWith(enterWith);
+                     visitExpression(with.getFirstChild(), 0);
+                     addToken(Token.LEAVEWITH);
+                     break;
+@@ -1476,6 +1476,17 @@ class CodeGenerator<T extends ScriptOrFn<T>> extends Icode {
+         stackChange(-1);
+     }
+ 
++    private void visitEnterWith(Node node) {
++        visitExpression(node.getFirstChild(), 0);
++        Object constNames = node.getProp(Node.BLOCK_SCOPE_PROP);
++        if (constNames != null) {
++            addStringOp(Icode_ENTER_BLOCK, (String) constNames);
++        } else {
++            addToken(Token.ENTERWITH);
++        }
++        stackChange(-1);
++    }
++
+     private void visitObjectLiteral(Node node, Node child) {
+         Object[] propertyIds = (Object[]) node.getProp(Node.OBJECT_IDS_PROP);
+         int count = propertyIds == null ? 0 : propertyIds.length;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/IRFactory.java b/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
+index 802de82f29af..12eb57eff829 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
++++ b/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
+@@ -627,11 +627,12 @@ public final class IRFactory {
+         Scope savedScope = parser.currentScope;
+         parser.currentScope = loop;
+         try {
++            boolean closures = containsClosure(loop);
+             Node init = transform(loop.getInitializer());
+             Node test = transform(loop.getCondition());
+             Node incr = transform(loop.getIncrement());
+             Node body = transform(loop.getBody());
+-            return createFor(loop, init, test, incr, body);
++            return createFor(loop, init, test, incr, body, closures);
+         } finally {
+             parser.currentScope = savedScope;
+         }
+@@ -1621,7 +1622,9 @@ public final class IRFactory {
+         return result;
+     }
+ 
+-    private static Node createFor(Scope loop, Node init, Node test, Node incr, Node body) {
++    private Node createFor(
++            Scope loop, Node init, Node test, Node incr, Node body, boolean closures) {
++        boolean es6 = parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
+         if (init.getType() == Token.LET) {
+             // rewrite "for (let i=s; i < N; i++)..." as
+             // "let (i=s) { for (; i < N; i++)..." so that "s" is evaluated
+@@ -1629,12 +1632,49 @@ public final class IRFactory {
+             Scope let = Scope.splitScope(loop);
+             let.setType(Token.LET);
+             let.addChildrenToBack(init);
+-            let.addChildToBack(createLoop(loop, LOOP_FOR, body, test, new Node(Token.EMPTY), incr));
++            Node newLoop = createLoop(loop, LOOP_FOR, body, test, new Node(Token.EMPTY), incr);
++            if (es6 && closures) {
++                // Each iteration gets its own copy of the bindings, so that closures made in one
++                // iteration keep seeing that iteration's values. The first copy separates the
++                // bindings the initializer saw; the others are made before each increment.
++                Jump jump = (Jump) newLoop;
++                newLoop.addChildAfter(new Node(Token.BLOCK_SCOPE_COPY), jump.getContinue());
++                newLoop.addChildToFront(new Node(Token.BLOCK_SCOPE_COPY));
++            }
++            let.addChildToBack(newLoop);
+             return let;
+         }
++        if (init.getType() == Token.CONST && es6) {
++            // "for (const i = s; ...)": the bindings live in a block around the loop, and as they
++            // cannot change there is nothing to copy for each iteration.
++            Scope block = Scope.splitScope(loop);
++            block.setType(Token.BLOCK);
++            block.addChildToBack(init);
++            block.addChildToBack(
++                    createLoop(loop, LOOP_FOR, body, test, new Node(Token.EMPTY), incr));
++            loop.setParentScope(block);
++            return block;
++        }
+         return createLoop(loop, LOOP_FOR, body, test, init, incr);
+     }
+ 
++    /** Whether a function, or a direct call to eval, could capture the bindings of a loop. */
++    private static boolean containsClosure(AstNode loop) {
++        boolean[] found = {false};
++        loop.visit(
++                node -> {
++                    if (found[0]) return false;
++                    if (node instanceof FunctionNode
++                            || (node instanceof Name
++                                    && "eval".equals(((Name) node).getIdentifier()))) {
++                        found[0] = true;
++                        return false;
++                    }
++                    return true;
++                });
++        return found[0];
++    }
++
+     private static Node createLoop(
+             Jump loop, int loopType, Node body, Node cond, Node init, Node incr) {
+         Node bodyTarget = Node.newTarget();
+@@ -1685,6 +1725,35 @@ public final class IRFactory {
+         return loop;
+     }
+ 
++    /**
++     * For a for-in or for-of loop whose head declares let or const bindings, makes the block that
++     * each iteration runs in, and moves the bindings there, so that every iteration has its own.
++     * Returns null when the bindings stay with the loop.
++     */
++    private Scope createIterationScope(Node loop, int declType) {
++        if ((declType != Token.LET && declType != Token.CONST)
++                || parser.compilerEnv.getLanguageVersion() < Context.VERSION_ES6
++                || !(loop instanceof ForInLoop)
++                || loop instanceof ArrayComprehensionLoop) {
++            return null;
++        }
++        Scope loopScope = (Scope) loop;
++        Scope iteration = parser.createScopeNode(Token.BLOCK, loop.getLineno(), loop.getColumn());
++        if (loopScope.getSymbolTable() != null) {
++            // a destructuring head declares its names later, in the new scope
++            Scope.joinScopes(loopScope, iteration);
++            loopScope.setSymbolTable(null);
++        }
++        List<Scope> children = loopScope.getChildScopes();
++        List<Scope> moved = children == null ? List.of() : new ArrayList<>(children);
++        if (children != null) children.clear();
++        loopScope.addChildScope(iteration);
++        for (Scope child : moved) {
++            iteration.addChildScope(child);
++        }
++        return iteration;
++    }
++
+     /** Generate IR for a for..in loop. */
+     private Node createForIn(
+             int declType,
+@@ -1701,7 +1770,13 @@ public final class IRFactory {
+             int destructuringLen = 0;
+             Node lvalue;
+             int type = lhs.getType();
+-            if (type == Token.VAR || type == Token.LET) {
++            boolean declaration =
++                    type == Token.VAR
++                            || type == Token.LET
++                            || (type == Token.CONST
++                                    && parser.compilerEnv.getLanguageVersion()
++                                            >= Context.VERSION_ES6);
++            if (declaration) {
+                 Node kid = lhs.getLastChild();
+                 int kidType = kid.getType();
+                 if (kidType == Token.ARRAYLIT || kidType == Token.OBJECTLIT) {
+@@ -1746,27 +1821,40 @@ public final class IRFactory {
+             Node id = new Node(Token.ENUM_ID);
+             id.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+ 
+-            Node newBody = new Node(Token.BLOCK);
++            Scope iteration = createIterationScope(loop, declType);
++            Node newBody = iteration != null ? iteration : new Node(Token.BLOCK);
+             Node assign;
+-            if (destructuring != -1) {
+-                assign =
+-                        parser.createDestructuringAssignment(declType, lvalue, id, this::transform);
+-                if (!isForEach
+-                        && !isForOf
+-                        && (destructuring == Token.OBJECTLIT || destructuringLen != 2)) {
+-                    // destructuring assignment is only allowed in for..each or
+-                    // with an array type of length 2 (to hold key and value)
+-                    parser.reportError("msg.bad.for.in.destruct");
++            if (iteration != null) parser.pushScope(iteration);
++            try {
++                if (destructuring != -1) {
++                    assign =
++                            parser.createDestructuringAssignment(
++                                    declType, lvalue, id, this::transform);
++                    if (!isForEach
++                            && !isForOf
++                            && (destructuring == Token.OBJECTLIT || destructuringLen != 2)) {
++                        // destructuring assignment is only allowed in for..each or
++                        // with an array type of length 2 (to hold key and value)
++                        parser.reportError("msg.bad.for.in.destruct");
++                    }
++                } else if (type == Token.CONST) {
++                    // each iteration initializes a new binding rather than assigning to it
++                    lvalue.setType(Token.BINDNAME);
++                    assign = new Node(Token.SETCONST, lvalue, id);
++                } else {
++                    assign = parser.simpleAssignment(lvalue, id);
+                 }
+-            } else {
+-                assign = parser.simpleAssignment(lvalue, id);
++            } finally {
++                if (iteration != null) parser.popScope();
+             }
+             newBody.addChildToBack(new Node(Token.EXPR_VOID, assign));
+             newBody.addChildToBack(body);
+ 
+             loop = createLoop((Jump) loop, LOOP_WHILE, newBody, cond, null, null);
+             loop.addChildToFront(init);
+-            if (type == Token.VAR || type == Token.LET) loop.addChildToFront(lhs);
++            if (iteration == null && (type == Token.VAR || type == Token.LET)) {
++                loop.addChildToFront(lhs);
++            }
+             localBlock.addChildToBack(loop);
+ 
+             return localBlock;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Icode.java b/rhino/src/main/java/org/mozilla/javascript/Icode.java
+index c0ab6b221d8b..d7f4fb351718 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Icode.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Icode.java
+@@ -165,8 +165,14 @@ abstract class Icode {
+             // spread
+             Icode_SPREAD = Icode_DELPROP_SUPER - 1,
+ 
++            // Enter a block scope (let, const, class); string register: its const names
++            Icode_ENTER_BLOCK = Icode_SPREAD - 1,
++
++            // Replace the current block scope with a copy, for the next loop iteration
++            Icode_COPY_BLOCK = Icode_ENTER_BLOCK - 1,
++
+             // Last icode
+-            MIN_ICODE = Icode_SPREAD;
++            MIN_ICODE = Icode_COPY_BLOCK;
+ 
+     static String bytecodeName(int bytecode) {
+         if (!validBytecode(bytecode)) {
+@@ -358,6 +364,10 @@ abstract class Icode {
+                 return "DELPROP_SUPER";
+             case Icode_SPREAD:
+                 return "SPREAD";
++            case Icode_ENTER_BLOCK:
++                return "ENTER_BLOCK";
++            case Icode_COPY_BLOCK:
++                return "COPY_BLOCK";
+         }
+ 
+         // icode without name
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+index 14a829b861ab..a7f18b1931ed 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+@@ -1727,6 +1727,8 @@ public final class Interpreter extends Icode implements Evaluator {
+         instructionObjs[base + Icode_SCOPE_LOAD] = new DoScopeLoad();
+         instructionObjs[base + Icode_SCOPE_SAVE] = new DoScopeSave();
+         instructionObjs[base + Icode_SPREAD] = new DoSpread();
++        instructionObjs[base + Icode_ENTER_BLOCK] = new DoEnterBlock();
++        instructionObjs[base + Icode_COPY_BLOCK] = new DoCopyBlock();
+         instructionObjs[base + Icode_CLOSURE_EXPR] = new DoClosureExpr();
+         instructionObjs[base + Icode_METHOD_EXPR] = new DoMethodExpr();
+         instructionObjs[base + Icode_CLOSURE_STMT] = new DoClosureStatement();
+@@ -4169,6 +4171,24 @@ public final class Interpreter extends Icode implements Evaluator {
+         }
+     }
+ 
++    private static class DoEnterBlock extends InstructionClass {
++        @Override
++        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
++            Object bindings = frame.stack[state.stackTop];
++            frame.scope = ScriptRuntime.enterBlockScope(bindings, state.stringReg, cx, frame.scope);
++            state.stackTop--;
++            return null;
++        }
++    }
++
++    private static class DoCopyBlock extends InstructionClass {
++        @Override
++        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
++            frame.scope = ScriptRuntime.copyBlockScope(frame.scope);
++            return null;
++        }
++    }
++
+     private static class DoLeaveWith extends InstructionClass {
+         @Override
+         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Node.java b/rhino/src/main/java/org/mozilla/javascript/Node.java
+index 96c234375c54..7252565e7c35 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Node.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Node.java
+@@ -69,7 +69,8 @@ public class Node implements Iterable<Node> {
+             OPTIONAL_CHAINING = 30,
+             SUPER_PROPERTY_ACCESS = 31,
+             NUMBER_OF_SPREAD = 32,
+-            LAST_PROP = NUMBER_OF_SPREAD,
++            BLOCK_SCOPE_PROP = 33, // const names of a block scope entered by ENTERWITH
++            LAST_PROP = BLOCK_SCOPE_PROP,
+             FIRST_PROP = FUNCTION_PROP;
+ 
+     // values of ISNUMBER_PROP to specify
+@@ -455,6 +456,8 @@ public class Node implements Iterable<Node> {
+                 return "optional_chaining";
+             case SUPER_PROPERTY_ACCESS:
+                 return "super_property_access";
++            case BLOCK_SCOPE_PROP:
++                return "block_scope";
+             case NUMBER_OF_SPREAD:
+                 return "number_of_spread";
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/NodeTransformer.java b/rhino/src/main/java/org/mozilla/javascript/NodeTransformer.java
+index ee2cc75d6faa..70bf33a728dd 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/NodeTransformer.java
++++ b/rhino/src/main/java/org/mozilla/javascript/NodeTransformer.java
+@@ -17,6 +17,7 @@ import org.mozilla.javascript.ast.Jump;
+ import org.mozilla.javascript.ast.Name;
+ import org.mozilla.javascript.ast.Scope;
+ import org.mozilla.javascript.ast.ScriptNode;
++import org.mozilla.javascript.ast.Symbol;
+ 
+ /**
+  * This class transforms a tree to a lower-level representation for codegen.
+@@ -33,6 +34,7 @@ public class NodeTransformer {
+     }
+ 
+     public final void transform(ScriptNode tree, boolean inStrictMode, CompilerEnvirons env) {
++        es6 = env.getLanguageVersion() >= Context.VERSION_ES6;
+         boolean useStrictMode = inStrictMode;
+         // Support strict mode inside a function only for "ES6" language level
+         // and above. Otherwise, we will end up breaking backward compatibility for
+@@ -95,9 +97,15 @@ public class NodeTransformer {
+                     Node let = new Node(type == Token.ARRAYCOMP ? Token.LETEXPR : Token.LET);
+                     Node innerLet = new Node(Token.LET);
+                     let.addChildToBack(innerLet);
+-                    for (String name : newScope.getSymbolTable().keySet()) {
+-                        innerLet.addChildToBack(Node.newString(Token.NAME, name));
++                    StringBuilder constNames = new StringBuilder();
++                    for (Symbol symbol : newScope.getSymbolTable().values()) {
++                        innerLet.addChildToBack(Node.newString(Token.NAME, symbol.getName()));
++                        if (symbol.getDeclType() == Token.CONST) {
++                            if (constNames.length() > 0) constNames.append(' ');
++                            constNames.append(symbol.getName());
++                        }
+                     }
++                    let.putProp(Node.BLOCK_SCOPE_PROP, constNames.toString());
+                     newScope.setSymbolTable(null); // so we don't transform again
+                     Node oldNode = node;
+                     node = replaceCurrent(parent, previous, node, let);
+@@ -282,7 +290,13 @@ public class NodeTransformer {
+                             Node n = cursor;
+                             cursor = cursor.getNext();
+                             if (n.getType() == Token.NAME) {
+-                                if (!n.hasChildren()) continue;
++                                if (!n.hasChildren()) {
++                                    // A let without initializer must start out undefined each
++                                    // time a loop runs it again. Block scope objects are made
++                                    // anew for each entry, but a flattened variable is not.
++                                    if (type != Token.LET || !es6 || createScopeObjects) continue;
++                                    n.addChildToBack(new Node(Token.VOID, Node.newNumber(0.0)));
++                                }
+                                 Node init = n.getFirstChild();
+                                 n.removeChild(init);
+                                 n.setType(Token.BINDNAME);
+@@ -306,6 +320,13 @@ public class NodeTransformer {
+                         break;
+                     }
+ 
++                case Token.BLOCK_SCOPE_COPY:
++                    if (!createScopeObjects) {
++                        // Flattened bindings cannot be captured, so there is nothing to copy.
++                        node = replaceCurrent(parent, previous, node, new Node(Token.EMPTY));
++                    }
++                    break;
++
+                 case Token.TYPEOFNAME:
+                     {
+                         Scope defining = scope.getDefiningScope(node.getString());
+@@ -389,7 +410,9 @@ public class NodeTransformer {
+                                 node.setType(Token.SETVAR);
+                                 nameSource.setType(Token.STRING);
+                             } else if (type == Token.SETCONST) {
+-                                node.setType(Token.SETCONSTVAR);
++                                // A block scoped const is an ordinary variable once flattened:
++                                // a loop runs its declaration again for each new binding.
++                                node.setType(defining == tree ? Token.SETCONSTVAR : Token.SETVAR);
+                                 nameSource.setType(Token.STRING);
+                             } else if (type == Token.DELPROP) {
+                                 // Local variables are by definition permanent
+@@ -479,6 +502,10 @@ public class NodeTransformer {
+             }
+             objectLiteral.putProp(Node.OBJECT_IDS_PROP, list.toArray());
+             newVars = new Node(Token.ENTERWITH, objectLiteral);
++            if (es6) {
++                Object constNames = scopeNode.getProp(Node.BLOCK_SCOPE_PROP);
++                newVars.putProp(Node.BLOCK_SCOPE_PROP, constNames == null ? "" : constNames);
++            }
+             result.addChildToBack(newVars);
+             result.addChildToBack(new Node(Token.WITH, body));
+             result.addChildToBack(new Node(Token.LEAVEWITH));
+@@ -564,4 +591,5 @@ public class NodeTransformer {
+     private Deque<Node> loops;
+     private Deque<Node> loopEnds;
+     private boolean hasFinally;
++    private boolean es6;
+ }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Parser.java b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+index de1de39b1159..1a19d115f119 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Parser.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+@@ -11,6 +11,7 @@ import java.io.Reader;
+ import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.HashSet;
++import java.util.IdentityHashMap;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
+@@ -146,6 +147,8 @@ public class Parser {
+     private boolean insideMethod;
+     Scope currentScope;
+     private int endFlags;
++    // block scopes, with the names of the vars and functions hoisted out of them
++    private IdentityHashMap<Scope, Set<String>> hoistedNames;
+     private boolean inForInit; // bound temporarily during forStatement()
+     private Map<String, LabeledStatement> labelSet;
+     private List<Loop> loopSet;
+@@ -1714,9 +1717,14 @@ public class Parser {
+                 ForInLoop fis = new ForInLoop(forPos);
+                 if (init instanceof VariableDeclaration) {
+                     // check that there was only one variable given
+-                    if (((VariableDeclaration) init).getVariables().size() > 1) {
++                    VariableDeclaration decl = (VariableDeclaration) init;
++                    if (decl.getVariables().size() > 1) {
+                         reportError("msg.mult.index");
+                     }
++                    if (decl.getType() == Token.CONST
++                            && decl.getVariables().get(0).getInitializer() != null) {
++                        reportError("msg.bad.for.in.lhs");
++                    }
+                 }
+                 if (isForOf && isForEach) {
+                     reportError("msg.invalid.for.each");
+@@ -1771,7 +1779,10 @@ public class Parser {
+                 init = new EmptyExpression(ts.tokenBeg, 1);
+                 // We haven't consumed the token, so we need the CURRENT lexer position
+                 init.setLineColumnNumber(ts.getLineno(), ts.getTokenColumn());
+-            } else if (tt == Token.VAR || tt == Token.LET) {
++            } else if (tt == Token.VAR
++                    || tt == Token.LET
++                    || (tt == Token.CONST
++                            && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6)) {
+                 consumeToken();
+                 init = variables(tt, ts.tokenBeg, false);
+             } else {
+@@ -2469,10 +2480,25 @@ public class Parser {
+         Scope definingScope = currentScope.getDefiningScope(name);
+         Symbol symbol = definingScope != null ? definingScope.getSymbol(name) : null;
+         int symDeclType = symbol != null ? symbol.getDeclType() : -1;
+-        if (symbol != null
+-                && (symDeclType == Token.CONST
+-                        || declType == Token.CONST
+-                        || (definingScope == currentScope && symDeclType == Token.LET))) {
++        // From ES6 on, const is block scoped like let: it only clashes with a declaration in the
++        // same scope, and a var hoisted through the scope that holds it.
++        boolean lexicalConst = compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
++        boolean redeclared;
++        if (lexicalConst && (declType == Token.LET || declType == Token.CONST)) {
++            redeclared = symbol != null && definingScope == currentScope;
++            if (!redeclared && hoistedThrough(currentScope).contains(name)) {
++                // a var or function declared in a nested block is hoisted through this one
++                redeclared = true;
++                symDeclType = Token.VAR;
++            }
++        } else {
++            redeclared =
++                    symbol != null
++                            && (symDeclType == Token.CONST
++                                    || declType == Token.CONST
++                                    || (definingScope == currentScope && symDeclType == Token.LET));
++        }
++        if (redeclared) {
+             addError(
+                     symDeclType == Token.CONST
+                             ? "msg.const.redecl"
+@@ -2486,6 +2512,10 @@ public class Parser {
+                     name);
+             return;
+         }
++        int symbolType = declType;
++        if (declType == Token.CONST && lexicalConst) {
++            declType = Token.LET;
++        }
+         switch (declType) {
+             case Token.LET:
+                 if (!ignoreNotInBlock
+@@ -2493,12 +2523,30 @@ public class Parser {
+                     addError("msg.let.decl.not.in.block");
+                     return;
+                 }
+-                currentScope.putSymbol(new Symbol(declType, name));
++                currentScope.putSymbol(new Symbol(symbolType, name));
+                 return;
+ 
+             case Token.VAR:
+             case Token.CONST:
+             case Token.FUNCTION:
++                if (lexicalConst && declType != Token.CONST) {
++                    for (Scope s = currentScope;
++                            s != null && s != currentScriptOrFn;
++                            s = s.getParentScope()) {
++                        Symbol lexical = s.getSymbol(name);
++                        if (lexical != null
++                                && (lexical.getDeclType() == Token.LET
++                                        || lexical.getDeclType() == Token.CONST)) {
++                            addError(
++                                    lexical.getDeclType() == Token.CONST
++                                            ? "msg.const.redecl"
++                                            : "msg.let.redecl",
++                                    name);
++                            return;
++                        }
++                        hoistedThrough(s).add(name);
++                    }
++                }
+                 if (symbol != null) {
+                     if (symDeclType == Token.VAR) addStrictWarning("msg.var.redecl", name);
+                     else if (symDeclType == Token.LP) {
+@@ -2523,6 +2571,14 @@ public class Parser {
+         }
+     }
+ 
++    /** The names of the vars and functions declared in a block nested in {@code scope}. */
++    private Set<String> hoistedThrough(Scope scope) {
++        if (hoistedNames == null) {
++            hoistedNames = new IdentityHashMap<>();
++        }
++        return hoistedNames.computeIfAbsent(scope, k -> new HashSet<>());
++    }
++
+     private AstNode expr(boolean allowTrailingComma) throws IOException {
+         AstNode pn = assignExpr();
+         int pos = pn.getPosition();
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+index 7eefee67e87e..178e1b7ef194 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+@@ -2261,8 +2261,12 @@ public class ScriptRuntime {
+                 } else {
+                     result = ScriptableObject.getProperty(withObj, name);
+                     if (result != Scriptable.NOT_FOUND) {
+-                        // function this should be the target object of with
+-                        thisObj = withObj;
++                        // function this should be the target object of with, but a block
++                        // scope binding is a variable, as in an activation
++                        thisObj =
++                                scope instanceof BlockScope
++                                        ? ScriptableObject.getTopLevelScope(parentScope)
++                                        : withObj;
+                         break;
+                     }
+                 }
+@@ -2351,8 +2355,12 @@ public class ScriptRuntime {
+                 } else {
+                     result = ScriptableObject.getProperty(withObj, name);
+                     if (result != Scriptable.NOT_FOUND) {
+-                        // function this should be the target object of with
+-                        thisObj = withObj;
++                        // function this should be the target object of with, but a block
++                        // scope binding is a variable, as in an activation
++                        thisObj =
++                                scope instanceof BlockScope
++                                        ? ScriptableObject.getTopLevelScope(parentScope)
++                                        : withObj;
+                         break;
+                     }
+                 }
+@@ -5246,6 +5254,23 @@ public class ScriptRuntime {
+         return new NativeWith(scope, sobj);
+     }
+ 
++    /**
++     * Enters the scope of a block with let, const or class bindings, held by {@code bindings}.
++     * {@code constNames} lists the names, separated by spaces, that are constants.
++     */
++    public static Scriptable enterBlockScope(
++            Object bindings, String constNames, Context cx, Scriptable scope) {
++        return BlockScope.enter(bindings, constNames, scope);
++    }
++
++    /**
++     * Replaces the block scope of a loop with a copy, so that the next iteration has bindings of
++     * its own and closures made in the last one keep theirs.
++     */
++    public static Scriptable copyBlockScope(Scriptable scope) {
++        return ((BlockScope) scope).copy();
++    }
++
+     public static Scriptable leaveWith(Scriptable scope) {
+         NativeWith nw = (NativeWith) scope;
+         return nw.getParentScope();
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Token.java b/rhino/src/main/java/org/mozilla/javascript/Token.java
+index c5b87cc480ab..fac3c7808a40 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Token.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Token.java
+@@ -245,7 +245,8 @@ public class Token {
+             DOTDOTDOT = TAGGED_TEMPLATE_LITERAL + 1, // spread/rest ...
+             NULLISH_COALESCING = DOTDOTDOT + 1, // nullish coalescing (??)
+             QUESTION_DOT = NULLISH_COALESCING + 1, // optional chaining operator (?.)
+-            LAST_TOKEN = QUESTION_DOT + 1;
++            BLOCK_SCOPE_COPY = QUESTION_DOT + 1, // fresh copy of a loop's block scope
++            LAST_TOKEN = BLOCK_SCOPE_COPY + 1;
+ 
+     /**
+      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
+@@ -648,6 +649,8 @@ public class Token {
+                 return "DOTDOTDOT";
+             case QUESTION_DOT:
+                 return "QUESTION_DOT";
++            case BLOCK_SCOPE_COPY:
++                return "BLOCK_SCOPE_COPY";
+         }
+ 
+         // Token without name
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ast/ScriptNode.java b/rhino/src/main/java/org/mozilla/javascript/ast/ScriptNode.java
+index f44e889732b4..8425dd542295 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ast/ScriptNode.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ast/ScriptNode.java
+@@ -306,7 +306,10 @@ public class ScriptNode extends Scope {
+         for (int i = 0; i < symbols.size(); i++) {
+             Symbol symbol = symbols.get(i);
+             variableNames[i] = symbol.getName();
+-            isConsts[i] = symbol.getDeclType() == Token.CONST;
++            // Block scoped consts are flattened into plain variables, as each run of their
++            // declaration makes a new binding.
++            isConsts[i] =
++                    symbol.getDeclType() == Token.CONST && symbol.getContainingTable() == this;
+             symbol.setIndex(i);
+         }
+     }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java b/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
+index ed7b4de8b6df..9d921cb3ee64 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
++++ b/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
+@@ -786,16 +786,39 @@ class BodyCodegen {
+ 
+             case Token.ENTERWITH:
+                 generateExpression(child, node);
+-                cfw.addALoad(contextLocal);
++                Object constNames = node.getProp(Node.BLOCK_SCOPE_PROP);
++                if (constNames != null) {
++                    cfw.addPush((String) constNames);
++                    cfw.addALoad(contextLocal);
++                    cfw.addALoad(variableObjectLocal);
++                    addScriptRuntimeInvoke(
++                            "enterBlockScope",
++                            "(Ljava/lang/Object;"
++                                    + "Ljava/lang/String;"
++                                    + "Lorg/mozilla/javascript/Context;"
++                                    + "Lorg/mozilla/javascript/Scriptable;"
++                                    + ")Lorg/mozilla/javascript/Scriptable;");
++                } else {
++                    cfw.addALoad(contextLocal);
++                    cfw.addALoad(variableObjectLocal);
++                    addScriptRuntimeInvoke(
++                            "enterWith",
++                            "(Ljava/lang/Object;"
++                                    + "Lorg/mozilla/javascript/Context;"
++                                    + "Lorg/mozilla/javascript/Scriptable;"
++                                    + ")Lorg/mozilla/javascript/Scriptable;");
++                }
++                cfw.addAStore(variableObjectLocal);
++                incReferenceWordLocal(variableObjectLocal);
++                break;
++
++            case Token.BLOCK_SCOPE_COPY:
+                 cfw.addALoad(variableObjectLocal);
+                 addScriptRuntimeInvoke(
+-                        "enterWith",
+-                        "(Ljava/lang/Object;"
+-                                + "Lorg/mozilla/javascript/Context;"
+-                                + "Lorg/mozilla/javascript/Scriptable;"
++                        "copyBlockScope",
++                        "(Lorg/mozilla/javascript/Scriptable;"
+                                 + ")Lorg/mozilla/javascript/Scriptable;");
+                 cfw.addAStore(variableObjectLocal);
+-                incReferenceWordLocal(variableObjectLocal);
+                 break;
+ 
+             case Token.LEAVEWITH:
+diff --git a/rhino/src/test/java/org/mozilla/javascript/tests/es6/LoopBindingsTest.java b/rhino/src/test/java/org/mozilla/javascript/tests/es6/LoopBindingsTest.java
+new file mode 100644
+index 000000000000..6319fe902a4b
+--- /dev/null
++++ b/rhino/src/test/java/org/mozilla/javascript/tests/es6/LoopBindingsTest.java
+@@ -0,0 +1,242 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript.tests.es6;
++
++import org.junit.jupiter.api.Test;
++import org.mozilla.javascript.Context;
++import org.mozilla.javascript.testutils.Utils;
++
++/** Per-iteration let and const bindings in loops, and block scoped const. */
++public class LoopBindingsTest {
++
++    /**
++     * Runs the script at top level, then inside a function, which keeps its bindings differently,
++     * and checks the value it leaves in {@code result}.
++     */
++    private static void checkResult(Object expected, String script) {
++        Utils.assertWithAllModes(Context.VERSION_ES6, null, expected, script + "\nresult");
++        Utils.assertWithAllModes(Context.VERSION_ECMASCRIPT, null, expected, script + "\nresult");
++        Utils.assertWithAllModes_ES6(
++                expected, "(function() {\n" + script + "\nreturn result;\n})()");
++    }
++
++    @Test
++    public void letPerIteration() {
++        checkResult(
++                "0,1,2",
++                "var fs = []; for (let i = 0; i < 3; i++) fs.push(() => i);\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void letPerIterationWithContinueAndBreak() {
++        checkResult(
++                "0,2,4",
++                "var fs = [];\n"
++                        + "for (let i = 0; ; i++) {\n"
++                        + "  if (i > 5) break;\n"
++                        + "  if (i % 2) continue;\n"
++                        + "  fs.push(() => i);\n"
++                        + "}\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void letPerIterationNested() {
++        checkResult(
++                "00,01,10,11",
++                "var fs = [];\n"
++                        + "for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++)"
++                        + " fs.push(() => '' + i + j);\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void letPerIterationLabelledContinue() {
++        checkResult(
++                "00,10,20",
++                "var fs = [];\n"
++                        + "outer: for (let i = 0; i < 3; i++) {\n"
++                        + "  for (let j = 0; j < 3; j++) {\n"
++                        + "    if (j == 1) continue outer;\n"
++                        + "    fs.push(() => '' + i + j);\n"
++                        + "  }\n"
++                        + "}\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void closureChangesOnlyItsOwnIteration() {
++        checkResult(
++                "0,1,2|1,2,3",
++                "var fs = []; for (let i = 0; i < 3; i++) fs.push(() => i++);\n"
++                        + "var result = fs.map(f => f()).join() + '|' + fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void incrementSeesTheValueTheBodyLeft() {
++        checkResult(
++                "2:2,5",
++                "var fs = [];\n"
++                        + "for (let i = 0; i < 5; i++) { fs.push(() => i); i += 2; }\n"
++                        + "var result = fs.length + ':' + fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void letPerIterationInGenerator() {
++        checkResult(
++                "0,1,2",
++                "function* g() { for (let i = 0; i < 3; i++) yield () => i; }\n"
++                        + "var result = [...g()].map(f => f()).join();");
++    }
++
++    @Test
++    public void letPerIterationWithTryCatch() {
++        checkResult(
++                "0,-1,2",
++                "var fs = [];\n"
++                        + "for (let i = 0; i < 3; i++) {\n"
++                        + "  try { if (i == 1) throw 1; fs.push(() => i); }\n"
++                        + "  catch (e) { fs.push(() => -i); }\n"
++                        + "}\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void constInLoopBody() {
++        checkResult(
++                "0,1,2",
++                "var out = []; for (let i = 0; i < 3; i++) { const x = i; out.push(() => x); }\n"
++                        + "var result = out.map(f => f()).join();");
++    }
++
++    @Test
++    public void constInLoopBodyWithoutClosures() {
++        checkResult(
++                "0,1,2",
++                "var out = []; for (let i = 0; i < 3; i++) { const x = i; out.push(x); }\n"
++                        + "var result = out.join();");
++    }
++
++    @Test
++    public void constInWhileLoopBody() {
++        checkResult(
++                "0,1,2",
++                "var out = [], i = 0; while (i < 3) { const x = i++; out.push(() => x); }\n"
++                        + "var result = out.map(f => f()).join();");
++    }
++
++    @Test
++    public void letWithoutInitializerIsUndefinedEachIteration() {
++        checkResult(
++                ",5,",
++                "var out = [];\n"
++                        + "for (let i = 0; i < 3; i++) { let x; if (i == 1) x = 5; out.push(x); }\n"
++                        + "var result = out.join();");
++        checkResult(
++                ",5,",
++                "var out = [];\n"
++                        + "for (let i = 0; i < 3; i++) { let x; if (i == 1) x = 5; out.push(() => x); }\n"
++                        + "var result = out.map(f => f()).join();");
++    }
++
++    @Test
++    public void forConstOf() {
++        checkResult(6, "let result = 0; for (const x of [1, 2, 3]) result += x;");
++    }
++
++    @Test
++    public void forConstIn() {
++        checkResult(2, "let result = 0; for (const k in {a: 1, b: 2}) result++;");
++    }
++
++    @Test
++    public void forLetInLetsMayBeHeadBindings() {
++        checkResult(
++                "a,b",
++                "var fs = []; for (let k in {a: 1, b: 2}) fs.push(() => k);\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void forConstOfClosures() {
++        checkResult(
++                "1,2,3",
++                "var fs = []; for (const x of [1, 2, 3]) fs.push(() => x);\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void forConstOfDestructuring() {
++        checkResult(
++                "a1,b2",
++                "var fs = [];\n"
++                        + "for (const [k, v] of Object.entries({a: 1, b: 2})) fs.push(() => k + v);\n"
++                        + "var result = fs.map(f => f()).join();");
++        checkResult(
++                "3",
++                "var result; for (const {a, b: [c]} of [{a: 1, b: [2]}]) result = '' + (a + c);");
++    }
++
++    @Test
++    public void forLetOfDestructuringClosures() {
++        checkResult(
++                "3,7",
++                "var fs = []; for (let [k, v] of [[1, 2], [3, 4]]) fs.push(() => k + v);\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void forConstHead() {
++        checkResult(
++                "4,4,4",
++                "var fs = [];\n"
++                        + "for (const n = 3, m = 1; fs.length < n; ) fs.push(() => n + m);\n"
++                        + "var result = fs.map(f => f()).join();");
++    }
++
++    @Test
++    public void forConstHeadInsideOuterLoop() {
++        checkResult(
++                "0,1",
++                "var out = [];\n"
++                        + "for (let i = 0; i < 2; i++) for (const c = i; out.length <= i; ) out.push(c);\n"
++                        + "var result = out.join();");
++    }
++
++    @Test
++    public void constIsBlockScoped() {
++        checkResult(1, "const result = 1; { const result = 2; }");
++        checkResult(
++                "2,1",
++                "const a = 1; var result = []; { const a = 2; result.push(a); } result.push(a);"
++                        + " result = result.join();");
++    }
++
++    @Test
++    public void constCannotBeRedeclaredInTheSameScope() {
++        Utils.assertEvaluatorExceptionES6(
++                "redeclaration of const x.", "{ const x = 1; const x = 2; }");
++    }
++
++    @Test
++    public void blockBindingsDoNotSeeObjectPrototype() {
++        checkResult(6, "var valueOf = 5, result; { let x = 1; result = valueOf + (() => x)(); }");
++    }
++
++    @Test
++    public void functionInBlockBindingGetsGlobalThis() {
++        checkResult(
++                true,
++                "var result; { let g = function() { return this; }; result = g() === globalThis; }");
++    }
++
++    @Test
++    public void legacyConstBeforeEs6IsUnchanged() {
++        Utils.assertWithAllModes_1_8(1, "function f() { { const x = 1; } return x; } f();");
++    }
++}
+diff --git a/tests/testsrc/test262.properties b/tests/testsrc/test262.properties
+index da37aceaab3c..5e22afb9bc05 100644
+--- a/tests/testsrc/test262.properties
++++ b/tests/testsrc/test262.properties
+@@ -423,7 +423,7 @@ annexB/language 386/845 (45.68%)
+     statements/if/emulated-undefined.js {unsupported: [IsHTMLDDA]}
+     statements/switch/emulates-undefined.js {unsupported: [IsHTMLDDA]}
+ 
+-harness 23/116 (19.83%)
++harness 22/116 (18.97%)
+     assert-notsamevalue-tostring.js {unsupported: [async-functions]}
+     assert-samevalue-tostring.js {unsupported: [async-functions]}
+     assert-tostring.js {unsupported: [async-functions]}
+@@ -446,13 +446,11 @@ harness 23/116 (19.83%)
+     asyncHelpers-throwsAsync-single-arg.js {unsupported: [async]}
+     compare-array-arguments.js
+     isConstructor.js
+-    nativeFunctionMatcher.js
+ 
+-built-ins/AggregateError 2/25 (8.0%)
+-    newtarget-proto-fallback.js
++built-ins/AggregateError 1/25 (4.0%)
+     proto-from-ctor-realm.js
+ 
+-built-ins/Array 257/3077 (8.35%)
++built-ins/Array 256/3077 (8.32%)
+     fromAsync 95/95 (100.0%)
+     length/define-own-prop-length-coercion-order-set.js
+     prototype/at/coerced-index-resize.js {unsupported: [resizable-arraybuffer]}
+@@ -595,7 +593,6 @@ built-ins/Array 257/3077 (8.35%)
+     prototype/splice/S15.4.4.12_A6.1_T2.js incorrect length handling
+     prototype/splice/S15.4.4.12_A6.1_T3.js non-strict
+     prototype/splice/set_length_no_args.js
+-    prototype/Symbol.unscopables/change-array-by-copy.js
+     prototype/toLocaleString/invoke-element-tolocalestring.js
+     prototype/toLocaleString/primitive_this_value.js strict
+     prototype/toLocaleString/primitive_this_value_getter.js strict
+@@ -942,7 +939,7 @@ built-ins/Error 7/53 (13.21%)
+ 
+ ~built-ins/FinalizationRegistry
+ 
+-built-ins/Function 126/509 (24.75%)
++built-ins/Function 124/509 (24.36%)
+     internals/Call 2/2 (100.0%)
+     internals/Construct 6/6 (100.0%)
+     prototype/apply/15.3.4.3-1-s.js strict
+@@ -988,7 +985,6 @@ built-ins/Function 126/509 (24.75%)
+     prototype/toString/async-method-object.js {unsupported: [async-functions]}
+     prototype/toString/AsyncFunction.js {unsupported: [async-functions]}
+     prototype/toString/AsyncGenerator.js {unsupported: [async-iteration]}
+-    prototype/toString/bound-function.js
+     prototype/toString/built-in-function-object.js
+     prototype/toString/class-declaration-complex-heritage.js
+     prototype/toString/class-declaration-explicit-ctor.js
+@@ -1028,7 +1024,6 @@ built-ins/Function 126/509 (24.75%)
+     prototype/toString/setter-class-statement.js
+     prototype/toString/setter-class-statement-static.js
+     prototype/toString/setter-object.js
+-    prototype/toString/symbol-named-builtins.js
+     15.3.2.1-10-6gs.js non-strict
+     15.3.2.1-11-1-s.js non-strict
+     15.3.2.1-11-3-s.js non-strict
+@@ -2246,10 +2241,9 @@ built-ins/RegExp 974/1868 (52.14%)
+ 
+ built-ins/RegExpStringIteratorPrototype 0/17 (0.0%)
+ 
+-built-ins/Set 50/381 (13.12%)
++built-ins/Set 46/381 (12.07%)
+     prototype/difference/allows-set-like-class.js
+     prototype/difference/receiver-not-set.js
+-    prototype/difference/result-order.js
+     prototype/difference/set-like-class-mutation.js
+     prototype/difference/set-like-class-order.js
+     prototype/difference/subclass.js
+@@ -2257,7 +2251,6 @@ built-ins/Set 50/381 (13.12%)
+     prototype/difference/subclass-symbol-species.js
+     prototype/intersection/allows-set-like-class.js
+     prototype/intersection/receiver-not-set.js
+-    prototype/intersection/result-order.js
+     prototype/intersection/set-like-class-mutation.js
+     prototype/intersection/set-like-class-order.js
+     prototype/intersection/subclass.js
+@@ -2280,7 +2273,6 @@ built-ins/Set 50/381 (13.12%)
+     prototype/symmetricDifference/allows-set-like-object.js
+     prototype/symmetricDifference/converts-negative-zero.js
+     prototype/symmetricDifference/receiver-not-set.js
+-    prototype/symmetricDifference/result-order.js
+     prototype/symmetricDifference/set-like-array.js
+     prototype/symmetricDifference/set-like-class-mutation.js
+     prototype/symmetricDifference/set-like-class-order.js
+@@ -2289,7 +2281,6 @@ built-ins/Set 50/381 (13.12%)
+     prototype/symmetricDifference/subclass-symbol-species.js
+     prototype/union/allows-set-like-class.js
+     prototype/union/receiver-not-set.js
+-    prototype/union/result-order.js
+     prototype/union/set-like-class-mutation.js
+     prototype/union/set-like-class-order.js
+     prototype/union/subclass.js
+@@ -3121,12 +3112,8 @@ language/arguments-object 183/263 (69.58%)
+ 
+ language/asi 0/102 (0.0%)
+ 
+-language/block-scope 68/145 (46.9%)
+-    shadowing/const-declaration-shadowing-catch-parameter.js
+-    shadowing/const-declarations-shadowing-parameter-name-let-const-and-var-variables.js
+-    shadowing/let-declarations-shadowing-parameter-name-let-const-and-var.js
++language/block-scope 59/145 (40.69%)
+     syntax/for-in/disallow-initialization-assignment.js
+-    syntax/for-in/mixed-values-in-iteration.js
+     syntax/function-declarations/in-statement-position-do-statement-while-expression.js
+     syntax/function-declarations/in-statement-position-for-statement.js
+     syntax/function-declarations/in-statement-position-if-expression-statement.js strict
+@@ -3161,31 +3148,26 @@ language/block-scope 68/145 (46.9%)
+     syntax/redeclaration/function-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/function-name-redeclaration-attempt-with-function.js strict
+     syntax/redeclaration/function-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/function-name-redeclaration-attempt-with-let.js
+     syntax/redeclaration/function-name-redeclaration-attempt-with-var.js
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-function.js
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/generator-name-redeclaration-attempt-with-let.js
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-var.js
+     syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-function.js
+     syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/inner-block-var-name-redeclaration-attempt-with-let.js
+     syntax/redeclaration/inner-block-var-redeclaration-attempt-after-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/inner-block-var-redeclaration-attempt-after-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/inner-block-var-redeclaration-attempt-after-function.js
+     syntax/redeclaration/inner-block-var-redeclaration-attempt-after-generator.js
+-    syntax/redeclaration/inner-block-var-redeclaration-attempt-after-let.js
+     syntax/redeclaration/let-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/let-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/var-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/var-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/var-name-redeclaration-attempt-with-function.js
+     syntax/redeclaration/var-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/var-name-redeclaration-attempt-with-let.js
+     syntax/redeclaration/var-redeclaration-attempt-after-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/var-redeclaration-attempt-after-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/var-redeclaration-attempt-after-function.js
+@@ -4419,7 +4401,7 @@ language/expressions/new 22/59 (37.29%)
+ 
+ ~language/expressions/new.target
+ 
+-language/expressions/object 614/1170 (52.48%)
++language/expressions/object 612/1170 (52.31%)
+     dstr/async-gen-meth-ary-init-iter-close.js {unsupported: [async-iteration, async]}
+     dstr/async-gen-meth-ary-init-iter-get-err.js {unsupported: [async-iteration]}
+     dstr/async-gen-meth-ary-init-iter-get-err-array-prototype.js {unsupported: [async-iteration]}
+@@ -4952,7 +4934,6 @@ language/expressions/object 614/1170 (52.48%)
+     method-definition/gen-yield-spread-obj.js
+     method-definition/generator-invoke-fn-strict.js non-strict
+     method-definition/generator-param-init-yield.js non-strict
+-    method-definition/generator-param-redecl-let.js
+     method-definition/generator-prop-name-yield-expr.js non-strict
+     method-definition/generator-prop-name-yield-id.js non-strict
+     method-definition/generator-prototype-prop.js
+@@ -4967,7 +4948,6 @@ language/expressions/object 614/1170 (52.48%)
+     method-definition/name-invoke-fn-strict.js non-strict
+     method-definition/name-param-id-yield.js non-strict
+     method-definition/name-param-init-yield.js non-strict
+-    method-definition/name-param-redecl.js
+     method-definition/name-prop-name-yield-expr.js non-strict
+     method-definition/name-prop-name-yield-id.js non-strict
+     method-definition/object-method-returns-promise.js {unsupported: [async-functions]}
+@@ -5035,7 +5015,7 @@ language/expressions/object 614/1170 (52.48%)
+     yield-non-strict-access.js non-strict
+     yield-non-strict-syntax.js non-strict
+ 
+-language/expressions/optional-chaining 18/38 (47.37%)
++language/expressions/optional-chaining 16/38 (42.11%)
+     call-expression.js
+     early-errors-tail-position-null-optchain-template-string.js
+     early-errors-tail-position-null-optchain-template-string-esi.js
+@@ -5043,8 +5023,6 @@ language/expressions/optional-chaining 18/38 (47.37%)
+     early-errors-tail-position-optchain-template-string-esi.js
+     eval-optional-call.js
+     iteration-statement-for-await-of.js {unsupported: [async]}
+-    iteration-statement-for-in.js
+-    iteration-statement-for-of-type-error.js
+     member-expression.js
+     member-expression-async-identifier.js {unsupported: [async]}
+     member-expression-async-literal.js {unsupported: [async]}
+@@ -5313,14 +5291,7 @@ language/function-code 96/217 (44.24%)
+     switch-case-decl-onlystrict.js strict
+     switch-dflt-decl-onlystrict.js strict
+ 
+-language/future-reserved-words 7/55 (12.73%)
+-    implements.js non-strict
+-    interface.js non-strict
+-    package.js non-strict
+-    private.js non-strict
+-    protected.js non-strict
+-    public.js non-strict
+-    static.js non-strict
++language/future-reserved-words 0/55 (0.0%)
+ 
+ language/global-code 26/42 (61.9%)
+     block-decl-strict.js strict
+@@ -5558,7 +5529,7 @@ language/statements/break 0/20 (0.0%)
+ 
+ ~language/statements/class
+ 
+-language/statements/const 73/136 (53.68%)
++language/statements/const 65/136 (47.79%)
+     dstr/ary-init-iter-close.js
+     dstr/ary-init-iter-get-err.js
+     dstr/ary-init-iter-get-err-array-prototype.js
+@@ -5602,25 +5573,17 @@ language/statements/const 73/136 (53.68%)
+     syntax/block-scope-syntax-const-declarations-mixed-with-without-initialiser.js
+     syntax/block-scope-syntax-const-declarations-mixed-without-with-initialiser.js
+     syntax/block-scope-syntax-const-declarations-without-initialiser.js
+-    syntax/const.js
+     syntax/const-invalid-assignment-next-expression-for.js
+     syntax/const-invalid-assignment-statement-body-for-in.js
+     syntax/const-invalid-assignment-statement-body-for-of.js
+-    syntax/const-outer-inner-let-bindings.js
+-    syntax/with-initializer-do-statement-while-expression.js
+-    syntax/with-initializer-for-statement.js
+     syntax/with-initializer-if-expression-statement.js
+     syntax/with-initializer-if-expression-statement-else-statement.js
+     syntax/with-initializer-label-statement.js
+-    syntax/with-initializer-while-expression-statement.js
+     syntax/without-initializer-case-expression-statement-list.js
+     syntax/without-initializer-default-statement-list.js
+-    syntax/without-initializer-do-statement-while-expression.js
+-    syntax/without-initializer-for-statement.js
+     syntax/without-initializer-if-expression-statement.js
+     syntax/without-initializer-if-expression-statement-else-statement.js
+     syntax/without-initializer-label-statement.js
+-    syntax/without-initializer-while-expression-statement.js
+     block-local-closure-get-before-initialization.js
+     block-local-use-before-initialization-in-declaration-statement.js
+     block-local-use-before-initialization-in-prior-statement.js
+@@ -5637,12 +5600,11 @@ language/statements/continue 0/24 (0.0%)
+ 
+ language/statements/debugger 0/2 (0.0%)
+ 
+-language/statements/do-while 10/36 (27.78%)
++language/statements/do-while 9/36 (25.0%)
+     cptn-abrupt-empty.js
+     cptn-normal.js
+     decl-async-fun.js {unsupported: [async-functions]}
+     decl-async-gen.js {unsupported: [async-iteration]}
+-    decl-const.js
+     decl-fun.js
+     decl-gen.js
+     labelled-fn-stmt.js
+@@ -5653,49 +5615,24 @@ language/statements/empty 0/2 (0.0%)
+ 
+ language/statements/expression 0/3 (0.0%)
+ 
+-language/statements/for 212/385 (55.06%)
++language/statements/for 162/385 (42.08%)
+     dstr/const-ary-init-iter-close.js
+     dstr/const-ary-init-iter-get-err.js
+     dstr/const-ary-init-iter-get-err-array-prototype.js
+-    dstr/const-ary-init-iter-no-close.js
+-    dstr/const-ary-name-iter-val.js
+-    dstr/const-ary-ptrn-elem-ary-elem-init.js
+-    dstr/const-ary-ptrn-elem-ary-elem-iter.js
+     dstr/const-ary-ptrn-elem-ary-elision-init.js
+-    dstr/const-ary-ptrn-elem-ary-elision-iter.js
+-    dstr/const-ary-ptrn-elem-ary-empty-init.js
+-    dstr/const-ary-ptrn-elem-ary-empty-iter.js
+     dstr/const-ary-ptrn-elem-ary-rest-init.js
+     dstr/const-ary-ptrn-elem-ary-rest-iter.js
+-    dstr/const-ary-ptrn-elem-ary-val-null.js
+-    dstr/const-ary-ptrn-elem-id-init-exhausted.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-arrow.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-class.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-cover.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-fn.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-gen.js
+-    dstr/const-ary-ptrn-elem-id-init-hole.js
+-    dstr/const-ary-ptrn-elem-id-init-skipped.js
+-    dstr/const-ary-ptrn-elem-id-init-throws.js
+-    dstr/const-ary-ptrn-elem-id-init-undef.js
+-    dstr/const-ary-ptrn-elem-id-init-unresolvable.js
+-    dstr/const-ary-ptrn-elem-id-iter-complete.js
+-    dstr/const-ary-ptrn-elem-id-iter-done.js
+     dstr/const-ary-ptrn-elem-id-iter-step-err.js
+-    dstr/const-ary-ptrn-elem-id-iter-val.js
+     dstr/const-ary-ptrn-elem-id-iter-val-array-prototype.js
+     dstr/const-ary-ptrn-elem-id-iter-val-err.js
+-    dstr/const-ary-ptrn-elem-obj-id.js
+-    dstr/const-ary-ptrn-elem-obj-id-init.js
+-    dstr/const-ary-ptrn-elem-obj-prop-id.js
+-    dstr/const-ary-ptrn-elem-obj-prop-id-init.js
+-    dstr/const-ary-ptrn-elem-obj-val-null.js
+-    dstr/const-ary-ptrn-elem-obj-val-undef.js
+     dstr/const-ary-ptrn-elision.js
+-    dstr/const-ary-ptrn-elision-exhausted.js
+     dstr/const-ary-ptrn-elision-iter-close.js
+     dstr/const-ary-ptrn-elision-step-err.js
+-    dstr/const-ary-ptrn-empty.js
+     dstr/const-ary-ptrn-rest-ary-elem.js
+     dstr/const-ary-ptrn-rest-ary-elision.js
+     dstr/const-ary-ptrn-rest-ary-empty.js
+@@ -5712,34 +5649,12 @@ language/statements/for 212/385 (55.06%)
+     dstr/const-ary-ptrn-rest-obj-prop-id.js
+     dstr/const-obj-init-null.js
+     dstr/const-obj-init-undefined.js
+-    dstr/const-obj-ptrn-empty.js
+-    dstr/const-obj-ptrn-id-get-value-err.js
+     dstr/const-obj-ptrn-id-init-fn-name-arrow.js
+     dstr/const-obj-ptrn-id-init-fn-name-class.js
+     dstr/const-obj-ptrn-id-init-fn-name-cover.js
+     dstr/const-obj-ptrn-id-init-fn-name-fn.js
+     dstr/const-obj-ptrn-id-init-fn-name-gen.js
+-    dstr/const-obj-ptrn-id-init-skipped.js
+-    dstr/const-obj-ptrn-id-init-throws.js
+-    dstr/const-obj-ptrn-id-init-unresolvable.js
+-    dstr/const-obj-ptrn-id-trailing-comma.js
+-    dstr/const-obj-ptrn-list-err.js
+-    dstr/const-obj-ptrn-prop-ary.js
+-    dstr/const-obj-ptrn-prop-ary-init.js
+-    dstr/const-obj-ptrn-prop-ary-trailing-comma.js
+-    dstr/const-obj-ptrn-prop-ary-value-null.js
+     dstr/const-obj-ptrn-prop-eval-err.js
+-    dstr/const-obj-ptrn-prop-id.js
+-    dstr/const-obj-ptrn-prop-id-get-value-err.js
+-    dstr/const-obj-ptrn-prop-id-init.js
+-    dstr/const-obj-ptrn-prop-id-init-skipped.js
+-    dstr/const-obj-ptrn-prop-id-init-throws.js
+-    dstr/const-obj-ptrn-prop-id-init-unresolvable.js
+-    dstr/const-obj-ptrn-prop-id-trailing-comma.js
+-    dstr/const-obj-ptrn-prop-obj.js
+-    dstr/const-obj-ptrn-prop-obj-init.js
+-    dstr/const-obj-ptrn-prop-obj-value-null.js
+-    dstr/const-obj-ptrn-prop-obj-value-undef.js
+     dstr/const-obj-ptrn-rest-getter.js {unsupported: [object-rest]}
+     dstr/const-obj-ptrn-rest-skip-non-enumerable.js {unsupported: [object-rest]}
+     dstr/const-obj-ptrn-rest-val-obj.js {unsupported: [object-rest]}
+@@ -5844,22 +5759,19 @@ language/statements/for 212/385 (55.06%)
+     cptn-expr-expr-no-iter.js
+     decl-async-fun.js {unsupported: [async-functions]}
+     decl-async-gen.js {unsupported: [async-iteration]}
+-    decl-const.js
+     decl-fun.js
+     decl-gen.js
+-    head-const-fresh-binding-per-iteration.js
+     head-init-async-of.js
+     head-init-expr-check-empty-inc-empty-completion.js
+     head-init-var-check-empty-inc-empty-completion.js
+-    head-let-bound-names-in-stmt.js
+     head-lhs-let.js non-strict
++    labelled-fn-stmt-const.js
+     labelled-fn-stmt-expr.js
+     labelled-fn-stmt-let.js
+     labelled-fn-stmt-var.js
+     let-array-with-newline.js non-strict
+     let-block-with-newline.js non-strict
+     let-identifier-with-newline.js non-strict
+-    scope-body-lex-boundary.js
+     scope-body-lex-open.js
+     scope-head-lex-open.js
+     tco-const-body.js {unsupported: [tail-call-optimization]}
+@@ -5869,7 +5781,7 @@ language/statements/for 212/385 (55.06%)
+ 
+ ~language/statements/for-await-of
+ 
+-language/statements/for-in 40/115 (34.78%)
++language/statements/for-in 36/115 (31.3%)
+     dstr/obj-rest-not-last-element-invalid.js {unsupported: [object-rest]}
+     12.6.4-2.js
+     cptn-decl-abrupt-empty.js
+@@ -5882,19 +5794,16 @@ language/statements/for-in 40/115 (34.78%)
+     cptn-expr-zero-itr.js
+     decl-async-fun.js {unsupported: [async-functions]}
+     decl-async-gen.js {unsupported: [async-iteration]}
+-    decl-const.js
+     decl-fun.js
+     decl-gen.js
+     head-const-bound-names-fordecl-tdz.js
+-    head-const-fresh-binding-per-iteration.js
+     head-let-bound-names-fordecl-tdz.js
+-    head-let-bound-names-in-stmt.js
+     head-let-destructuring.js
+-    head-let-fresh-binding-per-iteration.js
+     head-lhs-let.js non-strict
+     head-var-bound-names-dup.js
+     head-var-bound-names-let.js non-strict
+     identifier-let-allowed-as-lefthandside-expression-not-strict.js non-strict
++    labelled-fn-stmt-const.js
+     labelled-fn-stmt-let.js
+     labelled-fn-stmt-lhs.js
+     labelled-fn-stmt-var.js
+@@ -5903,7 +5812,6 @@ language/statements/for-in 40/115 (34.78%)
+     let-identifier-with-newline.js non-strict
+     order-enumerable-shadowed.js
+     resizable-buffer.js {unsupported: [resizable-arraybuffer]}
+-    scope-body-lex-boundary.js
+     scope-body-lex-close.js
+     scope-body-lex-open.js
+     scope-body-var-none.js
+@@ -5911,7 +5819,7 @@ language/statements/for-in 40/115 (34.78%)
+     scope-head-lex-open.js
+     scope-head-var-none.js non-strict
+ 
+-language/statements/for-of 410/751 (54.59%)
++language/statements/for-of 358/751 (47.67%)
+     dstr/array-elem-init-evaluation.js
+     dstr/array-elem-init-fn-name-arrow.js
+     dstr/array-elem-init-fn-name-class.js {unsupported: [class]}
+@@ -6028,46 +5936,20 @@ language/statements/for-of 410/751 (54.59%)
+     dstr/array-rest-yield-ident-valid.js non-strict
+     dstr/const-ary-init-iter-close.js
+     dstr/const-ary-init-iter-get-err.js
+-    dstr/const-ary-init-iter-get-err-array-prototype.js
+-    dstr/const-ary-init-iter-no-close.js
+-    dstr/const-ary-name-iter-val.js
+-    dstr/const-ary-ptrn-elem-ary-elem-init.js
+-    dstr/const-ary-ptrn-elem-ary-elem-iter.js
+     dstr/const-ary-ptrn-elem-ary-elision-init.js
+-    dstr/const-ary-ptrn-elem-ary-elision-iter.js
+-    dstr/const-ary-ptrn-elem-ary-empty-init.js
+-    dstr/const-ary-ptrn-elem-ary-empty-iter.js
+     dstr/const-ary-ptrn-elem-ary-rest-init.js
+     dstr/const-ary-ptrn-elem-ary-rest-iter.js
+-    dstr/const-ary-ptrn-elem-ary-val-null.js
+-    dstr/const-ary-ptrn-elem-id-init-exhausted.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-arrow.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-class.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-cover.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-fn.js
+     dstr/const-ary-ptrn-elem-id-init-fn-name-gen.js
+-    dstr/const-ary-ptrn-elem-id-init-hole.js
+-    dstr/const-ary-ptrn-elem-id-init-skipped.js
+-    dstr/const-ary-ptrn-elem-id-init-throws.js
+-    dstr/const-ary-ptrn-elem-id-init-undef.js
+-    dstr/const-ary-ptrn-elem-id-init-unresolvable.js
+-    dstr/const-ary-ptrn-elem-id-iter-complete.js
+-    dstr/const-ary-ptrn-elem-id-iter-done.js
+     dstr/const-ary-ptrn-elem-id-iter-step-err.js
+-    dstr/const-ary-ptrn-elem-id-iter-val.js
+     dstr/const-ary-ptrn-elem-id-iter-val-array-prototype.js
+     dstr/const-ary-ptrn-elem-id-iter-val-err.js
+-    dstr/const-ary-ptrn-elem-obj-id.js
+-    dstr/const-ary-ptrn-elem-obj-id-init.js
+-    dstr/const-ary-ptrn-elem-obj-prop-id.js
+-    dstr/const-ary-ptrn-elem-obj-prop-id-init.js
+-    dstr/const-ary-ptrn-elem-obj-val-null.js
+-    dstr/const-ary-ptrn-elem-obj-val-undef.js
+     dstr/const-ary-ptrn-elision.js
+-    dstr/const-ary-ptrn-elision-exhausted.js
+     dstr/const-ary-ptrn-elision-iter-close.js
+     dstr/const-ary-ptrn-elision-step-err.js
+-    dstr/const-ary-ptrn-empty.js
+     dstr/const-ary-ptrn-rest-ary-elem.js
+     dstr/const-ary-ptrn-rest-ary-elision.js
+     dstr/const-ary-ptrn-rest-ary-empty.js
+@@ -6084,34 +5966,12 @@ language/statements/for-of 410/751 (54.59%)
+     dstr/const-ary-ptrn-rest-obj-prop-id.js
+     dstr/const-obj-init-null.js
+     dstr/const-obj-init-undefined.js
+-    dstr/const-obj-ptrn-empty.js
+-    dstr/const-obj-ptrn-id-get-value-err.js
+     dstr/const-obj-ptrn-id-init-fn-name-arrow.js
+     dstr/const-obj-ptrn-id-init-fn-name-class.js
+     dstr/const-obj-ptrn-id-init-fn-name-cover.js
+     dstr/const-obj-ptrn-id-init-fn-name-fn.js
+     dstr/const-obj-ptrn-id-init-fn-name-gen.js
+-    dstr/const-obj-ptrn-id-init-skipped.js
+-    dstr/const-obj-ptrn-id-init-throws.js
+-    dstr/const-obj-ptrn-id-init-unresolvable.js
+-    dstr/const-obj-ptrn-id-trailing-comma.js
+-    dstr/const-obj-ptrn-list-err.js
+-    dstr/const-obj-ptrn-prop-ary.js
+-    dstr/const-obj-ptrn-prop-ary-init.js
+-    dstr/const-obj-ptrn-prop-ary-trailing-comma.js
+-    dstr/const-obj-ptrn-prop-ary-value-null.js
+     dstr/const-obj-ptrn-prop-eval-err.js
+-    dstr/const-obj-ptrn-prop-id.js
+-    dstr/const-obj-ptrn-prop-id-get-value-err.js
+-    dstr/const-obj-ptrn-prop-id-init.js
+-    dstr/const-obj-ptrn-prop-id-init-skipped.js
+-    dstr/const-obj-ptrn-prop-id-init-throws.js
+-    dstr/const-obj-ptrn-prop-id-init-unresolvable.js
+-    dstr/const-obj-ptrn-prop-id-trailing-comma.js
+-    dstr/const-obj-ptrn-prop-obj.js
+-    dstr/const-obj-ptrn-prop-obj-init.js
+-    dstr/const-obj-ptrn-prop-obj-value-null.js
+-    dstr/const-obj-ptrn-prop-obj-value-undef.js
+     dstr/const-obj-ptrn-rest-getter.js {unsupported: [object-rest]}
+     dstr/const-obj-ptrn-rest-skip-non-enumerable.js {unsupported: [object-rest]}
+     dstr/const-obj-ptrn-rest-val-obj.js {unsupported: [object-rest]}
+@@ -6272,7 +6132,6 @@ language/statements/for-of 410/751 (54.59%)
+     cptn-expr-no-itr.js
+     decl-async-fun.js {unsupported: [async-functions]}
+     decl-async-gen.js {unsupported: [async-iteration]}
+-    decl-const.js
+     decl-fun.js
+     decl-gen.js
+     escaped-of.js
+@@ -6284,12 +6143,9 @@ language/statements/for-of 410/751 (54.59%)
+     head-await-using-bound-names-in-stmt.js {unsupported: [module]}
+     head-await-using-fresh-binding-per-iteration.js {unsupported: [module]}
+     head-const-bound-names-fordecl-tdz.js
+-    head-const-fresh-binding-per-iteration.js
+     head-decl-no-expr.js
+     head-expr-no-expr.js
+     head-let-bound-names-fordecl-tdz.js
+-    head-let-bound-names-in-stmt.js
+-    head-let-fresh-binding-per-iteration.js
+     head-let-init.js
+     head-lhs-async-invalid.js
+     head-using-bound-names-fordecl-tdz.js
+@@ -6307,13 +6163,13 @@ language/statements/for-of 410/751 (54.59%)
+     iterator-close-via-throw.js
+     iterator-next-reference.js
+     iterator-next-result-type.js
++    labelled-fn-stmt-const.js
+     labelled-fn-stmt-let.js
+     labelled-fn-stmt-lhs.js
+     labelled-fn-stmt-var.js
+     let-array-with-newline.js non-strict
+     let-block-with-newline.js non-strict
+     let-identifier-with-newline.js non-strict
+-    scope-body-lex-boundary.js
+     scope-body-lex-open.js
+     scope-head-lex-close.js
+     scope-head-lex-open.js
+@@ -6635,7 +6491,7 @@ language/statements/labeled 15/24 (62.5%)
+     value-yield-non-strict.js non-strict
+     value-yield-non-strict-escaped.js non-strict
+ 
+-language/statements/let 66/145 (45.52%)
++language/statements/let 62/145 (42.76%)
+     dstr/ary-init-iter-close.js
+     dstr/ary-init-iter-get-err.js
+     dstr/ary-init-iter-get-err-array-prototype.js
+@@ -6677,11 +6533,7 @@ language/statements/let 66/145 (45.52%)
+     dstr/obj-ptrn-rest-skip-non-enumerable.js {unsupported: [object-rest]}
+     dstr/obj-ptrn-rest-val-obj.js {unsupported: [object-rest]}
+     syntax/escaped-let.js non-strict
+-    syntax/let-closure-inside-condition.js
+     syntax/let-closure-inside-initialization.js
+-    syntax/let-closure-inside-next-expression.js
+-    syntax/let-iteration-variable-is-freshly-allocated-for-each-iteration-multi-let-binding.js
+-    syntax/let-iteration-variable-is-freshly-allocated-for-each-iteration-single-let-binding.js
+     syntax/with-initialisers-in-statement-positions-if-expression-statement.js
+     syntax/with-initialisers-in-statement-positions-if-expression-statement-else-statement.js
+     syntax/with-initialisers-in-statement-positions-label-statement.js
+@@ -6706,7 +6558,7 @@ language/statements/let 66/145 (45.52%)
+ language/statements/return 1/16 (6.25%)
+     tco.js {unsupported: [tail-call-optimization]}
+ 
+-language/statements/switch 60/111 (54.05%)
++language/statements/switch 56/111 (50.45%)
+     syntax/redeclaration/async-function-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/async-function-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration, async-functions]}
+     syntax/redeclaration/async-function-name-redeclaration-attempt-with-class.js {unsupported: [async-functions]}
+@@ -6731,13 +6583,11 @@ language/statements/switch 60/111 (54.05%)
+     syntax/redeclaration/function-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/function-name-redeclaration-attempt-with-function.js strict
+     syntax/redeclaration/function-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/function-name-redeclaration-attempt-with-let.js
+     syntax/redeclaration/function-name-redeclaration-attempt-with-var.js
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-function.js
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/generator-name-redeclaration-attempt-with-let.js
+     syntax/redeclaration/generator-name-redeclaration-attempt-with-var.js
+     syntax/redeclaration/let-name-redeclaration-attempt-with-async-function.js {unsupported: [async-functions]}
+     syntax/redeclaration/let-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+@@ -6745,7 +6595,6 @@ language/statements/switch 60/111 (54.05%)
+     syntax/redeclaration/var-name-redeclaration-attempt-with-async-generator.js {unsupported: [async-iteration]}
+     syntax/redeclaration/var-name-redeclaration-attempt-with-function.js
+     syntax/redeclaration/var-name-redeclaration-attempt-with-generator.js
+-    syntax/redeclaration/var-name-redeclaration-attempt-with-let.js
+     cptn-a-abrupt-empty.js
+     cptn-abrupt-empty.js
+     cptn-b-abrupt-empty.js
+@@ -6760,7 +6609,6 @@ language/statements/switch 60/111 (54.05%)
+     scope-lex-async-function.js
+     scope-lex-async-generator.js
+     scope-lex-class.js
+-    scope-lex-const.js
+     scope-lex-generator.js
+     scope-lex-open-case.js
+     scope-lex-open-dflt.js
+@@ -6888,13 +6736,12 @@ language/statements/variable 48/178 (26.97%)
+     fn-name-class.js {unsupported: [class]}
+     static-init-await-binding-valid.js
+ 
+-language/statements/while 13/38 (34.21%)
++language/statements/while 12/38 (31.58%)
+     cptn-abrupt-empty.js
+     cptn-iter.js
+     cptn-no-iter.js
+     decl-async-fun.js {unsupported: [async-functions]}
+     decl-async-gen.js {unsupported: [async-iteration]}
+-    decl-const.js
+     decl-fun.js
+     decl-gen.js
+     labelled-fn-stmt.js

@@ -1,0 +1,741 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Max Leiter <8675906+MaxLeiter@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 17:19:55 -0700
+Subject: [PATCH] Spread arguments in calls and new
+
+f(...a, b), obj.m(...a), f?.(...a) and new C(...a). The arguments of
+such a call are gathered in one array literal. The interpreter passes
+its elements on as the call's bound arguments, so interpreted callees
+still run in the same interpreter loop; compiled code turns it into the
+argument array.
+
+eval(...args) is an indirect eval.
+
+This includes upstream's cf04a1c85 ("fix: Array spread throws TypeError
+on non-iterable, null, or undefined targets"), so that spreading
+something that is not iterable throws a TypeError instead of passing
+nothing.
+
+diff --git a/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java b/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
+index 698ced3acc39..999d89eeb691 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
++++ b/rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java
+@@ -623,9 +623,17 @@ class CodeGenerator<T extends ScriptOrFn<T>> extends Icode {
+                         }
+                     }
+                     int argCount = 0;
+-                    while ((child = child.getNext()) != null) {
+-                        visitExpression(child, 0);
+-                        ++argCount;
++                    boolean spread = node.getIntProp(Node.SPREAD_ARGS, 0) == 1;
++                    if (spread) {
++                        // the arguments are one array, which the call spreads
++                        visitExpression(child.getNext(), 0);
++                        addIcode(Icode_SPREAD_ARGS);
++                        stackChange(-1);
++                    } else {
++                        while ((child = child.getNext()) != null) {
++                            visitExpression(child, 0);
++                            ++argCount;
++                        }
+                     }
+                     int callType = node.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL);
+                     if (type != Token.REF_CALL && callType != Node.NON_SPECIALCALL) {
+@@ -641,6 +649,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> extends Icode {
+                         // or we're not generating debug info (since the
+                         // optimization will confuse the debugger)
+                         if (type == Token.CALL
++                                && !spread
+                                 && (contextFlags & ECF_TAIL) != 0
+                                 && !compilerEnv.isGenerateDebugInfo()
+                                 && !itsInTryFlag) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/IRFactory.java b/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
+index 12eb57eff829..cdeb74d8f3f8 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
++++ b/rhino/src/main/java/org/mozilla/javascript/IRFactory.java
+@@ -741,11 +741,7 @@ public final class IRFactory {
+             Node transformedTarget = transform(node.getTarget());
+             Node call = createCallOrNew(Token.CALL, transformedTarget);
+             call.setLineColumnNumber(node.getLineno(), node.getColumn());
+-            List<AstNode> args = node.getArguments();
+-            for (int i = 0; i < args.size(); i++) {
+-                AstNode arg = args.get(i);
+-                call.addChildToBack(transform(arg));
+-            }
++            addArguments(call, node.getArguments());
+             if (node.isOptionalCall()) {
+                 call.putIntProp(Node.OPTIONAL_CHAINING, 1);
+             }
+@@ -758,6 +754,38 @@ public final class IRFactory {
+         }
+     }
+ 
++    /**
++     * Adds the arguments of a call or new expression. When any of them is spread, they are all
++     * gathered in one array literal instead, which the call spreads at run time.
++     */
++    private void addArguments(Node call, List<AstNode> args) {
++        boolean spread = false;
++        for (AstNode arg : args) {
++            if (arg instanceof Spread) {
++                spread = true;
++                break;
++            }
++        }
++        if (!spread) {
++            for (AstNode arg : args) {
++                call.addChildToBack(transform(arg));
++            }
++            return;
++        }
++        Node array = new Node(Token.ARRAYLIT);
++        for (AstNode arg : args) {
++            array.addChildToBack(transform(arg));
++            if (arg instanceof Spread) {
++                array.putIntProp(
++                        Node.NUMBER_OF_SPREAD, array.getIntProp(Node.NUMBER_OF_SPREAD, 0) + 1);
++            }
++        }
++        call.addChildToBack(array);
++        call.putIntProp(Node.SPREAD_ARGS, 1);
++        // eval(...args) is an indirect eval
++        call.removeProp(Node.SPECIALCALL_PROP);
++    }
++
+     private Node transformGenExpr(GeneratorExpression node) {
+         Node pn;
+ 
+@@ -963,11 +991,7 @@ public final class IRFactory {
+     private Node transformNewExpr(NewExpression node) {
+         Node nx = createCallOrNew(Token.NEW, transform(node.getTarget()));
+         nx.setLineColumnNumber(node.getLineno(), node.getColumn());
+-        List<AstNode> args = node.getArguments();
+-        for (int i = 0; i < args.size(); i++) {
+-            AstNode arg = args.get(i);
+-            nx.addChildToBack(transform(arg));
+-        }
++        addArguments(nx, node.getArguments());
+         if (node.getInitializer() != null) {
+             nx.addChildToBack(transformObjectLiteral(node.getInitializer()));
+         }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Icode.java b/rhino/src/main/java/org/mozilla/javascript/Icode.java
+index d7f4fb351718..19d6ce5ecd3d 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Icode.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Icode.java
+@@ -171,8 +171,11 @@ abstract class Icode {
+             // Replace the current block scope with a copy, for the next loop iteration
+             Icode_COPY_BLOCK = Icode_ENTER_BLOCK - 1,
+ 
++            // Pop an array whose elements are the arguments of the next call or new
++            Icode_SPREAD_ARGS = Icode_COPY_BLOCK - 1,
++
+             // Last icode
+-            MIN_ICODE = Icode_COPY_BLOCK;
++            MIN_ICODE = Icode_SPREAD_ARGS;
+ 
+     static String bytecodeName(int bytecode) {
+         if (!validBytecode(bytecode)) {
+@@ -368,6 +371,8 @@ abstract class Icode {
+                 return "ENTER_BLOCK";
+             case Icode_COPY_BLOCK:
+                 return "COPY_BLOCK";
++            case Icode_SPREAD_ARGS:
++                return "SPREAD_ARGS";
+         }
+ 
+         // icode without name
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+index a7f18b1931ed..a2b5bf7b70d0 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+@@ -1576,6 +1576,8 @@ public final class Interpreter extends Icode implements Evaluator {
+         final boolean instructionCounting;
+         GeneratorState generatorState;
+         Object throwable;
++        // arguments of the next call or new, from Icode_SPREAD_ARGS
++        Object[] spreadArgs;
+ 
+         InterpreterState(int stackTop, int indexReg, boolean instructionCounting) {
+             this.stackTop = stackTop;
+@@ -1729,6 +1731,7 @@ public final class Interpreter extends Icode implements Evaluator {
+         instructionObjs[base + Icode_SPREAD] = new DoSpread();
+         instructionObjs[base + Icode_ENTER_BLOCK] = new DoEnterBlock();
+         instructionObjs[base + Icode_COPY_BLOCK] = new DoCopyBlock();
++        instructionObjs[base + Icode_SPREAD_ARGS] = new DoSpreadArgs();
+         instructionObjs[base + Icode_CLOSURE_EXPR] = new DoClosureExpr();
+         instructionObjs[base + Icode_METHOD_EXPR] = new DoMethodExpr();
+         instructionObjs[base + Icode_CLOSURE_STMT] = new DoClosureStatement();
+@@ -3500,6 +3503,13 @@ public final class Interpreter extends Icode implements Evaluator {
+             // stack change: lookup_result arg0 .. argN -> result
+             // indexReg: number of arguments
+             state.stackTop -= state.indexReg;
++            if (state.spreadArgs != null) {
++                // spread arguments: the stack holds none, they all come from the array
++                boundArgs = state.spreadArgs;
++                blen = boundArgs.length;
++                state.indexReg = blen;
++                state.spreadArgs = null;
++            }
+             ScriptRuntime.LookupResult result = (ScriptRuntime.LookupResult) stack[state.stackTop];
+             // Check if the lookup result is a function and throw if it's not
+             // must not be done sooner according to the spec
+@@ -3762,6 +3772,11 @@ public final class Interpreter extends Icode implements Evaluator {
+             // stack change: function arg0 .. argN -> newResult
+             // state.indexReg: number of arguments
+             state.stackTop -= state.indexReg;
++            Object[] spreadArgs = state.spreadArgs;
++            if (spreadArgs != null) {
++                state.indexReg = spreadArgs.length;
++                state.spreadArgs = null;
++            }
+ 
+             Object lhs = frame.stack[state.stackTop];
+             if (lhs instanceof JSFunction
+@@ -3788,7 +3803,7 @@ public final class Interpreter extends Icode implements Evaluator {
+                                     newInstance,
+                                     frame.stack,
+                                     frame.sDbl,
+-                                    null,
++                                    spreadArgs,
+                                     state.stackTop + 1,
+                                     state.indexReg,
+                                     f,
+@@ -3816,7 +3831,10 @@ public final class Interpreter extends Icode implements Evaluator {
+             }
+ 
+             Object[] outArgs =
+-                    getArgsArray(frame.stack, frame.sDbl, state.stackTop + 1, state.indexReg);
++                    spreadArgs != null
++                            ? spreadArgs
++                            : getArgsArray(
++                                    frame.stack, frame.sDbl, state.stackTop + 1, state.indexReg);
+             frame.stack[state.stackTop] = ctor.construct(cx, frame.scope, outArgs);
+             return null;
+         }
+@@ -4181,6 +4199,15 @@ public final class Interpreter extends Icode implements Evaluator {
+         }
+     }
+ 
++    private static class DoSpreadArgs extends InstructionClass {
++        @Override
++        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
++            state.spreadArgs = ScriptRuntime.spreadArguments(frame.stack[state.stackTop], cx);
++            state.stackTop--;
++            return null;
++        }
++    }
++
+     private static class DoCopyBlock extends InstructionClass {
+         @Override
+         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/NewLiteralStorage.java b/rhino/src/main/java/org/mozilla/javascript/NewLiteralStorage.java
+index 0719937f31c4..98cb40898d75 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/NewLiteralStorage.java
++++ b/rhino/src/main/java/org/mozilla/javascript/NewLiteralStorage.java
+@@ -76,61 +76,24 @@ public abstract class NewLiteralStorage {
+     }
+ 
+     private void spreadArray(Context cx, Scriptable scope, Object source) {
+-        // See ecma-262 2026, 13.2.5.5 (Array Spread)
+-        if (source != null && !Undefined.isUndefined(source)) {
+-            Scriptable src = ScriptRuntime.toObject(cx, scope, source);
+-
+-            // Check if the object has Symbol.iterator
+-            Object iteratorProp = ScriptableObject.getProperty(src, SymbolKey.ITERATOR);
+-            if ((iteratorProp != Scriptable.NOT_FOUND) && !Undefined.isUndefined(iteratorProp)) {
+-                // Per spec, if Symbol.iterator exists, use it. Let exceptions propagate.
+-                final Object iterator = ScriptRuntime.callIterator(src, cx, scope);
+-                if (!Undefined.isUndefined(iterator)) {
+-                    List<Object> spreadValues = new ArrayList<>();
+-                    try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+-                        for (Object temp : it) {
+-                            spreadValues.add(temp);
+-                        }
+-                    }
+-
+-                    // Resize arrays
+-                    int spreadSize = spreadValues.size();
+-                    int newLen = values.length + spreadSize;
+-                    getterSetters = Arrays.copyOf(getterSetters, newLen);
+-                    values = Arrays.copyOf(values, newLen);
+-
+-                    // Push all values
+-                    for (Object value : spreadValues) {
+-                        pushValue(value);
+-                    }
+-                    return;
+-                }
++        // See ecma-262 2026, 13.2.5.5 (Array Spread). ToObject throws TypeError for null /
++        // undefined; callIterator throws TypeError if @@iterator is missing.
++        Scriptable src = ScriptRuntime.toObject(cx, scope, source);
++        final Object iterator = ScriptRuntime.callIterator(src, cx, scope);
++        List<Object> spreadValues = new ArrayList<>();
++        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
++            for (Object temp : it) {
++                spreadValues.add(temp);
+             }
+-            // Fallback for objects without Symbol.iterator
+-            int spreadSize =
+-                    (src instanceof NativeArray)
+-                            ? (int) ((NativeArray) src).getLength()
+-                            : src.getIds().length;
+-            int newLen = values.length + spreadSize;
+-            getterSetters = Arrays.copyOf(getterSetters, newLen);
+-            values = Arrays.copyOf(values, newLen);
+-
+-            if (src instanceof NativeArray) { // TODO: check if it's dense
+-                NativeArray arr = (NativeArray) src;
+-                long length = arr.getLength();
++        }
+ 
+-                for (int i = 0; i < length; i++) {
+-                    Object value = NativeArray.getElem(cx, arr, i);
+-                    pushValue(value);
+-                }
+-            } else {
+-                Object[] ids = src.getIds();
++        int spreadSize = spreadValues.size();
++        int newLen = values.length + spreadSize;
++        getterSetters = Arrays.copyOf(getterSetters, newLen);
++        values = Arrays.copyOf(values, newLen);
+ 
+-                for (Object id : ids) {
+-                    Object value = getPropertyById(src, id);
+-                    pushValue(value);
+-                }
+-            }
++        for (Object value : spreadValues) {
++            pushValue(value);
+         }
+     }
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Node.java b/rhino/src/main/java/org/mozilla/javascript/Node.java
+index 7252565e7c35..be5253e06e96 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Node.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Node.java
+@@ -70,7 +70,8 @@ public class Node implements Iterable<Node> {
+             SUPER_PROPERTY_ACCESS = 31,
+             NUMBER_OF_SPREAD = 32,
+             BLOCK_SCOPE_PROP = 33, // const names of a block scope entered by ENTERWITH
+-            LAST_PROP = BLOCK_SCOPE_PROP,
++            SPREAD_ARGS = 34, // the arguments of a call or new are one array to spread
++            LAST_PROP = SPREAD_ARGS,
+             FIRST_PROP = FUNCTION_PROP;
+ 
+     // values of ISNUMBER_PROP to specify
+@@ -458,6 +459,8 @@ public class Node implements Iterable<Node> {
+                 return "super_property_access";
+             case BLOCK_SCOPE_PROP:
+                 return "block_scope";
++            case SPREAD_ARGS:
++                return "spread_args";
+             case NUMBER_OF_SPREAD:
+                 return "number_of_spread";
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Parser.java b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+index 1a19d115f119..3146cafa6576 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Parser.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+@@ -3000,6 +3000,16 @@ public class Parser {
+                 if (peekToken() == Token.YIELD) {
+                     reportError("msg.yield.parenthesized");
+                 }
++                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
++                        && matchToken(Token.DOTDOTDOT, true)) {
++                    int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
++                    AstNode expr = assignExpr();
++                    Spread spread = new Spread(pos, getNodeEnd(expr) - pos);
++                    spread.setLineColumnNumber(lineno, column);
++                    spread.setExpression(expr);
++                    result.add(spread);
++                    continue;
++                }
+                 AstNode en = assignExpr();
+                 if (peekToken() == Token.FOR) {
+                     try {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+index 178e1b7ef194..ab892820fb3b 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java
+@@ -3474,6 +3474,11 @@ public class ScriptRuntime {
+                         || ScriptableObject.hasProperty(obj, "length"));
+     }
+ 
++    /** The arguments of a call with spread arguments, gathered in an array. */
++    public static Object[] spreadArguments(Object array, Context cx) {
++        return cx.getElements((Scriptable) array);
++    }
++
+     static Object[] getApplyArguments(Context cx, Object arg1) {
+         if (arg1 == null || Undefined.isUndefined(arg1)) {
+             return ScriptRuntime.emptyArgs;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java b/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
+index 9d921cb3ee64..4158674d4737 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
++++ b/rhino/src/main/java/org/mozilla/javascript/optimizer/BodyCodegen.java
+@@ -2928,6 +2928,15 @@ class BodyCodegen {
+     }
+ 
+     private void generateCallArgArray(Node node, Node argChild, boolean directCall) {
++        if (node.getIntProp(Node.SPREAD_ARGS, 0) == 1) {
++            // the arguments are one array, whose elements the call gets
++            generateExpression(argChild, node);
++            cfw.addALoad(contextLocal);
++            addScriptRuntimeInvoke(
++                    "spreadArguments",
++                    "(Ljava/lang/Object;Lorg/mozilla/javascript/Context;)[Ljava/lang/Object;");
++            return;
++        }
+         int argCount = countArguments(argChild);
+         // load array object to set arguments
+         if (argCount == 1 && itsOneArgArray >= 0) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/optimizer/OptTransformer.java b/rhino/src/main/java/org/mozilla/javascript/optimizer/OptTransformer.java
+index 81bae9c37cf9..d09f49648287 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/optimizer/OptTransformer.java
++++ b/rhino/src/main/java/org/mozilla/javascript/optimizer/OptTransformer.java
+@@ -40,6 +40,9 @@ class OptTransformer extends NodeTransformer {
+     }
+ 
+     private void detectDirectCall(Node node, ScriptNode tree) {
++        if (node.getIntProp(Node.SPREAD_ARGS, 0) == 1) {
++            return;
++        }
+         if (tree.getType() == Token.FUNCTION) {
+             Node left = node.getFirstChild();
+ 
+diff --git a/rhino/src/test/java/org/mozilla/javascript/tests/es6/SpreadCallTest.java b/rhino/src/test/java/org/mozilla/javascript/tests/es6/SpreadCallTest.java
+new file mode 100644
+index 000000000000..8852a4ccf463
+--- /dev/null
++++ b/rhino/src/test/java/org/mozilla/javascript/tests/es6/SpreadCallTest.java
+@@ -0,0 +1,115 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript.tests.es6;
++
++import org.junit.jupiter.api.Test;
++import org.mozilla.javascript.testutils.Utils;
++
++/** Spread arguments in calls and new expressions. */
++public class SpreadCallTest {
++
++    @Test
++    public void spreadIntoBuiltIn() {
++        Utils.assertWithAllModes_ES6(5, "Math.max(...[1, 5, 3])");
++    }
++
++    @Test
++    public void spreadMixedWithArguments() {
++        Utils.assertWithAllModes_ES6(
++                "1,2,3,4,5",
++                "function f() { return Array.prototype.join.call(arguments); }\n"
++                        + "var a = [1, 2], c = [4, 5];\n"
++                        + "f(...a, 3, ...c)");
++    }
++
++    @Test
++    public void spreadIntoInterpretedFunction() {
++        Utils.assertWithAllModes_ES6(
++                "a-b-undefined",
++                "function f(x, y, z) { return x + '-' + y + '-' + z; } f(...['a', 'b'])");
++    }
++
++    @Test
++    public void spreadIntoMethodKeepsThis() {
++        Utils.assertWithAllModes_ES6(
++                6,
++                "var o = { k: 1, m(a, b, c) { return this.k * (a + b + c); } }; o.m(...[1, 2, 3])");
++    }
++
++    @Test
++    public void spreadIntoRestParameter() {
++        Utils.assertWithAllModes_ES6(
++                3, "function f(first, ...rest) { return rest.length; } f(...[0, 1, 2, 3])");
++    }
++
++    @Test
++    public void spreadIterables() {
++        Utils.assertWithAllModes_ES6(
++                "a,b,1,2",
++                "function f() { return Array.from(arguments).join(); }\n"
++                        + "f(...'ab', ...new Set([1, 2]))");
++        Utils.assertWithAllModes_ES6(
++                3,
++                "function* g() { yield 1; yield 2; } "
++                        + "function f(a, b) { return a + b; } f(...g())");
++    }
++
++    @Test
++    public void spreadEvaluationOrder() {
++        Utils.assertWithAllModes_ES6(
++                "f,a,b",
++                "var log = [];\n"
++                        + "function f() { log.push('f'); return function() {}; }\n"
++                        + "function a() { log.push('a'); return [1]; }\n"
++                        + "function b() { log.push('b'); return [2]; }\n"
++                        + "f()(...a(), ...b()); log.join()");
++    }
++
++    @Test
++    public void spreadIntoNew() {
++        Utils.assertWithAllModes_ES6(2020, "var d = new Date(...[2020, 1, 1]); d.getFullYear()");
++        Utils.assertWithAllModes_ES6(
++                "3:4",
++                "function P(x, y) { this.x = x; this.y = y; }\n"
++                        + "var p = new P(...[3, 4]); p.x + ':' + p.y");
++    }
++
++    @Test
++    public void spreadWithApplyAndCall() {
++        Utils.assertWithAllModes_ES6(
++                "1,2,3",
++                "function f() { return Array.from(arguments).join(); }\n"
++                        + "f.call(null, ...[1, 2, 3])");
++        Utils.assertWithAllModes_ES6(
++                "1,2",
++                "function f() { return Array.from(arguments).join(); }\n"
++                        + "f.apply(null, ...[[1, 2]])");
++    }
++
++    @Test
++    public void spreadOfNonIterableThrows() {
++        Utils.assertEcmaErrorES6("TypeError", "function f() {} f(...1)");
++    }
++
++    @Test
++    public void optionalCallWithSpread() {
++        Utils.assertWithAllModes_ES6(
++                "undefined,3",
++                "var o = null, p = { f(a, b) { return a + b; } };\n"
++                        + "[o?.f(...[1, 2]), p.f?.(...[1, 2])].map(String).join()");
++    }
++
++    @Test
++    public void emptySpread() {
++        Utils.assertWithAllModes_ES6(0, "function f() { return arguments.length; } f(...[])");
++    }
++
++    @Test
++    public void spreadIsSyntaxErrorBeforeEs6() {
++        Utils.assertEvaluatorException_1_8("syntax error (test#1)", "Math.max(...[1, 2])");
++    }
++}
+diff --git a/tests/src/test/java/org/mozilla/javascript/tests/ArrayLiteralSpreadTest.java b/tests/src/test/java/org/mozilla/javascript/tests/ArrayLiteralSpreadTest.java
+index 31ae793ae474..d3c08066e435 100644
+--- a/tests/src/test/java/org/mozilla/javascript/tests/ArrayLiteralSpreadTest.java
++++ b/tests/src/test/java/org/mozilla/javascript/tests/ArrayLiteralSpreadTest.java
+@@ -281,4 +281,61 @@ class ArrayLiteralSpreadTest {
+                         + "}";
+         Utils.assertWithAllModes_ES6("Next failed", script);
+     }
++
++    @Test
++    void testSpreadNonIterableObjectThrowsTypeError() {
++        // Per ecma-262 13.2.5.5, spreading an object without @@iterator throws TypeError.
++        String script =
++                "try {\n"
++                        + "  var result = [...{a: 1, b: 2}];\n"
++                        + "  'should not reach here';\n"
++                        + "} catch (e) {\n"
++                        + "  e instanceof TypeError ? 'TypeError' : 'wrong: ' + e;\n"
++                        + "}";
++        Utils.assertWithAllModes_ES6("TypeError", script);
++    }
++
++    @Test
++    void testSpreadArrayWithoutPrototypeIteratorThrowsTypeError() {
++        // Removing Array.prototype[Symbol.iterator] should make array spread throw too.
++        String script =
++                "var arr = [1, 2, 3];\n"
++                        + "var saved = Array.prototype[Symbol.iterator];\n"
++                        + "delete Array.prototype[Symbol.iterator];\n"
++                        + "var outcome;\n"
++                        + "try {\n"
++                        + "  var result = [...arr];\n"
++                        + "  outcome = 'should not reach here';\n"
++                        + "} catch (e) {\n"
++                        + "  outcome = e instanceof TypeError ? 'TypeError' : 'wrong: ' + e;\n"
++                        + "} finally {\n"
++                        + "  Array.prototype[Symbol.iterator] = saved;\n"
++                        + "}\n"
++                        + "outcome;";
++        Utils.assertWithAllModes_ES6("TypeError", script);
++    }
++
++    @Test
++    void testSpreadNullThrowsTypeError() {
++        String script =
++                "try {\n"
++                        + "  var result = [...null];\n"
++                        + "  'should not reach here';\n"
++                        + "} catch (e) {\n"
++                        + "  e instanceof TypeError ? 'TypeError' : 'wrong: ' + e;\n"
++                        + "}";
++        Utils.assertWithAllModes_ES6("TypeError", script);
++    }
++
++    @Test
++    void testSpreadUndefinedThrowsTypeError() {
++        String script =
++                "try {\n"
++                        + "  var result = [...undefined];\n"
++                        + "  'should not reach here';\n"
++                        + "} catch (e) {\n"
++                        + "  e instanceof TypeError ? 'TypeError' : 'wrong: ' + e;\n"
++                        + "}";
++        Utils.assertWithAllModes_ES6("TypeError", script);
++    }
+ }
+diff --git a/tests/testsrc/test262.properties b/tests/testsrc/test262.properties
+index 5e22afb9bc05..35c2c62cabe8 100644
+--- a/tests/testsrc/test262.properties
++++ b/tests/testsrc/test262.properties
+@@ -423,7 +423,7 @@ annexB/language 386/845 (45.68%)
+     statements/if/emulated-undefined.js {unsupported: [IsHTMLDDA]}
+     statements/switch/emulates-undefined.js {unsupported: [IsHTMLDDA]}
+ 
+-harness 22/116 (18.97%)
++harness 21/116 (18.1%)
+     assert-notsamevalue-tostring.js {unsupported: [async-functions]}
+     assert-samevalue-tostring.js {unsupported: [async-functions]}
+     assert-tostring.js {unsupported: [async-functions]}
+@@ -444,13 +444,12 @@ harness 22/116 (18.97%)
+     asyncHelpers-throwsAsync-resolved-error.js {unsupported: [async]}
+     asyncHelpers-throwsAsync-same-realm.js {unsupported: [async]}
+     asyncHelpers-throwsAsync-single-arg.js {unsupported: [async]}
+-    compare-array-arguments.js
+     isConstructor.js
+ 
+ built-ins/AggregateError 1/25 (4.0%)
+     proto-from-ctor-realm.js
+ 
+-built-ins/Array 256/3077 (8.32%)
++built-ins/Array 255/3077 (8.29%)
+     fromAsync 95/95 (100.0%)
+     length/define-own-prop-length-coercion-order-set.js
+     prototype/at/coerced-index-resize.js {unsupported: [resizable-arraybuffer]}
+@@ -593,7 +592,6 @@ built-ins/Array 256/3077 (8.32%)
+     prototype/splice/S15.4.4.12_A6.1_T2.js incorrect length handling
+     prototype/splice/S15.4.4.12_A6.1_T3.js non-strict
+     prototype/splice/set_length_no_args.js
+-    prototype/toLocaleString/invoke-element-tolocalestring.js
+     prototype/toLocaleString/primitive_this_value.js strict
+     prototype/toLocaleString/primitive_this_value_getter.js strict
+     prototype/toLocaleString/resizable-buffer.js {unsupported: [resizable-arraybuffer]}
+@@ -2925,7 +2923,7 @@ built-ins/undefined 0/8 (0.0%)
+ 
+ ~intl402
+ 
+-language/arguments-object 183/263 (69.58%)
++language/arguments-object 177/263 (67.3%)
+     mapped/mapped-arguments-nonconfigurable-3.js non-strict
+     mapped/mapped-arguments-nonconfigurable-delete-1.js non-strict
+     mapped/mapped-arguments-nonconfigurable-delete-2.js non-strict
+@@ -3103,12 +3101,6 @@ language/arguments-object 183/263 (69.58%)
+     cls-expr-private-meth-static-args-trailing-comma-single-args.js {unsupported: [class]}
+     cls-expr-private-meth-static-args-trailing-comma-spread-operator.js {unsupported: [class]}
+     cls-expr-private-meth-static-args-trailing-comma-undefined.js {unsupported: [class]}
+-    func-decl-args-trailing-comma-spread-operator.js
+-    func-expr-args-trailing-comma-spread-operator.js
+-    gen-func-decl-args-trailing-comma-spread-operator.js
+-    gen-func-expr-args-trailing-comma-spread-operator.js
+-    gen-meth-args-trailing-comma-spread-operator.js
+-    meth-args-trailing-comma-spread-operator.js
+ 
+ language/asi 0/102 (0.0%)
+ 
+@@ -3830,41 +3822,17 @@ language/expressions/bitwise-or 0/30 (0.0%)
+ 
+ language/expressions/bitwise-xor 0/30 (0.0%)
+ 
+-language/expressions/call 34/92 (36.96%)
++language/expressions/call 10/92 (10.87%)
+     eval-realm-indirect.js non-strict
+     eval-spread.js
+-    eval-spread-empty.js
+     eval-spread-empty-leading.js
+     eval-spread-empty-trailing.js
+-    spread-err-mult-err-expr-throws.js
+-    spread-err-mult-err-iter-get-value.js
+-    spread-err-mult-err-itr-get-call.js
+-    spread-err-mult-err-itr-get-get.js
+-    spread-err-mult-err-itr-step.js
+-    spread-err-mult-err-itr-value.js
+-    spread-err-mult-err-unresolvable.js
+-    spread-err-sngl-err-expr-throws.js
+-    spread-err-sngl-err-itr-get-call.js
+-    spread-err-sngl-err-itr-get-get.js
+-    spread-err-sngl-err-itr-get-value.js
+-    spread-err-sngl-err-itr-step.js
+-    spread-err-sngl-err-itr-value.js
+-    spread-err-sngl-err-unresolvable.js
+-    spread-mult-empty.js
+-    spread-mult-expr.js
+-    spread-mult-iter.js
+-    spread-mult-literal.js
+-    spread-sngl-empty.js
+-    spread-sngl-expr.js
+-    spread-sngl-iter.js
+-    spread-sngl-literal.js
+     tco-call-args.js {unsupported: [tail-call-optimization]}
+     tco-member-args.js {unsupported: [tail-call-optimization]}
+     tco-non-eval-function.js {unsupported: [tail-call-optimization]}
+     tco-non-eval-function-dynamic.js {unsupported: [tail-call-optimization]}
+     tco-non-eval-global.js {unsupported: [tail-call-optimization]}
+     tco-non-eval-with.js {unsupported: [tail-call-optimization]}
+-    trailing-comma.js
+ 
+ ~language/expressions/class
+ 
+@@ -4375,29 +4343,7 @@ language/expressions/modulus 0/40 (0.0%)
+ 
+ language/expressions/multiplication 0/40 (0.0%)
+ 
+-language/expressions/new 22/59 (37.29%)
+-    spread-err-mult-err-expr-throws.js
+-    spread-err-mult-err-iter-get-value.js
+-    spread-err-mult-err-itr-get-call.js
+-    spread-err-mult-err-itr-get-get.js
+-    spread-err-mult-err-itr-step.js
+-    spread-err-mult-err-itr-value.js
+-    spread-err-mult-err-unresolvable.js
+-    spread-err-sngl-err-expr-throws.js
+-    spread-err-sngl-err-itr-get-call.js
+-    spread-err-sngl-err-itr-get-get.js
+-    spread-err-sngl-err-itr-get-value.js
+-    spread-err-sngl-err-itr-step.js
+-    spread-err-sngl-err-itr-value.js
+-    spread-err-sngl-err-unresolvable.js
+-    spread-mult-empty.js
+-    spread-mult-expr.js
+-    spread-mult-iter.js
+-    spread-mult-literal.js
+-    spread-sngl-empty.js
+-    spread-sngl-expr.js
+-    spread-sngl-iter.js
+-    spread-sngl-literal.js
++language/expressions/new 0/59 (0.0%)
+ 
+ ~language/expressions/new.target
+ 
+@@ -5015,7 +4961,7 @@ language/expressions/object 612/1170 (52.31%)
+     yield-non-strict-access.js non-strict
+     yield-non-strict-syntax.js non-strict
+ 
+-language/expressions/optional-chaining 16/38 (42.11%)
++language/expressions/optional-chaining 15/38 (39.47%)
+     call-expression.js
+     early-errors-tail-position-null-optchain-template-string.js
+     early-errors-tail-position-null-optchain-template-string-esi.js
+@@ -5030,7 +4976,6 @@ language/expressions/optional-chaining 16/38 (42.11%)
+     new-target-optional-call.js
+     optional-chain-async-optional-chain-square-brackets.js {unsupported: [async]}
+     optional-chain-async-square-brackets.js {unsupported: [async]}
+-    optional-chain-prod-arguments.js
+     super-property-optional-call.js
+ 
+ language/expressions/postfix-decrement 9/37 (24.32%)

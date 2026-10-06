@@ -1,20 +1,15 @@
-// Mozilla Rhino, relocated to dev.vellum.shadow.rhino so it can never clash with another mod's copy (KubeJS's fork
-// lives in its own package, but other mods jar-in-jar plain org.mozilla:rhino). The relocated classes are copied
-// into the engine consumers' outputs (see multiloader-loader.gradle), not nested as a jar.
+// Mozilla Rhino (MPL-2.0), built from upstream source with Vellum's patches applied, then relocated to
+// dev.vellum.shadow.rhino so it can never clash with another mod's copy (KubeJS's fork lives in its own package, but
+// other mods jar-in-jar plain org.mozilla:rhino). The relocated classes are copied into the engine consumers' outputs
+// (see multiloader-loader.gradle), not nested as a jar.
 //
-// Before relocation, Rhino's BigInt code is patched (patchRhino): BigInteger multiplications, powers, shifts and
-// parses in ScriptRuntime, NativeBigInt and TokenStream call VellumBigInts first, which refuses results over a size
-// limit. One BigInteger operation runs in Java, out of the script budget's sight, so without this a page could
-// freeze the game with a few lines of BigInt arithmetic.
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassVisitor
-import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.MethodVisitor
-import org.objectweb.asm.Opcodes
-
-import java.util.zip.ZipEntry
+// The upstream source is the GitHub archive of the commit pinned in gradle.properties (rhino_commit), checked against
+// rhino_sha256. It is downloaded once per pin into the Gradle user home. The patches in rhino/patches are applied to
+// its core module (rhino/src/main) in order; see rhino/README.md for how to work on them.
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.zip.ZipFile
-import java.util.zip.ZipOutputStream
 
 plugins {
     id 'java'
@@ -27,95 +22,113 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version)
 }
 
-// VellumBigInts ships with the engine, which also runs on Java 21 (Minecraft 1.21.1).
-tasks.withType(JavaCompile).configureEach {
-    options.release = engine_java_release as int
+def upstreamCommit = rhino_commit
+def upstreamSha256 = rhino_sha256
+def archiveFile = new File(gradle.gradleUserHomeDir, "caches/vellum-rhino/rhino-${upstreamCommit}.zip")
+def patchesDir = layout.projectDirectory.dir('patches')
+def sourceDir = layout.buildDirectory.dir('rhino-src')
+def workDir = layout.projectDirectory.dir('work')
+
+static String sha256(File file) {
+    MessageDigest digest = MessageDigest.getInstance('SHA-256')
+    file.withInputStream { input ->
+        byte[] buffer = new byte[65536]
+        int n
+        while ((n = input.read(buffer)) > 0) digest.update(buffer, 0, n)
+    }
+    return digest.digest().encodeHex().toString()
 }
 
-configurations {
-    rhinoOriginal { canBeConsumed = false; canBeResolved = true }
-}
-
-dependencies {
-    rhinoOriginal("org.mozilla:rhino:${rhino_version}")
-}
-
-/** The classes whose BigInteger calls go through VellumBigInts. */
-def bigIntClasses = ['org/mozilla/javascript/ScriptRuntime.class', 'org/mozilla/javascript/NativeBigInt.class',
-                     'org/mozilla/javascript/TokenStream.class']
-
-/** Rewrites the BigInteger calls of one class; returns the new bytes and how many calls were rewritten. */
-static List patchBigIntegers(byte[] bytes) {
-    String guard = 'org/mozilla/javascript/VellumBigInts'
-    int[] count = [0]
-    ClassReader reader = new ClassReader(bytes)
-    ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS)
-    reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
-        @Override
-        MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
-            return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, desc, signature, exceptions)) {
-                @Override
-                void visitMethodInsn(int opcode, String owner, String method, String type, boolean itf) {
-                    if (owner == 'java/math/BigInteger') {
-                        if (opcode == Opcodes.INVOKEVIRTUAL && method in ['multiply', 'pow', 'shiftLeft', 'shiftRight']) {
-                            count[0]++
-                            super.visitMethodInsn(Opcodes.INVOKESTATIC, guard, method,
-                                    '(Ljava/math/BigInteger;' + type.substring(1), false)
-                            return
-                        }
-                        if (opcode == Opcodes.INVOKESPECIAL && method == '<init>' && type == '(Ljava/lang/String;I)V') {
-                            count[0]++
-                            super.visitInsn(Opcodes.DUP2)
-                            super.visitMethodInsn(Opcodes.INVOKESTATIC, guard, 'checkDigits', '(Ljava/lang/String;I)V', false)
-                        } else if (opcode == Opcodes.INVOKESPECIAL && method == '<init>' && type == '(Ljava/lang/String;)V') {
-                            count[0]++
-                            super.visitInsn(Opcodes.DUP)
-                            super.visitMethodInsn(Opcodes.INVOKESTATIC, guard, 'checkDigits', '(Ljava/lang/String;)V', false)
-                        }
-                    }
-                    super.visitMethodInsn(opcode, owner, method, type, itf)
-                }
+/** Unpacks the entries of the upstream archive under {@code prefix} (a path inside the repository) into {@code dest}. */
+static void unpack(File archive, String prefix, File dest) {
+    new ZipFile(archive).withCloseable { zip ->
+        zip.entries().each { entry ->
+            int slash = entry.name.indexOf('/')
+            String path = entry.name.substring(slash + 1)
+            if (path.isEmpty() || !path.startsWith(prefix)) return
+            File target = new File(dest, path)
+            if (!target.canonicalPath.startsWith(dest.canonicalPath)) throw new GradleException("Bad archive entry $entry.name")
+            if (entry.isDirectory()) {
+                target.mkdirs()
+            } else {
+                target.parentFile.mkdirs()
+                zip.getInputStream(entry).withCloseable { Files.copy(it, target.toPath(), StandardCopyOption.REPLACE_EXISTING) }
             }
         }
-    }, 0)
-    return [writer.toByteArray(), count[0]]
-}
-
-def patchedJar = layout.buildDirectory.file("patched/rhino-${rhino_version}.jar")
-
-tasks.register('patchRhino') {
-    inputs.files(configurations.rhinoOriginal)
-    inputs.property('classes', bigIntClasses)
-    outputs.file(patchedJar)
-    doLast {
-        File out = patchedJar.get().asFile
-        out.parentFile.mkdirs()
-        Map<String, Integer> patched = [:]
-        new ZipFile(configurations.rhinoOriginal.singleFile).withCloseable { zip ->
-            new ZipOutputStream(new FileOutputStream(out)).withCloseable { zout ->
-                zip.entries().each { ZipEntry entry ->
-                    byte[] bytes = zip.getInputStream(entry).bytes
-                    if (bigIntClasses.contains(entry.name)) {
-                        def (byte[] rewritten, int count) = patchBigIntegers(bytes)
-                        bytes = rewritten
-                        patched[entry.name] = count
-                    }
-                    zout.putNextEntry(new ZipEntry(entry.name))
-                    zout.write(bytes)
-                    zout.closeEntry()
-                }
-            }
-        }
-        // A Rhino upgrade that moves this code must not silently drop the checks.
-        bigIntClasses.each { name ->
-            if (!patched[name]) throw new GradleException("patchRhino: no BigInteger calls rewritten in $name")
-        }
-        logger.info("patchRhino: rewrote BigInteger calls $patched")
     }
 }
 
-dependencies {
-    implementation(files(tasks.named('patchRhino')))
+static List<File> patchFiles(File dir) {
+    return (dir.listFiles({ File f -> f.name.endsWith('.patch') } as FileFilter) ?: []).sort { it.name }
+}
+
+/** Runs git in {@code dir}; a failure throws with {@code what} and git's output. */
+def git = { File dir, String what, List<String> args ->
+    def out = new ByteArrayOutputStream()
+    def result = providers.exec {
+        workingDir = dir
+        commandLine(['git', '-c', 'core.autocrlf=false', '-c', 'commit.gpgsign=false'] + args)
+        ignoreExitValue = true
+    }
+    String text = result.standardOutput.asText.get() + result.standardError.asText.get()
+    if (result.result.get().exitValue != 0) throw new GradleException("$what failed:\n$text")
+    return text
+}
+
+tasks.register('fetchRhino') {
+    description = 'Downloads the pinned upstream Rhino source archive, once per pin.'
+    inputs.property('commit', upstreamCommit)
+    inputs.property('sha256', upstreamSha256)
+    outputs.file(archiveFile)
+    doLast {
+        if (archiveFile.isFile() && sha256(archiveFile) == upstreamSha256) return
+        archiveFile.parentFile.mkdirs()
+        File partial = new File(archiveFile.path + '.part')
+        String url = "https://github.com/mozilla/rhino/archive/${upstreamCommit}.zip"
+        logger.lifecycle("Downloading $url")
+        new URI(url).toURL().openStream().withCloseable { Files.copy(it, partial.toPath(), StandardCopyOption.REPLACE_EXISTING) }
+        String actual = sha256(partial)
+        if (actual != upstreamSha256) {
+            partial.delete()
+            throw new GradleException("Rhino archive checksum mismatch for $url: expected $upstreamSha256, got $actual")
+        }
+        Files.move(partial.toPath(), archiveFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+
+def prepareRhinoSources = tasks.register('prepareRhinoSources') {
+    description = 'Unpacks the core module of the pinned Rhino source and applies rhino/patches.'
+    dependsOn('fetchRhino')
+    inputs.file(archiveFile)
+    inputs.dir(patchesDir)
+    outputs.dir(sourceDir)
+    doLast {
+        File dest = sourceDir.get().asFile
+        project.delete(dest)
+        dest.mkdirs()
+        unpack(archiveFile, 'rhino/src/main/', dest)
+        // A repository of its own, so that git apply never looks at an enclosing one.
+        git(dest, 'git init', ['init', '-q'])
+        patchFiles(patchesDir.asFile).each { File patch ->
+            git(dest, "Applying ${patch.name}", ['apply', '--whitespace=nowarn', '--include=rhino/src/main/*', patch.absolutePath])
+        }
+        project.delete(new File(dest, '.git'))
+    }
+}
+
+sourceSets {
+    main {
+        java.srcDir(prepareRhinoSources.map { sourceDir.get().dir('rhino/src/main/java') })
+        java.exclude('module-info.java')
+        resources.srcDir(prepareRhinoSources.map { sourceDir.get().dir('rhino/src/main/resources') })
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    // Rhino ships with the engine, which also runs on Java 21 (Minecraft 1.21.1).
+    options.release = engine_java_release as int
+    options.compilerArgs += ['-nowarn', '-Xlint:none']
 }
 
 tasks.named('shadowJar') {
@@ -133,4 +146,43 @@ configurations {
 }
 artifacts {
     relocated(tasks.named('shadowJar'))
+}
+
+// Developer workflow, see rhino/README.md.
+
+tasks.register('applyRhinoPatches') {
+    group = 'rhino'
+    description = 'Makes rhino/work, a git repository of the pinned Rhino source with each patch applied as a commit.'
+    dependsOn('fetchRhino')
+    doLast {
+        File work = workDir.asFile
+        if (work.exists()) throw new GradleException("$work exists. Rebuild the patches from it, or delete it to start over.")
+        work.mkdirs()
+        unpack(archiveFile, '', work)
+        git(work, 'git init', ['init', '-q'])
+        git(work, 'git add', ['add', '-A'])
+        git(work, 'Committing upstream', ['-c', 'user.name=Rhino', '-c', 'user.email=rhino@invalid',
+                                           'commit', '-q', '-m', "Upstream Rhino ${upstreamCommit}"])
+        git(work, 'Tagging upstream', ['tag', 'upstream'])
+        patchFiles(patchesDir.asFile).each { File patch ->
+            git(work, "Applying ${patch.name}", ['-c', 'user.name=Vellum', '-c', 'user.email=vellum@invalid',
+                                                 'am', '-q', '--committer-date-is-author-date', patch.absolutePath])
+        }
+        logger.lifecycle("rhino/work is ready: upstream is tagged 'upstream', each patch is a commit on top.")
+    }
+}
+
+tasks.register('rebuildRhinoPatches') {
+    group = 'rhino'
+    description = 'Regenerates rhino/patches from the commits in rhino/work after the upstream tag.'
+    doLast {
+        File work = workDir.asFile
+        if (!new File(work, '.git').exists()) throw new GradleException("$work is missing; run applyRhinoPatches first.")
+        File dir = patchesDir.asFile
+        dir.mkdirs()
+        patchFiles(dir).each { it.delete() }
+        git(work, 'git format-patch', ['format-patch', '-q', '--zero-commit', '--no-signature', '--no-stat',
+                                       '--abbrev=12', '-N', '-o', dir.absolutePath, 'upstream..HEAD'])
+        logger.lifecycle("Wrote ${patchFiles(dir).size()} patches to $dir")
+    }
 }

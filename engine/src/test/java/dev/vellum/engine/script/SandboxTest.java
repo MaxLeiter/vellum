@@ -230,13 +230,10 @@ class SandboxTest {
     /** The dialect limits SCRIPTING.md documents: each is a syntax error. */
     @ParameterizedTest
     @ValueSource(strings = {
-            "class A {}",
-            "async function f() { await 1 }",
-            "Math.max(...[1, 2])",
-            "for (const x of [1, 2]) {}",
-            "for (const k in {a: 1}) {}",
             "const {a, ...rest} = {a: 1, b: 2}",
-            "const f = async () => 1",
+            "class A { #secret = 1 }",
+            "async function* g() {}",
+            "await null",
             "import x from 'y'",
             "export var a = 1",
     })
@@ -248,14 +245,12 @@ class SandboxTest {
     }
 
     @Test
-    void loopLetSharesOneBindingAcrossIterations() {
+    void loopBindingsAreFreshInEachIteration() {
         Page page = new TestHost().load("");
-        assertEquals("3,3,3", page.eval(
+        assertEquals("0,1,2", page.eval(
                 "(function () { var fs = []; for (let i = 0; i < 3; i++) fs.push(() => i); return fs.map(f => f()).join() })()"));
-        assertEquals("2,2", page.eval(
-                "(function () { var fs = []; for (let x of [1, 2]) fs.push(() => x); return fs.map(f => f()).join() })()"));
         assertEquals("1,2", page.eval(
-                "(function () { var fs = []; [1, 2].forEach(x => fs.push(() => x)); return fs.map(f => f()).join() })()"));
+                "(function () { var fs = []; for (const x of [1, 2]) fs.push(() => x); return fs.map(f => f()).join() })()"));
         assertEquals("undefined", page.eval("typeof Intl"));
     }
 }

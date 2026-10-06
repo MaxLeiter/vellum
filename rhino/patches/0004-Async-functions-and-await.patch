@@ -1,0 +1,1246 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Max Leiter <8675906+MaxLeiter@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 17:37:40 -0700
+Subject: [PATCH] Async functions and await
+
+async function declarations and expressions, async arrow functions, and
+async methods in object literals and classes. await is valid in their
+bodies; elsewhere, including at the top level of a script, it is a
+SyntaxError. Async generators and for await are not supported.
+
+An async function compiles as a generator that yields what it awaits.
+Calling it starts the generator, and NativePromise steps it: each
+awaited value is resolved as Promise.resolve would, and the generator
+resumes from a reaction job once it settles, with no derived promise in
+between, which gives the job ordering of the spec. A throw, or an
+awaited rejection that is not caught, rejects the function's promise.
+
+Compiled generators cannot yet keep a call in progress across a yield,
+which an await inside call arguments needs, so the compiler leaves
+scripts that contain async functions to the interpreter.
+
+Microtasks now count towards the instruction observer, so that an async
+function that only awaits cannot run unobserved.
+
+diff --git a/rhino/src/main/java/org/mozilla/classfile/ClassFileWriter.java b/rhino/src/main/java/org/mozilla/classfile/ClassFileWriter.java
+index 8b4beb9c5fee..7a7e9d195006 100644
+--- a/rhino/src/main/java/org/mozilla/classfile/ClassFileWriter.java
++++ b/rhino/src/main/java/org/mozilla/classfile/ClassFileWriter.java
+@@ -34,7 +34,7 @@ public class ClassFileWriter {
+ 
+         private static final long serialVersionUID = 1263998431033790599L;
+ 
+-        ClassFileFormatException(String message) {
++        public ClassFileFormatException(String message) {
+             super(message);
+         }
+     }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/CodeGenUtils.java b/rhino/src/main/java/org/mozilla/javascript/CodeGenUtils.java
+index 412a64b272bc..f0309bb82d6e 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/CodeGenUtils.java
++++ b/rhino/src/main/java/org/mozilla/javascript/CodeGenUtils.java
+@@ -38,6 +38,11 @@ public class CodeGenUtils {
+             builder.hasPrototype = true;
+             builder.constructor = builder.code;
+         }
++        if (fn.isAsync()) {
++            // async functions are not constructors
++            builder.hasPrototype = false;
++            builder.constructor = new JSCode.NullBuilder<JSFunction>();
++        }
+ 
+         fillInForFunction(builder, fn);
+     }
+@@ -55,6 +60,9 @@ public class CodeGenUtils {
+         if (fn.isES6Generator()) {
+             builder.isES6Generator = true;
+         }
++        if (fn.isAsync()) {
++            builder.isAsync = true;
++        }
+         if (fn.isShorthand()) {
+             builder.isShorthand = true;
+         }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Context.java b/rhino/src/main/java/org/mozilla/javascript/Context.java
+index 9dc16e0b1d17..17a15c32015f 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Context.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Context.java
+@@ -2512,11 +2512,22 @@ public class Context implements Closeable {
+         do {
+             head = microtasks.poll();
+             if (head != null) {
++                if (instructionThreshold != 0) {
++                    // Each job counts like a call, so that jobs which run few instructions each,
++                    // such as the steps of an async function, cannot run unobserved for ever.
++                    instructionCount += MICROTASK_COST;
++                    if (instructionCount > instructionThreshold) {
++                        observeInstructionCount(instructionCount);
++                        instructionCount = 0;
++                    }
++                }
+                 head.run();
+             }
+         } while (head != null);
+     }
+ 
++    private static final int MICROTASK_COST = 100;
++
+     /**
+      * Control whether to track unhandled promise rejections. If "track" is set to true, then the
+      * tracker returned by "getUnhandledPromiseTracker" must be periodically used to process the
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ES6Generator.java b/rhino/src/main/java/org/mozilla/javascript/ES6Generator.java
+index 4eda0cb74e49..8767bb9afea8 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ES6Generator.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ES6Generator.java
+@@ -119,6 +119,16 @@ public final class ES6Generator extends ScriptableObject {
+         return generator.resumeDelegeeThrow(cx, scope, value);
+     }
+ 
++    /** Resumes the generator with {@code value}, as {@code next(value)} would. */
++    Scriptable resume(Context cx, Scriptable scope, Object value) {
++        return resumeLocal(cx, scope, value);
++    }
++
++    /** Throws {@code value} into the generator, as {@code throw(value)} would. */
++    Scriptable resumeThrow(Context cx, Scriptable scope, Object value) {
++        return resumeAbruptLocal(cx, scope, NativeGenerator.GENERATOR_THROW, value);
++    }
++
+     private static Object js_iterator(
+             Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+         return thisObj;
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+index ed5a4adec8bd..942287bb032d 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Interpreter.java
+@@ -3666,7 +3666,8 @@ public final class Interpreter extends Icode implements Evaluator {
+             }
+ 
+             if (fun instanceof JSFunction
+-                    && ((JSFunction) fun).getDescriptor().getCode() instanceof InterpreterData) {
++                    && ((JSFunction) fun).getDescriptor().getCode() instanceof InterpreterData
++                    && !((JSFunction) fun).getDescriptor().isAsync()) {
+                 JSFunction ifun = (JSFunction) fun;
+                 JSDescriptor desc = ifun.getDescriptor();
+                 InterpreterData idata = (InterpreterData) desc.getCode();
+diff --git a/rhino/src/main/java/org/mozilla/javascript/JSDescriptor.java b/rhino/src/main/java/org/mozilla/javascript/JSDescriptor.java
+index a05b05e430f9..342014d0a287 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/JSDescriptor.java
++++ b/rhino/src/main/java/org/mozilla/javascript/JSDescriptor.java
+@@ -30,6 +30,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
+     private static final int REQUIRES_ACTIVATION_FRAME_FLAG = 1 << 10;
+     private static final int REQUIRES_ARGUMENT_OBJECT_FLAG = 1 << 11;
+     private static final int DECLARED_AS_FUNCTION_EXPRESSION_FLAG = 1 << 12;
++    private static final int IS_ASYNC_FLAG = 1 << 13;
+ 
+     private final JSCode<T> code;
+     private final JSCode<T> constructor;
+@@ -61,6 +62,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
+             boolean isScript,
+             boolean isTopLevel,
+             boolean isES6Generator,
++            boolean isAsync,
+             boolean isShorthand,
+             boolean hasPrototype,
+             boolean hasLexicalThis,
+@@ -93,6 +95,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
+         flags = flags | (isScript ? IS_SCRIPT_FLAG : 0);
+         flags = flags | (isTopLevel ? IS_TOP_LEVEL_FLAG : 0);
+         flags = flags | (isES6Generator ? IS_ES6_GENERATOR_FLAG : 0);
++        flags = flags | (isAsync ? IS_ASYNC_FLAG : 0);
+         flags = flags | (isShorthand ? IS_SHORTHAND_FLAG : 0);
+         flags = flags | (hasPrototype ? HAS_PROTOTYPE_FLAG : 0);
+         flags = flags | (hasLexicalThis ? HAS_LEXICAL_THIS_FLAG : 0);
+@@ -156,6 +159,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
+         return (flags & IS_SHORTHAND_FLAG) != 0;
+     }
+ 
++    /** Whether this is an async function, whose code is a generator that yields what it awaits. */
++    public boolean isAsync() {
++        return (flags & IS_ASYNC_FLAG) != 0;
++    }
++
+     public boolean hasPrototype() {
+         return (flags & HAS_PROTOTYPE_FLAG) != 0;
+     }
+@@ -297,6 +305,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
+         public boolean isScript;
+         public boolean isTopLevel;
+         public boolean isES6Generator;
++        public boolean isAsync;
+         public boolean isShorthand;
+         public boolean hasPrototype;
+         public boolean hasLexicalThis;
+@@ -367,6 +376,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
+                             isScript,
+                             isTopLevel,
+                             isES6Generator,
++                            isAsync,
+                             isShorthand,
+                             hasPrototype,
+                             hasLexicalThis,
+diff --git a/rhino/src/main/java/org/mozilla/javascript/JSFunction.java b/rhino/src/main/java/org/mozilla/javascript/JSFunction.java
+index f099fead01da..c17ba4f7df51 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/JSFunction.java
++++ b/rhino/src/main/java/org/mozilla/javascript/JSFunction.java
+@@ -22,7 +22,8 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
+         this.descriptor = descriptor;
+         this.lexicalThis = lexicalThis;
+         this.homeObject = homeObject;
+-        ScriptRuntime.setFunctionProtoAndParent(this, cx, scope, descriptor.isES6Generator());
++        ScriptRuntime.setFunctionProtoAndParent(
++                this, cx, scope, descriptor.isES6Generator() && !descriptor.isAsync());
+         if (!descriptor.isShorthand()) {
+             setupDefaultPrototype(scope);
+         }
+@@ -133,6 +134,15 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
+             return ScriptRuntime.doTopCall(this, cx, scope, thisObj, args, isStrict());
+         }
+         var realThis = descriptor.hasLexicalThis() ? lexicalThis : thisObj;
++        if (descriptor.isAsync()) {
++            return NativePromise.runAsyncFunction(
++                    cx,
++                    scope,
++                    () ->
++                            descriptor
++                                    .getCode()
++                                    .execute(cx, this, Undefined.instance, scope, realThis, args));
++        }
+         return descriptor.getCode().execute(cx, this, Undefined.instance, scope, realThis, args);
+     }
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/NativePromise.java b/rhino/src/main/java/org/mozilla/javascript/NativePromise.java
+index b8a3a2cef57f..8f9b1871dbec 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/NativePromise.java
++++ b/rhino/src/main/java/org/mozilla/javascript/NativePromise.java
+@@ -5,6 +5,7 @@
+ package org.mozilla.javascript;
+ 
+ import java.util.ArrayList;
++import java.util.function.Supplier;
+ import org.mozilla.javascript.TopLevel.NativeErrors;
+ 
+ public class NativePromise extends ScriptableObject {
+@@ -578,6 +579,137 @@ public class NativePromise extends ScriptableObject {
+         return ScriptRuntime.newNativeError(cx, scope, constructor, new Object[] {re.getMessage()});
+     }
+ 
++    /**
++     * Calls an async function: {@code body} starts it, and returns the generator that its code
++     * compiles to, which yields the values it awaits. Returns the promise of its result.
++     */
++    static Object runAsyncFunction(Context cx, Scriptable scope, Supplier<Object> body) {
++        Scriptable top = ScriptableObject.getTopLevelScope(scope);
++        Capability cap =
++                new Capability(
++                        cx, top, TopLevel.getBuiltinCtor(cx, top, TopLevel.Builtins.Promise));
++        Object generator;
++        try {
++            generator = body.get();
++        } catch (RhinoException re) {
++            cap.reject.call(
++                    cx,
++                    top,
++                    Undefined.SCRIPTABLE_UNDEFINED,
++                    new Object[] {getErrorObject(cx, top, re)});
++            return cap.promise;
++        }
++        new AsyncFunctionRun(top, (ES6Generator) generator, cap)
++                .step(cx, false, Undefined.instance);
++        return cap.promise;
++    }
++
++    /** The run of an async function, which steps its generator as awaited values settle. */
++    private static final class AsyncFunctionRun {
++        private final Scriptable scope;
++        private final ES6Generator generator;
++        private final Capability capability;
++        private final Callable onFulfilled;
++        private final Callable onRejected;
++
++        AsyncFunctionRun(Scriptable scope, ES6Generator generator, Capability capability) {
++            this.scope = scope;
++            this.generator = generator;
++            this.capability = capability;
++            onFulfilled =
++                    new LambdaFunction(
++                            scope,
++                            1,
++                            (Context cx, Scriptable s, Scriptable thisObj, Object[] args) -> {
++                                step(cx, false, args.length > 0 ? args[0] : Undefined.instance);
++                                return Undefined.instance;
++                            });
++            onRejected =
++                    new LambdaFunction(
++                            scope,
++                            1,
++                            (Context cx, Scriptable s, Scriptable thisObj, Object[] args) -> {
++                                step(cx, true, args.length > 0 ? args[0] : Undefined.instance);
++                                return Undefined.instance;
++                            });
++        }
++
++        /** Resumes the function with the outcome of what it awaited, up to its next await. */
++        void step(Context cx, boolean rejected, Object value) {
++            if (!ScriptRuntime.hasTopCall(cx)) {
++                // a microtask run after the script that started it
++                ScriptRuntime.doTopCall(
++                        (Context c, Scriptable s, Scriptable thisObj, Object[] args) -> {
++                            step(c, rejected, value);
++                            return Undefined.instance;
++                        },
++                        cx,
++                        scope,
++                        Undefined.SCRIPTABLE_UNDEFINED,
++                        ScriptRuntime.emptyArgs,
++                        false);
++                return;
++            }
++            Scriptable result;
++            try {
++                result =
++                        rejected
++                                ? generator.resumeThrow(cx, scope, value)
++                                : generator.resume(cx, scope, value);
++            } catch (RhinoException re) {
++                capability.reject.call(
++                        cx,
++                        scope,
++                        Undefined.SCRIPTABLE_UNDEFINED,
++                        new Object[] {getErrorObject(cx, scope, re)});
++                return;
++            }
++            Object resultValue = ScriptableObject.getProperty(result, ES6Iterator.VALUE_PROPERTY);
++            if (resultValue == Scriptable.NOT_FOUND) {
++                resultValue = Undefined.instance;
++            }
++            if (ScriptRuntime.isIteratorDone(cx, result)) {
++                capability.resolve.call(
++                        cx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {resultValue});
++                return;
++            }
++            await(cx, resultValue);
++        }
++
++        /**
++         * Awaits {@code value}: resolves it to a promise as {@code Promise.resolve} does, then
++         * resumes the function from a reaction job once that settles.
++         */
++        private void await(Context cx, Object value) {
++            Object promise;
++            try {
++                promise =
++                        resolveInternal(
++                                cx,
++                                scope,
++                                TopLevel.getBuiltinCtor(cx, scope, TopLevel.Builtins.Promise),
++                                value);
++            } catch (RhinoException re) {
++                step(cx, true, getErrorObject(cx, scope, re));
++                return;
++            }
++            NativePromise p = (NativePromise) promise;
++            Reaction fulfill = new Reaction(null, ReactionType.FULFILL, onFulfilled);
++            Reaction reject = new Reaction(null, ReactionType.REJECT, onRejected);
++            if (p.state == State.PENDING) {
++                p.fulfillReactions.add(fulfill);
++                p.rejectReactions.add(reject);
++            } else if (p.state == State.FULFILLED) {
++                Object result = p.result;
++                cx.enqueueMicrotask(() -> fulfill.invoke(cx, scope, result));
++            } else {
++                Object result = p.result;
++                p.markHandled(cx);
++                cx.enqueueMicrotask(() -> reject.invoke(cx, scope, result));
++            }
++        }
++    }
++
+     // Output of "CreateResolvingFunctions." Carries with it an "alreadyResolved" state,
+     // so we make it a separate object. This actually fires resolution functions on
+     // the passed callbacks.
+@@ -665,6 +797,11 @@ public class NativePromise extends ScriptableObject {
+ 
+         // Implementation of NewPromiseReactionJob
+         void invoke(Context cx, Scriptable scope, Object arg) {
++            if (capability == null) {
++                // an await, which has no promise of its own
++                handler.call(cx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {arg});
++                return;
++            }
+             try {
+                 Object result = null;
+                 if (handler == null) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Node.java b/rhino/src/main/java/org/mozilla/javascript/Node.java
+index 730537ed1aea..6e7cbd8581d0 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Node.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Node.java
+@@ -73,7 +73,8 @@ public class Node implements Iterable<Node> {
+             SPREAD_ARGS = 34, // the arguments of a call or new are one array to spread
+             CONSTRUCTION_THIS = 35, // function whose this may be a class construction
+             CLASS_FLAGS = 36, // flags of a CLASS node, see ClassFunction
+-            LAST_PROP = CLASS_FLAGS,
++            ASYNC_ARROW = 37, // async arrow function head, or an await
++            LAST_PROP = ASYNC_ARROW,
+             FIRST_PROP = FUNCTION_PROP;
+ 
+     // values of ISNUMBER_PROP to specify
+@@ -467,6 +468,8 @@ public class Node implements Iterable<Node> {
+                 return "construction_this";
+             case CLASS_FLAGS:
+                 return "class_flags";
++            case ASYNC_ARROW:
++                return "async_arrow";
+             case NUMBER_OF_SPREAD:
+                 return "number_of_spread";
+ 
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Parser.java b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+index 87d4f5295173..1e1c3be704dc 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Parser.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Parser.java
+@@ -148,6 +148,10 @@ public class Parser {
+     private boolean insideMethod;
+     // whether the statement being parsed is the body of an if, loop, with or label
+     private boolean inSingleStatementContext;
++    // whether the code being parsed is the body of an async function
++    private boolean inAsyncFunction;
++    // whether the next function parsed is async
++    private boolean pendingAsync;
+     // whether the code being parsed is a class constructor, or an arrow function in one
+     private int classConstructorKind;
+     // the kind of constructor that the next method parsed is
+@@ -630,7 +634,17 @@ public class Parser {
+                 }
+ 
+                 AstNode n;
+-                if (tt == Token.FUNCTION) {
++                if (tt == Token.ASYNC) {
++                    try {
++                        n =
++                                asyncFunction(
++                                        calledByCompileFunction
++                                                ? FunctionNode.FUNCTION_EXPRESSION
++                                                : FunctionNode.FUNCTION_STATEMENT);
++                    } catch (ParserException e) {
++                        break;
++                    }
++                } else if (tt == Token.FUNCTION) {
+                     consumeToken();
+                     try {
+                         n =
+@@ -744,6 +758,9 @@ public class Parser {
+                             consumeToken();
+                             n = function(FunctionNode.FUNCTION_STATEMENT);
+                             break;
++                        case Token.ASYNC:
++                            n = asyncFunction(FunctionNode.FUNCTION_STATEMENT);
++                            break;
+                         default:
+                             n = statement();
+                             if (inDirectivePrologue) {
+@@ -1022,6 +1039,8 @@ public class Parser {
+         int savedConstructorKind = classConstructorKind;
+         classConstructorKind = isMethodDefiniton ? pendingConstructorKind : 0;
+         pendingConstructorKind = 0;
++        boolean savedAsync = inAsyncFunction;
++        inAsyncFunction = startAsyncFunction(fnNode);
+         if (classConstructorKind != 0) {
+             fnNode.putIntProp(Node.CONSTRUCTION_THIS, 1);
+         }
+@@ -1044,6 +1063,7 @@ public class Parser {
+             savedVars.restore();
+             insideMethod = wasInsideMethod;
+             classConstructorKind = savedConstructorKind;
++            inAsyncFunction = savedAsync;
+         }
+ 
+         if (memberExprNode != null) {
+@@ -1096,6 +1116,8 @@ public class Parser {
+         Set<String> paramNames = new HashSet<>();
+ 
+         PerFunctionVariables savedVars = new PerFunctionVariables(fnNode);
++        boolean savedAsync = inAsyncFunction;
++        inAsyncFunction = startAsyncFunction(fnNode);
+         // Intentionally not overwriting "insideMethod" - we want to propagate this from the parent
+         // function or scope
+         try {
+@@ -1139,9 +1161,10 @@ public class Parser {
+             fnNode.setLength(end - functionSourceStart);
+         } finally {
+             savedVars.restore();
++            inAsyncFunction = savedAsync;
+         }
+ 
+-        if (fnNode.isGenerator()) {
++        if (fnNode.isGenerator() && !fnNode.isAsync()) {
+             reportError("msg.arrowfunction.generator");
+             return makeErrorNode();
+         }
+@@ -1424,6 +1447,9 @@ public class Parser {
+                 consumeToken();
+                 return function(FunctionNode.FUNCTION_EXPRESSION_STATEMENT);
+ 
++            case Token.ASYNC:
++                return asyncFunction(FunctionNode.FUNCTION_EXPRESSION_STATEMENT);
++
+             case Token.DEFAULT:
+                 pn = defaultXmlNamespace();
+                 break;
+@@ -2210,6 +2236,7 @@ public class Parser {
+                 addStrictWarning("msg.return.inconsistent", "", pos, end - pos);
+         } else {
+             if (!insideFunctionBody()) reportError("msg.bad.yield");
++            if (inAsyncFunction) reportError("msg.async.yield");
+             endFlags |= Node.END_YIELDS;
+             ret = new Yield(pos, end - pos, e, yieldStar);
+             setRequiresActivation();
+@@ -2669,6 +2696,15 @@ public class Parser {
+             }
+         } else if (!hasEOL && tt == Token.ARROW) {
+             consumeToken();
++            if (pn.getIntProp(Node.ASYNC_ARROW, 0) == 1) {
++                // async x => ...
++                pendingAsync = true;
++            } else if (pn instanceof FunctionCall
++                    && ((FunctionCall) pn).getTarget().getIntProp(Node.ASYNC_ARROW, 0) == 1) {
++                // async (a, b) => ..., parsed as a call
++                pendingAsync = true;
++                pn = asyncArrowParams((FunctionCall) pn);
++            }
+             pn = arrowFunction(pn, startLine, startColumn);
+         } else if (pn.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
+                 && !inDestructuringAssignment) {
+@@ -2904,6 +2940,24 @@ public class Parser {
+         int line, column;
+ 
+         switch (tt) {
++            case Token.AWAIT:
++                {
++                    consumeToken();
++                    line = lineNumber();
++                    column = columnNumber();
++                    int pos = ts.tokenBeg;
++                    if (!inAsyncFunction || !insideFunctionBody()) {
++                        reportError("msg.async.await");
++                    }
++                    // an async function runs as a generator that yields what it awaits
++                    AstNode operand = unaryExpr();
++                    Yield await = new Yield(pos, getNodeEnd(operand) - pos, operand, false);
++                    await.putIntProp(Node.ASYNC_ARROW, 1);
++                    setRequiresActivation();
++                    setIsGenerator();
++                    await.setLineColumnNumber(line, column);
++                    return await;
++                }
+             case Token.VOID:
+             case Token.NOT:
+             case Token.BITNOT:
+@@ -3536,6 +3590,9 @@ public class Parser {
+                 consumeToken();
+                 return function(FunctionNode.FUNCTION_EXPRESSION);
+ 
++            case Token.ASYNC:
++                return asyncFunction(FunctionNode.FUNCTION_EXPRESSION);
++
+             case Token.LB:
+                 consumeToken();
+                 return arrayLiteral();
+@@ -3562,8 +3619,31 @@ public class Parser {
+                 return attributeAccess();
+ 
+             case Token.NAME:
+-                consumeToken();
+-                return name(ttFlagged, tt);
++                {
++                    consumeToken();
++                    AstNode name = name(ttFlagged, tt);
++                    if (name instanceof Name
++                            && "async".equals(((Name) name).getIdentifier())
++                            && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
++                            && !inForInit) {
++                        int next = peekTokenOrEOL();
++                        if (next == Token.NAME) {
++                            // async x => ...
++                            consumeToken();
++                            Name param = createNameNode();
++                            param.putIntProp(Node.ASYNC_ARROW, 1);
++                            if (peekToken() != Token.ARROW) {
++                                reportError("msg.syntax");
++                            }
++                            return param;
++                        }
++                        if (next == Token.LP) {
++                            // async (...) => ..., or a call of a function named async
++                            name.putIntProp(Node.ASYNC_ARROW, 1);
++                        }
++                    }
++                    return name;
++                }
+ 
+             case Token.NUMBER:
+             case Token.BIGINT:
+@@ -3985,6 +4065,51 @@ public class Parser {
+     private static final int GET_ENTRY = 2;
+     private static final int SET_ENTRY = 4;
+     private static final int METHOD_ENTRY = 8;
++    private static final int ASYNC_ENTRY = 16;
++
++    /** Parses an async function, at its {@code async} keyword. */
++    private FunctionNode asyncFunction(int type) throws IOException {
++        consumeToken();
++        mustMatchToken(Token.FUNCTION, "msg.syntax", true);
++        pendingAsync = true;
++        return function(type);
++    }
++
++    /**
++     * Makes the function being parsed async if that was asked for: it runs as a generator that
++     * yields the values it awaits. Returns whether it is async.
++     */
++    private boolean startAsyncFunction(FunctionNode fnNode) {
++        boolean isAsync = pendingAsync;
++        pendingAsync = false;
++        if (isAsync) {
++            if (fnNode.isES6Generator()) {
++                reportError("msg.async.generator");
++            }
++            fnNode.setIsAsync();
++            fnNode.setIsES6Generator();
++        }
++        return isAsync;
++    }
++
++    /** The parameters of {@code async (a, b) => ...}, which was parsed as a call. */
++    private AstNode asyncArrowParams(FunctionCall call) {
++        List<AstNode> args = call.getArguments();
++        AstNode params;
++        if (args.isEmpty()) {
++            params = new EmptyExpression(call.getPosition(), 1);
++        } else {
++            params = args.get(0);
++            for (int i = 1; i < args.size(); i++) {
++                AstNode arg = args.get(i);
++                params = new InfixExpression(Token.COMMA, params, arg, arg.getPosition());
++            }
++        }
++        ParenthesizedExpression paren =
++                new ParenthesizedExpression(call.getPosition(), call.getLength(), params);
++        paren.setLineColumnNumber(call.getLineno(), call.getColumn());
++        return paren;
++    }
+ 
+     /** Parses a class declaration, after the {@code class} keyword, as a let declaration. */
+     private AstNode classDeclaration() throws IOException {
+@@ -4114,6 +4239,25 @@ public class Parser {
+             int entryKind = METHOD_ENTRY;
+             int peeked = peekToken();
+             boolean isGenerator = pname instanceof GeneratorMethodDefinition;
++            boolean isAsync = false;
++            if (peeked != Token.LP
++                    && !isGenerator
++                    && pname instanceof Name
++                    && "async".equals(((Name) pname).getIdentifier())
++                    && peeked != Token.ASSIGN
++                    && peeked != Token.SEMI
++                    && peeked != Token.RC
++                    && (peekFlaggedToken() & TI_AFTER_EOL) == 0) {
++                isAsync = true;
++                pname = classElementName();
++                if (pname == null) {
++                    reportError("msg.class.bad.member");
++                    return;
++                }
++                consumeToken();
++                isGenerator = pname instanceof GeneratorMethodDefinition;
++                peeked = peekToken();
++            }
+             if (peeked != Token.LP && !isGenerator) {
+                 if (pname instanceof Name
+                         && ("get".equals(pname.getString()) || "set".equals(pname.getString()))
+@@ -4165,6 +4309,12 @@ public class Parser {
+                 cls.setHasConstructor(true);
+                 pendingConstructorKind = derived ? DERIVED_CONSTRUCTOR : BASE_CONSTRUCTOR;
+             }
++            if (isAsync) {
++                if (isConstructor) {
++                    reportError("msg.class.bad.constructor");
++                }
++                pendingAsync = true;
++            }
+             ObjectProperty member;
+             try {
+                 member = methodDefinition(memberPos, pname, entryKind, isGenerator, true);
+@@ -4378,14 +4528,24 @@ public class Parser {
+                             entryKind = GET_ENTRY;
+                         } else if ("set".equals(propertyName)) {
+                             entryKind = SET_ENTRY;
++                        } else if ("async".equals(propertyName)
++                                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
++                                && (peekFlaggedToken() & TI_AFTER_EOL) == 0) {
++                            entryKind = ASYNC_ENTRY;
+                         }
+                     }
+-                    if (entryKind == GET_ENTRY || entryKind == SET_ENTRY) {
++                    if (entryKind == GET_ENTRY
++                            || entryKind == SET_ENTRY
++                            || entryKind == ASYNC_ENTRY) {
+                         pname = objliteralProperty();
+                         if (pname == null) {
+                             reportError("msg.bad.prop");
+                         }
+                         consumeToken();
++                        if (entryKind == ASYNC_ENTRY) {
++                            entryKind = METHOD_ENTRY;
++                            pendingAsync = true;
++                        }
+                     }
+                     if (pname == null) {
+                         propertyName = null;
+@@ -4584,6 +4744,9 @@ public class Parser {
+             int pos, AstNode propName, int entryKind, boolean isGenerator, boolean isShorthand)
+             throws IOException {
+         FunctionNode fn = function(FunctionNode.FUNCTION_EXPRESSION, true);
++        if (isGenerator && fn.isAsync()) {
++            reportError("msg.async.generator");
++        }
+         // We've already parsed the function name, so fn should be anonymous.
+         Name name = fn.getFunctionName();
+         if (name != null && name.length() != 0) {
+diff --git a/rhino/src/main/java/org/mozilla/javascript/Token.java b/rhino/src/main/java/org/mozilla/javascript/Token.java
+index ef4313d8844f..987f3d8d15bd 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/Token.java
++++ b/rhino/src/main/java/org/mozilla/javascript/Token.java
+@@ -250,7 +250,9 @@ public class Token {
+             EXTENDS = CLASS + 1, // extends keyword
+             SUPER_CALL = EXTENDS + 1, // super(...) in a class constructor
+             NEW_TARGET = SUPER_CALL + 1, // new.target
+-            LAST_TOKEN = NEW_TARGET + 1;
++            AWAIT = NEW_TARGET + 1, // await keyword
++            ASYNC = AWAIT + 1, // async, when followed by function
++            LAST_TOKEN = ASYNC + 1;
+ 
+     /**
+      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
+@@ -663,6 +665,10 @@ public class Token {
+                 return "SUPER_CALL";
+             case NEW_TARGET:
+                 return "NEW_TARGET";
++            case AWAIT:
++                return "AWAIT";
++            case ASYNC:
++                return "ASYNC";
+         }
+ 
+         // Token without name
+@@ -732,6 +738,8 @@ public class Token {
+                 return "class";
+             case Token.EXTENDS:
+                 return "extends";
++            case Token.AWAIT:
++                return "await";
+             case Token.YIELD:
+                 return "yield";
+             case Token.SUPER:
+diff --git a/rhino/src/main/java/org/mozilla/javascript/TokenStream.java b/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
+index b0010a6572d6..45f9b91d6e4d 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
++++ b/rhino/src/main/java/org/mozilla/javascript/TokenStream.java
+@@ -396,7 +396,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
+                 Id_yield = Token.YIELD,
+ 
+                 // 11.6.2.2 Future Reserved Words
+-                Id_await = Token.RESERVED,
++                Id_await = Token.AWAIT,
+                 Id_enum = Token.RESERVED,
+ 
+                 // 11.6.2.2 NOTE Strict Future Reserved Words
+@@ -835,6 +835,12 @@ class TokenStream implements Parser.CurrentPositionReporter {
+                 }
+ 
+                 this.string = internString(str);
++                if (!containsEscape
++                        && "async".equals(str)
++                        && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
++                        && isFunctionNext()) {
++                    return Token.ASYNC;
++                }
+                 return Token.NAME;
+             }
+ 
+@@ -2159,6 +2165,23 @@ class TokenStream implements Parser.CurrentPositionReporter {
+         stringBufferTop = N + codePointLen;
+     }
+ 
++    /** Whether the keyword {@code function} follows on the same line. */
++    private boolean isFunctionNext() {
++        int i = sourceCursor - ungetCursor;
++        int c = charAt(i);
++        while (c == ' ' || c == '\t') {
++            c = charAt(++i);
++        }
++        String keyword = "function";
++        for (int k = 0; k < keyword.length(); k++) {
++            if (charAt(i + k) != keyword.charAt(k)) {
++                return false;
++            }
++        }
++        int after = charAt(i + keyword.length());
++        return after == EOF_CHAR || !Character.isJavaIdentifierPart(after);
++    }
++
+     private boolean canUngetChar() {
+         return ungetCursor == 0 || ungetBuffer[ungetCursor - 1] != '\n';
+     }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/ast/FunctionNode.java b/rhino/src/main/java/org/mozilla/javascript/ast/FunctionNode.java
+index d7eeaea01382..3f12875f3c9d 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/ast/FunctionNode.java
++++ b/rhino/src/main/java/org/mozilla/javascript/ast/FunctionNode.java
+@@ -118,6 +118,7 @@ public class FunctionNode extends ScriptNode {
+     private boolean requiresArgumentObject;
+     private boolean isGenerator;
+     private boolean isES6Generator;
++    private boolean isAsync;
+     private List<Node> generatorResumePoints;
+     private Map<Node, int[]> liveLocals;
+     private Node generatorParamInitBlock; // IR block for default parameters init in generators
+@@ -314,6 +315,15 @@ public class FunctionNode extends ScriptNode {
+         isGenerator = true;
+     }
+ 
++    public boolean isAsync() {
++        return isAsync;
++    }
++
++    /** Marks an async function, which is compiled as a generator that yields what it awaits. */
++    public void setIsAsync() {
++        isAsync = true;
++    }
++
+     public boolean isES6Generator() {
+         return isES6Generator;
+     }
+diff --git a/rhino/src/main/java/org/mozilla/javascript/optimizer/ClassCompiler.java b/rhino/src/main/java/org/mozilla/javascript/optimizer/ClassCompiler.java
+index 2f84dc4e57de..f05c925b9e94 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/optimizer/ClassCompiler.java
++++ b/rhino/src/main/java/org/mozilla/javascript/optimizer/ClassCompiler.java
+@@ -301,6 +301,7 @@ public class ClassCompiler {
+         cfw.add(builder.isScript ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+         cfw.add(builder.isTopLevel ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+         cfw.add(builder.isES6Generator ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
++        cfw.add(builder.isAsync ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+         cfw.add(builder.isShorthand ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+         cfw.add(builder.hasPrototype ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+         cfw.add(builder.hasLexicalThis ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+diff --git a/rhino/src/main/java/org/mozilla/javascript/optimizer/Codegen.java b/rhino/src/main/java/org/mozilla/javascript/optimizer/Codegen.java
+index cfb161227158..521610218760 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/optimizer/Codegen.java
++++ b/rhino/src/main/java/org/mozilla/javascript/optimizer/Codegen.java
+@@ -90,6 +90,16 @@ public class Codegen implements Evaluator {
+         }
+     }
+ 
++    private static boolean containsAsyncFunction(ScriptNode tree) {
++        for (int i = 0; i != tree.getFunctionCount(); ++i) {
++            FunctionNode fn = tree.getFunctionNode(i);
++            if (fn.isAsync() || containsAsyncFunction(fn)) {
++                return true;
++            }
++        }
++        return false;
++    }
++
+     @Override
+     @SuppressWarnings("unchecked")
+     public Object compile(
+@@ -97,6 +107,11 @@ public class Codegen implements Evaluator {
+             ScriptNode tree,
+             String rawSource,
+             boolean returnFunction) {
++        if (containsAsyncFunction(tree)) {
++            // An await can sit inside the arguments of a call, and compiled generators cannot
++            // yet keep a call in progress across a yield, so these scripts are interpreted.
++            throw new ClassFileWriter.ClassFileFormatException("async functions are interpreted");
++        }
+         int serial;
+         synchronized (globalLock) {
+             serial = ++globalSerialClassCounter;
+diff --git a/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties b/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties
+index 4680a3fef9a0..16b9be920a50 100644
+--- a/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties
++++ b/rhino/src/main/resources/org/mozilla/javascript/resources/Messages.properties
+@@ -480,6 +480,15 @@ msg.reserved.id =\
+ msg.super.shorthand.function =\
+     super should be inside a shorthand function
+ 
++msg.async.await =\
++    await is only valid in async functions
++
++msg.async.yield =\
++    yield is not valid in async functions
++
++msg.async.generator =\
++    async generators are not supported
++
+ msg.private.name =\
+     private class members (#name) are not supported
+ 
+diff --git a/rhino/src/test/java/org/mozilla/javascript/tests/es6/AsyncFunctionTest.java b/rhino/src/test/java/org/mozilla/javascript/tests/es6/AsyncFunctionTest.java
+new file mode 100644
+index 000000000000..c7691661f64a
+--- /dev/null
++++ b/rhino/src/test/java/org/mozilla/javascript/tests/es6/AsyncFunctionTest.java
+@@ -0,0 +1,273 @@
++/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++package org.mozilla.javascript.tests.es6;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++
++import org.junit.jupiter.api.Test;
++import org.mozilla.javascript.Context;
++import org.mozilla.javascript.ContextFactory;
++import org.mozilla.javascript.Scriptable;
++import org.mozilla.javascript.testutils.Utils;
++
++/** Async functions and await. */
++public class AsyncFunctionTest {
++
++    /**
++     * Runs the script, which finishes once its microtasks have run, then checks the value it left
++     * in {@code log}, joined with commas.
++     */
++    private static void check(String expected, String script) {
++        Utils.runWithAllModes(
++                cx -> {
++                    cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
++                    Scriptable scope = cx.initStandardObjects();
++                    cx.evaluateString(scope, "var log = [];\n" + script, "test.js", 1, null);
++                    Object log = cx.evaluateString(scope, "log.join()", "check.js", 1, null);
++                    assertEquals(expected, log);
++                    return null;
++                });
++    }
++
++    @Test
++    public void returnsPromise() {
++        check(
++                "function,2",
++                "async function f() { return await Promise.resolve(2); }\n"
++                        + "var p = f(); log.push(typeof p.then); p.then(v => log.push(v));");
++    }
++
++    @Test
++    public void awaitsPlainValues() {
++        check(
++                "3",
++                "async function f() { var a = await 1; var b = await 2; return a + b; }\n"
++                        + "f().then(v => log.push(v));");
++    }
++
++    @Test
++    public void runsSynchronouslyUntilFirstAwait() {
++        check(
++                "a,b,c",
++                "async function f() { log.push('a'); await null; log.push('c'); }\n"
++                        + "f(); log.push('b');");
++    }
++
++    @Test
++    public void microtaskOrdering() {
++        check(
++                "start,end,a1,p1,a2,p2",
++                "async function f() { log.push('a1'); await null; log.push('a2'); }\n"
++                        + "log.push('start');\n"
++                        + "Promise.resolve().then(() => { f(); log.push('p1'); })"
++                        + ".then(() => log.push('p2'));\n"
++                        + "log.push('end');");
++        check(
++                "1,2,3",
++                "var p = Promise.resolve();\n"
++                        + "(async () => { await p; log.push(1); await p; log.push(3); })();\n"
++                        + "p.then(() => log.push(2));");
++    }
++
++    @Test
++    public void awaitingThenables() {
++        check(
++                "7",
++                "async function f() { return await { then(r) { r(7); } }; }\n"
++                        + "f().then(v => log.push(v));");
++    }
++
++    @Test
++    public void rejectionsBecomeExceptions() {
++        check(
++                "caught boom",
++                "async function f() {\n"
++                        + "  try { await Promise.reject(new Error('boom')); }\n"
++                        + "  catch (e) { log.push('caught ' + e.message); }\n"
++                        + "}\n"
++                        + "f();");
++    }
++
++    @Test
++    public void exceptionsRejectThePromise() {
++        check(
++                "Error: bad,TypeError",
++                "async function f() { await null; throw new Error('bad'); }\n"
++                        + "async function g() { null.x; }\n"
++                        + "f().catch(e => log.push(String(e)))"
++                        + ".then(() => g()).catch(e => log.push(e.name));");
++    }
++
++    @Test
++    public void synchronousThrowStillRejects() {
++        check(
++                "sync,rejected",
++                "async function f() { throw 1; }\n"
++                        + "var p = f(); log.push('sync'); p.catch(() => log.push('rejected'));");
++    }
++
++    @Test
++    public void finallyRunsAcrossAwait() {
++        check(
++                "try,finally,done",
++                "async function f() {\n"
++                        + "  try { log.push('try'); await null; return 'done'; }\n"
++                        + "  finally { await null; log.push('finally'); }\n"
++                        + "}\n"
++                        + "f().then(v => log.push(v));");
++    }
++
++    @Test
++    public void asyncArrows() {
++        check(
++                "2,6,9",
++                "var a = async x => x * 2;\n"
++                        + "var b = async (x, y) => { return await x * y; };\n"
++                        + "var c = async () => 9;\n"
++                        + "a(1).then(v => log.push(v)).then(() => b(2, 3)).then(v => log.push(v))"
++                        + ".then(() => c()).then(v => log.push(v));");
++    }
++
++    @Test
++    public void asyncArrowKeepsThis() {
++        check(
++                "5",
++                "var o = { v: 5, m() { return (async () => this.v)(); } };\n"
++                        + "o.m().then(v => log.push(v));");
++    }
++
++    @Test
++    public void asyncMethods() {
++        check(
++                "1,2,3",
++                "var o = { async m() { return 1; } };\n"
++                        + "class A { async m() { return 2; } static async s() { return 3; } }\n"
++                        + "o.m().then(v => log.push(v)).then(() => new A().m())"
++                        + ".then(v => log.push(v)).then(() => A.s()).then(v => log.push(v));");
++    }
++
++    @Test
++    public void superInAsyncMethods() {
++        check(
++                "base+derived",
++                "class A { async f() { return 'base'; } }\n"
++                        + "class B extends A { async f() { return (await super.f()) + '+derived'; } }\n"
++                        + "new B().f().then(v => log.push(v));");
++    }
++
++    @Test
++    public void asyncFunctionExpression() {
++        check(
++                "4",
++                "var f = async function named() { return 4; };\n" + "f().then(v => log.push(v));");
++    }
++
++    @Test
++    public void awaitInLoops() {
++        check(
++                "0,1,2,sum 3",
++                "async function f() {\n"
++                        + "  let sum = 0;\n"
++                        + "  for (let i = 0; i < 3; i++) { log.push(await i); sum += i; }\n"
++                        + "  return sum;\n"
++                        + "}\n"
++                        + "f().then(s => log.push('sum ' + s));");
++    }
++
++    @Test
++    public void awaitInClosuresOverLoopVariables() {
++        check(
++                "0,1,2",
++                "async function f() {\n"
++                        + "  var fs = [];\n"
++                        + "  for (const x of [0, 1, 2]) { await null; fs.push(() => x); }\n"
++                        + "  return fs.map(g => g()).join();\n"
++                        + "}\n"
++                        + "f().then(v => log.push(v));");
++    }
++
++    @Test
++    public void promiseAllOfAsyncCalls() {
++        check(
++                "2,4,6",
++                "async function dbl(x) { await null; return x * 2; }\n"
++                        + "Promise.all([1, 2, 3].map(dbl)).then(v => log.push(v.join()));");
++    }
++
++    /** Async steps run as microtasks, which count towards the instruction observer. */
++    @Test
++    public void endlessAwaitLoopIsObserved() {
++        class Stop extends Error {}
++        ContextFactory factory =
++                new ContextFactory() {
++                    @Override
++                    protected void observeInstructionCount(Context cx, int instructionCount) {
++                        throw new Stop();
++                    }
++                };
++        Utils.runWithAllModes(
++                factory,
++                cx -> {
++                    cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
++                    cx.setInstructionObserverThreshold(10_000);
++                    Scriptable scope = cx.initStandardObjects();
++                    assertThrows(
++                            Stop.class,
++                            () ->
++                                    cx.evaluateString(
++                                            scope,
++                                            "(async () => { for (;;) await null; })();"
++                                                    + "async function storm() { await null; storm(); storm(); }",
++                                            "test.js",
++                                            1,
++                                            null));
++                    assertThrows(
++                            Stop.class,
++                            () -> cx.evaluateString(scope, "storm();", "storm.js", 1, null));
++                    return null;
++                });
++    }
++
++    @Test
++    public void asyncFunctionsAreNotConstructors() {
++        Utils.assertEcmaErrorES6("TypeError", "async function f() {} new f()");
++    }
++
++    @Test
++    public void awaitOutsideAsyncIsSyntaxError() {
++        Utils.assertEvaluatorExceptionES6("await is only valid in async functions", "await 1;");
++        Utils.assertEvaluatorExceptionES6(
++                "await is only valid in async functions", "function f() { await 1; }");
++        Utils.assertEvaluatorExceptionES6(
++                "await is only valid in async functions",
++                "async function f() { [1].map(x => await x); }");
++    }
++
++    @Test
++    public void yieldInAsyncIsSyntaxError() {
++        Utils.assertEvaluatorExceptionES6(
++                "yield is not valid in async functions", "async function f() { yield 1; }");
++    }
++
++    @Test
++    public void asyncGeneratorsAreSyntaxErrors() {
++        Utils.assertEvaluatorExceptionES6(
++                "async generators are not supported", "async function* f() {}");
++    }
++
++    @Test
++    public void asyncIsStillAnIdentifier() {
++        Utils.assertWithAllModes_ES6(3, "var async = function(x) { return x + 1; }; async(2)");
++        Utils.assertWithAllModes_ES6(5, "var o = { async: 5 }; o.async");
++    }
++
++    @Test
++    public void typeofAsyncFunction() {
++        Utils.assertWithAllModes_ES6("function", "async function f() {} typeof f");
++    }
++}
+diff --git a/tests/testsrc/test262.properties b/tests/testsrc/test262.properties
+index 72571fac0292..68cbb53f22ee 100644
+--- a/tests/testsrc/test262.properties
++++ b/tests/testsrc/test262.properties
+@@ -1507,7 +1507,7 @@ built-ins/Number 4/335 (1.19%)
+     S9.3.1_A3_T1_U180E.js {unsupported: [u180e]}
+     S9.3.1_A3_T2_U180E.js {unsupported: [u180e]}
+ 
+-built-ins/Object 118/3410 (3.46%)
++built-ins/Object 116/3410 (3.4%)
+     assign/assignment-to-readonly-property-of-target-must-throw-a-typeerror-exception.js
+     assign/source-own-prop-error.js
+     assign/strings-and-symbol-order-proxy.js
+@@ -1617,8 +1617,6 @@ built-ins/Object 118/3410 (3.46%)
+     prototype/setPrototypeOf-with-non-circular-values-__proto__.js
+     seal/proxy-no-ownkeys-returned-keys-order.js
+     seal/proxy-with-defineProperty-handler.js
+-    seal/seal-asyncarrowfunction.js
+-    seal/seal-asyncfunction.js
+     seal/seal-asyncgeneratorfunction.js
+     seal/seal-finalizationregistry.js
+     seal/seal-sharedarraybuffer.js {unsupported: [SharedArrayBuffer]}
+@@ -3669,8 +3667,9 @@ language/expressions/assignment 182/485 (37.53%)
+     target-super-computed-reference-null.js
+     target-super-identifier-reference-null.js
+ 
+-language/expressions/assignmenttargettype 25/324 (7.72%)
++language/expressions/assignmenttargettype 26/324 (8.02%)
+     direct-arrowfunction-1.js
++    direct-asyncarrowfunction-1.js
+     direct-callexpression.js strict
+     direct-callexpression-as-for-in-lhs.js strict
+     direct-callexpression-as-for-of-lhs.js strict
+@@ -3696,9 +3695,10 @@ language/expressions/assignmenttargettype 25/324 (7.72%)
+     simple-basic-identifierreference-await.js
+     simple-basic-identifierreference-yield.js non-strict
+ 
+-language/expressions/async-arrow-function 42/60 (70.0%)
++language/expressions/async-arrow-function 43/60 (71.67%)
+     forbidden-ext/b1 2/2 (100.0%)
+     forbidden-ext/b2 3/3 (100.0%)
++    array-destructuring-param-strict-body.js
+     arrow-returns-promise.js {unsupported: [async]}
+     await-as-binding-identifier.js {unsupported: [async-functions]}
+     await-as-binding-identifier-escaped.js {unsupported: [async-functions]}
+@@ -3713,6 +3713,7 @@ language/expressions/async-arrow-function 42/60 (70.0%)
+     dflt-params-abrupt.js {unsupported: [async-functions, async]}
+     dflt-params-arg-val-not-undefined.js {unsupported: [async-functions, async]}
+     dflt-params-arg-val-undefined.js {unsupported: [async-functions, async]}
++    dflt-params-duplicates.js non-strict
+     dflt-params-ref-later.js {unsupported: [async-functions, async]}
+     dflt-params-ref-prior.js {unsupported: [async-functions, async]}
+     dflt-params-ref-self.js {unsupported: [async-functions, async]}
+@@ -3721,10 +3722,9 @@ language/expressions/async-arrow-function 42/60 (70.0%)
+     escaped-async.js {unsupported: [async-functions]}
+     escaped-async-line-terminator.js {unsupported: [async-functions]}
+     eval-var-scope-syntax-err.js {unsupported: [async-functions, async]}
+-    name.js
++    object-destructuring-param-strict-body.js
+     params-trailing-comma-multiple.js {unsupported: [async-functions, async]}
+     params-trailing-comma-single.js {unsupported: [async-functions, async]}
+-    prototype.js
+     try-reject-finally-reject.js {unsupported: [async]}
+     try-reject-finally-return.js {unsupported: [async]}
+     try-reject-finally-throw.js {unsupported: [async]}
+@@ -4778,6 +4778,7 @@ language/expressions/object 611/1170 (52.22%)
+     method-definition/async-returns-async-function-returns-newtarget.js {unsupported: [async-functions, async]}
+     method-definition/async-super-call-body.js {unsupported: [async]}
+     method-definition/async-super-call-param.js {unsupported: [async]}
++    method-definition/early-errors-object-async-method-duplicate-parameters.js non-strict
+     method-definition/early-errors-object-method-arguments-in-formal-parameters.js {unsupported: [async-functions]}
+     method-definition/early-errors-object-method-await-in-formals.js {unsupported: [async-functions]}
+     method-definition/early-errors-object-method-await-in-formals-default.js {unsupported: [async-functions]}
+@@ -4851,7 +4852,6 @@ language/expressions/object 611/1170 (52.22%)
+     accessor-name-computed-in.js
+     accessor-name-computed-yield-id.js non-strict
+     computed-__proto__.js
+-    cpn-obj-lit-computed-property-name-from-async-arrow-function-expression.js
+     cpn-obj-lit-computed-property-name-from-await-expression.js {unsupported: [module, async]}
+     cpn-obj-lit-computed-property-name-from-yield-expression.js
+     fn-name-class.js {unsupported: [class]}

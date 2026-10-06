@@ -49,8 +49,8 @@ import java.util.Set;
  *       {@link Limits#maxDepth} instead of overflowing the stack.</li>
  * </ul>
  *
- * BigInt arithmetic is capped at {@link Limits#maxBigIntBits} by {@link VellumBigInts}, which the build patches into
- * Rhino (rhino/build.gradle). Rhino extras that pages have no use for are removed ({@link #EXTRAS}).
+ * BigInt arithmetic is capped at {@link Limits#maxBigIntBits} by {@link VellumBigInts}, which one of Vellum's Rhino
+ * patches adds (rhino/patches). Rhino extras that pages have no use for are removed ({@link #EXTRAS}).
  */
 final class Builtins {
     @FunctionalInterface
