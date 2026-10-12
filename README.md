@@ -2,9 +2,9 @@
 
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui) | [Modrinth](https://modrinth.com/mod/vellum-gui) | [Docs](docs/index.md)
 
-Vellum is a small web engine inside Minecraft. Screens, inventories, HUD and map can be expressed as an HTML page, and Vellum lays it out, animates it, runs its scripts and draws it with the normal GUI renderer. It runs on Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric.
+Vellum is a small web engine inside Minecraft. Write your screens, inventories, HUDs, etc in HTML and Vellum handles the layout, scripting, and rendering with the normal GUI renderer. It runs on Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric.
 
-You don't need to install this on its own. It's a library: mods that use it list it as a dependency, and launchers install it with them.
+You probably don't need to install this on its own; Vellum is a library other mods depend on.
 
 The inspiration for Vellum was two-fold:
 
@@ -26,16 +26,13 @@ Vellum helps in both these cases.
 
 ### What you get
 
-- Most of CSS: block, inline, flexbox, grid and positioning, transitions and `@keyframes`. Its goal is to be a 90-10 solution compared to a complete browser.
-- The game's own look by default. Buttons, text fields, panels, slots and tooltips use vanilla sprites and the game font, so an unstyled page already fits in.
-- Put `<slot index="0">` wherever you want a slot and vanilla mechanics will Just Work(tm): clicking, dragging, shift-clicking and tooltips.
+- Most of CSS: block, inline, flexbox, and grid support, transitions, selectors, and `@keyframes`. Its goal is to be a 90-10 solution compared to a complete browser.
+- Minecraft's look by default. Elements use vanilla sprites by default. 
+- Use `<slot index="0">` for inventory slots and vanilla mechanics will Just Work(tm): clicking, dragging, shift-clicking and tooltips.
 - Minecraft-specific elements: `<item>`, `<slot>`, 3D `<entity>` and `<model>`, sprites, translations and player heads.
 - JavaScript with Vue-style templates (`v-for`, `v-if`, `v-model`, `@click`).
-- HUD overlays, narration/accessibility support, and a standalone previewer with hot reload, so you (or your agent) can build a page without launching the game.
-- Pure Java with the JS engine relocated, so it won't clash with anything in a big modpack.
+- Narration/accessibility support and a standalone previewer with hot reload, so you (or your agent) can preview without launching the game.
 - Speed. A few hundred elements restyle and relayout in well under a millisecond.
-
-Where Vellum behaves differently from a browser, the docs say so.
 
 ```html
 <div class="mc-panel chest">
@@ -55,18 +52,18 @@ Where Vellum behaves differently from a browser, the docs say so.
 
 ### For mod developers
 
-Vellum is in development. Other mods (Chronicle, claudemons) use it as a library. It's on [maven.maxleiter.com](https://maven.maxleiter.com):
+Vellum is in development. It's on [maven.maxleiter.com](https://maven.maxleiter.com):
 
 ```groovy
 repositories { maven { url = "https://maven.maxleiter.com"; content { includeGroup("dev.vellum") } } }
 dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.5.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
-Make it a required dependency of your mod, here and on Modrinth and CurseForge, rather than bundling it. [`template/`](template/README.md) has small NeoForge and Fabric mods to start from. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
+Feel free to bundle Vellum with your mod, or add it as a dependency. [`template/`](template/README.md) has small NeoForge and Fabric mods to start from. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
 
 ### Servers
 
-A server mod can open a page on a player's client, push data to it and get messages back. Since a server might be hostile, scripts run in a Rhino sandbox with no Java access, no network access, no file access, and sensible resource caps. Players can always close a page with Shift+Esc, and `config/vellum.properties` lets them block server pages entirely.
+A server mod can open a page on a player's client, push data to it and get messages back. Since a server might be hostile, scripts run in a Rhino sandbox with no Java access, no network access, no file access, and sensible caps. Players can always close a page with Shift+Esc, and `config/vellum.properties` lets them block server pages entirely.
 
 ## Examples
 
@@ -94,17 +91,6 @@ You can also build pages without launching Minecraft. The previewer renders a pa
 ```
 
 Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README.md).
-
-## Modules
-
-| Module | What |
-|---|---|
-| `engine/` | No Minecraft dependencies. Contains the DOM, HTML and CSS parsers, cascade, layout, animation, painting to an abstract canvas, input and forms, sandboxed scripting |
-| `rhino/` | Mozilla Rhino 1.9.1 with Vellum's patches, relocated to `dev.vellum.shadow.rhino` |
-| `common/` | Vanilla-only Minecraft code: the canvas over Minecraft's GUI drawing, screens, container screens, HUD overlays, networking, the public API, demos |
-| `neoforge/`, `fabric/` | Loader entrypoints |
-| `<loader>/versions/<minecraft>/` | Where Stonecutter builds each Minecraft version, and the code of one version only (see Versions) |
-| `preview/` | The standalone previewer |
 
 ## Building
 
@@ -147,3 +133,5 @@ LLMs were used in the development of Vellum.
 Vellum is MIT (`LICENSE`). The jars bundle Mozilla Rhino, which is MPL-2.0: it is built from the upstream commit
 pinned in `gradle.properties` (Rhino 1.9.1) with the patches in [`rhino/patches`](rhino/patches), and its license,
 notices and a note on where that source is ship in each jar under `META-INF/licenses/rhino/`.
+
+LLMs were used heavily in the development of Vellum.
