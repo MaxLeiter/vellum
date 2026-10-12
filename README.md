@@ -12,7 +12,7 @@ The inspiration for Vellum was three-fold:
 - LLMs are better at web development than Minecraft GUI development
 - Updating GUIs across Minecraft versions has always been a pain. With Vellum, your GUIs stay the same and just the library needs to be updated.
 
-Vellum helps in both these cases.
+Vellum helps in both these cases. Opus 5.5 was used heavily in the development of Vellum.
 
 <table>
   <tr>
@@ -28,7 +28,7 @@ Vellum helps in both these cases.
 ### What you get
 
 - Most of CSS: block, inline, flexbox, and grid support, transitions, selectors, and `@keyframes`. Its goal is to be a 90-10 solution compared to a complete browser.
-- Minecraft's look by default. Elements use vanilla sprites by default. 
+- Elements use vanilla sprites by default. 
 - Use `<slot index="0">` for inventory slots and vanilla mechanics will Just Work(tm): clicking, dragging, shift-clicking and tooltips.
 - Minecraft-specific elements: `<item>`, `<slot>`, 3D `<entity>` and `<model>`, sprites, translations and player heads.
 - JavaScript with Vue-style templates (`v-for`, `v-if`, `v-model`, `@click`).
@@ -128,8 +128,6 @@ release, beta or alpha. Running the workflow by hand is a dry run, and so is `./
 locally: both show what would be uploaded and upload nothing.
 
 ## License
-
-LLMs were used in the development of Vellum.
 
 Vellum is MIT (`LICENSE`). The jars bundle Mozilla Rhino, which is MPL-2.0: it is built from the upstream commit
 pinned in `gradle.properties` (Rhino 1.9.1) with the patches in [`rhino/patches`](rhino/patches), and its license,
