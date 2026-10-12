@@ -113,19 +113,9 @@ against its SHA-256), applies the patches in `rhino/patches` and compiles it, so
 
 Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric (Fabric needs Fabric API). A few things differ on 26.2 and 1.21.1; [docs/versions.md](docs/versions.md) lists them and how the versions are built.
 
-## Releases
+## Mods using Vellum
 
-[`CHANGELOG.md`](CHANGELOG.md) has what changed in each version. To release one:
-
-1. Set `version` in `gradle.properties` and add a `## <version>` section to `CHANGELOG.md`.
-2. Commit, then tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
-
-The tag runs `.github/workflows/release.yml`. It builds, makes a GitHub release, publishes the Maven artifacts to
-[maven.maxleiter.com](https://github.com/MaxLeiter/maven), and uploads a NeoForge and a Fabric jar per Minecraft
-version to Modrinth and CurseForge. The secrets are `MAVEN_DEPLOY_KEY`, `MODRINTH_TOKEN` and `CURSEFORGE_TOKEN`, and
-the store project ids are `modrinth_id` and `curseforge_id` in `gradle.properties`. `release_type` there picks
-release, beta or alpha. Running the workflow by hand is a dry run, and so is `./gradlew publishMods -PpublishDryRun`
-locally: both show what would be uploaded and upload nothing.
+- [TileFinder](https://www.curseforge.com/minecraft/mc-mods/tilefinder)
 
 ## License
 
