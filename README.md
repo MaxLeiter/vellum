@@ -10,7 +10,7 @@ The inspiration for Vellum was three-fold:
 
 - I'm a web developer and my Minecraft GUIs have always looked bad
 - LLMs are better at web development than Minecraft GUI development
-- Updating GUIs across Minecraft versions has always been a pain. With Vellun, your GUIs stay the same and just the library needs to be updated.
+- Updating GUIs across Minecraft versions has always been a pain. With Vellum, your GUIs stay the same and just the library needs to be updated.
 
 Vellum helps in both these cases.
 
