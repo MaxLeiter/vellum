@@ -23,4 +23,5 @@ on NeoForge and Fabric, and on Minecraft 26.3, 26.2 and 1.21.1 apart from the di
 
 - [Minecraft versions](versions.md): what differs on 26.2 and 1.21.1, and how the versions build from one source tree.
 - [Minecraft 26.3 GUI notes](MC_26_3_GUI_API.md): how the 26.3 GUI renderer works, for working on Vellum itself.
+- [Design: SDF boxes](design/sdf-boxes.md): a proposal to draw rounded boxes, borders and shadows with a shader.
 - [Previewer](../preview/README.md) and [patched Rhino](../rhino/README.md).
