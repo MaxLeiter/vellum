@@ -4,6 +4,7 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Affine;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.Shapes;
+import dev.vellum.engine.style.Shadow;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A canvas that records every drawing call and clip with the state it ran in: the transform, the alpha and the clip
  * (as a viewport rectangle). Read it structurally ({@link #calls}, {@link #ops}) or as strings ({@link #trace}).
  * Shapes ({@code fillRoundedRect}, {@code fillBorder}) are recorded as such, not tessellated, unless
- * {@link #tessellate} is set.
+ * {@link #tessellate} is set. Box shadows are tessellated unless {@link #recordShadows} is set.
  */
 public final class RecordingCanvas implements Canvas {
     /**
@@ -49,6 +50,7 @@ public final class RecordingCanvas implements Canvas {
                 case "fillRect" -> "rect " + size + " " + hex(color);
                 case "fillRoundedRect" -> "round " + size + " " + hex(color);
                 case "fillBorder" -> "border " + size + " " + hex(color);
+                case "fillBoxShadow" -> (args[16] != 0 ? "inset-shadow " : "shadow ") + size + " " + hex(color);
                 case "fillQuads" -> "quads " + quads.length / 8 + " " + size;
                 case "drawText" -> "text '" + text + "' " + at + " " + hex(color) + (shadow ? " shadow" : "");
                 case "drawImage" -> "image " + text + " " + size;
@@ -65,6 +67,11 @@ public final class RecordingCanvas implements Canvas {
     public float devicePixel = 1;
     /** Tessellate shapes into quads (through the {@link Canvas} defaults) instead of recording them. */
     public boolean tessellate;
+    /**
+     * Record {@code fillBoxShadow} calls (args: box, radii, offset x and y, blur, spread, inset as 0 or 1) instead of
+     * tessellating them, as a backend that draws shadows itself would.
+     */
+    public boolean recordShadows;
 
     private Affine matrix = new Affine();
     private float alpha = 1;
@@ -285,6 +292,23 @@ public final class RecordingCanvas implements Canvas {
         System.arraycopy(widths, 0, args, 12, 4);
         record("fillBorder", bounds(outer[0], outer[1], outer[2], outer[3]), args, colors[0], null, null, null,
                 colors.clone(), 0, false);
+    }
+
+    @Override
+    public void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
+        if (!recordShadows) {
+            Canvas.super.fillBoxShadow(box, radii, shadow);
+            return;
+        }
+        float[] args = new float[17];
+        System.arraycopy(box, 0, args, 0, 4);
+        System.arraycopy(radii, 0, args, 4, 8);
+        args[12] = shadow.offsetX();
+        args[13] = shadow.offsetY();
+        args[14] = shadow.blur();
+        args[15] = shadow.spread();
+        args[16] = shadow.inset() ? 1 : 0;
+        record("fillBoxShadow", bounds(box[0], box[1], box[2], box[3]), args, shadow.color(), null, null, null, null, 0, false);
     }
 
     private static String f(float v) {

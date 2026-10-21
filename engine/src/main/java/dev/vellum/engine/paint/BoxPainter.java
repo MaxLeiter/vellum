@@ -5,6 +5,7 @@ import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.input.Controls;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.layout.Fragment;
+import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.BorderStyle;
 import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.ComputedStyle;
@@ -26,7 +27,6 @@ final class BoxPainter implements StackingOrder.Visitor {
     private final Geometry geometry = new Geometry();
     private final Backgrounds backgrounds;
     private final Borders borders = new Borders();
-    private final Shadows shadows = new Shadows();
 
     private Canvas canvas;
     /** GUI px per device pixel in the current transform, saved per transformed context. */
@@ -35,6 +35,8 @@ final class BoxPainter implements StackingOrder.Visitor {
     private int depth;
 
     private final float[] rect = new float[4], radii = new float[8], widths = new float[4];
+    /** The border or padding box a box-shadow is drawn from, for {@link Canvas#fillBoxShadow}. */
+    private final float[] shadowBox = new float[4], shadowRadii = new float[8];
     private final BorderStyle[] styles = new BorderStyle[4];
     private final int[] colors = new int[4];
 
@@ -122,11 +124,15 @@ final class BoxPainter implements StackingOrder.Visitor {
     /** Outer shadows, background, inset shadows and border (CSS paints the first shadow on top). */
     private void decorations(ComputedStyle s, Geometry g) {
         List<Shadow> boxShadows = s.boxShadow;
-        for (int i = boxShadows.size() - 1; i >= 0; i--) if (!boxShadows.get(i).inset()) shadows.outer(batch, boxShadows.get(i), g, dp);
-        batch.flush(canvas);
+        if (!boxShadows.isEmpty()) g.area(BackgroundLayer.Box.BORDER_BOX, shadowBox, shadowRadii);
+        for (int i = boxShadows.size() - 1; i >= 0; i--) {
+            if (!boxShadows.get(i).inset()) canvas.fillBoxShadow(shadowBox, shadowRadii, boxShadows.get(i));
+        }
         backgrounds.paint(canvas, batch, g, s, dp);
-        for (int i = boxShadows.size() - 1; i >= 0; i--) if (boxShadows.get(i).inset()) shadows.inset(batch, boxShadows.get(i), g, dp);
-        batch.flush(canvas);
+        if (!boxShadows.isEmpty()) g.area(BackgroundLayer.Box.PADDING_BOX, shadowBox, shadowRadii);
+        for (int i = boxShadows.size() - 1; i >= 0; i--) {
+            if (boxShadows.get(i).inset()) canvas.fillBoxShadow(shadowBox, shadowRadii, boxShadows.get(i));
+        }
         if (!s.hasBorder()) return;
         rect[0] = g.x;
         rect[1] = g.y;

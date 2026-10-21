@@ -1,6 +1,5 @@
 package dev.vellum.engine.paint;
 
-import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.Shadow;
 
@@ -14,8 +13,14 @@ import java.util.Arrays;
  * <p>Outer shadows go under the box; when the shadow is not offset, the part under the border box is left out
  * exactly, so translucent boxes do not darken. (An offset shadow is drawn whole: only visible through translucent
  * backgrounds.) Inset shadows fill the padding box outside the offset, shrunk shape, clipped to the padding box.
+ *
+ * <p>This is the default behind {@link Canvas#fillBoxShadow}; a backend that can draw blurred shapes itself overrides
+ * that instead.
  */
 final class Shadows {
+    private static final ThreadLocal<Shadows> SCRATCH = ThreadLocal.withInitial(Shadows::new);
+
+    private final QuadBatch batch = new QuadBatch();
     private final float[] shape = new float[8], ringRadii = new float[8], widths = new float[4];
     private final float[] padding = new float[4], paddingRadii = new float[8], path = new float[2 * 72];
     private final int[] outerColors = new int[4], innerColors = new int[4];
@@ -25,11 +30,21 @@ final class Shadows {
     private boolean inward;
     private float blur;
 
-    void outer(QuadBatch batch, Shadow shadow, Geometry g, float dp) {
+    /** Tessellates one shadow of {@code box} (see {@link Canvas#fillBoxShadow}) and draws it on {@code canvas}. */
+    static void fill(Canvas canvas, float[] box, float[] radii, Shadow shadow) {
+        Shadows shadows = SCRATCH.get();
+        float dp = Geometry.devicePixel(canvas);
+        if (shadow.inset()) shadows.inset(shadow, box, radii, dp);
+        else shadows.outer(shadow, box, radii, dp);
+        shadows.batch.flush(canvas);
+    }
+
+    /** An outer shadow of the border box {@code box} {x, y, width, height} with corner radii {@code radii}. */
+    private void outer(Shadow shadow, float[] box, float[] radii, float dp) {
         if (Colors.isTransparent(shadow.color())) return;
         float spread = shadow.spread();
-        if (!begin(shadow, g.x + shadow.offsetX() - spread, g.y + shadow.offsetY() - spread,
-                g.width + 2 * spread, g.height + 2 * spread, g.radii, -spread)) {
+        if (!begin(shadow, box[0] + shadow.offsetX() - spread, box[1] + shadow.offsetY() - spread,
+                box[2] + 2 * spread, box[3] + 2 * spread, radii, -spread)) {
             return;
         }
         boolean concentric = shadow.offsetX() == 0 && shadow.offsetY() == 0;
@@ -39,18 +54,20 @@ final class Shadows {
         if (hole >= blur) return;
         if (hole < lo) {
             if (concentric) {
-                band(batch, hole, lo, dp);
+                band(hole, lo, dp);
             } else {
                 offsetRadii(lo, ringRadii);
                 batch.roundedRect(sx - lo, sy - lo, sw + 2 * lo, sh + 2 * lo, ringRadii, dp, alphaAt(lo));
             }
         }
-        if (blur > 0) ramp(batch, Math.max(lo, hole), blur, dp);
+        if (blur > 0) ramp(Math.max(lo, hole), blur, dp);
     }
 
-    void inset(QuadBatch batch, Shadow shadow, Geometry g, float dp) {
+    /** An inset shadow of the padding box {@code box} {x, y, width, height} with corner radii {@code radii}. */
+    private void inset(Shadow shadow, float[] box, float[] radii, float dp) {
         if (Colors.isTransparent(shadow.color())) return;
-        g.area(BackgroundLayer.Box.PADDING_BOX, padding, paddingRadii);
+        System.arraycopy(box, 0, padding, 0, 4);
+        System.arraycopy(radii, 0, paddingRadii, 0, 8);
         if (padding[2] <= 0 || padding[3] <= 0) return;
         batch.setClip(padding[0], padding[1], padding[2], padding[3], paddingRadii, dp);
         float spread = shadow.spread();
@@ -58,8 +75,8 @@ final class Shadows {
                 padding[2] - 2 * spread, padding[3] - 2 * spread, paddingRadii, spread)) {
             batch.rect(padding[0], padding[1], padding[2], padding[3], shadow.color()); // shrunk to nothing: all shadow
         } else {
-            if (blur > 0) ramp(batch, -Math.min(blur, Math.min(sw, sh) / 2), blur, dp);
-            outside(batch, blur, dp);
+            if (blur > 0) ramp(-Math.min(blur, Math.min(sw, sh) / 2), blur, dp);
+            outside(blur, dp);
         }
         batch.clearClip();
     }
@@ -79,15 +96,15 @@ final class Shadows {
     }
 
     /** Rings from e0 to e1 with alpha following the blur profile. */
-    private void ramp(QuadBatch batch, float e0, float e1, float dp) {
+    private void ramp(float e0, float e1, float dp) {
         int rings = Math.clamp(Math.round((e1 - e0) / dp / 4), 2, 6);
         for (int i = 0; i < rings; i++) {
-            band(batch, e0 + (e1 - e0) * i / rings, e0 + (e1 - e0) * (i + 1) / rings, dp);
+            band(e0 + (e1 - e0) * i / rings, e0 + (e1 - e0) * (i + 1) / rings, dp);
         }
     }
 
     /** The ring of the shadow between offsets e0 < e1, coloured by the profile at each edge. */
-    private void band(QuadBatch batch, float e0, float e1, float dp) {
+    private void band(float e0, float e1, float dp) {
         offsetRadii(e1, ringRadii);
         Arrays.fill(widths, e1 - e0);
         Arrays.fill(outerColors, alphaAt(e1));
@@ -100,7 +117,7 @@ final class Shadows {
      * blur. Its bounding box leaves four strips; the grown shape's rounded corners leave the bits between each arc
      * and its bounding corner, fanned from that corner.
      */
-    private void outside(QuadBatch batch, float e, float dp) {
+    private void outside(float e, float dp) {
         float x0 = sx - e, y0 = sy - e, x1 = sx + sw + e, y1 = sy + sh + e;
         float px0 = padding[0], py0 = padding[1], px1 = padding[0] + padding[2], py1 = padding[1] + padding[3];
         if (y0 > py0) batch.rect(px0, py0, px1 - px0, y0 - py0, color);

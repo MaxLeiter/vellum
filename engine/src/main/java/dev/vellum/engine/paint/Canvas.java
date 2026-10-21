@@ -1,6 +1,7 @@
 package dev.vellum.engine.paint;
 
 import dev.vellum.engine.host.FontSpec;
+import dev.vellum.engine.style.Shadow;
 
 /**
  * The drawing backend. The {@link Painter} turns the box tree into calls on this interface each frame; Minecraft
@@ -108,5 +109,19 @@ public interface Canvas {
      */
     default void fillBorder(float[] outer, float[] radii, float[] widths, int[] colors) {
         Shapes.fillBorder(this, outer, radii, widths, colors);
+    }
+
+    /**
+     * Draws one CSS box-shadow. For an outer shadow {@code box} is the border box, which the shadow is drawn under;
+     * for an inset shadow ({@link Shadow#inset()}) it is the padding box, which the shadow stays inside. The shadow's
+     * shape is {@code box} moved by the offset and grown (outer) or shrunk (inset) by the spread, blurred by a Gaussian
+     * with σ = blur / 2. The default tessellates the blur into rings; it leaves the border box uncovered under an
+     * outer shadow that is not offset, so translucent boxes do not darken.
+     *
+     * @param box   {x, y, width, height}
+     * @param radii the box's corner radii, as in {@link #fillRoundedRect}
+     */
+    default void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
+        Shadows.fill(this, box, radii, shadow);
     }
 }
