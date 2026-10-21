@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- On Minecraft 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `client.shapeShader=false` in `vellum.properties` goes back to flat quads. 26.2 and 1.21.1 are unchanged.
+- `Canvas.fillBoxShadow`: a canvas backend can draw box-shadows itself.
+
 ## 0.5.1
 
 - `list-style` and `list-style-type` work: `none` removes a list's bullets, and `disc`, `circle` and `square` pick them.

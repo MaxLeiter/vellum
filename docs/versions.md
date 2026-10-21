@@ -22,7 +22,8 @@ lives in one file per version under `common/versions/<minecraft>/src`: `McGui` (
 input), `KeyNames`, `Scene` and `EntityPortrait` (3D), `GameTests`. Keep committed sources on 26.3: if you switch
 Stonecutter's active version to work on 1.21.1, switch back before committing.
 
-Everything works on 26.2, except that the dev tour (`-Ptour`) is 26.3 only. 26.2 is the 26.3 code with these
+Everything works on 26.2, except that the dev tour (`-Ptour`) and the shape shader (`client.shapeShader`: antialiased
+rounded boxes and blurred box-shadows) are 26.3 only; 26.2 draws shapes as quads, as 1.21.1 does. 26.2 is the 26.3 code with these
 differences, which live in `common/versions/26.2/src` (copies of the 26.3 files, adjusted) and in `>=26.3` comments:
 
 - The render API is `com.mojang.blaze3d.pipeline.RenderPipeline` and `com.mojang.blaze3d.textures.FilterMode`/`GpuTextureView`; 26.3 moved them to `com.mojang.renderpearl.api.*`.
@@ -34,6 +35,7 @@ differences, which live in `common/versions/26.2/src` (copies of the 26.3 files,
 
 Everything works on 1.21.1, with these differences:
 
+- Rounded boxes, borders and box-shadows are drawn as quads, without the shape shader.
 - `<entity>` and `<model>` can't fade: under half opacity they aren't drawn, as items aren't on either version. `-mc-tint` works.
 - `VellumEntities.registerPortraitState` doesn't exist, since 1.21.1 has no entity render states. Entity `components`
   are ignored, and `variant` and `color` are set through the entity's NBT.

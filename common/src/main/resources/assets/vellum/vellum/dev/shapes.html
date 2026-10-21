@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <title>Shapes</title>
+  <style>
+    /*
+     * The autopilot's check of rounded boxes, borders and box-shadows (McCanvas's shape shader on 26.3, quads
+     * elsewhere): large radii, per-corner radii, blurs, spreads, inset shadows, translucency and transforms. Each cell
+     * names what it draws; the ones the shader leaves to the tessellation say "quads".
+     */
+    body {
+      height: 100vh;
+      margin: 0;
+      background: repeating-linear-gradient(45deg, #2b3446 0 6px, #303a4e 6px 12px);
+      color: #e8ecf4;
+      font-size: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 100px);
+      grid-auto-rows: 74px;
+      justify-content: center;
+      align-content: center;
+      height: 100%;
+    }
+
+    .cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .shape {
+      width: 64px;
+      height: 40px;
+      background: #d9a441;
+    }
+
+    .fill { border-radius: 16px; }
+    .border { background: #1d2433; border: 3px solid #7fd1ff; border-radius: 14px; }
+    .pill { border-radius: 999px; background: #8be08b; }
+    .corners { border-radius: 20px 0 20px 0; border: 2px solid #fff; background: #c05050; }
+    .ellipse { border-radius: 30px / 12px; background: #9b7bd8; }
+    .glow { background: rgba(255, 255, 255, 0.25); border-radius: 10px; box-shadow: 0 0 14px #ffd36b; }
+    .drop { border-radius: 10px; box-shadow: 5px 7px 10px rgba(0, 0, 0, 0.8); }
+    .ring { border-radius: 12px; box-shadow: 0 0 0 4px #ff6b9a; }
+    .inset { background: #445; border-radius: 12px; box-shadow: inset 0 0 12px #000; }
+    .inset-spread { background: #445; border-radius: 12px; box-shadow: inset 0 0 4px 6px rgba(127, 209, 255, 0.7); }
+    .rotated {
+      border-radius: 12px;
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px #7fd1ff;
+      transform: rotate(14deg);
+    }
+    .scaled { width: 32px; height: 20px; margin: 10px 0; border-radius: 6px; border: 1px solid #fff; transform: scale(2); }
+  </style>
+</head>
+<body>
+<div class="grid">
+  <div class="cell"><div class="shape fill"></div>radius 16</div>
+  <div class="cell"><div class="shape border"></div>border 3, radius 14</div>
+  <div class="cell"><div class="shape pill"></div>pill</div>
+  <div class="cell"><div class="shape corners"></div>per corner</div>
+  <div class="cell"><div class="shape ellipse"></div>elliptical (quads)</div>
+  <div class="cell"><div class="shape glow"></div>glow, translucent</div>
+  <div class="cell"><div class="shape drop"></div>offset shadow</div>
+  <div class="cell"><div class="shape ring"></div>spread 4</div>
+  <div class="cell"><div class="shape inset"></div>inset blur</div>
+  <div class="cell"><div class="shape inset-spread"></div>inset spread</div>
+  <div class="cell"><div class="shape rotated"></div>rotated</div>
+  <div class="cell"><div class="shape scaled"></div>scale(2)</div>
+</div>
+</body>
+</html>

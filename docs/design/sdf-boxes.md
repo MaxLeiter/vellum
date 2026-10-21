@@ -1,8 +1,8 @@
 # Design: drawing boxes with a signed-distance shader
 
-Status: proposal, not started. Nothing here has been compiled against Minecraft yet; the API names come from
-[MC_26_3_GUI_API.md](../MC_26_3_GUI_API.md) and must be checked against the 26.3 and 26.2 jars before building on
-them.
+Status: steps 1 to 3 are built for 26.3 (`Canvas.fillBoxShadow`, `SdfRenderState`, `assets/vellum/shaders/core/sdf_box`,
+the overrides in `McCanvas`), behind `client.shapeShader`. 26.2, loader registration and the previewer are still to
+do. Where the build differs from the proposal below, the "As built" section says so.
 
 ## Why
 
@@ -138,11 +138,29 @@ game, which is what the previewer is for.
 1.21.1 stays on tessellation: its renderer is immediate-mode with a different shader system, and porting there is
 not worth the code until someone asks.
 
+## As built (26.3)
+
+- **Vertex format.** A pipeline can declare its own `VertexFormat`, and `BufferBuilder` writes any of vanilla's
+  eight attribute names into it, so the layout is close to the table above. Shadows needed more than fits, so a
+  shadow's spread rides in `Position.z` (the GUI pipelines have no depth test) and its flags in `Normal`. Offset inset
+  shadows would need two more floats; they are tessellated. Shadows blur with one corner radius, so a shadow whose
+  corners differ is tessellated too.
+- **One pipeline per kind.** `vellum:pipeline/sdf_box` (fills and borders) and `vellum:pipeline/sdf_shadow` (the same
+  shaders with `SHADOW` defined), no culling, so mirrored transforms need no rewinding.
+- **No loader registration yet.** Vanilla compiles a pipeline it was not told about on first use;
+  `SdfRenderState.available()` asks for both, and a failure (shaders not loaded, a driver that rejects them) is logged
+  once, retried every few seconds, and tessellated meanwhile.
+- **The cutout.** The proposal's `boxOpaque` flag is not needed: `fillBoxShadow` passes the box and the `Shadow`, so the
+  shader knows the box and leaves it uncovered under an outer shadow that is not offset, as the tessellation does.
+- **Square shapes stay quads.** Unrounded fills and borders, and unblurred square shadows, keep the exact quads, which
+  are as crisp on whole device pixels.
+- **Checked** under the dev autopilot on NeoForge 26.3 with Mesa's software Vulkan (the OpenGL backend could not open
+  a window on the virtual display): every page draws, the autopilot's 26 checks pass, and `dev/shapes.html` covers the
+  cases above.
+
 ## Open questions
 
-- Can a 26.x pipeline declare its own vertex format, and can `BufferBuilder` write `UV3` and `LineWidth` together
-  with `UV0`? If not, radii and mode have to squeeze into `UV1`/`UV2` alone (8 × int16).
-- Does `fwidth` behave the same on the Vulkan backend's SPIR-V as on OpenGL?
+- Does the OpenGL backend draw the same as Vulkan? Only Vulkan has been run so far (see above).
 - An outer shadow that is not offset has the part under the border box cut out, so translucent boxes do not darken.
   The shader would need the box's own shape as well as the shadow's, which does not fit the vertex budget. The proposal
   only takes the shader path when the box is opaque. Is that common enough, or should the cutout get its own

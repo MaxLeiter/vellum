@@ -119,6 +119,18 @@ public final class McGui {
                 scissor, bounds));
     }
 
+    /** Whether {@link #shape} can draw. Not on this version: shapes are tessellated. */
+    boolean shapesAvailable() {
+        return false;
+    }
+
+    /** The shape shader's draw (see 26.3's McGui). Never called on this version: {@link #shapesAvailable} is false. */
+    void shape(boolean shadow, Matrix3x2fc pose, float x0, float y0, float x1, float y1, float cx, float cy,
+               float halfWidth, float halfHeight, short[] radii, float a, float b, boolean inset, boolean cutout, int color,
+               ScreenRectangle bounds, @Nullable ScreenRectangle scissor) {
+        throw new UnsupportedOperationException("no shape shader on this Minecraft version");
+    }
+
     /** Text at (x, y) in {@code m}, scaled by {@code scale}. */
     void text(Matrix3x2fc m, float x, float y, float scale, FormattedCharSequence text, int color, boolean shadow) {
         g.pose().set(m).translate(x, y).scale(scale, scale);
