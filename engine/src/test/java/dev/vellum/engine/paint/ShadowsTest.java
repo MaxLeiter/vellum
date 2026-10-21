@@ -114,4 +114,16 @@ class ShadowsTest {
         assertEquals(4, outer[15], 1e-4);
         assertEquals(0, c.quadCount(), "nothing tessellated");
     }
+
+    @Test
+    void shapeRenderingCrispEdgesIsPassedToTheCanvasPerBox() {
+        RecordingCanvas c = new RecordingCanvas();
+        new TestHost().load("<div style='border-radius: 4px; background: red; height: 4px'></div>"
+                + "<div style='shape-rendering: crispEdges; height: 10px'><p style='border-radius: 4px; background: blue; height: 4px'></p></div>"
+                + "<div style='shape-rendering: optimizeSpeed; height: 4px'></div><div style='shape-rendering: geometricPrecision; height: 4px'></div>")
+                .paint(c);
+        List<Boolean> last = c.crispHints.subList(c.crispHints.size() - 5, c.crispHints.size());
+        assertEquals(List.of(false, true, true, true, false), last,
+                "per box, inherited by the paragraph; optimizeSpeed is crisp too, geometricPrecision is not");
+    }
 }

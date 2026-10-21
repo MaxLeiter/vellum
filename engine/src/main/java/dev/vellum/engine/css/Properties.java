@@ -7,6 +7,7 @@ import dev.vellum.engine.css.Token.Type;
 import dev.vellum.engine.host.FontFamilies;
 import dev.vellum.engine.style.Align;
 import dev.vellum.engine.style.ListStyleType;
+import dev.vellum.engine.style.ShapeRendering;
 import dev.vellum.engine.style.AnimationSpec;
 import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.BorderStyle;
@@ -268,6 +269,8 @@ final class Properties {
         add(Prop.TEXT_DECORATION_LINE_THROUGH, decorationLine("line-through"), TEXT);
         add(Prop.WHITE_SPACE, Keywords.parser(WhiteSpace.class), KEYWORD);
         add(Prop.LIST_STYLE_TYPE, Keywords.parser(ListStyleType.class), KEYWORD);
+        add(Prop.SHAPE_RENDERING, Keywords.parser(Map.of("auto", ShapeRendering.AUTO, "geometricprecision", ShapeRendering.AUTO,
+                "crispedges", ShapeRendering.CRISP_EDGES, "optimizespeed", ShapeRendering.CRISP_EDGES)), KEYWORD);
         add(Prop.WORD_BREAK, Keywords.parser(WordBreak.class, Map.of("keep-all", WordBreak.NORMAL,
                 "anywhere", WordBreak.BREAK_WORD)), KEYWORD);
         add(Prop.TEXT_OVERFLOW, Keywords.parser(TextOverflow.class), KEYWORD);

@@ -6,7 +6,8 @@
     /*
      * The autopilot's check of rounded boxes, borders and box-shadows (McCanvas's shape shader on 26.3, quads
      * elsewhere): large radii, per-corner radii, blurs, spreads, inset shadows, translucency and transforms. Each cell
-     * names what it draws; the ones the shader leaves to the tessellation say "quads".
+     * names what it draws; the ones the shader leaves to the tessellation say "quads". The last row repeats four of
+     * them with shape-rendering: crispEdges, which keeps the tessellation's hard pixel edges.
      */
     body {
       height: 100vh;
@@ -55,6 +56,7 @@
       box-shadow: 0 0 10px #7fd1ff;
       transform: rotate(14deg);
     }
+    .crisp { shape-rendering: crispEdges; }
     .scaled { width: 32px; height: 20px; margin: 10px 0; border-radius: 6px; border: 1px solid #fff; transform: scale(2); }
   </style>
 </head>
@@ -72,6 +74,10 @@
   <div class="cell"><div class="shape inset-spread"></div>inset spread</div>
   <div class="cell"><div class="shape rotated"></div>rotated</div>
   <div class="cell"><div class="shape scaled"></div>scale(2)</div>
+  <div class="cell crisp"><div class="shape pill"></div>pill, crisp</div>
+  <div class="cell crisp"><div class="shape border"></div>border, crisp</div>
+  <div class="cell crisp"><div class="shape drop"></div>offset shadow, crisp</div>
+  <div class="cell crisp"><div class="shape rotated"></div>rotated, crisp</div>
 </div>
 </body>
 </html>

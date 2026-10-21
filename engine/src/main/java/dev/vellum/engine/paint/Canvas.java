@@ -124,4 +124,12 @@ public interface Canvas {
     default void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
         Shadows.fill(this, box, radii, shadow);
     }
+
+    /**
+     * Whether the shapes that follow ({@link #fillRoundedRect}, {@link #fillBorder}, {@link #fillBoxShadow}) keep hard
+     * pixel edges, as their defaults draw them: true for a box with {@code shape-rendering: crispEdges}. The painter
+     * sets it before each box's decorations and outline. A backend that draws shapes more smoothly should not do so
+     * while it is true.
+     */
+    default void crispShapes(boolean crisp) {}
 }

@@ -72,11 +72,18 @@ public final class RecordingCanvas implements Canvas {
      * tessellating them, as a backend that draws shadows itself would.
      */
     public boolean recordShadows;
+    /** Every {@link #crispShapes} hint, in order (not recorded in {@link #calls}). */
+    public final List<Boolean> crispHints = new ArrayList<>();
 
     private Affine matrix = new Affine();
     private float alpha = 1;
     private float[] clip;
     private final Deque<Object[]> stack = new ArrayDeque<>();
+
+    @Override
+    public void crispShapes(boolean crisp) {
+        crispHints.add(crisp);
+    }
 
     // ---- Queries ----
 

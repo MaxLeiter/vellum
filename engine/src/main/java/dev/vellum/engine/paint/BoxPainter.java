@@ -9,6 +9,7 @@ import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.BorderStyle;
 import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.ComputedStyle;
+import dev.vellum.engine.style.ShapeRendering;
 import dev.vellum.engine.style.Shadow;
 import dev.vellum.engine.style.Visibility;
 
@@ -123,6 +124,7 @@ final class BoxPainter implements StackingOrder.Visitor {
 
     /** Outer shadows, background, inset shadows and border (CSS paints the first shadow on top). */
     private void decorations(ComputedStyle s, Geometry g) {
+        canvas.crispShapes(s.shapeRendering == ShapeRendering.CRISP_EDGES);
         List<Shadow> boxShadows = s.boxShadow;
         if (!boxShadows.isEmpty()) g.area(BackgroundLayer.Box.BORDER_BOX, shadowBox, shadowRadii);
         for (int i = boxShadows.size() - 1; i >= 0; i--) {
@@ -211,6 +213,7 @@ final class BoxPainter implements StackingOrder.Visitor {
 
     /** The outline around a border box at (x, y), outline-offset away, following the border radius. */
     private void outline(ComputedStyle s, float x, float y, float width, float height) {
+        canvas.crispShapes(s.shapeRendering == ShapeRendering.CRISP_EDGES);
         float out = s.outlineOffset + s.outlineWidth;
         float x0 = snap(x - out), y0 = snap(y - out);
         rect[0] = x0;

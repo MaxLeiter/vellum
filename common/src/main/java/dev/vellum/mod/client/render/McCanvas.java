@@ -38,7 +38,8 @@ import java.util.Arrays;
  *       {@code client.shapeShader} is on, rounded boxes, rounded borders of one width and colour, and box-shadows are
  *       each one quad that the shader fills with antialiased edges and a Gaussian blur. What it can't draw (elliptical
  *       corners, borders that differ by side, shadows with corners that differ, offset inset shadows) is tessellated by
- *       the {@link Canvas} defaults, as everything is on other versions.</li>
+ *       the {@link Canvas} defaults, as everything is on other versions, and as boxes with
+ *       {@code shape-rendering: crispEdges} are.</li>
  * </ul>
  */
 public final class McCanvas implements Canvas {
@@ -56,6 +57,8 @@ public final class McCanvas implements Canvas {
     private final @Nullable SlotSink slots;
     /** Whether shapes go to the shape shader this frame. */
     private final boolean shapes;
+    /** The box being painted asked for hard pixel edges ({@code shape-rendering: crispEdges}). */
+    private boolean crisp;
 
     private final Matrix3x2f m;
     private final Matrix3x2f scratch = new Matrix3x2f();
@@ -237,6 +240,11 @@ public final class McCanvas implements Canvas {
     // ---- Shapes ----
 
     @Override
+    public void crispShapes(boolean crisp) {
+        this.crisp = crisp;
+    }
+
+    @Override
     public void fillRoundedRect(float x, float y, float width, float height, float[] radii, int argb) {
         if (!Shapes.isRounded(radii)) fillRect(x, y, width, height, argb);
         else if (!box(x, y, width, height, radii, 0, argb)) Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
@@ -259,7 +267,7 @@ public final class McCanvas implements Canvas {
 
     /** A rounded box, or its border when {@code border} > 0, through the shape shader; false to tessellate it instead. */
     private boolean box(float x, float y, float width, float height, float[] radii, float border, int argb) {
-        if (!shapes || !circular(radii)) return false;
+        if (!shapes || crisp || !circular(radii)) return false;
         if (clippedAway() || width <= 0 || height <= 0) return true;
         int c = color(argb);
         if (alpha(c) == 0) return true;
@@ -276,7 +284,7 @@ public final class McCanvas implements Canvas {
         boolean offset = s.offsetX() != 0 || s.offsetY() != 0;
         float blur = Math.max(0, s.blur());
         // Square, sharp shadows stay exact quads; the shader blurs with one corner radius.
-        if (!shapes || (blur == 0 && !Shapes.isRounded(radii)) || (s.inset() && offset) || !oneRadius(radii)) return false;
+        if (!shapes || crisp || (blur == 0 && !Shapes.isRounded(radii)) || (s.inset() && offset) || !oneRadius(radii)) return false;
         int c = color(s.color());
         if (clippedAway() || Colors.isTransparent(c)) return true;
         float sigma = blur / 2, spread = s.spread(), edge = devicePixel();
