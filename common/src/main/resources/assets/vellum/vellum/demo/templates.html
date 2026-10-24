@@ -4,9 +4,7 @@
   <title>Templates</title>
   <link rel="stylesheet" href="demo.css">
   <style>
-    .counter {
-      justify-content: center;
-    }
+    .counter { justify-content: center; }
 
     .counter .value {
       min-width: 40px;
@@ -14,9 +12,7 @@
       text-align: center;
     }
 
-    .counter button {
-      width: 20px;
-    }
+    .counter button { width: 20px; }
 
     .todos {
       display: flex;
@@ -47,9 +43,7 @@
       margin-left: auto;
     }
 
-    .add input {
-      flex: 1;
-    }
+    .add input { flex: 1; }
 
     .live {
       padding: 4px 6px;
@@ -74,18 +68,19 @@
     </div>
 
     <h2>Todo</h2>
-    <div class="row add">
-      <input type="text" placeholder="Something to do..." v-model="draft" @keydown.enter="add()">
-      <button @click="add()">Add</button>
-    </div>
+    <!-- Enter in the field submits the form, as the button does. -->
+    <form class="row add" @submit="add()">
+      <input type="text" placeholder="Something to do..." v-model="draft">
+      <button>Add</button>
+    </form>
     <ul class="todos">
-      <li v-for="todo in todos" v-key="todo.id" :class="todo.done ? 'done' : ''">
+      <li v-for="todo in todos" v-key="todo.id" :class="{ done: todo.done }">
         <input type="checkbox" v-model="todo.done">
         <span>{{ todo.text }}</span>
         <button @click="remove(todo)">x</button>
       </li>
     </ul>
-    <p class="muted">{{ left() }} of {{ todos.length }} left</p>
+    <p class="muted">{{ todos.filter(t => !t.done).length }} of {{ todos.length }} left</p>
 
     <h2>Live data</h2>
     <div class="live" v-if="source === 'server'">
@@ -116,10 +111,6 @@
 
     function remove(todo) {
       state.todos = state.todos.filter(t => t !== todo);
-    }
-
-    function left() {
-      return state.todos.filter(t => !t.done).length;
     }
 
     // In a server session the server answers 'refresh' with a data push; the bindings update by themselves.

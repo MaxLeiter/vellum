@@ -24,13 +24,7 @@
       border: 1px solid var(--line);
     }
 
-    .tile {
-      transition: filter 100ms;
-    }
-
-    .tile:hover {
-      outline: 1px solid #fff;
-    }
+    .tile:hover { outline: 1px solid #fff; }
 
     .you {
       position: absolute;
@@ -81,14 +75,14 @@
 
     <div class="maps">
       <div class="tiles">
-        <div class="tile" v-for="tile in tiles" v-key="tile.i" :style="'background:' + tile.color" @mouseover="hovered = tile"></div>
+        <div class="tile" v-for="tile in tiles" :style="{ background: tile.color }" @mouseover="hovered = tile"></div>
         <div class="you"></div>
       </div>
       <canvas id="minimap" width="48" height="48"></canvas>
     </div>
     <p class="status">
-      <span class="swatch" :style="'background:' + (hovered ? hovered.color : 'transparent')"></span>
-      Biome: <b class="biome">{{ hovered ? hovered.name : '-' }}</b>
+      <span class="swatch" :style="{ background: hovered.color }"></span>
+      Biome: <b class="biome">{{ hovered.name }}</b>
     </p>
     <p class="muted">Left: a grid of divs. Right: a 48×48 canvas drawn by a script.</p>
   </main>
@@ -113,15 +107,12 @@
       return BIOMES[Math.min(BIOMES.length - 1, Math.floor(height(x, y) * BIOMES.length))];
     }
 
+    // One entry per tile, row by row: the biome it shows.
     const tiles = [];
     for (let y = 0; y < 10; y++) {
-      for (let x = 0; x < 16; x++) {
-        // let, not const: Rhino binds a const in a loop body only once.
-        let b = biome(x, y);
-        tiles.push({ i: y * 16 + x, name: b.name, color: b.color });
-      }
+      for (let x = 0; x < 16; x++) tiles.push(biome(x, y));
     }
-    vellum.state({ tiles: tiles, hovered: null });
+    vellum.state({ tiles: tiles, hovered: { name: '-', color: 'transparent' } });
 
     const ctx = document.getElementById('minimap').getContext('2d');
     for (let y = 0; y < 48; y++) {
