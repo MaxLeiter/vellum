@@ -22,8 +22,7 @@ lives in one file per version under `common/versions/<minecraft>/src`: `McGui` (
 input), `KeyNames`, `Scene` and `EntityPortrait` (3D), `GameTests`. Keep committed sources on 26.3: if you switch
 Stonecutter's active version to work on 1.21.1, switch back before committing.
 
-Everything works on 26.2, except that the dev tour (`-Ptour`) and the shape shader (`client.shapeShader`: antialiased
-rounded boxes and blurred box-shadows) are 26.3 only; 26.2 draws shapes as quads, as 1.21.1 does. 26.2 is the 26.3 code with these
+Everything works on 26.2, except that the dev tour (`-Ptour`) is 26.3 only. 26.2 is the 26.3 code with these
 differences, which live in `common/versions/26.2/src` (copies of the 26.3 files, adjusted) and in `>=26.3` comments:
 
 - The render API is `com.mojang.blaze3d.pipeline.RenderPipeline` and `com.mojang.blaze3d.textures.FilterMode`/`GpuTextureView`; 26.3 moved them to `com.mojang.renderpearl.api.*`.
@@ -31,6 +30,7 @@ differences, which live in `common/versions/26.2/src` (copies of the 26.3 files,
 - `PoseStack` has `mulPose(Quaternionfc)` but no `rotate` or `rotateDegrees`; `SubmitNodeCollection` has a no-argument constructor and `submitModel` takes a sprite and a crumbling overlay where 26.3 takes a `UvMapping`.
 - `GuiGraphicsExtractor.setTooltipForNextFrame` has no `replaceExisting` overload with an item style (NeoForge's takes the stack and style only); `ScreenNarrationCollector.update` has no `NarrationTrigger`.
 - `MouseHandler.onButton`, `onScroll`, `onMove` and `KeyboardHandler.keyPress`, `charTyped` are private: they are widened (`#? if <26.3`), and `PictureInPictureRenderer.textureView` is widened with the `blaze3d` type.
+- The shape shader's vertices are packed differently. 26.2's `BufferBuilder` writes only `Position`, `Color`, `UV0`, `UV1`, `UV2`, `Normal` and `LineWidth` (no `UV3`), so 26.2's `SdfRenderState` grows the box by the same margin on every side and sends the margin in `Position.z`; the shader works out the half size from that. A shadow's spread travels as the bits of a float in `UV2`. The pipelines define `VELLUM_26_2`, which picks the 26.2 parts of `sdf_box.vsh` and `.fsh`: `#moj_import` instead of `#include`, and attributes and varyings without `layout(location)`, since 26.2 matches them by name. A pipeline that fails to compile stays failed until resources reload, so the retry in `SdfRenderState.available()` only helps after one.
 - The dev tour is off: `DevTour` and `TourCursor` are the 1.21.1 stubs, since the tour hides and reads the system cursor through SDL.
 
 Everything works on 1.21.1, with these differences:

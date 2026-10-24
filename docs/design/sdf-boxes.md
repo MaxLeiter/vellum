@@ -1,8 +1,8 @@
 # Design: drawing boxes with a signed-distance shader
 
-Status: steps 1 to 3 are built for 26.3 (`Canvas.fillBoxShadow`, `SdfRenderState`, `assets/vellum/shaders/core/sdf_box`,
-the overrides in `McCanvas`), behind `client.shapeShader`. 26.2, loader registration and the previewer are still to
-do. Where the build differs from the proposal below, the "As built" section says so.
+Status: steps 1 to 4 are built for 26.3 and 26.2 (`Canvas.fillBoxShadow`, `SdfRenderState`,
+`assets/vellum/shaders/core/sdf_box`, the overrides in `McCanvas`), behind `client.shapeShader`. Loader registration
+and the previewer are still to do. Where the build differs from the proposal below, the "As built" section says so.
 
 ## Why
 
@@ -158,9 +158,25 @@ not worth the code until someone asks.
   a window on the virtual display): every page draws, the autopilot's 26 checks pass, and `dev/shapes.html` covers the
   cases above.
 
+## As built (26.2)
+
+- 26.2's `BufferBuilder` writes seven attribute names (`Position`, `Color`, `UV0`, `UV1`, `UV2`, `Normal`,
+  `LineWidth`) and has no `UV3`. 26.2's `SdfRenderState` makes the quad the box grown by one margin on every side
+  (the largest the call asked for on any side) and sends the margin in `Position.z`, so the shader gets the half size
+  as `|UV0|` minus the margin. A shadow has one radius, which fits in `UV1`, and its spread travels as the bits of a
+  float split over `UV2`'s two shorts.
+- The shader source is shared. The 26.2 pipelines define `VELLUM_26_2`, which switches `sdf_box.vsh` and `.fsh` to
+  26.2's conventions: `#moj_import` instead of `#include` (vanilla's include files order `DynamicTransforms`
+  differently on the two versions, so the shader has to use them), and inputs and outputs without `layout(location)`,
+  because both of 26.2's backends match attributes and varyings by name.
+- `GpuDevice.precompilePipeline(...).isValid()` stands in for 26.3's `getCompiledPipelineNullable`. The device keeps
+  a pipeline that failed until resources reload, so the retry only succeeds after a reload.
+- Checked under the dev autopilot on NeoForge 26.2 with the OpenGL backend (macOS, GL 4.1 on Metal): the shapes page
+  looks as it does on 26.3.
+
 ## Open questions
 
-- Does the OpenGL backend draw the same as Vulkan? Only Vulkan has been run so far (see above).
+- Does 26.3's OpenGL backend draw the same as its Vulkan one? 26.3 has only been run on Vulkan, 26.2 only on OpenGL.
 - An outer shadow that is not offset has the part under the border box cut out, so translucent boxes do not darken.
   The shader would need the box's own shape as well as the shadow's, which does not fit the vertex budget. The proposal
   only takes the shader path when the box is opaque. Is that common enough, or should the cutout get its own
