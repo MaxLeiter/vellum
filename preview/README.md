@@ -3,6 +3,9 @@
 Renders a Vellum page in a window without launching Minecraft. It uses the engine, Java2D, and Minecraft's own font
 glyphs and GUI sprites, which it reads from your Minecraft jar. It is also where the snapshot tests live.
 
+It draws like Minecraft 26.3: rounded boxes, borders and box-shadows come out smooth, as the game's shape shader
+draws them, unless the page asks for `shape-rendering: crispEdges`.
+
 ## Running it
 
 ```sh

@@ -80,7 +80,7 @@ final class TriangleRasterizer {
     }
 
     /** Source-over of non-premultiplied ARGB. */
-    private static int blend(int dst, int src) {
+    static int blend(int dst, int src) {
         int sa = src >>> 24;
         if (sa == 255) return src;
         if (sa == 0) return dst;

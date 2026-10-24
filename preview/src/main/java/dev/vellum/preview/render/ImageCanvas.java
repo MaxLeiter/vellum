@@ -2,7 +2,10 @@ package dev.vellum.preview.render;
 
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.paint.Shapes;
+import dev.vellum.engine.paint.SmoothShape;
 import dev.vellum.engine.style.Colors;
+import dev.vellum.engine.style.Shadow;
 
 import java.awt.AlphaComposite;
 import java.awt.Color;
@@ -22,7 +25,8 @@ import java.util.Deque;
 /**
  * {@link Canvas} over a Java2D {@link BufferedImage}, drawing like Minecraft's GUI renderer: one GUI px is
  * {@code scale} device px, textures and glyphs are sampled nearest-neighbour, sprites are cut with vanilla's
- * scaling, text uses {@link MinecraftFont}, and clips are device-pixel rectangles like the GUI scissor. Used by the
+ * scaling, text uses {@link MinecraftFont}, clips are device-pixel rectangles like the GUI scissor, and rounded boxes,
+ * borders and box-shadows have the shape shader's smooth edges and blur ({@link ShapeRasterizer}). Used by the
  * previewer and the snapshot tests. A canvas can be {@link #reset} and reused for the next frame of the same image.
  */
 public final class ImageCanvas implements Canvas {
@@ -36,6 +40,9 @@ public final class ImageCanvas implements Canvas {
     private final MinecraftFont font;
     private final Graphics2D g;
     private final TriangleRasterizer rasterizer;
+    private final ShapeRasterizer shapes;
+    /** The box being painted asked for hard pixel edges ({@code shape-rendering: crispEdges}). */
+    private boolean crisp;
     private final Rectangle bounds;
     private final Deque<State> saved = new ArrayDeque<>();
     /** GUI → device. */
@@ -68,7 +75,9 @@ public final class ImageCanvas implements Canvas {
         // Pure strokes keep shape edges where they are, so pixels are covered by their centres, as on a GPU.
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-        this.rasterizer = new TriangleRasterizer(((DataBufferInt) image.getRaster().getDataBuffer()).getData(), image.getWidth());
+        int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+        this.rasterizer = new TriangleRasterizer(pixels, image.getWidth());
+        this.shapes = new ShapeRasterizer(pixels, image.getWidth());
         this.bounds = new Rectangle(image.getWidth(), image.getHeight());
         reset();
     }
@@ -170,6 +179,39 @@ public final class ImageCanvas implements Canvas {
                 rasterizer.fill(clip, device[0], device[1], c0, device[4], device[5], c2, device[6], device[7], c3);
             }
         }
+    }
+
+    // ---- Shapes, as Minecraft's shape shader draws them (see McCanvas) ----
+
+    @Override
+    public void crispShapes(boolean crisp) {
+        this.crisp = crisp;
+    }
+
+    @Override
+    public void fillRoundedRect(float x, float y, float width, float height, float[] radii, int argb) {
+        if (!Shapes.isRounded(radii)) fillRect(x, y, width, height, argb);
+        else if (!smooth(crisp ? null : SmoothShape.box(x, y, width, height, radii, 0, argb))) {
+            Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
+        }
+    }
+
+    @Override
+    public void fillBorder(float[] outer, float[] radii, float[] widths, int[] colors) {
+        if (!smooth(crisp ? null : SmoothShape.border(outer, radii, widths, colors))) Canvas.super.fillBorder(outer, radii, widths, colors);
+    }
+
+    @Override
+    public void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
+        if (!smooth(crisp ? null : SmoothShape.shadow(box, radii, shadow))) Canvas.super.fillBoxShadow(box, radii, shadow);
+    }
+
+    /** Draws a smooth shape; false (null) to tessellate it instead. */
+    private boolean smooth(SmoothShape s) {
+        if (s == null) return false;
+        int c = modulate(s.argb());
+        if (s != SmoothShape.NOTHING && (c >>> 24) != 0) shapes.fill(s, transform, clip, devicePixel(), c);
+        return true;
     }
 
     @Override

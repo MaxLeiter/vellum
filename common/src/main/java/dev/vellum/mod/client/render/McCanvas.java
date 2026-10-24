@@ -4,7 +4,7 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.ScissorStack;
 import dev.vellum.engine.paint.Shapes;
-import dev.vellum.engine.style.Colors;
+import dev.vellum.engine.paint.SmoothShape;
 import dev.vellum.engine.style.Shadow;
 import dev.vellum.mod.VellumConfig;
 import net.minecraft.client.Minecraft;
@@ -247,85 +247,51 @@ public final class McCanvas implements Canvas {
     @Override
     public void fillRoundedRect(float x, float y, float width, float height, float[] radii, int argb) {
         if (!Shapes.isRounded(radii)) fillRect(x, y, width, height, argb);
-        else if (!box(x, y, width, height, radii, 0, argb)) Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
+        else if (!draw(smooth() ? SmoothShape.box(x, y, width, height, radii, 0, argb) : null)) {
+            Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
+        }
     }
 
     @Override
     public void fillBorder(float[] outer, float[] radii, float[] widths, int[] colors) {
-        boolean uniform = widths[0] > 0 && colors[0] == colors[1] && colors[0] == colors[2] && colors[0] == colors[3]
-                && widths[0] == widths[1] && widths[0] == widths[2] && widths[0] == widths[3];
         // Square borders stay exact quads: on whole device pixels they are as crisp as anything the shader draws.
-        if (!uniform || !Shapes.isRounded(radii) || !box(outer[0], outer[1], outer[2], outer[3], radii, widths[0], colors[0])) {
-            Canvas.super.fillBorder(outer, radii, widths, colors);
-        }
+        if (!draw(smooth() ? SmoothShape.border(outer, radii, widths, colors) : null)) Canvas.super.fillBorder(outer, radii, widths, colors);
     }
 
     @Override
     public void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
-        if (!shadow(box, radii, shadow)) Canvas.super.fillBoxShadow(box, radii, shadow);
+        if (!draw(smooth() ? SmoothShape.shadow(box, radii, shadow) : null)) Canvas.super.fillBoxShadow(box, radii, shadow);
     }
 
-    /** A rounded box, or its border when {@code border} > 0, through the shape shader; false to tessellate it instead. */
-    private boolean box(float x, float y, float width, float height, float[] radii, float border, int argb) {
-        if (!shapes || crisp || !circular(radii)) return false;
-        if (clippedAway() || width <= 0 || height <= 0) return true;
-        int c = color(argb);
-        if (alpha(c) == 0) return true;
-        float edge = devicePixel(), hw = width / 2, hh = height / 2;
-        return shape(false, x - edge, y - edge, x + width + edge, y + height + edge, x + hw, y + hh, hw, hh, radii, border, 0,
-                false, false, c);
+    /** Whether shapes may go to the shader: it is on and the box being painted did not ask for crisp edges. */
+    private boolean smooth() {
+        return shapes && !crisp;
     }
 
     /**
-     * A box-shadow through the shape shader; false to tessellate it instead. Like the tessellation, an outer shadow
-     * that is not offset leaves the box uncovered, and one that is covers it.
+     * Submits a shape to the shader (see {@link McGui#shape}), with a device pixel of room on every side for its
+     * antialiased edge. False to tessellate it instead: null (the shader can't draw it) or a radius too large for the
+     * shader's 16 bits.
      */
-    private boolean shadow(float[] box, float[] radii, Shadow s) {
-        boolean offset = s.offsetX() != 0 || s.offsetY() != 0;
-        float blur = Math.max(0, s.blur());
-        // Square, sharp shadows stay exact quads; the shader blurs with one corner radius.
-        if (!shapes || crisp || (blur == 0 && !Shapes.isRounded(radii)) || (s.inset() && offset) || !oneRadius(radii)) return false;
-        int c = color(s.color());
-        if (clippedAway() || Colors.isTransparent(c)) return true;
-        float sigma = blur / 2, spread = s.spread(), edge = devicePixel();
-        float hw = box[2] / 2, hh = box[3] / 2;
-        if (s.inset()) {
-            if (box[2] <= 0 || box[3] <= 0) return true;
-            return shape(true, box[0] - edge, box[1] - edge, box[0] + box[2] + edge, box[1] + box[3] + edge, box[0] + hw,
-                    box[1] + hh, hw, hh, radii, sigma, spread, true, false, c);
-        }
-        if (hw + spread <= 0 || hh + spread <= 0) return true; // spread to nothing
-        // The Gaussian reaches 3 sigma past the shape before it fades out.
-        float cx = box[0] + hw + s.offsetX(), cy = box[1] + hh + s.offsetY();
-        float ex = hw + spread + 3 * sigma + edge, ey = hh + spread + 3 * sigma + edge;
-        return shape(true, cx - ex, cy - ey, cx + ex, cy + ey, cx, cy, hw, hh, radii, sigma, spread, false, !offset, c);
-    }
-
-    /** Submits a shape (see {@link McGui#shape}); false when a radius is too large for the shader's 16 bits. */
-    private boolean shape(boolean shadow, float x0, float y0, float x1, float y1, float cx, float cy, float hw, float hh,
-                          float[] radii, float a, float b, boolean inset, boolean cutout, int color) {
+    private boolean draw(@Nullable SmoothShape s) {
+        if (s == null) return false;
+        if (s == SmoothShape.NOTHING || clippedAway()) return true;
+        int c = color(s.argb());
+        if (alpha(c) == 0) return true;
         short[] r = new short[4];
         for (int k = 0; k < 4; k++) {
-            float sixteenths = radii[2 * k] * 16;
+            float sixteenths = s.radii()[2 * k] * 16;
             if (!(sixteenths < Short.MAX_VALUE)) return false;
             r[k] = (short) Math.round(Math.max(0, sixteenths));
         }
+        float edge = devicePixel(), x0 = s.x0() - edge, y0 = s.y0() - edge, x1 = s.x1() + edge, y1 = s.y1() + edge;
         boundsOf(x0, y0, x1, y1);
         ScreenRectangle scissor = gui.scissor();
         ScreenRectangle bounds = clippedBounds(scissor);
-        if (bounds != null) gui.shape(shadow, pose(), x0, y0, x1, y1, cx, cy, hw, hh, r, a, b, inset, cutout, color, bounds, scissor);
-        return true;
-    }
-
-    /** Whether every corner is circular (horizontal radius = vertical), as the shader draws them. */
-    private static boolean circular(float[] radii) {
-        for (int i = 0; i < 8; i += 2) if (Math.abs(radii[i] - radii[i + 1]) > 1e-3f) return false;
-        return true;
-    }
-
-    /** Whether all corners have the same circular radius, as the shader blurs them. */
-    private static boolean oneRadius(float[] radii) {
-        for (int i = 1; i < 8; i++) if (Math.abs(radii[i] - radii[0]) > 1e-3f) return false;
+        if (bounds != null) {
+            gui.shape(s.shadow(), pose(), x0, y0, x1, y1, s.cx(), s.cy(), s.halfWidth(), s.halfHeight(), r, s.a(), s.b(),
+                    s.inset(), s.cutout(), c, bounds, scissor);
+        }
         return true;
     }
 

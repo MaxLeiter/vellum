@@ -76,7 +76,8 @@ smooth edges at any GUI scale or rotation and blurs are a real Gaussian. Square 
 For hard pixel edges instead, the look of 1.21.1, set `shape-rendering: crispEdges` on an element. It is
 inherited, so `html { shape-rendering: crispEdges; }` covers a whole page. `auto` (the default) and
 `geometricPrecision` allow smooth shapes, and `optimizeSpeed` is the same as `crispEdges`. Players can also turn the
-shader off for everything with `client.shapeShader=false` ([Settings](security.md#settings)).
+shader off for everything with `client.shapeShader=false` ([Settings](security.md#settings)). The previewer draws
+shapes the way the shader does, and honours `crispEdges` too.
 
 ## Placing entities and models
 

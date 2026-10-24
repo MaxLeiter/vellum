@@ -1,8 +1,10 @@
 # Design: drawing boxes with a signed-distance shader
 
-Status: steps 1 to 4 are built for 26.3 and 26.2 (`Canvas.fillBoxShadow`, `SdfRenderState`,
-`assets/vellum/shaders/core/sdf_box`, the overrides in `McCanvas`), behind `client.shapeShader`. Loader registration
-and the previewer are still to do. Where the build differs from the proposal below, the "As built" section says so.
+Status: built for 26.3 and 26.2 (`Canvas.fillBoxShadow`, `SmoothShape`, `SdfRenderState`,
+`assets/vellum/shaders/core/sdf_box`, the overrides in `McCanvas`), behind `client.shapeShader`, with
+`shape-rendering: crispEdges` for pages that want hard edges, and the previewer draws the same shapes. Loader
+registration is not done (see "As built"). Where the build differs from the proposal below, the "As built" sections
+say so.
 
 ## Why
 
@@ -119,10 +121,15 @@ into one draw. Interleaving SDF boxes with vanilla fills costs a draw call per s
 
 ## Keeping the previewer honest
 
-The previewer's `ImageCanvas` draws with antialiasing **off**, so it matches the game pixel for pixel today. Once the
-game antialiases boxes, the previewer should too: override the same three methods in `ImageCanvas` with Java2D's
-antialiased `RoundRectangle2D` and a Gaussian for shadows. Otherwise a page tuned in the previewer looks different in
+The previewer's `ImageCanvas` draws with antialiasing off, so it matched the game pixel for pixel before the shader.
+Once the game antialiases boxes, the previewer has to as well, or a page tuned in the previewer looks different in
 game, which is what the previewer is for.
+
+As built: `engine/.../paint/SmoothShape` decides what the shader draws and describes it (the quad, the box, radii,
+border width or blur), and holds a Java port of the fragment shader (`coverage`). `McCanvas` turns a `SmoothShape`
+into the shader's vertices; the previewer's `ShapeRasterizer` samples `coverage` at the centre of every device pixel
+under the quad and blends it as the GPU does. So both draw the same shapes, decided in one place, and the previewer
+matches the game to within the font and a sub-pixel of layout rounding. `SmoothShapeTest` checks the coverage maths.
 
 ## Plan
 
