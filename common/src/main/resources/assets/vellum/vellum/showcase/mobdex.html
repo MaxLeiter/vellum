@@ -12,10 +12,17 @@
       --red-hi: #ff7d6e;
       --red: #d7322a;
       --red-edge: #5c0d0a;
+      --seam: #f0645a;
       --bezel: #d9d4cc;
       --lcd: #0c1820;
+      --well: #071017;
+      --key: #13232e;
+      --line: #1d3442;
+      --line-hi: #23465c;
+      --line-hover: #3a6680;
       --ink: #d6f1ff;
       --dim: #5d7d91;
+      --unseen: #34505f;
       --cyan: #5cc8ff;
       --danger: #e5484d;
       /* Category colours live in the script (COLORS) and reach the CSS as a per-element --c. */
@@ -50,7 +57,6 @@
 
     @keyframes power-on {
       from { transform: translateY(12px) scale(0.96); opacity: 0; }
-      to { transform: none; opacity: 1; }
     }
 
     /* ---------------------------------------------------------------- top band: lens, LEDs, title, counters */
@@ -65,7 +71,7 @@
       padding: 0 8px;
       /* A moulded seam: dark line, then a highlight line under it. */
       border-bottom: 1px solid var(--red-edge);
-      box-shadow: 0 1px 0 #f0645a;
+      box-shadow: 0 1px 0 var(--seam);
     }
 
     .lens {
@@ -124,19 +130,11 @@
       display: flex;
       flex-direction: column;
       margin-left: 2px;
-    }
-
-    .title b {
-      font-size: 16px;
-      letter-spacing: 1px;
-      color: #fff;
-      text-shadow: 1px 1px 0 var(--red-edge);
-    }
-
-    .title small {
-      color: #ffc2bb;
       letter-spacing: 1px;
     }
+
+    .title b { font-size: 16px; color: #fff; text-shadow: 1px 1px 0 var(--red-edge); }
+    .title small { color: #ffc2bb; }
 
     /* The counters sit in a little black LCD window. */
     .counter {
@@ -146,7 +144,7 @@
       padding: 3px 6px;
       background: #10140f;
       border: 1px solid;
-      border-color: var(--red-edge) #f0645a #f0645a var(--red-edge);
+      border-color: var(--red-edge) var(--seam) var(--seam) var(--red-edge);
       color: #9cff8a;
     }
 
@@ -182,15 +180,8 @@
       border-radius: 3px;
     }
 
-    .bezel.left {
-      flex: 0 0 41%;
-      border-bottom-left-radius: 12px;
-    }
-
-    .bezel.right {
-      flex: 1;
-      border-bottom-right-radius: 12px;
-    }
+    .bezel.left { flex: 0 0 41%; border-bottom-left-radius: 12px; }
+    .bezel.right { flex: 1; border-bottom-right-radius: 12px; }
 
     /* Two tiny red dots above each screen, like the original. */
     .bezel::before {
@@ -251,24 +242,18 @@
 
     /* ---------------------------------------------------------------- left screen: search, filters, list */
 
-    .search {
-      position: relative;
-      flex: none;
-    }
+    .search { position: relative; flex: none; }
 
     .search input {
       width: 100%;
       height: 14px;
       padding: 0 4px 0 15px;
       color: var(--ink);
-      background: #071017;
-      border: 1px solid #23465c;
+      background: var(--well);
+      border: 1px solid var(--line-hi);
     }
 
-    .search input:focus {
-      background-image: none;
-      border-color: var(--cyan);
-    }
+    .search input:focus { border-color: var(--cyan); }
 
     /* A sprite drawn as a background, so -mc-tint applies (the <sprite> element ignores it). */
     .search i {
@@ -296,17 +281,14 @@
       flex: 1;
       height: 18px;
       color: var(--dim);
-      background: #13232e;
-      border: 1px solid #1d3442;
+      background: var(--key);
+      border: 1px solid var(--line);
       border-bottom-width: 2px;
       cursor: pointer;
       transition: background-color 150ms, border-color 150ms, transform 120ms ease-out;
     }
 
-    .tab:hover {
-      transform: translateY(-1px);
-      border-color: #3a6680;
-    }
+    .tab:hover { transform: translateY(-1px); border-color: var(--line-hover); }
 
     .tab.on {
       color: #fff;
@@ -314,25 +296,23 @@
       border-color: rgba(255, 255, 255, 0.5) rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.45) rgba(255, 255, 255, 0.5);
     }
 
-    .tab item { width: 16px; height: 16px; }
-
     .listhead {
       display: flex;
       flex: none;
       justify-content: space-between;
       padding: 1px 2px 2px;
       color: var(--dim);
-      border-bottom: 1px solid #1d3442;
+      border-bottom: 1px solid var(--line);
     }
 
-    .listhead b { color: var(--hc); }
+    .listhead b { color: var(--c); }
 
     .list {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
       scrollbar-width: thin;
-      scrollbar-color: #3a6680 transparent;
+      scrollbar-color: var(--line-hover) transparent;
     }
 
     .row {
@@ -350,16 +330,16 @@
 
     @keyframes row-in {
       from { opacity: 0; transform: translateX(-8px); }
-      to { opacity: 1; transform: none; }
     }
 
     .row:hover { background: rgba(92, 200, 255, 0.08); }
 
-    .row .no { color: var(--dim); }
+    .no { color: var(--dim); }
+
     .row item, .row .no-egg { flex: none; width: 10px; height: 10px; }
-    .row .no-egg { text-align: center; color: #34505f; }
+    .row .no-egg { text-align: center; color: var(--unseen); }
     .row .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .row.unseen .nm { color: #34505f; }
+    .row.unseen .nm { color: var(--unseen); }
 
     /* The selected row: a category-coloured wash from the left and a cursor arrow. */
     .row.sel {
@@ -402,21 +382,11 @@
       background: var(--dim);
     }
 
-    .empty {
-      padding: 12px 4px;
-      color: var(--dim);
-      text-align: center;
-    }
+    .empty { padding: 12px 4px; color: var(--dim); text-align: center; }
 
     /* ---------------------------------------------------------------- right screen: the entry */
 
-    .entry {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      flex: 1;
-      min-height: 0;
-    }
+    .entry { gap: 3px; }
 
     .entry-head {
       display: flex;
@@ -425,11 +395,7 @@
       flex: none;
       height: 14px;
       padding: 0 2px 2px;
-      border-bottom: 1px solid #1d3442;
-    }
-
-    .entry-head .no {
-      color: var(--dim);
+      border-bottom: 1px solid var(--line);
     }
 
     .entry-head .name {
@@ -441,14 +407,9 @@
 
     @keyframes name-in {
       from { opacity: 0; transform: translateX(6px); letter-spacing: 3px; }
-      to { opacity: 1; transform: none; letter-spacing: 0; }
     }
 
-    .badges {
-      display: flex;
-      gap: 2px;
-      margin-left: auto;
-    }
+    .badges { display: flex; gap: 2px; margin-left: auto; }
 
     .badge {
       padding: 1px 3px 0;
@@ -464,7 +425,6 @@
 
     @keyframes badge-in {
       from { transform: scale(0.4); opacity: 0; }
-      to { transform: none; opacity: 1; }
     }
 
     .entry-main {
@@ -485,7 +445,7 @@
         radial-gradient(circle at 50% 40%, rgba(92, 200, 255, 0.14) 0%, rgba(92, 200, 255, 0) 70%),
         repeating-linear-gradient(to right, rgba(92, 200, 255, 0.07) 0 1px, transparent 1px 8px),
         repeating-linear-gradient(to bottom, rgba(92, 200, 255, 0.07) 0 1px, transparent 1px 8px);
-      border: 1px solid #1d3442;
+      border: 1px solid var(--line);
     }
 
     /* The disc's middle is the floor line: the entity's box ends there, and entities stand on the bottom of their
@@ -520,6 +480,9 @@
       to { -mc-yaw: 360deg; }
     }
 
+    /* The overlays on the stage let the pointer through, so the mob under them can still be dragged. */
+    .noise, .nodata, .scan, .flash, .live, .stamp { pointer-events: none; }
+
     .corner {
       position: absolute;
       width: 5px;
@@ -527,10 +490,10 @@
       border: 0 solid var(--cyan);
     }
 
-    .corner.tl { left: 2px; top: 2px; border-top-width: 1px; border-left-width: 1px; }
-    .corner.tr { right: 2px; top: 2px; border-top-width: 1px; border-right-width: 1px; }
-    .corner.bl { left: 2px; bottom: 2px; border-bottom-width: 1px; border-left-width: 1px; }
-    .corner.br { right: 2px; bottom: 2px; border-bottom-width: 1px; border-right-width: 1px; }
+    .corner.tl { left: 2px; top: 2px; border-width: 1px 0 0 1px; }
+    .corner.tr { right: 2px; top: 2px; border-width: 1px 1px 0 0; }
+    .corner.bl { left: 2px; bottom: 2px; border-width: 0 0 1px 1px; }
+    .corner.br { right: 2px; bottom: 2px; border-width: 0 1px 1px 0; }
 
     .scan {
       position: absolute;
@@ -541,7 +504,6 @@
       background: rgba(140, 220, 255, 0.55);
       box-shadow: 0 0 4px rgba(92, 200, 255, 0.9);
       animation: scan 2.6s linear infinite;
-      pointer-events: none;
     }
 
     @keyframes scan {
@@ -556,7 +518,6 @@
       inset: 0;
       background: linear-gradient(to bottom, rgba(180, 240, 255, 0.9), rgba(92, 200, 255, 0.2));
       animation: flash 450ms ease-out both;
-      pointer-events: none;
     }
 
     @keyframes flash {
@@ -568,7 +529,6 @@
     .noise {
       position: absolute;
       inset: -8px 0 0;
-      pointer-events: none;
       background:
         repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
         repeating-linear-gradient(to right, rgba(92, 200, 255, 0.06) 0 2px, transparent 2px 5px);
@@ -584,7 +544,6 @@
       left: 0;
       right: 0;
       top: 4px;
-      pointer-events: none;
       color: var(--danger);
       text-align: center;
       animation: blink 1s steps(1) infinite;
@@ -595,7 +554,6 @@
       position: absolute;
       left: 4px;
       top: 4px;
-      pointer-events: none;
       display: flex;
       align-items: center;
       gap: 2px;
@@ -623,33 +581,18 @@
       min-width: 0;
     }
 
-    .stat {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      height: 8px;
-    }
+    /* Every row of the stats panel starts with a label, and the labels make one column. */
+    .stats > * { display: flex; align-items: center; }
+    .stats .k { flex: none; width: 31px; color: var(--dim); }
 
-    /* One label column for every row of the stats panel. */
-    .stat .k, .hearts .k, .info .k, .drops .k {
-      flex: none;
-      width: 31px;
-      color: var(--dim);
-    }
+    .stat { gap: 3px; height: 8px; }
+    .stat .v { width: 22px; text-align: right; }
 
-    .stat .v {
-      width: 22px;
-      text-align: right;
-    }
+    /* The sunken wells on the LCD: bar tracks, drop slots and the description box. */
+    .bar, .drop, .desc { background: var(--well); border: 1px solid var(--line); }
 
-    /* The bar is a flex row so its fill stretches to the bar's height (see the report on % heights). */
-    .bar {
-      display: flex;
-      flex: 1;
-      height: 6px;
-      background: #071017;
-      border: 1px solid #1d3442;
-    }
+    /* The bar is a flex row so its fill stretches to the bar's height. */
+    .bar { display: flex; flex: 1; height: 6px; }
 
     .fill {
       width: 0;
@@ -658,12 +601,7 @@
       transition: width 450ms cubic-bezier(0.2, 0.8, 0.3, 1);
     }
 
-    .hearts {
-      display: flex;
-      align-items: center;
-      height: 9px;
-      margin-top: 1px;
-    }
+    .hearts { height: 9px; margin-top: 1px; }
 
     .heart {
       width: 9px;
@@ -679,63 +617,36 @@
     @keyframes beat {
       from { transform: scale(0); }
       70% { transform: scale(1.3); }
-      to { transform: none; }
     }
 
-    .more {
-      margin-left: 3px;
-      color: #ff8a80;
-    }
+    .more { margin-left: 3px; color: #ff8a80; }
 
-    .info {
-      display: flex;
-      align-items: center;
-      height: 9px;
-    }
+    .info { height: 9px; }
 
-    .skull {
-      width: 8px;
-      color: #23465c;
-    }
+    .skull { width: 8px; color: var(--line-hi); }
+    .skull.on { color: var(--danger); text-shadow: 0 0 2px rgba(229, 72, 77, 0.6); }
 
-    .skull.on {
-      color: var(--danger);
-      text-shadow: 0 0 2px rgba(229, 72, 77, 0.6);
-    }
-
-    .drops {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    }
+    .drops { gap: 2px; }
 
     .drop {
       width: 18px;
       height: 18px;
       padding: 1px;
-      background: #071017;
-      border: 1px solid #1d3442;
       animation: badge-in 250ms ease-out both;
     }
 
-    .drop item { width: 16px; height: 16px; }
-
     /* ---- description */
 
+    /* Positioned, so on a short screen, where the stats run under it, it stays on top of them for the pointer. */
     .desc {
       position: relative;
       flex: none;
       height: 34px;
       padding: 3px 4px;
       line-height: 10px;
-      background: #071017;
-      border: 1px solid #1d3442;
     }
 
-    .caret {
-      color: var(--cyan);
-      animation: blink 700ms steps(1) infinite;
-    }
+    .caret { color: var(--cyan); animation: blink 700ms steps(1) infinite; }
 
     /* ---- the CAUGHT stamp */
 
@@ -753,7 +664,6 @@
       outline-offset: 1px;
       transform: rotate(-14deg);
       animation: stamp 420ms cubic-bezier(0.3, 1.4, 0.5, 1) 250ms both;
-      pointer-events: none;
     }
 
     @keyframes stamp {
@@ -778,18 +688,19 @@
       width: 14px;
       height: 10px;
       color: var(--ink);
-      background: #13232e;
-      border: 1px solid #23465c;
+      background: var(--key);
+      border: 1px solid var(--line-hi);
       cursor: pointer;
       transition: background-color 120ms, transform 80ms;
     }
 
     .key:hover { background: #1d3a4c; }
     .key.wide { width: auto; padding: 0 3px; }
-    .key.on { color: #071017; background: var(--cyan); border-color: #bfeaff; }
+    .key.on { color: var(--well); background: var(--cyan); border-color: #bfeaff; }
     .key:active { transform: translateY(1px); }
 
-    .keys .sp { flex: 1; }
+    /* The status line sits at the right end. */
+    .keys span { margin-left: auto; }
 
     @media (prefers-reduced-motion: reduce) {
       .lens, .led, .scan, .noise, .row, .row.sel::before, .stage entity { animation: none; }
@@ -803,8 +714,8 @@
       <div class="leds"><div class="led r"></div><div class="led y"></div><div class="led g"></div></div>
       <div class="title"><b>MOBDEX</b><small>FIELD UNIT 26.3</small></div>
       <div class="counter">
-        <div><span>SEEN </span>{{ pad(seenCount()) }}</div>
-        <div><span>CAUGHT </span>{{ pad(caughtCount()) }}</div>
+        <div><span>SEEN </span>{{ pad(SEEN) }}</div>
+        <div><span>CAUGHT </span>{{ pad(CAUGHT) }}</div>
       </div>
       <div class="grille"></div>
     </header>
@@ -824,7 +735,7 @@
               <span v-else>ALL</span>
             </div>
           </nav>
-          <div class="listhead" :style="{ '--hc': color(filter) }">
+          <div class="listhead" :style="{ '--c': color(filter) }">
             <b>{{ filterName() }}</b>
             <span>{{ filtered().length }} {{ filtered().length === 1 ? 'ENTRY' : 'ENTRIES' }}</span>
           </div>
@@ -849,87 +760,82 @@
 
       <!-- Right screen: the selected entry. -->
       <section class="bezel right">
-        <div class="screen">
-          <div class="entry">
-            <div class="entry-head">
-              <span class="no">#{{ pad(mob().no) }}</span>
-              <!-- A keyed v-for of one item re-creates the element whenever the key changes, so its CSS
-                   entrance animation plays again for every new selection. -->
-              <span class="name" v-for="k in [sel]" :key="k">{{ mob().seen ? mob().name.toUpperCase() : '??????' }}</span>
-              <div class="badges" v-for="k in [sel]" :key="k">
-                <span class="badge" v-for="c in (mob().seen ? mob().cats : [])" :key="c"
-                      :style="{ '--c': color(c) }">{{ c.toUpperCase() }}</span>
+        <div class="screen entry">
+          <div class="entry-head">
+            <span class="no">#{{ pad(mob().no) }}</span>
+            <!-- A keyed v-for of one item re-creates the element whenever the key changes, so its CSS
+                 entrance animation plays again for every new selection. -->
+            <span class="name" v-for="k in [sel]" :key="k">{{ mob().seen ? mob().name.toUpperCase() : '??????' }}</span>
+            <div class="badges" v-for="k in [sel]" :key="k">
+              <span class="badge" v-for="c in (mob().seen ? mob().cats : [])" :key="c"
+                    :style="{ '--c': color(c) }">{{ c.toUpperCase() }}</span>
+            </div>
+          </div>
+
+          <div class="entry-main">
+            <div class="stage" @mouseenter="hovering = true" @mouseleave="hovering = false">
+              <div class="turntable"></div>
+              <entity :type="mob().id" rotatable :follow-mouse="hovering && mob().seen" :baby="baby"
+                      :walk="walking" :class="{ unseen: !mob().seen }"></entity>
+              <div v-if="!mob().seen">
+                <div class="noise"></div>
+                <div class="nodata">NO DATA</div>
+              </div>
+              <div class="corner tl"></div><div class="corner tr"></div>
+              <div class="corner bl"></div><div class="corner br"></div>
+              <div class="scan"></div>
+              <div class="flash" v-for="k in [sel]" :key="k"></div>
+              <div class="live" v-if="mob().seen">{{ hovering ? 'DRAG' : 'LIVE' }}</div>
+            </div>
+
+            <div class="stats">
+              <div class="stat" v-for="s in STATS" :key="s.key" :style="{ '--c': s.color }">
+                <span class="k">{{ s.label }}</span>
+                <div class="bar"><div class="fill" :style="{ width: statWidth(s) }"></div></div>
+                <span class="v">{{ statText(s) }}</span>
+              </div>
+              <div class="hearts" v-for="k in [sel]" :key="k">
+                <span class="k">LIFE</span>
+                <div v-for="(h, i) in hearts()" class="heart" :class="h"
+                     :style="{ animationDelay: (150 + i * 30) + 'ms' }"></div>
+                <span class="more" v-if="mob().seen && mob().hp > 20">+{{ (mob().hp - 20) / 2 }}</span>
+                <span v-if="!mob().seen">??</span>
+              </div>
+              <div class="info">
+                <span class="k">HOME</span>
+                <span>{{ mob().seen ? mob().home : '???' }}</span>
+              </div>
+              <div class="info">
+                <span class="k">SIZE</span>
+                <span>{{ size() }}</span>
+              </div>
+              <div class="info">
+                <span class="k">RISK</span>
+                <span v-for="on in threat()" class="skull" :class="{ on: on }">☠</span>
+              </div>
+              <div class="drops" v-for="k in [sel]" :key="k">
+                <span class="k">DROPS</span>
+                <div class="drop" v-for="(d, i) in (mob().seen && mob().drops ? mob().drops : [])" :key="d"
+                     :style="{ animationDelay: (200 + i * 70) + 'ms' }">
+                  <item :id="'minecraft:' + d" tooltip></item>
+                </div>
+                <span v-if="mob().seen && mob().drops && mob().drops.length === 0">NOTHING</span>
+                <span v-if="mob().seen && !mob().drops">NOT LOGGED</span>
+                <span v-if="!mob().seen">???</span>
               </div>
             </div>
 
-            <div class="entry-main">
-              <div class="stage" @mouseenter="hovering = true" @mouseleave="hovering = false">
-                <div class="turntable"></div>
-                <!-- Turned by CSS (@keyframes turn on -mc-yaw), held still while hovered, turned by dragging. Unseen
-                     mobs are silhouettes. -->
-                <entity :type="mob().id" rotatable :follow-mouse="hovering && mob().seen" :baby="baby"
-                        :walk="walking" :class="{ unseen: !mob().seen }"></entity>
-                <div v-if="!mob().seen">
-                  <div class="noise"></div>
-                  <div class="nodata">NO DATA</div>
-                </div>
-                <div class="corner tl"></div><div class="corner tr"></div>
-                <div class="corner bl"></div><div class="corner br"></div>
-                <div class="scan"></div>
-                <div class="flash" v-for="k in [sel]" :key="k"></div>
-                <div class="live" v-if="mob().seen">{{ hovering ? 'DRAG' : 'LIVE' }}</div>
-              </div>
+            <div class="stamp" v-for="k in [sel]" :key="k" v-if="mob().caught">CAUGHT</div>
+          </div>
 
-              <div class="stats">
-                <div class="stat" v-for="s in STATS" :key="s.key" :style="{ '--c': s.color }">
-                  <span class="k">{{ s.label }}</span>
-                  <div class="bar"><div class="fill" :style="{ width: statWidth(s) }"></div></div>
-                  <span class="v">{{ statText(s) }}</span>
-                </div>
-                <div class="hearts" v-for="k in [sel]" :key="k">
-                  <span class="k">LIFE</span>
-                  <div v-for="(h, i) in hearts()" class="heart" :class="h"
-                       :style="{ animationDelay: (150 + i * 30) + 'ms' }"></div>
-                  <span class="more" v-if="mob().seen && mob().hp > 20">+{{ (mob().hp - 20) / 2 }}</span>
-                  <span v-if="!mob().seen">??</span>
-                </div>
-                <div class="info">
-                  <span class="k">HOME</span>
-                  <span>{{ mob().seen ? mob().home : '???' }}</span>
-                </div>
-                <div class="info">
-                  <span class="k">SIZE</span>
-                  <span>{{ size() }}</span>
-                </div>
-                <div class="info">
-                  <span class="k">RISK</span>
-                  <span v-for="(on, i) in threat()" class="skull" :class="{ on: on }">☠</span>
-                </div>
-                <div class="drops" v-for="k in [sel]" :key="k">
-                  <span class="k">DROPS</span>
-                  <div class="drop" v-for="(d, i) in (mob().seen && mob().drops ? mob().drops : [])" :key="d"
-                       :style="{ animationDelay: (200 + i * 70) + 'ms' }">
-                    <item :id="'minecraft:' + d" tooltip></item>
-                  </div>
-                  <span v-if="mob().seen && mob().drops && mob().drops.length === 0">NOTHING</span>
-                  <span v-if="mob().seen && !mob().drops">NOT LOGGED</span>
-                  <span v-if="!mob().seen">???</span>
-                </div>
-              </div>
+          <div class="desc">{{ typed() }}<span class="caret" v-if="typing()">█</span></div>
 
-              <div class="stamp" v-for="k in [sel]" :key="k" v-if="mob().caught">CAUGHT</div>
-            </div>
-
-            <div class="desc">{{ typed() }}<span class="caret" v-if="typing()">█</span></div>
-
-            <div class="keys">
-              <div class="key" @click="step(-1)">▲</div>
-              <div class="key" @click="step(1)">▼</div>
-              <div class="key wide" :class="{ on: baby }" @click="baby = !baby">BABY</div>
-              <div class="key wide" :class="{ on: walking }" @click="walking = !walking">WALK</div>
-              <span class="sp"></span>
-              <span>{{ mob().caught ? mob().killed + ' CAUGHT' : mob().seen ? 'SEEN ONLY' : 'UNKNOWN' }}</span>
-            </div>
+          <div class="keys">
+            <div class="key" @click="step(-1)">▲</div>
+            <div class="key" @click="step(1)">▼</div>
+            <div class="key wide" :class="{ on: baby }" @click="baby = !baby">BABY</div>
+            <div class="key wide" :class="{ on: walking }" @click="walking = !walking">WALK</div>
+            <span>{{ mob().caught ? mob().killed + ' CAUGHT' : mob().seen ? 'SEEN ONLY' : 'UNKNOWN' }}</span>
           </div>
         </div>
       </section>
@@ -1053,7 +959,7 @@
 
     // One dex entry: the game's data (or, without it, the flavoured mob's id) with the flavour on top.
     function entry(m) {
-      const parts = m.id.split(':'), ns = parts[0], path = parts[1], vanilla = ns === 'minecraft';
+      const [ns, path] = m.id.split(':'), vanilla = ns === 'minecraft';
       const tab = CATEGORY_TAB[m.category] || 'other';
       const e = Object.assign({ name: titleCase(path), cats: [tab], home: vanilla ? 'Unknown' : ns.toUpperCase(),
         drops: null, desc: KIND[tab] + (vanilla ? '' : ' from ' + ns) + '. Stands ' + m.height + ' blocks tall.',
@@ -1111,8 +1017,6 @@
     function pad(n) { return String(n).padStart(3, '0'); }
     function color(cat) { return COLORS[cat] || COLORS.all; }
     function mob() { return BY_ID[state.sel] || MOBS[0]; }
-    function seenCount() { return SEEN; }
-    function caughtCount() { return CAUGHT; }
     function filterName() { return state.filter === 'all' ? 'ALL MOBS' : state.filter.toUpperCase(); }
 
     // The mobs the filter and the search let through, worked out again only when one of them or the list changed.
@@ -1155,13 +1059,16 @@
       return out;
     }
 
-    // Threat as five skulls: passive mobs are harmless, neutral ones top out at three; some mobs say otherwise.
+    // Threat as five skulls, from attack and health: passive mobs are harmless, neutral ones top out at three, and
+    // some flavoured mobs set their own (risk).
     function threat() {
-      const m = mob(), out = [];
-      const rated = m.known && !m.cats.includes('passive');
-      const n = !m.seen ? 0 : m.risk || (rated ? Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5)) : 0);
-      for (let i = 0; i < 5; i++) out.push(i < n);
-      return out;
+      const m = mob();
+      let n = 0;
+      if (m.seen && m.risk) n = m.risk;
+      else if (m.seen && m.known && !m.cats.includes('passive')) {
+        n = Math.min(m.cats.includes('neutral') ? 3 : 5, Math.ceil((m.atk + m.hp / 10) / 5));
+      }
+      return [0, 1, 2, 3, 4].map(i => i < n);
     }
 
     // ---- The description types itself out, Pokédex style.
@@ -1201,9 +1108,9 @@
       iron_golem: 'entity.iron_golem.repair', bee: 'entity.bee.pollinate', axolotl: 'entity.axolotl.idle_air',
       turtle: 'entity.turtle.ambient_land', sniffer: 'entity.sniffer.idle' };
     function cry(m) {
-      const parts = m.id.split(':');
-      if (!m.seen || parts[0] !== 'minecraft' || !FLAVOUR[parts[1]]) return;
-      vellum.playSound('minecraft:' + (CRIES[parts[1]] || 'entity.' + parts[1] + '.ambient'), 0.3, state.baby ? 1.5 : 1);
+      const [ns, path] = m.id.split(':');
+      if (!m.seen || ns !== 'minecraft' || !FLAVOUR[path]) return;
+      vellum.playSound('minecraft:' + (CRIES[path] || 'entity.' + path + '.ambient'), 0.3, state.baby ? 1.5 : 1);
     }
 
     function setFilter(id) {
@@ -1235,8 +1142,8 @@
       else if (r.bottom > l.bottom) list.scrollTop += r.bottom - l.bottom;
     }
 
+    // The arrow keys step through the list, also while typing in the search field.
     document.addEventListener('keydown', e => {
-      if (document.activeElement && document.activeElement.tagName === 'INPUT' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
       if (e.key === 'ArrowDown') { step(1); e.preventDefault(); }
       if (e.key === 'ArrowUp') { step(-1); e.preventDefault(); }
     });
