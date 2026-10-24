@@ -12,7 +12,6 @@
      */
     :root {
       --panel: rgba(0, 0, 0, 0.5);
-      --line: rgba(255, 255, 255, 0.14);
       --end: #d38cff;
       --end-deep: #8b2fd6;
       --gold: #ffcf4a;
@@ -46,18 +45,14 @@
 
     .pillar.far {
       bottom: 34px;
+      width: 8px;
       background: linear-gradient(rgba(60, 30, 90, 0.5), rgba(20, 6, 34, 0.85)), url(minecraft:textures/block/obsidian.png);
       background-size: auto, 8px 8px;
     }
 
-    /* Each crystal bobs over its pillar inside a soft pink glow. */
-    .pillar item {
-      position: absolute;
-      left: 50%;
-      top: -22px;
-      margin-left: -8px;
-      animation: bob 2.4s ease-in-out infinite;
-    }
+    /* Each crystal bobs over its pillar inside a soft pink glow. Both are centred with a negative margin. */
+    .pillar > * { position: absolute; left: 50%; }
+    .pillar item { top: -22px; margin-left: -8px; animation: bob 2.4s ease-in-out infinite; }
 
     .pillar.far item {
       width: 8px;
@@ -67,8 +62,6 @@
     }
 
     .pillar .halo {
-      position: absolute;
-      left: 50%;
       top: -34px;
       width: 40px;
       height: 40px;
@@ -101,36 +94,24 @@
     }
 
     /* Every widget slides into place once when the HUD appears. */
-    @keyframes drop-in {
-      from { opacity: 0; transform: translateY(-10px); }
-    }
+    @keyframes drop-in { from { opacity: 0; transform: translateY(-10px); } }
+    @keyframes left-in { from { opacity: 0; transform: translateX(-16px); } }
+    @keyframes up-in { from { opacity: 0; transform: translateY(12px); } }
 
-    @keyframes left-in {
-      from { opacity: 0; transform: translateX(-16px); }
-    }
-
-    @keyframes right-in {
-      from { opacity: 0; transform: translateX(16px); }
-    }
-
-    @keyframes up-in {
-      from { opacity: 0; transform: translateY(12px); }
-    }
+    /* The compass, boss bar and vanilla hotbar are centred: left at the middle, pulled back by half their width. */
+    .compass, .boss, .vanilla { position: absolute; left: 50%; }
 
     /* ---------- Compass ---------- */
 
     /* A window onto a long dial. The script slides the dial (one turn = 360px) and fades labels near the ends. */
     .compass {
-      position: absolute;
       top: 2px;
-      left: 50%;
       width: 168px;
       height: 15px;
       margin-left: -84px;
       overflow: hidden;
       background: linear-gradient(to right, rgba(0, 0, 0, 0), var(--panel) 25%, var(--panel) 75%, rgba(0, 0, 0, 0));
-      border-bottom: 1px solid;
-      border-color: rgba(255, 255, 255, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.25);
       animation: drop-in 500ms ease-out both;
     }
 
@@ -141,11 +122,7 @@
       height: 100%;
     }
 
-    .dial > * {
-      position: absolute;
-      display: block;
-      font-style: normal;
-    }
+    .dial > * { position: absolute; display: block; font-style: normal; }
 
     .dial .tick {
       bottom: 0;
@@ -154,10 +131,7 @@
       background: rgba(255, 255, 255, 0.45);
     }
 
-    .dial .tick.major {
-      height: 4px;
-      background: rgba(255, 255, 255, 0.8);
-    }
+    .dial .tick.major { height: 4px; background: rgba(255, 255, 255, 0.8); }
 
     /* Labels are centred on their bearing with a negative margin. */
     .dial .label {
@@ -168,13 +142,8 @@
       color: #e8e8e8;
     }
 
-    .dial .label.north {
-      color: mc-red;
-    }
-
-    .dial .label.minor {
-      color: mc-gray;
-    }
+    .dial .label.north { color: mc-red; }
+    .dial .label.minor { color: mc-gray; }
 
     /* Waypoints: little diamonds on the dial, each with a ping ring. */
     .dial .waypoint {
@@ -193,16 +162,13 @@
       bottom: 0;
       width: 1px;
       height: 15px;
-      margin-left: 0;
       background: linear-gradient(rgba(255, 207, 74, 0), var(--gold));
     }
 
     /* ---------- Boss bar ---------- */
 
     .boss {
-      position: absolute;
       top: 20px;
-      left: 50%;
       width: 182px;
       margin-left: -91px;
       display: flex;
@@ -212,9 +178,7 @@
       animation: drop-in 500ms ease-out 150ms both;
     }
 
-    .boss-name {
-      color: #f2d9ff;
-    }
+    .boss-name { color: #f2d9ff; }
 
     /* The vanilla purple track, with our own fill inside its 1px frame. */
     .boss-bar {
@@ -229,20 +193,13 @@
       top: 1px;
       bottom: 1px;
       left: 1px;
-      max-width: 180px;
     }
 
     /* The lag bar trails the fill: it waits, then catches up, so each hit leaves a pale chunk that drains. */
-    .boss-bar .lag {
-      background: #ffd6f2;
-      transition: width 500ms ease-in 450ms;
-    }
+    .boss-bar .lag { background: #ffd6f2; transition: width 500ms ease-in 450ms; }
 
     /* The fill clips a wide repeating gradient that scrolls sideways forever: an animated gradient fill. */
-    .boss-bar .fill {
-      overflow: hidden;
-      transition: width 120ms ease-out;
-    }
+    .boss-bar .fill { overflow: hidden; transition: width 120ms ease-out; }
 
     .flow {
       position: absolute;
@@ -254,9 +211,7 @@
       animation: flow 1.6s linear infinite;
     }
 
-    @keyframes flow {
-      to { transform: translateX(-91px); }
-    }
+    @keyframes flow { to { transform: translateX(-91px); } }
 
     .boss-bar .shine {
       height: 1px;
@@ -265,25 +220,10 @@
       background: rgba(255, 255, 255, 0.35);
     }
 
-    .boss-bar .notches {
-      top: 0;
-      left: 0;
-      bottom: 0;
-      width: 182px;
-      max-width: none;
-      background: sprite(minecraft:boss_bar/notched_10_progress);
-    }
+    .boss-bar .notches { inset: 0; background: sprite(minecraft:boss_bar/notched_10_progress); }
 
     /* The damage flash: a white overlay the script fades out with element.animate(). */
-    .boss-bar .flash {
-      top: -1px;
-      left: -1px;
-      bottom: -1px;
-      width: 184px;
-      max-width: none;
-      background: #fff;
-      opacity: 0;
-    }
+    .boss-bar .flash { inset: -1px; background: #fff; opacity: 0; }
 
     /* Damage numbers float up from the end of the fill and fade. */
     .dmg {
@@ -293,9 +233,7 @@
       animation: dmg 800ms ease-out forwards;
     }
 
-    .dmg.crit {
-      color: mc-yellow;
-    }
+    .dmg.crit { color: mc-yellow; }
 
     @keyframes dmg {
       0% { opacity: 0; transform: translateY(-4px) scale(0.6); }
@@ -312,7 +250,6 @@
       left: 4px;
       width: 112px;
       padding: 4px 5px 5px;
-      background: var(--panel);
       border-left: 2px solid var(--gold);
       animation: left-in 500ms ease-out 250ms both;
     }
@@ -331,10 +268,7 @@
       gap: 3px;
       margin: 0;
       padding: 0;
-    }
-
-    .quest li::before {
-      content: none;
+      list-style: none;
     }
 
     /* A grid per objective: [mark | text] on the first row, [ | bar | count] on the second. */
@@ -348,29 +282,16 @@
       color: #e0e0e0;
     }
 
-    .quest li.done {
-      color: mc-gray;
-    }
-
-    .quest li.done .text {
-      text-decoration: line-through;
-    }
-
-    .quest .mark { grid-area: mark; }
+    .quest li.done { color: mc-gray; }
     .quest .text { grid-area: text; }
-
-    .quest .count {
-      grid-area: count;
-      color: mc-yellow;
-    }
-
-    .quest li.done .count {
-      color: mc-green;
-    }
+    .quest li.done .text { text-decoration: line-through; }
+    .quest .count { grid-area: count; color: mc-yellow; }
+    .quest li.done .count { color: mc-green; }
 
     /* Status marks: a check sprite when done, a pulsing diamond with a ping ring for the active objective,
        a hollow diamond for the rest. */
     .mark {
+      grid-area: mark;
       position: relative;
       width: 8px;
       height: 8px;
@@ -382,7 +303,7 @@
       background-repeat: no-repeat;
     }
 
-    .diamond {
+    .mark i {
       position: absolute;
       left: 2px;
       top: 2px;
@@ -392,22 +313,9 @@
       border: 1px solid #b0b0b0;
     }
 
-    li.active .diamond {
-      background: var(--gold);
-      border-color: var(--gold);
-      animation: beat 1s ease-in-out infinite;
-    }
-
-    li.active .ping {
-      position: absolute;
-      left: 2px;
-      top: 2px;
-      width: 4px;
-      height: 4px;
-      border: 1px solid var(--gold);
-      transform: rotate(45deg);
-      animation: ping 1s ease-out infinite;
-    }
+    li.active .mark i { border-color: var(--gold); }
+    li.active .diamond { background: var(--gold); animation: beat 1s ease-in-out infinite; }
+    li.active .ping { animation: ping 1s ease-out infinite; }
 
     @keyframes beat {
       0%, 100% { transform: rotate(45deg) scale(1); }
@@ -434,9 +342,7 @@
       transition: width 400ms ease-out;
     }
 
-    li.done .progress > div {
-      background: linear-gradient(to right, #3a9a2a, #7ddc6a);
-    }
+    li.done .progress > div { background: linear-gradient(to right, #3a9a2a, #7ddc6a); }
 
     /* The sheen is a real element: pseudo-elements do not take animations in Vellum yet. */
     .progress .sheen {
@@ -476,36 +382,15 @@
       animation: toast-in 450ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
     }
 
-    .toast item {
-      position: absolute;
-      left: 8px;
-      top: 8px;
-    }
-
-    .toast .t-title {
-      position: absolute;
-      left: 30px;
-      top: 7px;
-      white-space: nowrap;
-    }
-
-    .toast .t-text {
-      position: absolute;
-      left: 30px;
-      top: 18px;
-      color: #fff;
-      white-space: nowrap;
-    }
+    .toast item { position: absolute; left: 8px; top: 8px; }
+    .toast div { position: absolute; left: 30px; white-space: nowrap; }
+    .toast .t-title { top: 7px; }
+    .toast .t-text { top: 18px; }
 
     /* Leaving: slide out, then fold the height away so the toasts below move up smoothly. */
-    .toast.out {
-      animation: toast-out 500ms ease-in forwards;
-    }
+    .toast.out { animation: toast-out 500ms ease-in forwards; }
 
-    @keyframes toast-in {
-      from { transform: translateX(170px); }
-      to { transform: translateX(0); }
-    }
+    @keyframes toast-in { from { transform: translateX(170px); } }
 
     @keyframes toast-out {
       0% { transform: translateX(0); height: 32px; opacity: 1; }
@@ -526,52 +411,28 @@
       transition: opacity 300ms;
     }
 
-    .combo.idle {
-      opacity: 0;
-    }
+    .combo.idle { opacity: 0; }
 
-    .combo-row {
-      display: flex;
-      align-items: flex-end;
-      gap: 2px;
-    }
+    .combo-row { display: flex; align-items: flex-end; gap: 2px; }
 
     /* 24px is the font at 3x. The extra shadows give the number a chunky drop. */
     .combo-n {
       font-size: 24px;
-      color: #fff;
       text-shadow: 1px 1px 0 #3a3a3a, 2px 2px 0 #1a1a1a;
       transform-origin: 100% 100%;
       transition: color 200ms;
     }
 
-    .combo-x {
-      margin-bottom: 3px;
-      font-size: 16px;
-      color: mc-gray;
-    }
-
-    .combo-label {
-      color: mc-gray;
-      letter-spacing: 1px;
-    }
+    .combo-x { margin-bottom: 3px; font-size: 16px; color: mc-gray; }
+    .combo-label { color: mc-gray; letter-spacing: 1px; }
 
     .combo.t2 .combo-n { color: mc-yellow; }
     .combo.t3 .combo-n { color: mc-gold; }
     .combo.t4 .combo-n { color: #ff6bd5; text-shadow: 1px 1px 0 #6a1a5a, 2px 2px 0 #2a0a24; }
     .combo.t4 .combo-label { color: var(--end); }
 
-    .combo-timer {
-      width: 56px;
-      height: 2px;
-      background: rgba(0, 0, 0, 0.5);
-    }
-
-    .combo-timer > div {
-      width: 100%;
-      height: 100%;
-      background: #fff;
-    }
+    .combo-timer { width: 56px; height: 2px; background: rgba(0, 0, 0, 0.5); }
+    .combo-timer > div { width: 100%; height: 100%; background: #fff; }
 
     .combo.t3 .combo-timer > div, .combo.t4 .combo-timer > div { background: var(--end); }
 
@@ -605,29 +466,17 @@
       background: sprite(minecraft:hud/effect_background);
     }
 
-    .effect img {
-      width: 18px;
-      height: 18px;
-    }
-
-    .effect .e-time {
-      color: mc-gray;
-    }
+    .effect .e-time { color: mc-gray; }
+    .effect img { width: 18px; height: 18px; }
 
     /* Under ten seconds the icon blinks, like vanilla. */
-    .effect.ending .icon {
-      animation: blink 500ms steps(1) infinite;
-    }
+    .effect.ending .icon { animation: blink 500ms steps(1) infinite; }
 
-    @keyframes blink {
-      50% { opacity: 0.35; }
-    }
+    @keyframes blink { 50% { opacity: 0.35; } }
 
     /* ---------- Vanilla-style vitals and hotbar (screen only) ---------- */
 
     .vanilla {
-      position: absolute;
-      left: 50%;
       bottom: 0;
       width: 182px;
       margin-left: -91px;
@@ -641,15 +490,9 @@
       padding: 0 0 1px 1px;
     }
 
-    .hearts, .food, .armor {
-      display: flex;
-    }
+    .hearts, .food, .armor { display: flex; }
 
-    .stack {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
+    .stack { display: flex; flex-direction: column; gap: 1px; }
 
     /* Each icon is 8px apart and 9px wide, overlapping by 1px, as in vanilla. Two background layers: the
        full or half heart sprite over the empty container. */
@@ -660,11 +503,7 @@
       margin-right: -1px;
     }
 
-    .hearts i {
-      background: sprite(minecraft:hud/heart/container);
-      animation: lubdub 1.4s ease-in-out infinite;
-    }
-
+    .hearts i { background: sprite(minecraft:hud/heart/container); animation: lubdub 1.4s ease-in-out infinite; }
     .hearts i.full { background: sprite(minecraft:hud/heart/full), sprite(minecraft:hud/heart/container); }
     .hearts i.half { background: sprite(minecraft:hud/heart/half), sprite(minecraft:hud/heart/container); }
 
@@ -690,11 +529,7 @@
     }
 
     /* The progress sprite is drawn at full width inside a clipping box, so it is revealed rather than squashed. */
-    .xp > div {
-      height: 5px;
-      overflow: hidden;
-      transition: width 600ms ease-out;
-    }
+    .xp > div { height: 5px; overflow: hidden; transition: width 600ms ease-out; }
 
     .xp > div > i {
       display: block;
@@ -721,10 +556,7 @@
       background: sprite(minecraft:hud/hotbar);
     }
 
-    .hotbar item {
-      position: absolute;
-      top: 3px;
-    }
+    .hotbar item { position: absolute; top: 3px; }
 
     .selection {
       position: absolute;
@@ -742,9 +574,9 @@
 </head>
 <body>
   <div class="end" v-if="!overlay">
-    <div class="pillar far" style="left: 15%; width: 8px; height: 56px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
-    <div class="pillar far" style="left: 58%; width: 8px; height: 72px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
-    <div class="pillar far" style="left: 88%; width: 8px; height: 48px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar far" style="left: 15%; height: 56px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar far" style="left: 58%; height: 72px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
+    <div class="pillar far" style="left: 88%; height: 48px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
     <div class="pillar" style="left: 6%; width: 24px; height: 104px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
     <div class="pillar" style="left: 27%; width: 16px; height: 76px"><i class="halo"></i><item id="minecraft:end_crystal" style="animation-delay: -0.8s"></item></div>
     <div class="pillar" style="left: 71%; width: 16px; height: 90px"><i class="halo"></i><item id="minecraft:end_crystal" style="animation-delay: -1.6s"></item></div>
@@ -768,11 +600,11 @@
     </div>
   </div>
 
-  <section class="quest">
+  <section class="quest mc-dark">
     <header><span>⚔</span><span>Free the End</span></header>
     <ul>
       <li v-for="o in objectives" :key="o.id" :class="{ done: o.n >= o.max, active: o.id === activeId() }">
-        <span class="mark"><i class="ping"></i><i class="diamond" v-if="o.n < o.max"></i></span>
+        <span class="mark"><i class="ping" v-if="o.id === activeId()"></i><i class="diamond" v-if="o.n < o.max"></i></span>
         <span class="text">{{ o.text }}</span>
         <span class="count" v-if="o.max > 1">{{ o.n }}/{{ o.max }}</span>
         <div class="progress" v-if="o.max > 1"><div :style="{ width: o.n / o.max * 100 + '%' }"></div><i class="sheen"></i></div>
@@ -872,23 +704,23 @@
 
     // ---------- Compass ----------
 
-    // Build three turns of dial (-360..720 degrees) so the window never runs off the end.
-    const PX_PER_DEG = 1, WINDOW = 168;
+    // Build three turns of dial (-360..720 degrees, a pixel per degree) so the window never runs off the end.
+    const WINDOW = 168;
     const dial = document.getElementById('dial');
     const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     const labels = [];
     function put(cls, deg, text) {
       const el = document.createElement('i');
       el.className = cls;
-      el.style.left = ((deg + 360) * PX_PER_DEG) + 'px';
+      el.style.left = deg + 360 + 'px';
       if (text) el.textContent = text;
       dial.appendChild(el);
       return el;
     }
     for (let deg = -360; deg < 720; deg += 15) {
       if (deg % 45 === 0) {
-        let name = names[((deg / 45) % 8 + 8) % 8];
-        let label = put('label' + (name === 'N' ? ' north' : name.length > 1 ? ' minor' : ''), deg, name);
+        const name = names[((deg / 45) % 8 + 8) % 8];
+        const label = put('label' + (name === 'N' ? ' north' : name.length > 1 ? ' minor' : ''), deg, name);
         label.deg = deg;
         labels.push(label);
         put('tick major', deg);
@@ -907,11 +739,11 @@
     function steer(now) {
       const t = now / 1000;
       const heading = ((40 + 70 * Math.sin(t / 3.1) + 25 * Math.sin(t / 1.3 + 1)) % 360 + 360) % 360;
-      const offset = WINDOW / 2 - (heading + 360) * PX_PER_DEG;
+      const offset = WINDOW / 2 - (heading + 360);
       dial.style.transform = 'translateX(' + offset.toFixed(1) + 'px)';
       labels.forEach(label => {
-        const d = Math.abs(label.deg - heading) * PX_PER_DEG;
-        label.style.opacity = d > 84 ? 0 : (1 - Math.max(0, d - 40) / 44).toFixed(2);
+        const d = Math.abs(label.deg - heading);
+        label.style.opacity = d > WINDOW / 2 ? 0 : (1 - Math.max(0, d - 40) / 44).toFixed(2);
       });
       requestAnimationFrame(steer);
     }
@@ -987,7 +819,7 @@
 
     let nextToast = 1;
     function toast(icon, title, text, color) {
-      const t = { id: nextToast++, icon: icon, title: title, text: text, color: color || '#ffff55', out: false };
+      const t = { id: nextToast++, icon, title, text, color: color || '#ffff55', out: false };
       hud.toasts.push(t);
       // Vanilla toasts stay about five seconds. Mark it leaving (the CSS exit animation), then drop it.
       setTimeout(() => { t.out = true; }, 4600);
@@ -1004,8 +836,7 @@
     ];
     let feedIndex = 0;
     function nextFeed() {
-      const f = feed[feedIndex++ % feed.length];
-      toast(f[0], f[1], f[2], f[3]);
+      toast(...feed[feedIndex++ % feed.length]);
     }
     setTimeout(nextFeed, 600);
     setTimeout(nextFeed, 2200);
@@ -1020,7 +851,7 @@
       // Drink another potion when one wears off, so the list keeps moving.
       if (hud.effects.length < 3) {
         const missing = potions.find(p => !hud.effects.some(e => e.id === p.id));
-        if (missing) hud.effects.push({ id: missing.id, name: missing.name, t: 30 + Math.floor(Math.random() * 60), color: missing.color });
+        if (missing) hud.effects.push({ ...missing, t: 30 + Math.floor(Math.random() * 60) });
       }
     }, 1000);
   </script>
