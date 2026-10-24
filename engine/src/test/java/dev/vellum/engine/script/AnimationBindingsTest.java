@@ -108,6 +108,23 @@ class AnimationBindingsTest {
     }
 
     @Test
+    void whatAFinishedCallbackChangesShowsInThatFrame() {
+        // The journal's page turn: a leaf held opaque by one animation (fill: forwards) fades out with another, and
+        // the fade's finished callback cancels the hold. No frame may show the hold again in between.
+        Page page = new TestHost().load("""
+                <div id=d style="opacity: 0"></div>
+                <script>
+                const d = document.getElementById('d');
+                const hold = d.animate([{opacity: 1}, {opacity: 1}], {duration: 10, fill: 'forwards'});
+                d.animate([{opacity: 1}, {opacity: 0}], {duration: 100}).finished.then(() => hold.cancel());
+                </script>""");
+        page.frame(50);
+        assertEquals(0.5, page.byId("d").style.opacity, 1e-4);
+        page.frame(100);
+        assertEquals(0, page.byId("d").style.opacity, 1e-4, "the hold is cancelled in the frame the fade finished");
+    }
+
+    @Test
     void cancellingRejectsFinishedAndRemovesTheEffect() {
         Page page = new TestHost().load("""
                 <div id=d style="opacity: 0.5"></div>
