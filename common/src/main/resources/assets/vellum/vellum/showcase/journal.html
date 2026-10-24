@@ -487,9 +487,9 @@
     .timeline::before {
       content: "";
       position: absolute;
-      left: 9px;
-      top: 8px;
-      bottom: 8px;
+      left: 12px;
+      top: 11px;
+      bottom: 11px;
       border-left: 1px dashed var(--ink-soft);
     }
 
@@ -500,21 +500,18 @@
       animation: ink-in 350ms ease-out both;
     }
 
+    /* A 16px item is a square, so the ring around it needs room for its corners: 20px inside the border. */
     .era .mark {
-      position: relative;
+      position: relative; /* above the spine */
       flex: none;
-      width: 16px;
-      height: 16px;
-      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
       background: var(--paper);
       border: 1px solid var(--ink-soft);
-      border-radius: 8px;
-    }
-
-    .era .mark item {
-      position: absolute;
-      left: -1px;
-      top: -1px;
+      border-radius: 11px;
     }
 
     .era.now .mark {

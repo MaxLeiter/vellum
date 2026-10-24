@@ -31,7 +31,7 @@ import java.util.function.Predicate;
  *
  * <p>Timing events ({@code transitionrun/start/end/cancel}, {@code animationstart/iteration/end/cancel}) and script
  * callbacks are queued while styles update and dispatched at the end of {@link #tick}, so listeners always see
- * consistent styles. A pseudo-element's events go to its element, naming it in {@code pseudoElement}.
+ * consistent styles; what they change about animations applies in the same tick. A pseudo-element's events go to its element, naming it in {@code pseudoElement}.
  *
  * <p>Reduced motion ({@link dev.vellum.engine.host.Host#prefersReducedMotion}): transitions do not run (properties
  * change at once, without transition events), and keyframe animations, CSS or scripted, run with no delay and no
@@ -79,6 +79,14 @@ public final class AnimationEngine {
      * layout-affecting property moved. Elements that left the document lose their animations.
      */
     public void tick(double nowMs) {
+        advance(nowMs);
+        // Callbacks may change animations, as a finished promise that cancels another does. Apply that now, before
+        // the frame is drawn, as browsers do, so no frame shows the state in between. What these second updates
+        // queue waits for the next tick.
+        if (dispatchQueued()) advance(nowMs);
+    }
+
+    private void advance(double nowMs) {
         boolean treeChanged = document.domVersion() != connectedVersion;
         connectedVersion = document.domVersion();
         for (Iterator<ElementAnimations> it = animated.iterator(); it.hasNext(); ) {
@@ -92,7 +100,6 @@ public final class AnimationEngine {
             }
             if (update(state.element, state.which)) updateInheritors(state.element, state.which);
         }
-        dispatchQueued();
     }
 
     /**
@@ -243,8 +250,9 @@ public final class AnimationEngine {
         }
     }
 
-    private void dispatchQueued() {
-        if (queued.isEmpty()) return;
+    /** Runs the queued events and callbacks; false when there were none. */
+    private boolean dispatchQueued() {
+        if (queued.isEmpty()) return false;
         List<Runnable> tasks = queued;
         queued = new ArrayList<>(); // tasks queued by listeners wait for the next tick
         for (Runnable task : tasks) {
@@ -254,5 +262,6 @@ public final class AnimationEngine {
                 document.reportError("Error in animation callback", e);
             }
         }
+        return true;
     }
 }
