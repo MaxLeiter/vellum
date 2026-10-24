@@ -17,20 +17,22 @@ The jars are `vellum-<loader>-<minecraft>-<version>.jar` (`vellum-neoforge-1.21.
 `dev.vellum:vellum-{common,neoforge,fabric}-<minecraft>` for every version at the same Vellum version.
 
 The sources are written for 26.3. Where 1.21.1 differs, Stonecutter comments (`//? if >=26 {`) pick the code, and where 26.2 differs from 26.3 finer ones (`//? if >=26.3 {`, `#? if >=26.3 {` in the access widener and
-transformer). Renames such as `Identifier`/`ResourceLocation` are replacements in `stonecutter.gradle`. Code that differs a lot
-lives in one file per version under `common/versions/<minecraft>/src`: `McGui` (drawing), `McClient` (screens and
-input), `KeyNames`, `Scene` and `EntityPortrait` (3D), `GameTests`. Keep committed sources on 26.3: if you switch
-Stonecutter's active version to work on 1.21.1, switch back before committing.
+transformer). Renames such as `Identifier`/`ResourceLocation` are replacements in `stonecutter.gradle`. Files that
+1.21.1 needs written differently live in `common/versions/1.21.1/src`: `McGui` (drawing), `McClient` (screens and
+input), `Scene` and `EntityPortrait` (3D), `ModelContent`, `PlayerHeadContent`, `McSurface`, `VellumEntities`,
+`GameTests`, and the input event records. Their 26.x versions in `common/src` are wrapped in `//? if >=26 {`, so
+1.21.1 compiles only its own. Keep committed sources on 26.3: if you switch Stonecutter's active version to work on
+1.21.1, switch back before committing.
 
 Everything works on 26.2, except that the dev tour (`-Ptour`) is 26.3 only. 26.2 is the 26.3 code with these
-differences, which live in `common/versions/26.2/src` (copies of the 26.3 files, adjusted) and in `>=26.3` comments:
+differences, which are `>=26.3` comments and the `blaze3d`/`renderpearl` rename in `stonecutter.gradle`:
 
 - The render API is `com.mojang.blaze3d.pipeline.RenderPipeline` and `com.mojang.blaze3d.textures.FilterMode`/`GpuTextureView`; 26.3 moved them to `com.mojang.renderpearl.api.*`.
 - Keys are GLFW's, not SDL's: `KeyEvent(key, scancode, modifiers)` holds a GLFW key code, as on 1.21.1, and `KeyNames` is the GLFW one. Mouse buttons are GLFW's (0 left, 1 right, 2 middle); there is no `onTextInputFocusChange`.
 - `PoseStack` has `mulPose(Quaternionfc)` but no `rotate` or `rotateDegrees`; `SubmitNodeCollection` has a no-argument constructor and `submitModel` takes a sprite and a crumbling overlay where 26.3 takes a `UvMapping`.
 - `GuiGraphicsExtractor.setTooltipForNextFrame` has no `replaceExisting` overload with an item style (NeoForge's takes the stack and style only); `ScreenNarrationCollector.update` has no `NarrationTrigger`.
 - `MouseHandler.onButton`, `onScroll`, `onMove` and `KeyboardHandler.keyPress`, `charTyped` are private: they are widened (`#? if <26.3`), and `PictureInPictureRenderer.textureView` is widened with the `blaze3d` type.
-- The dev tour is off: `DevTour` and `TourCursor` are the 1.21.1 stubs, since the tour hides and reads the system cursor through SDL.
+- The dev tour is off: `DevTour` and `TourCursor` are stubs (their `else` blocks), since the tour hides and reads the system cursor through SDL.
 
 Everything works on 1.21.1, with these differences:
 
@@ -50,15 +52,15 @@ Everything works on 1.21.1, with these differences:
    [fabricmc.net/develop](https://fabricmc.net/develop/). Fabric picks its Loom plugin itself: plain Loom for 26.x,
    the remapping one for older, obfuscated versions.
 3. Make it compile: `./gradlew :common:<version>:compileJava`, then the loaders. Small differences are Stonecutter
-   comments (`//? if >=26.3 {`) or renames in `stonecutter.gradle`. For the per-version files (`McGui`, `McClient`,
-   `KeyNames`, `Scene`, `EntityPortrait`, `GameTests`), copy the nearest version's `common/versions/<minecraft>/src`
-   and fix what changed. The access transformer and access widener are shared by every version, with `#? if` blocks
+   comments (`//? if >=26.3 {`) or renames in `stonecutter.gradle`. Only a version that needs a file written
+   differently throughout gets its own copy in `common/versions/<minecraft>/src`, as 1.21.1 does; wrap the shared
+   file in a condition that leaves it out for that version. The access transformer and access widener are shared by every version, with `#? if` blocks
    for what one version needs (a disabled block's lines are commented with `##`, not `#`: the widener parser rejects
    the leading space a single `#` leaves behind). Check the mod metadata too: NeoForge 26.x needs `iconFile` instead
    of `logoFile` in `neoforge.mods.toml` (`neoforge_logo_key`), since NeoForge's deprecation warning screen stops the
    client at startup. Typical breakage between neighbouring 26.x versions: package moves (`blaze3d` to `renderpearl`),
    private input handlers that need widening, and changed signatures in tooltip and model submission code;
-   26.2 is a worked example (`common/versions/26.2/src` and the `>=26.3` comments).
+   26.2 is a worked example (the `>=26.3` comments and the `renderpearl` rename in `stonecutter.gradle`).
 4. `./gradlew build` builds and tests every version on both loaders, including the GameTests. Then look at the
    demos in the game: `./gradlew :neoforge:<version>:runClient -Pautopilot` and the same for `:fabric:<version>`.
    On macOS, copy `options.txt` (with `enableVsync:false`) and `config/fml.toml` (with `earlyWindowControl = false`)
