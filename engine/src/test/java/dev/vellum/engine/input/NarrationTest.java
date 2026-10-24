@@ -1,12 +1,11 @@
 package dev.vellum.engine.input;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.input.Accessible.Role;
 import dev.vellum.engine.input.Narration.Announcement;
-import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
+import dev.vellum.engine.testing.TestItem;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -19,22 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** {@link Narration}: titles, accessible names and roles, what the pointer and focus read, and live regions. */
 class NarrationTest {
-    /** An item as Minecraft's: named by its {@code id}, with a tooltip of its own when it has {@code tooltip}. */
-    private record Item(Element element) implements ReplacedContent {
-        @Override public float intrinsicWidth() { return 16; }
-        @Override public float intrinsicHeight() { return 16; }
-        @Override public void paint(Canvas canvas, float x, float y, float width, float height) {}
-        @Override public boolean showsTooltip() { return element.hasAttribute("tooltip"); }
-        @Override public String accessibleName() {
-            String id = element.getAttribute("id");
-            return id == null || id.isEmpty() ? null : id;
-        }
-    }
-
     private static Page load(String html) {
         TestHost host = new TestHost();
-        host.replaced.put("item", Item::new);
-        host.replaced.put("slot", Item::new); // a slot named by the item it holds
+        host.replaced.put("item", TestItem::new);
+        host.replaced.put("slot", TestItem::new); // a slot named by the item it holds
         return host.load(html);
     }
 

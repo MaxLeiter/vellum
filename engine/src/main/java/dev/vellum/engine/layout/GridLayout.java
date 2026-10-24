@@ -278,7 +278,7 @@ final class GridLayout implements FormattingContext {
             if (measure && item != first) continue;
             LayoutResult r = place(g, item, measure);
             if (item == first) {
-                baseline = item.box.y + (Float.isNaN(r.firstBaseline()) ? r.height() : r.firstBaseline());
+                baseline = item.box.y + r.firstBaselineOrBottom();
             }
         }
         return new LayoutResult(height, baseline, baseline, MarginSet.EMPTY, MarginSet.EMPTY, false);

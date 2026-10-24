@@ -349,20 +349,7 @@ final class Accessibility {
 
     /** Whitespace (also no-break spaces) collapsed to single spaces and stripped; "" for null. */
     static String collapse(CharSequence s) {
-        if (s == null) return "";
-        StringBuilder sb = new StringBuilder(s.length());
-        boolean space = false;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (Character.isWhitespace(c) || c == ' ') {
-                space = !sb.isEmpty();
-            } else {
-                if (space) sb.append(' ');
-                sb.append(c);
-                space = false;
-            }
-        }
-        return sb.toString();
+        return s == null ? "" : Element.collapse(s, c -> Character.isWhitespace(c) || c == '\u00A0');
     }
 
     /** A long name cut at a word near {@link #MAX_NAME} characters, with an ellipsis. */

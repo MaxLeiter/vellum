@@ -43,6 +43,15 @@ stonecutter.parameters { sc ->
     sc.replacements.regex(modern) { spec ->
         spec.replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
     }
+    // GLFW's Windows keys, for KeyNames on 26.2 and 1.21.1.
+    sc.replacements.regex(modern) { spec ->
+        spec.replace('\\bKEY_([LR])WIN\\b', 'KEY_$1SUPER', '\\bKEY_([LR])SUPER\\b', 'KEY_$1WIN')
+    }
+    // 26.3 moved the render pipeline and texture types from blaze3d to renderpearl.
+    sc.replacements.regex(sc.current.parsed >= '26.3') { spec ->
+        spec.replace('\\bcom\\.mojang\\.blaze3d\\.(pipeline\\.RenderPipeline|textures\\.FilterMode)\\b', 'com.mojang.renderpearl.api.$1',
+                '\\bcom\\.mojang\\.renderpearl\\.api\\.(pipeline\\.RenderPipeline|textures\\.FilterMode)\\b', 'com.mojang.blaze3d.$1')
+    }
     // 26.x has input event records; for older versions Vellum has records of the same shape in its own package.
     String inputEvents = '(KeyEvent|MouseButtonEvent|MouseButtonInfo|CharacterEvent)'
     sc.replacements.regex(modern) { spec ->

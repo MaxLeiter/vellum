@@ -108,7 +108,7 @@ public final class AnimationEngine {
      * Missing 0% / 100% keyframes animate from / to the underlying value.
      */
     public Animation animate(Element element, List<ResolvedKeyframe> keyframes, Timing timing) {
-        ScriptAnimation animation = new ScriptAnimation(this, element,
+        Animation animation = new Animation(this, element,
                 KeyframeEffect.of(keyframes, TimingFunction.LINEAR), effective(timing));
         animation.play();
         return animation;
@@ -164,7 +164,7 @@ public final class AnimationEngine {
     }
 
     /** A script changed {@code animation}'s playback: attach it to its element, which the next tick restyles. */
-    void changed(ScriptAnimation animation) {
+    void changed(Animation animation) {
         ElementAnimations state = stateOf(animation.element, PseudoElement.NONE);
         if (state == null) {
             if (animation.isIdle()) return; // not attached, nothing to remove
