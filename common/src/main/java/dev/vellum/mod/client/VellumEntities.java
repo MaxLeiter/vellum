@@ -1,11 +1,12 @@
-//? if >=26 {
 package dev.vellum.mod.client;
 
+//? if >=26 {
 import dev.vellum.mod.client.replaced.EntityPortrait;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import org.jspecify.annotations.Nullable;
+//?}
 
 /**
  * Client API for how pages draw entities ({@code <entity>}).
@@ -14,9 +15,13 @@ import org.jspecify.annotations.Nullable;
  * // In client setup: draw automatons in screens without the bubbles their renderer adds over their heads.
  * VellumEntities.registerPortraitState(MyEntities.AUTOMATON.get(), AutomatonRenderer::portraitState);
  * }</pre>
+ *
+ * <p>Minecraft 1.21.1 has no entity render states (Vellum poses the entity itself for the draw), so there this class
+ * has nothing.
  */
 public final class VellumEntities {
     private VellumEntities() {}
+    //? if >=26 {
 
     /** Makes the render state GUI renders of an entity start from ({@link #registerPortraitState}). */
     @FunctionalInterface
@@ -42,5 +47,5 @@ public final class VellumEntities {
     public static <T extends Entity> void registerPortraitState(EntityType<T> type, PortraitState<? super T> state) {
         EntityPortrait.registerState(type, state);
     }
+    //?}
 }
-//?}

@@ -243,26 +243,15 @@ public final class HtmlParser {
 
     /** html, head and body tags: merge attributes into the implied elements. Returns true if handled. */
     private boolean handleStructural(String name, List<String[]> attrs) {
-        switch (name) {
-            case "html" -> {
-                Element h = ensureHtml();
-                for (String[] a : attrs) if (!h.hasAttribute(a[0])) h.setAttribute(a[0], a[1]);
-                return true;
-            }
-            case "head" -> {
-                Element h = ensureHead();
-                for (String[] a : attrs) if (!h.hasAttribute(a[0])) h.setAttribute(a[0], a[1]);
-                return true;
-            }
-            case "body" -> {
-                Element b = ensureBody();
-                for (String[] a : attrs) if (!b.hasAttribute(a[0])) b.setAttribute(a[0], a[1]);
-                return true;
-            }
-            default -> {
-                return false;
-            }
-        }
+        Element h = switch (name) {
+            case "html" -> ensureHtml();
+            case "head" -> ensureHead();
+            case "body" -> ensureBody();
+            default -> null;
+        };
+        if (h == null) return false;
+        for (String[] a : attrs) if (!h.hasAttribute(a[0])) h.setAttribute(a[0], a[1]);
+        return true;
     }
 
     private void closeImplied(String name) {
