@@ -14,13 +14,9 @@
       --cloth-deep: #10152e;
       --trim: #d9a334;
       --trim-soft: rgba(217, 163, 52, 0.35);
+      --on-trim: #2a1a00;
       --cream: #f1e3bf;
-      --card: rgba(8, 10, 26, 0.6);
-      --common: #b8b8b8;
-      --uncommon: #55ff55;
-      --rare: #55ffff;
-      --epic: #ff55ff;
-      --legendary: #ffaa00;
+      --muted: #8f95c4;
     }
 
     body {
@@ -47,6 +43,8 @@
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
     }
 
+    /* A lantern item on a chain (::after), in a pool of light (::before). The light spills over the first tab, so
+       the lantern lets the pointer through. */
     .lantern {
       position: absolute;
       top: 10px;
@@ -55,13 +53,24 @@
       transform-origin: 8px 0;
       animation: swing 3s ease-in-out infinite alternate;
       z-index: 2;
+      pointer-events: none;
     }
 
     .lantern.left { left: 10px; }
     .lantern.right { right: 10px; animation-delay: -1.5s; }
+    .lantern::before, .lantern::after { content: ""; position: absolute; }
 
-    .lantern .chain {
-      position: absolute;
+    /* The warm light flickers a little. */
+    .lantern::before {
+      left: -22px;
+      top: -4px;
+      width: 60px;
+      height: 60px;
+      background: radial-gradient(circle, rgba(255, 190, 90, 0.35), rgba(255, 160, 60, 0) 70%);
+      animation: flicker 2.2s steps(4) infinite;
+    }
+
+    .lantern::after {
       left: 7px;
       top: 0;
       width: 2px;
@@ -75,38 +84,29 @@
       top: 12px;
     }
 
-    /* The warm pool of light around each lantern flickers a little. */
-    .lantern .light {
-      position: absolute;
-      left: -22px;
-      top: -4px;
-      width: 60px;
-      height: 60px;
-      background: radial-gradient(circle, rgba(255, 190, 90, 0.35), rgba(255, 160, 60, 0) 70%);
-      animation: flicker 2.2s steps(4) infinite;
-    }
-
     @keyframes swing {
       from { transform: rotate(-7deg); }
       to { transform: rotate(7deg); }
     }
 
     @keyframes flicker {
-      0%, 100% { opacity: 1; }
       25% { opacity: 0.8; }
       60% { opacity: 0.92; }
     }
 
-    /* ---------- Header ---------- */
+    /* ---------- Header, tabs and search ---------- */
 
-    header {
+    /* The header drops in, and the toolbar a beat later. */
+    header, .toolbar {
       display: flex;
       align-items: center;
       gap: 6px;
       flex: none;
-      padding: 4px 34px 4px 34px;
       animation: fade-down 500ms ease-out both;
     }
+
+    header { padding: 4px 34px; }
+    .toolbar { margin: 0 6px 4px; animation-delay: 100ms; }
 
     @keyframes fade-down {
       from { opacity: 0; transform: translateY(-6px); }
@@ -123,7 +123,7 @@
     .motto {
       flex: 1;
       padding-top: 6px;
-      color: #8f95c4;
+      color: var(--muted);
     }
 
     /* The purse: an emerald pill. Its number counts towards the real balance (see tween() below). */
@@ -137,17 +137,6 @@
       border-radius: 8px;
       color: mc-green;
       text-shadow: minecraft;
-    }
-
-    /* ---------- Tabs and search ---------- */
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex: none;
-      margin: 0 6px 4px;
-      animation: fade-down 500ms ease-out 100ms both;
     }
 
     .tabs {
@@ -165,14 +154,8 @@
       transition: color 150ms, background-color 150ms;
     }
 
-    .tabs button:hover {
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--cream);
-    }
-
-    .tabs button.on {
-      color: var(--trim);
-    }
+    .tabs button:hover { background: rgba(255, 255, 255, 0.06); color: var(--cream); }
+    .tabs button.on { color: var(--trim); }
 
     /* One underline for all tabs: the script moves it under the active tab and the transition slides it. */
     .indicator {
@@ -210,12 +193,9 @@
       transition: border-color 150ms, background-color 150ms;
     }
 
-    .search input:focus {
-      background: rgba(0, 0, 0, 0.5);
-      border-color: var(--trim);
-    }
+    .search input:focus { background: rgba(0, 0, 0, 0.5); border-color: var(--trim); }
 
-    /* ---------- Market: cards and satchel ---------- */
+    /* ---------- Wares ---------- */
 
     main {
       display: flex;
@@ -236,7 +216,9 @@
       padding: 3px 3px 3px 1px;
     }
 
+    /* Every card is tinted by its rarity colour, --tier. */
     .card {
+      --card-in: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
       position: relative;
       display: flex;
       flex-direction: column;
@@ -244,24 +226,23 @@
       gap: 2px;
       padding: 4px 2px 3px;
       overflow: hidden;
-      background: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)) , var(--card);
-      border: 1px solid;
-      border-color: color-mix(in srgb, var(--tier) 45%, transparent);
+      background: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)), rgba(8, 10, 26, 0.6);
+      border: 1px solid color-mix(in srgb, var(--tier) 45%, transparent);
       border-radius: 3px;
       cursor: pointer;
       transition: transform 160ms ease-out, border-color 160ms, box-shadow 200ms;
-      animation: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+      animation: var(--card-in);
     }
 
     @keyframes card-in {
       from { opacity: 0; transform: translateY(8px) scale(0.92); }
     }
 
-    .card.common { --tier: var(--common); }
-    .card.uncommon { --tier: var(--uncommon); }
-    .card.rare { --tier: var(--rare); }
-    .card.epic { --tier: var(--epic); }
-    .card.legendary { --tier: var(--legendary); }
+    .card.common { --tier: #b8b8b8; }
+    .card.uncommon { --tier: #55ff55; }
+    .card.rare { --tier: #55ffff; }
+    .card.epic { --tier: #ff55ff; }
+    .card.legendary { --tier: #ffaa00; }
 
     /* Hover: lift, grow a little, light the frame; the item starts to bob. */
     .card:hover {
@@ -270,9 +251,7 @@
       box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5), 0 0 6px color-mix(in srgb, var(--tier) 50%, transparent);
     }
 
-    .card:active {
-      transform: translateY(0) scale(0.97);
-    }
+    .card:active { transform: translateY(0) scale(0.97); }
 
     .art {
       position: relative;
@@ -295,25 +274,22 @@
     }
 
     /* 32px: the item drawn at exactly 2x, so it stays crisp. */
-    .art item {
-      width: 32px;
-      height: 32px;
-    }
-
-    .card:hover .art item {
-      animation: bob 700ms ease-in-out infinite;
-    }
+    .art item { width: 32px; height: 32px; }
+    .card:hover .art item { animation: bob 700ms ease-in-out infinite; }
 
     @keyframes bob {
-      0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-3px); }
+    }
+
+    /* Names that don't fit end in an ellipsis, on the cards and in the satchel. */
+    .name, .line-name {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .name {
       max-width: 100%;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
       color: var(--tier);
       text-shadow: minecraft;
     }
@@ -329,11 +305,9 @@
     }
 
     /* Rarity pips: one diamond per tier. */
-    .tier {
-      color: var(--tier);
-      letter-spacing: -1px;
-    }
+    .tier { color: var(--tier); letter-spacing: -1px; }
 
+    /* A price: a small emerald and the number, on the cards and in the satchel. */
     .price {
       display: flex;
       align-items: center;
@@ -341,15 +315,10 @@
       color: #8fe88f;
     }
 
-    .price item {
-      width: 8px;
-      height: 8px;
-    }
+    .price item { width: 8px; height: 8px; }
 
     /* Epic cards breathe; legendary cards glow harder and get a gradient frame. */
-    .card.epic {
-      animation: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards, breathe-epic 2.4s ease-in-out infinite;
-    }
+    .card.epic { animation: var(--card-in), breathe-epic 2.4s ease-in-out infinite; }
 
     @keyframes breathe-epic {
       0%, 100% { box-shadow: 0 0 2px rgba(255, 85, 255, 0.25); }
@@ -358,17 +327,14 @@
 
     /* The gradient border: a transparent border, then background layers clipped to different boxes. The
        bottom layer (border-box) is the gold gradient; the opaque layers above it are clipped to the padding box,
-       so the gradient only shows through the 1px border. */
+       so the gradient only shows through the 1px border. This rule comes after .card:hover, so the border stays
+       transparent on hover too. */
     .card.legendary {
       border-color: transparent;
       background: linear-gradient(rgba(255, 200, 80, 0.16), rgba(255, 170, 0, 0)) padding-box,
         linear-gradient(#0e1126, #0e1126) padding-box,
         linear-gradient(135deg, #fff3b0, #ff9a10 35%, #ffd36b 60%, #b85a00) border-box;
-      animation: card-in 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards, breathe-legend 1.8s ease-in-out infinite;
-    }
-
-    .card.legendary:hover {
-      border-color: transparent;
+      animation: var(--card-in), breathe-legend 1.8s ease-in-out infinite;
     }
 
     @keyframes breathe-legend {
@@ -394,12 +360,9 @@
       45%, 100% { transform: translateX(150px) rotate(20deg); }
     }
 
-    .card.legendary .art item {
-      animation: float 2.4s ease-in-out infinite;
-    }
+    .card.legendary .art item { animation: float 2.4s ease-in-out infinite; }
 
     @keyframes float {
-      0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-2px); }
     }
 
@@ -410,7 +373,7 @@
       align-items: center;
       gap: 4px;
       padding-top: 30px;
-      color: #8f95c4;
+      color: var(--muted);
     }
 
     /* ---------- Satchel ---------- */
@@ -449,7 +412,7 @@
       padding: 0 2px;
       background: var(--trim);
       border-radius: 4px;
-      color: #2a1a00;
+      color: var(--on-trim);
       text-align: center;
     }
 
@@ -478,27 +441,9 @@
       from { opacity: 0; transform: translateX(10px); }
     }
 
-    .line item { grid-area: icon; }
-
-    .line .l-name {
-      grid-area: name;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .line .l-cost {
-      grid-area: cost;
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      color: #8fe88f;
-    }
-
-    .line .l-cost item {
-      width: 8px;
-      height: 8px;
-    }
+    .line > item { grid-area: icon; }
+    .line-name { grid-area: name; }
+    .line .price { grid-area: cost; }
 
     .stepper {
       grid-area: step;
@@ -518,23 +463,13 @@
       transition: background-color 120ms, transform 120ms;
     }
 
-    .stepper button:hover {
-      background: var(--trim);
-      color: #2a1a00;
-    }
-
-    .stepper button:active {
-      transform: scale(0.85);
-    }
-
-    .stepper span {
-      min-width: 12px;
-      text-align: center;
-    }
+    .stepper button:hover { background: var(--trim); color: var(--on-trim); }
+    .stepper button:active { transform: scale(0.85); }
+    .stepper span { min-width: 12px; text-align: center; }
 
     .nothing {
       padding: 12px 4px;
-      color: #8f95c4;
+      color: var(--muted);
       text-align: center;
     }
 
@@ -554,14 +489,11 @@
       text-shadow: 1px 1px 0 #0a3a0a;
     }
 
-    .total.short .sum {
-      color: mc-red;
-      text-shadow: 1px 1px 0 #3a0a0a;
-    }
+    .total.short .sum { color: mc-red; text-shadow: 1px 1px 0 #3a0a0a; }
 
     .after {
       margin-bottom: 3px;
-      color: #8f95c4;
+      color: var(--muted);
       text-align: right;
     }
 
@@ -575,19 +507,13 @@
       border: 1px solid #ffe08a;
       border-bottom-color: #8a5a06;
       border-radius: 2px;
-      color: #2a1a00;
+      color: var(--on-trim);
       text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6);
       transition: transform 120ms, box-shadow 160ms;
     }
 
-    .buy:hover {
-      background: linear-gradient(#ffd56a, #dc9a1c);
-      box-shadow: 0 0 8px rgba(255, 190, 60, 0.6);
-    }
-
-    .buy:active {
-      transform: translateY(1px);
-    }
+    .buy:hover { background: linear-gradient(#ffd56a, #dc9a1c); box-shadow: 0 0 8px rgba(255, 190, 60, 0.6); }
+    .buy:active { transform: translateY(1px); }
 
     .buy:disabled {
       background: linear-gradient(#5a5a6a, #3a3a48);
@@ -604,17 +530,13 @@
       pointer-events: none;
     }
 
-    .fx > * {
-      position: absolute;
-      display: block;
-    }
+    .fx > * { position: absolute; display: block; }
+    .bit { width: 3px; height: 3px; }
 
-    .bit {
-      width: 3px;
-      height: 3px;
-    }
-
+    /* The toast is green, or red when it is sad. */
     .toast {
+      --tone: mc-green;
+      --glow: rgba(85, 255, 85, 0.35);
       left: 50%;
       top: 46%;
       display: flex;
@@ -624,25 +546,18 @@
       margin-left: -82px;
       padding: 5px 8px;
       background: rgba(10, 16, 10, 0.92);
-      border: 1px solid mc-green;
+      border: 1px solid var(--tone);
       border-radius: 3px;
-      box-shadow: 0 0 10px rgba(85, 255, 85, 0.35);
+      box-shadow: 0 0 10px var(--glow);
       animation: toast 2.6s ease-in-out forwards;
     }
 
+    .toast.sad { --tone: mc-red; --glow: rgba(255, 85, 85, 0.35); }
+
     .toast b {
       display: block;
-      color: mc-green;
+      color: var(--tone);
       font-weight: 400;
-    }
-
-    .toast.sad {
-      border-color: mc-red;
-      box-shadow: 0 0 10px rgba(255, 85, 85, 0.35);
-    }
-
-    .toast.sad b {
-      color: mc-red;
     }
 
     @keyframes toast {
@@ -653,14 +568,14 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .lantern, .light, .sweep, .card.epic, .card.legendary, .card.legendary .art item { animation: none; }
+      .lantern, .lantern::before, .sweep, .card.epic, .card.legendary, .card.legendary .art item { animation: none; }
     }
   </style>
 </head>
 <body>
   <div class="awning">
-    <div class="lantern left"><i class="light"></i><i class="chain"></i><item id="minecraft:lantern"></item></div>
-    <div class="lantern right"><i class="light"></i><i class="chain"></i><item id="minecraft:lantern"></item></div>
+    <div class="lantern left"><item id="minecraft:lantern"></item></div>
+    <div class="lantern right"><item id="minecraft:lantern"></item></div>
   </div>
 
   <header>
@@ -671,7 +586,7 @@
 
   <div class="toolbar">
     <nav class="tabs" id="tabs">
-      <button v-for="t in tabs" :key="t.id" :class="{ on: tab === t.id }" :data-tab="t.id" @click="pick(t.id)">{{ t.label }}</button>
+      <button v-for="t in tabs" :key="t.id" :class="{ on: tab === t.id }" @click="pick(t.id)">{{ t.label }}</button>
       <i class="indicator" id="indicator"></i>
     </nav>
     <label class="search">
@@ -699,12 +614,12 @@
     </section>
 
     <aside>
-      <h2><item id="minecraft:bundle" id="satchel"></item><span>Satchel</span><span class="badge" id="badge">{{ count() }}</span></h2>
+      <h2><item id="minecraft:bundle"></item><span>Satchel</span><span class="badge" id="badge">{{ count() }}</span></h2>
       <div class="lines">
-        <div class="line" v-for="l in cart" :key="l.id">
-          <item :id="ware(l.id).icon"></item>
-          <span class="l-name">{{ ware(l.id).name }}</span>
-          <span class="l-cost"><item id="minecraft:emerald"></item><span>{{ ware(l.id).price * l.qty }}</span></span>
+        <div class="line" v-for="l in cart" :key="l.ware.id">
+          <item :id="l.ware.icon"></item>
+          <span class="line-name">{{ l.ware.name }}</span>
+          <span class="price"><item id="minecraft:emerald"></item><span>{{ l.ware.price * l.qty }}</span></span>
           <span class="stepper">
             <button @click="step(l, -1)">-</button>
             <span>{{ l.qty }}</span>
@@ -718,7 +633,7 @@
         <span>Total</span>
         <span class="sum">{{ Math.round(shownTotal) }}</span>
       </div>
-      <div class="after">{{ cart.length === 0 ? 'Click a ware to add it' : total() > purse ? 'Need ' + (total() - purse) + ' more' : 'Left after: ' + (purse - total()) }}</div>
+      <div class="after">{{ hint() }}</div>
       <button class="buy" id="buy" :disabled="cart.length === 0" @click="purchase">Purchase</button>
     </aside>
   </main>
@@ -726,8 +641,6 @@
   <div class="fx" id="fx"></div>
 
   <script>
-    // Loops here use let: Rhino initialises a const inside a loop body only once.
-
     const WARES = [
       { id: 'bread', name: 'Bread', icon: 'minecraft:bread', price: 1, rarity: 'common', cat: 'food' },
       { id: 'beef', name: 'Steak', icon: 'minecraft:cooked_beef', price: 2, rarity: 'common', cat: 'food' },
@@ -752,6 +665,7 @@
     ];
     const ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
     const TIER_COLOUR = { legendary: 'gold', epic: 'light_purple', rare: 'aqua', uncommon: 'yellow', common: 'gray' };
+    const ware = id => WARES.find(w => w.id === id);
 
     const shop = vellum.state({
       tabs: [
@@ -761,7 +675,8 @@
       tab: 'all',
       query: '',
       purse: 96,
-      cart: [{ id: 'gapple', qty: 2 }, { id: 'pearl', qty: 1 }, { id: 'spyglass', qty: 1 }],
+      // Satchel lines: a ware and how many of it.
+      cart: [{ ware: ware('gapple'), qty: 2 }, { ware: ware('pearl'), qty: 1 }, { ware: ware('spyglass'), qty: 1 }],
       // What the purse and total show; tween() eases them towards the real values every frame.
       shownPurse: 96,
       shownTotal: 0,
@@ -772,9 +687,6 @@
         return WARES.filter(w => (this.tab === 'all' || w.cat === this.tab) && w.name.toLowerCase().includes(q))
           .toSorted((a, b) => ORDER[a.rarity] - ORDER[b.rarity] || b.price - a.price);
       },
-      ware(id) {
-        return WARES.find(w => w.id === id);
-      },
       // A card's tooltip: the rarity and the price. Over the item, these lines follow the item's own tooltip.
       deal(w) {
         const tier = w.rarity.charAt(0).toUpperCase() + w.rarity.slice(1);
@@ -782,10 +694,16 @@
           { text: '\n' + w.price + (w.price === 1 ? ' emerald' : ' emeralds'), color: 'green' }] });
       },
       total() {
-        return this.cart.reduce((sum, l) => sum + this.ware(l.id).price * l.qty, 0);
+        return this.cart.reduce((sum, l) => sum + l.ware.price * l.qty, 0);
       },
       count() {
         return this.cart.reduce((sum, l) => sum + l.qty, 0);
+      },
+      // The line under the total.
+      hint() {
+        const left = this.purse - this.total();
+        if (this.cart.length === 0) return 'Click a ware to add it';
+        return left < 0 ? `Need ${-left} more` : `Left after: ${left}`;
       },
 
       pick(id) {
@@ -794,9 +712,9 @@
         vellum.nextTick(moveIndicator);
       },
       add(w, event) {
-        const line = this.cart.find(l => l.id === w.id);
+        const line = this.cart.find(l => l.ware === w);
         if (line) line.qty++;
-        else this.cart.push({ id: w.id, qty: 1 });
+        else this.cart.push({ ware: w, qty: 1 });
         flyToSatchel(w.icon, event.currentTarget);
         vellum.playSound('minecraft:entity.item.pickup', 0.5, 1.2);
       },
@@ -808,14 +726,14 @@
         const cost = this.total();
         if (cost > this.purse) {
           shake(document.getElementById('total'));
-          toast('Hmm... not enough.', 'Need ' + (cost - this.purse) + ' more emeralds', 'sad');
+          toast('Hmm... not enough.', `Need ${cost - this.purse} more emeralds`, true);
           vellum.playSound('minecraft:entity.wandering_trader.no');
           return;
         }
         this.purse -= cost;
         this.cart = [];
         confetti(document.getElementById('buy'));
-        toast('Trade complete!', 'Paid ' + cost + ' emeralds', '');
+        toast('Trade complete!', `Paid ${cost} emeralds`, false);
         vellum.playSound('minecraft:entity.wandering_trader.yes');
         vellum.playSound('minecraft:entity.experience_orb.pickup', 0.4, 1.2);
       }
@@ -823,13 +741,15 @@
 
     // ---------- Counting numbers ----------
 
-    // Each frame, move the shown numbers a fraction of the way to the real ones: an ease-out count.
+    // One step of an ease-out count: a fraction of the way to the target, snapping to it once close.
+    function approach(shown, target, rate) {
+      const next = shown + (target - shown) * rate;
+      return Math.abs(target - next) < 0.05 ? target : next;
+    }
+
     function tween() {
-      const target = shop.total();
-      shop.shownTotal += (target - shop.shownTotal) * 0.18;
-      shop.shownPurse += (shop.purse - shop.shownPurse) * 0.12;
-      if (Math.abs(target - shop.shownTotal) < 0.05) shop.shownTotal = target;
-      if (Math.abs(shop.purse - shop.shownPurse) < 0.05) shop.shownPurse = shop.purse;
+      shop.shownTotal = approach(shop.shownTotal, shop.total(), 0.18);
+      shop.shownPurse = approach(shop.shownPurse, shop.purse, 0.12);
       requestAnimationFrame(tween);
     }
     requestAnimationFrame(tween);
@@ -838,12 +758,10 @@
 
     function moveIndicator() {
       const tabs = document.getElementById('tabs').getBoundingClientRect();
-      const on = document.querySelector('.tabs button.on');
-      if (!on) return;
-      const r = on.getBoundingClientRect();
+      const on = document.querySelector('.tabs button.on').getBoundingClientRect();
       const bar = document.getElementById('indicator');
-      bar.style.left = (r.left - tabs.left + 3) + 'px';
-      bar.style.width = (r.width - 6) + 'px';
+      bar.style.left = (on.left - tabs.left + 3) + 'px';
+      bar.style.width = (on.width - 6) + 'px';
     }
     vellum.nextTick(moveIndicator);
 
@@ -851,65 +769,62 @@
 
     const fx = document.getElementById('fx');
 
+    // Adds a tag to the effects layer at (x, y).
+    function spawn(tag, x, y) {
+      const el = document.createElement(tag);
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      fx.appendChild(el);
+      return el;
+    }
+
     // An item icon arcs from the card into the satchel, then the badge pops.
     function flyToSatchel(icon, card) {
       const from = card.getBoundingClientRect();
-      const to = document.getElementById('badge').getBoundingClientRect();
-      const it = document.createElement('item');
+      const badge = document.getElementById('badge');
+      const to = badge.getBoundingClientRect();
+      const it = spawn('item', from.left + from.width / 2 - 8, from.top + 8);
       it.setAttribute('id', icon);
-      it.style.left = (from.left + from.width / 2 - 8) + 'px';
-      it.style.top = (from.top + 8) + 'px';
-      fx.appendChild(it);
       const dx = to.left - from.left - from.width / 2 + 4, dy = to.top - from.top - 8;
       it.animate([
         { transform: 'translate(0px, 0px) scale(1.3)', opacity: 1 },
-        { transform: 'translate(' + dx * 0.5 + 'px, ' + (dy * 0.5 - 30) + 'px) scale(1)', opacity: 1, offset: 0.5 },
-        { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(0.4)', opacity: 0.2 }
+        { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 30}px) scale(1)`, opacity: 1, offset: 0.5 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.4)`, opacity: 0.2 }
       ], { duration: 520, easing: 'ease-in' }).finished.then(() => {
         it.remove();
-        document.getElementById('badge').animate([{ transform: 'scale(1.6)' }, { transform: 'none' }], { duration: 250, easing: 'ease-out' });
+        badge.animate([{ transform: 'scale(1.6)' }, { transform: 'none' }], { duration: 250, easing: 'ease-out' });
       });
     }
 
-    // Confetti: emeralds and coloured bits burst from the button, arc up, fall and fade, then are removed.
+    // Confetti: 8 emeralds and 36 coloured bits burst from the button, arc up, fall and fade, then are removed.
     const COLOURS = ['#55ff55', '#ffaa00', '#ff55ff', '#55ffff', '#f1e3bf', '#ffff55'];
     function confetti(button) {
       const r = button.getBoundingClientRect();
-      const cx = r.left + r.width / 2, cy = r.top;
       for (let i = 0; i < 44; i++) {
-        let el;
-        if (i < 8) {
-          el = document.createElement('item');
+        const emerald = i < 8;
+        const el = spawn(emerald ? 'item' : 'i', r.left + r.width / 2 - 4, r.top - 4);
+        if (emerald) {
           el.setAttribute('id', 'minecraft:emerald');
         } else {
-          el = document.createElement('i');
           el.className = 'bit';
           el.style.background = COLOURS[i % COLOURS.length];
         }
-        el.style.left = (cx - 4) + 'px';
-        el.style.top = (cy - 4) + 'px';
-        fx.appendChild(el);
-        burst(el, i);
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 2.8;
+        const speed = 50 + Math.random() * 80;
+        const dx = Math.cos(angle) * speed, dy = Math.sin(angle) * speed;
+        const spin = Math.round((Math.random() - 0.5) * 720);
+        el.animate([
+          { transform: `translate(0px, 0px) rotate(0deg) scale(${emerald ? 1 : 1.5})`, opacity: 1 },
+          { transform: `translate(${dx}px, ${dy}px) rotate(${spin / 2}deg)`, opacity: 1, offset: 0.45 },
+          { transform: `translate(${dx * 1.3}px, ${dy + 90}px) rotate(${spin}deg)`, opacity: 0 }
+        ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(0.2, 0.6, 0.4, 1)' }).finished.then(() => el.remove());
       }
     }
 
-    // A separate function so each particle gets its own variables (closures in loops share let bindings).
-    function burst(el, i) {
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 2.8;
-      const speed = 50 + Math.random() * 80;
-      const dx = Math.cos(angle) * speed, dy = Math.sin(angle) * speed;
-      const spin = Math.round((Math.random() - 0.5) * 720);
-      el.animate([
-        { transform: 'translate(0px, 0px) rotate(0deg) scale(' + (i < 8 ? 1 : 1.5) + ')', opacity: 1 },
-        { transform: 'translate(' + dx + 'px, ' + dy + 'px) rotate(' + spin / 2 + 'deg)', opacity: 1, offset: 0.45 },
-        { transform: 'translate(' + dx * 1.3 + 'px, ' + (dy + 90) + 'px) rotate(' + spin + 'deg)', opacity: 0 }
-      ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(0.2, 0.6, 0.4, 1)' }).finished.then(() => el.remove());
-    }
-
-    function toast(title, text, kind) {
+    function toast(title, text, sad) {
       const t = document.createElement('div');
-      t.className = 'toast ' + kind;
-      t.innerHTML = '<item id="minecraft:' + (kind ? 'barrier' : 'emerald') + '"></item><div><b></b><span></span></div>';
+      t.className = sad ? 'toast sad' : 'toast';
+      t.innerHTML = `<item id="minecraft:${sad ? 'barrier' : 'emerald'}"></item><div><b></b><span></span></div>`;
       t.querySelector('b').textContent = title;
       t.querySelector('span').textContent = text;
       t.addEventListener('animationend', () => t.remove());
