@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Mobdex</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * MOBDEX: a Pokédex-style handheld for Minecraft mobs.
@@ -28,13 +29,7 @@
       /* Category colours live in the script (COLORS) and reach the CSS as a per-element --c. */
     }
 
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      padding: 4px;
-    }
+    body { padding: 4px; }
 
     /* ---------------------------------------------------------------- the casing */
 
@@ -114,14 +109,15 @@
       height: 6px;
       border: 1px solid rgba(0, 0, 0, 0.55);
       border-radius: 3px;
-      animation: blink 1.6s steps(1) infinite;
+      animation: wink 1.6s steps(1) infinite;
     }
 
     .led.r { background: radial-gradient(circle at 35% 35%, #ffd0d0, #ff3b30 60%); }
     .led.y { background: radial-gradient(circle at 35% 35%, #fff6c8, #ffcc00 60%); animation-duration: 2.2s; animation-delay: 300ms; }
     .led.g { background: radial-gradient(circle at 35% 35%, #d8ffd8, #34c759 60%); animation-duration: 0.9s; animation-delay: 150ms; }
 
-    @keyframes blink {
+    /* A short dim at the end of each cycle (the shared blink dims for half of it). */
+    @keyframes wink {
       0% { opacity: 1; }
       70% { opacity: 0.35; }
     }
@@ -133,7 +129,7 @@
       letter-spacing: 1px;
     }
 
-    .title b { font-size: 16px; color: #fff; text-shadow: 1px 1px 0 var(--red-edge); }
+    .title strong { font-size: 16px; color: #fff; text-shadow: 1px 1px 0 var(--red-edge); }
     .title small { color: #ffc2bb; }
 
     /* The counters sit in a little black LCD window. */
@@ -305,7 +301,7 @@
       border-bottom: 1px solid var(--line);
     }
 
-    .listhead b { color: var(--c); }
+    .listhead strong { color: var(--c); }
 
     .list {
       flex: 1;
@@ -338,7 +334,7 @@
 
     .row item, .row .no-egg { flex: none; width: 10px; height: 10px; }
     .row .no-egg { text-align: center; color: var(--unseen); }
-    .row .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .nm { flex: 1; }
     .row.unseen .nm { color: var(--unseen); }
 
     /* The selected row: a category-coloured wash from the left and a cursor arrow. */
@@ -476,10 +472,6 @@
     .stage:hover entity { animation-play-state: paused; }
     .stage entity.unseen { -mc-tint: #0a1c28; }
 
-    @keyframes turn {
-      to { -mc-yaw: 360deg; }
-    }
-
     /* The overlays on the stage let the pointer through, so the mob under them can still be dragged. */
     .noise, .nodata, .scan, .flash, .live, .stamp { pointer-events: none; }
 
@@ -546,7 +538,7 @@
       top: 4px;
       color: var(--danger);
       text-align: center;
-      animation: blink 1s steps(1) infinite;
+      animation: wink 1s steps(1) infinite;
     }
 
     /* A "LIVE" feed tag in the stage corner. */
@@ -566,7 +558,7 @@
       height: 4px;
       border-radius: 2px;
       background: var(--danger);
-      animation: blink 1s steps(1) infinite;
+      animation: wink 1s steps(1) infinite;
     }
 
     /* ---- stats */
@@ -646,7 +638,7 @@
       line-height: 10px;
     }
 
-    .caret { color: var(--cyan); animation: blink 700ms steps(1) infinite; }
+    .caret { color: var(--cyan); animation: wink 700ms steps(1) infinite; }
 
     /* ---- the CAUGHT stamp */
 
@@ -707,12 +699,12 @@
     }
   </style>
 </head>
-<body>
+<body class="mc-center fullscreen">
   <main class="dex">
     <header class="top">
       <div class="lens"></div>
       <div class="leds"><div class="led r"></div><div class="led y"></div><div class="led g"></div></div>
-      <div class="title"><b>MOBDEX</b><small>FIELD UNIT 26.3</small></div>
+      <div class="title"><strong>MOBDEX</strong><small>FIELD UNIT 26.3</small></div>
       <div class="counter">
         <div><span>SEEN </span>{{ pad(SEEN) }}</div>
         <div><span>CAUGHT </span>{{ pad(CAUGHT) }}</div>
@@ -736,7 +728,7 @@
             </div>
           </nav>
           <div class="listhead" :style="{ '--c': color(filter) }">
-            <b>{{ filterName() }}</b>
+            <strong>{{ filterName() }}</strong>
             <span>{{ filtered().length }} {{ filtered().length === 1 ? 'ENTRY' : 'ENTRIES' }}</span>
           </div>
           <div class="list" id="list">
@@ -747,7 +739,7 @@
               <item v-if="m.seen && m.egg" :id="m.egg"></item>
               <span class="no-egg" v-else>?</span>
               <span class="no">#{{ pad(m.no) }}</span>
-              <span class="nm">{{ m.seen ? m.name : '??????' }}</span>
+              <span class="nm truncate">{{ m.seen ? m.name : '??????' }}</span>
               <span class="ball" v-if="m.caught"></span>
               <span class="seen-dot" v-else-if="m.seen"></span>
             </div>

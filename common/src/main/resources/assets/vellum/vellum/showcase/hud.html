@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Vellum HUD kit</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * A HUD kit for a dragon fight, built to sit over the game: nothing here takes input and the page has no
@@ -18,8 +19,6 @@
     }
 
     body {
-      height: 100vh;
-      overflow: hidden;
       pointer-events: none;
       text-shadow: minecraft;
     }
@@ -52,7 +51,7 @@
 
     /* Each crystal bobs over its pillar inside a soft pink glow. Both are centred with a negative margin. */
     .pillar > * { position: absolute; left: 50%; }
-    .pillar item { top: -22px; margin-left: -8px; animation: bob 2.4s ease-in-out infinite; }
+    .pillar item { top: -22px; margin-left: -8px; animation: bob 2.4s ease-in-out infinite; --bob-height: 4px; }
 
     .pillar.far item {
       width: 8px;
@@ -74,11 +73,6 @@
       width: 24px;
       height: 24px;
       margin-left: -12px;
-    }
-
-    @keyframes bob {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
     }
 
     /* The main island: end stone, with a darkening gradient towards the bottom of the screen. */
@@ -327,7 +321,7 @@
       to { opacity: 0; transform: rotate(45deg) scale(3); }
     }
 
-    /* Thin progress bars under counted objectives, with a sheen that sweeps across. */
+    /* Thin progress bars under counted objectives, with a sheen (::after) that sweeps across. */
     .progress {
       grid-area: bar;
       position: relative;
@@ -344,8 +338,8 @@
 
     li.done .progress > div { background: linear-gradient(to right, #3a9a2a, #7ddc6a); }
 
-    /* The sheen is a real element: pseudo-elements do not take animations in Vellum yet. */
-    .progress .sheen {
+    .progress::after {
+      content: "";
       position: absolute;
       top: 0;
       left: -12px;
@@ -470,9 +464,7 @@
     .effect img { width: 18px; height: 18px; }
 
     /* Under ten seconds the icon blinks, like vanilla. */
-    .effect.ending .icon { animation: blink 500ms steps(1) infinite; }
-
-    @keyframes blink { 50% { opacity: 0.35; } }
+    .effect.ending .icon { animation: blink 500ms steps(1) infinite; --blink-opacity: 0.35; }
 
     /* ---------- Vanilla-style vitals and hotbar (screen only) ---------- */
 
@@ -572,7 +564,7 @@
     }
   </style>
 </head>
-<body>
+<body class="fullscreen">
   <div class="end" v-if="!overlay">
     <div class="pillar far" style="left: 15%; height: 56px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
     <div class="pillar far" style="left: 58%; height: 72px"><i class="halo"></i><item id="minecraft:end_crystal"></item></div>
@@ -607,7 +599,7 @@
         <span class="mark"><i class="ping" v-if="o.id === activeId()"></i><i class="diamond" v-if="o.n < o.max"></i></span>
         <span class="text">{{ o.text }}</span>
         <span class="count" v-if="o.max > 1">{{ o.n }}/{{ o.max }}</span>
-        <div class="progress" v-if="o.max > 1"><div :style="{ width: o.n / o.max * 100 + '%' }"></div><i class="sheen"></i></div>
+        <div class="progress" v-if="o.max > 1"><div :style="{ width: o.n / o.max * 100 + '%' }"></div></div>
       </li>
     </ul>
   </section>

@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Companion Console</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * A claudemons companion console: chat with your robot, set what it may do, watch its task queue.
@@ -21,10 +22,11 @@
       --ask: #ffbf47;
       --never: #ff5c5c;
       --copper: #e0884f;
+      /* How far the caret and the thinking dot dim when they blink. */
+      --blink-opacity: 0.2;
     }
 
-    /* mc-center centres the console; the fixed height lets it fill the screen with height: 100%. */
-    body { height: 100vh; padding: 4px; color: var(--text); }
+    body { padding: 4px; color: var(--text); }
 
     .console {
       position: relative;
@@ -197,8 +199,6 @@
       animation: blink 600ms steps(1) infinite;
     }
 
-    @keyframes blink { 50% { opacity: 0.2; } }
-
     .vitals {
       display: flex;
       flex-direction: column;
@@ -313,7 +313,7 @@
 
     /* System lines: centred, dim, with a small item icon. */
     .sys { justify-content: center; color: var(--dim); animation: msg-in 220ms ease-out both; }
-    .sys b { font-weight: 400; color: var(--text); }
+    .sys b { color: var(--text); }
 
     /* The typing indicator: three dots bouncing one after another. */
     .typing {
@@ -436,8 +436,9 @@
       min-height: 0;
     }
 
-    /* Overall progress: a striped bar whose stripes march (an inner strip translated in a loop). */
-    .progress { display: flex; height: 6px; margin-bottom: 3px; }
+    /* Overall progress: a striped bar whose stripes march (an inner strip translated in a loop). Positioned, so it
+       paints over the title above it while the boot animation squashes the console flat. */
+    .progress { position: relative; display: flex; height: 6px; margin-bottom: 3px; }
     .progress .fill { position: relative; overflow: hidden; transition: width 500ms ease-out; }
 
     .progress .stripes {
@@ -486,7 +487,6 @@
 
     @keyframes task-in { from { opacity: 0; transform: translateX(10px); } }
 
-    .task .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .task.done .nm, .task .n { color: var(--dim); }
 
     .state { flex: none; width: 8px; text-align: center; }
@@ -508,7 +508,7 @@
     }
   </style>
 </head>
-<body class="mc-center">
+<body class="mc-center fullscreen">
   <main class="console">
     <!-- ============================================================== header -->
     <header class="head panel" :class="{ thinking: thinking }">
@@ -604,7 +604,7 @@
             <div class="tasklist" id="tasklist">
               <div class="task" v-for="t in tasks" :key="t.id" :class="{ done: t.have >= t.need }">
                 <item :id="t.icon"></item>
-                <span class="nm">{{ t.name }}</span>
+                <span class="nm truncate">{{ t.name }}</span>
                 <span class="n" v-if="t.need > 1 && t.have < t.need">{{ t.have }}/{{ t.need }}</span>
                 <span class="state done" v-if="t.have >= t.need">✔</span>
                 <div class="spinner" v-else-if="t === activeTask()"></div>

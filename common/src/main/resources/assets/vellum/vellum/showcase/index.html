@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Vellum showcase</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /* The showcase gallery: one card per demo, each with a tiny CSS sketch of the screen it opens. */
     :root {
@@ -14,8 +15,6 @@
     }
 
     body {
-      height: 100vh;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -33,8 +32,6 @@
     }
 
     h1 {
-      margin: 0;
-      font-weight: 400;
       text-shadow: 1px 1px 0 #6a5a8a, 2px 2px 0 #2a2040;
     }
 
@@ -59,10 +56,8 @@
     header model {
       width: 16px;
       height: 16px;
-      animation: spin 4s linear infinite;
+      animation: turn 4s linear infinite;
     }
-
-    @keyframes spin { to { -mc-yaw: 360deg; } }
 
     .grid {
       flex: 1;
@@ -104,8 +99,7 @@
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
     }
 
-    .card:hover .sketch item { animation: hop 500ms ease-in-out infinite; }
-    @keyframes hop { 50% { transform: translateY(-2px); } }
+    .card:hover .sketch item { animation: bob 500ms ease-in-out infinite; }
 
     .caption {
       display: flex;
@@ -114,10 +108,7 @@
       padding: 0 1px;
     }
 
-    .caption b {
-      font-weight: 400;
-      color: var(--accent);
-    }
+    .caption b { color: var(--accent); }
 
     .card small {
       padding: 0 1px;
@@ -300,8 +291,6 @@
       animation: blink 1.6s steps(1) infinite;
     }
 
-    @keyframes blink { 50% { opacity: 0.4; } }
-
     /* Journal: leather, two cream pages, a ribbon. */
     .s-book { background: #2a1c12; }
 
@@ -364,7 +353,7 @@
     }
   </style>
 </head>
-<body>
+<body class="fullscreen">
   <header>
     <h1>Vellum showcase</h1>
     <span>HTML and CSS, painted by Minecraft</span>

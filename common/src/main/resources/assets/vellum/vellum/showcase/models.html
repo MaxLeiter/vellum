@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Turntable</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * TURNTABLE: blocks, items and mobs in 3D. <model> and <entity> are turned by CSS (-mc-yaw, -mc-pitch,
@@ -17,7 +18,6 @@
     }
 
     body {
-      height: 100vh;
       display: flex;
       flex-direction: column;
       gap: 4px;
@@ -34,8 +34,6 @@
     }
 
     h1 {
-      margin: 0;
-      font-weight: 400;
       letter-spacing: 2px;
       text-shadow: 1px 1px 0 #34507a;
     }
@@ -96,8 +94,7 @@
     }
 
     /* Everything on a shelf spins, each a little behind the one before. */
-    .spin model, .spin entity { animation: spin 6s linear infinite; }
-    @keyframes spin { to { -mc-yaw: 360deg; } }
+    .spin model, .spin entity { animation: turn 6s linear infinite; }
     .cell:nth-child(2) > * { animation-delay: -1s; }
     .cell:nth-child(3) > * { animation-delay: -2s; }
     .cell:nth-child(4) > * { animation-delay: -3s; }
@@ -144,7 +141,6 @@
       text-align: center;
     }
 
-
     /* Head-and-shoulders portraits in viewfinders; they all watch the pointer, calmly: wherever it goes on the page,
        they turn their heads at most 30 degrees and tilt them at most 9. */
     .portraits {
@@ -157,15 +153,11 @@
     .portraits h2 {
       margin: 0 0 3px;
       font-size: 8px;
-      font-weight: 400;
       letter-spacing: 1px;
       color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
-    .stage b, .portraits h2 b { color: var(--glow); font-weight: 400; }
+    .stage b, .portraits h2 b { color: var(--glow); }
 
     .faces {
       display: flex;
@@ -220,7 +212,7 @@
     .face:hover .frame { border-color: var(--glow); }
   </style>
 </head>
-<body>
+<body class="fullscreen">
   <header>
     <h1>TURNTABLE</h1>
     <span>&lt;model&gt; and &lt;entity&gt; in 3D, turned by CSS</span>
@@ -267,7 +259,7 @@
         <p><b>Drag</b> to turn it, hover to swing it round.</p>
       </section>
       <section class="portraits">
-        <h2><b>PORTRAITS</b> focus: eyes</h2>
+        <h2 class="truncate"><b>PORTRAITS</b> focus: eyes</h2>
         <div class="faces">
           <div class="face"><div class="frame"><entity player follow-mouse></entity></div>you</div>
           <div class="face"><div class="frame"><entity type="minecraft:villager" follow-mouse></entity></div>villager</div>

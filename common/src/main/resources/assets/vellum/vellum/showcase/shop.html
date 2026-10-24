@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Wandering Trader</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * The Wandering Trader's night market, in the trader's own colours (indigo robe, ochre trim) under a striped
@@ -20,8 +21,6 @@
     }
 
     body {
-      height: 100vh;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
       color: var(--cream);
@@ -113,9 +112,7 @@
     }
 
     h1 {
-      margin: 0;
       font-size: 16px;
-      font-weight: 400;
       color: var(--trim);
       text-shadow: 1px 1px 0 #5a3a08, 2px 2px 0 #1a1004;
     }
@@ -262,7 +259,7 @@
       justify-content: center;
     }
 
-    /* A soft pool of the rarity colour behind the item. */
+    /* A soft pool of the rarity colour behind the item. It covers the item, so it lets the pointer through. */
     .art::before {
       content: "";
       position: absolute;
@@ -271,22 +268,12 @@
       width: 52px;
       height: 48px;
       background: radial-gradient(circle, color-mix(in srgb, var(--tier) 30%, transparent), rgba(0, 0, 0, 0) 65%);
+      pointer-events: none;
     }
 
     /* 32px: the item drawn at exactly 2x, so it stays crisp. */
     .art item { width: 32px; height: 32px; }
-    .card:hover .art item { animation: bob 700ms ease-in-out infinite; }
-
-    @keyframes bob {
-      50% { transform: translateY(-3px); }
-    }
-
-    /* Names that don't fit end in an ellipsis, on the cards and in the satchel. */
-    .name, .line-name {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
+    .card:hover .art item { animation: bob 700ms ease-in-out infinite; --bob-height: 3px; }
 
     .name {
       max-width: 100%;
@@ -360,11 +347,8 @@
       45%, 100% { transform: translateX(150px) rotate(20deg); }
     }
 
-    .card.legendary .art item { animation: float 2.4s ease-in-out infinite; }
-
-    @keyframes float {
-      50% { transform: translateY(-2px); }
-    }
+    /* Legendary items float, slower and lower, whether or not the card is hovered. */
+    .card.legendary .art item { animation: bob 2.4s ease-in-out infinite; --bob-height: 2px; }
 
     .empty {
       grid-column: 1 / -1;
@@ -401,7 +385,6 @@
       margin: 0 0 3px;
       padding-bottom: 3px;
       font-size: 8px;
-      font-weight: 400;
       color: var(--trim);
       border-bottom: 1px solid var(--trim-soft);
     }
@@ -557,7 +540,6 @@
     .toast b {
       display: block;
       color: var(--tone);
-      font-weight: 400;
     }
 
     @keyframes toast {
@@ -572,7 +554,7 @@
     }
   </style>
 </head>
-<body>
+<body class="fullscreen">
   <div class="awning">
     <div class="lantern left"><item id="minecraft:lantern"></item></div>
     <div class="lantern right"><item id="minecraft:lantern"></item></div>
@@ -601,7 +583,7 @@
            :title-json="deal(w)" @click="add(w, $event)">
         <i class="sweep" v-if="w.rarity === 'legendary'" :style="{ animationDelay: i * 250 + 'ms' }"></i>
         <div class="art"><item :id="w.icon" tooltip></item></div>
-        <div class="name">{{ w.name }}</div>
+        <div class="name truncate">{{ w.name }}</div>
         <div class="meta">
           <span class="tier">{{ '◆'.repeat(5 - ORDER[w.rarity]) }}</span>
           <span class="price"><item id="minecraft:emerald"></item><span>{{ w.price }}</span></span>
@@ -618,7 +600,7 @@
       <div class="lines">
         <div class="line" v-for="l in cart" :key="l.ware.id">
           <item :id="l.ware.icon"></item>
-          <span class="line-name">{{ l.ware.name }}</span>
+          <span class="line-name truncate">{{ l.ware.name }}</span>
           <span class="price"><item id="minecraft:emerald"></item><span>{{ l.ware.price * l.qty }}</span></span>
           <span class="stepper">
             <button @click="step(l, -1)">-</button>

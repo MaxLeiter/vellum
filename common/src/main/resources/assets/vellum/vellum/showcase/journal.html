@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Chronicle Journal</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * A Chronicle-style journal: a leather book open on a two-page spread, with ribbon tabs on the side.
@@ -22,17 +23,11 @@
       --pin: #c0261b;
     }
 
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      padding: 4px 26px 4px 4px;
-    }
+    /* The wider right padding leaves room for the ribbon tabs, which stick out past the book. */
+    body { padding: 4px 26px 4px 4px; }
 
-    /* The journal is written in one weight: Minecraft's bold is a doubled glyph and looks heavy on paper. */
-    h1, h3, b { font-weight: 400; color: var(--oxblood); }
-    h1 { margin: 0; font-size: 12px; line-height: 14px; }
+    h1, h3, b { color: var(--oxblood); }
+    h1 { font-size: 12px; line-height: 14px; }
     h3 { margin: 0 0 2px; letter-spacing: 1px; }
     p { margin: 0 0 4px; }
 
@@ -224,7 +219,7 @@
       background: linear-gradient(to right, rgba(214, 160, 60, 0.45), rgba(214, 160, 60, 0.08));
     }
 
-    .quest .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .quest .t { flex: 1; }
     .quest.done .t { color: var(--ink-soft); text-decoration: line-through; }
 
     /* A hand-drawn checkbox: an ink square; the tick is a glyph in red ink that pops in. */
@@ -656,7 +651,7 @@
     }
   </style>
 </head>
-<body>
+<body class="mc-center fullscreen">
   <main class="book">
     <div class="cover">
       <div class="cap tl"></div><div class="cap tr"></div><div class="cap bl"></div><div class="cap br"></div>
@@ -675,7 +670,7 @@
                      :class="{ sel: q.id === questId, done: q.done }"
                      :style="{ animationDelay: (i * 60 + 100) + 'ms' }" @click="pickQuest(q.id)">
                   <div class="check" @click.stop="toggleQuest(q)"><b v-if="q.done">✔</b></div>
-                  <span class="t">{{ q.title }}</span>
+                  <span class="t truncate">{{ q.title }}</span>
                   <item :id="q.icon"></item>
                 </div>
               </div>

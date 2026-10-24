@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Vellum title screen</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * A title screen painted entirely with CSS: a dusk sky, square sun, blocky clouds and four parallax ranges
@@ -16,8 +17,6 @@
     }
 
     body {
-      height: 100vh;
-      overflow: hidden;
       background: #0d0820;
       color: var(--ink);
     }
@@ -350,9 +349,7 @@
 
     /* 32px is the font at 4x: crisp. The extrusion is four 1px shadows, each a step darker. */
     h1 {
-      margin: 0;
       font-size: 32px;
-      font-weight: 400;
       letter-spacing: 4px;
       text-shadow: 1px 1px 0 #c3b2df, 2px 2px 0 #9580bb, 3px 3px 0 #66518f, 4px 4px 0 #2f2152;
     }
@@ -443,7 +440,7 @@
       transition: transform 160ms ease-out, background-color 160ms, border-color 160ms, box-shadow 200ms, color 160ms;
     }
 
-    /* Hover: slide right and glow gold. The item icon gets its own little hop. */
+    /* Hover: slide right and glow gold. The item icon starts to bob. */
     .panel button:hover, .panel button:focus-visible {
       transform: translateX(4px);
       background: rgba(255, 196, 100, 0.16);
@@ -454,11 +451,7 @@
 
     .panel button:active { transform: translateX(3px) scale(0.98); }
 
-    .panel button:hover item, .panel button:hover player-head { animation: hop 500ms ease-in-out infinite; }
-
-    @keyframes hop {
-      50% { transform: translateY(-2px); }
-    }
+    .panel button:hover item, .panel button:hover player-head { animation: bob 500ms ease-in-out infinite; }
 
     .panel player-head {
       width: 12px;
@@ -488,7 +481,7 @@
     }
   </style>
 </head>
-<body>
+<body class="fullscreen">
   <div class="world">
     <div class="sky day"></div>
     <div class="sky dusk"></div>
