@@ -11,4 +11,9 @@ package dev.vellum.engine.layout;
  * @param collapsesThrough the box is empty and its top and bottom margins collapse through it
  */
 record LayoutResult(float height, float firstBaseline, float lastBaseline, MarginSet top, MarginSet bottom,
-                    boolean collapsesThrough) {}
+                    boolean collapsesThrough) {
+    /** The first baseline, or the bottom border edge for a box without one (how flex and grid align it). */
+    float firstBaselineOrBottom() {
+        return Float.isNaN(firstBaseline) ? height : firstBaseline;
+    }
+}

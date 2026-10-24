@@ -1,11 +1,9 @@
 package dev.vellum.engine.input;
 
 import dev.vellum.engine.css.StyleEngine;
-import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.host.ReplacedContent;
-import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
+import dev.vellum.engine.testing.TestItem;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -219,21 +217,13 @@ class TooltipTest {
 
     // ---- Content with a tooltip of its own: <item tooltip> ----
 
-    /** An item as Minecraft's: its tooltip shows while hovered when it has the {@code tooltip} attribute. */
-    private record Item(Element element) implements ReplacedContent {
-        @Override public float intrinsicWidth() { return 16; }
-        @Override public float intrinsicHeight() { return 16; }
-        @Override public void paint(Canvas canvas, float x, float y, float width, float height) {}
-        @Override public boolean showsTooltip() { return element.hasAttribute("tooltip"); }
-    }
-
     /**
      * Shop rows: #row has a title-json, and the item #sword inside it shows its own tooltip; in #quiet, #muted has an
      * empty title and #icon no tooltip of its own; #bare has no title above it.
      */
     private static Page shop() {
         TestHost host = new TestHost();
-        host.replaced.put("item", Item::new);
+        host.replaced.put("item", TestItem::new);
         return host.load("""
                 <style>div { display: flex; height: 16px } span { width: 60px }</style>
                 <div id=row title-json='{"text":"Buy for 6 emeralds","color":"green"}'>

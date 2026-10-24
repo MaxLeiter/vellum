@@ -189,7 +189,7 @@ final class FlexLayout implements FormattingContext {
                 LayoutResult r = place(c, line, it, measure);
                 if (it == baselineItem) {
                     float y = itemPosition(c, line, it)[1];
-                    baseline = y + (Float.isNaN(r.firstBaseline()) ? r.height() : r.firstBaseline());
+                    baseline = y + r.firstBaselineOrBottom();
                 }
             }
         }
@@ -354,7 +354,7 @@ final class FlexLayout implements FormattingContext {
                 it.hypotheticalCross = Math.max(size, pb);
                 if (participatesInBaseline(c, it)) {
                     LayoutResult r = pass.measure(it.box, it.targetMain, Float.NaN, c.contentWidth, c.percentHeight);
-                    it.ascent = it.box.marginTop + (Float.isNaN(r.firstBaseline()) ? r.height() : r.firstBaseline());
+                    it.ascent = it.box.marginTop + r.firstBaselineOrBottom();
                 }
             }
         }

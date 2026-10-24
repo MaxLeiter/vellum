@@ -1,18 +1,20 @@
-//? if >=26 {
 package dev.vellum.mod.client.replaced;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.client.render.McCanvas;
 import dev.vellum.mod.client.render.Scene;
+//? if >=26 {
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.BlockModelResolver;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
+import net.minecraft.world.item.ItemDisplayContext;
+//?} else
+//import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
@@ -24,15 +26,19 @@ import org.jspecify.annotations.Nullable;
  * {@code -mc-yaw}/{@code -mc-pitch} 0 it looks as in the inventory (blocks in the three-quarter view, flat items face
  * on, at the size an item fills its slot); {@code -mc-yaw} turns it, {@code -mc-pitch} views it from further above,
  * {@code -mc-model-scale} sizes it, and {@code rotatable} lets the pointer turn it. Blocks without a model (fluids,
- * air) draw nothing.
+ * air) draw nothing. On 1.21.1 the block and item renderers draw it ({@link Scene}), and it can't fade: under half
+ * opacity it is not drawn.
  */
 final class ModelContent extends TurnableContent {
+    //? if >=26 {
     private static final BlockDisplayContext DISPLAY = BlockDisplayContext.create();
     /** One for every {@code <model>}: it holds nothing but the model manager, which outlives resource reloads. */
     private static @Nullable BlockModelResolver resolver;
+    //?}
 
     private @Nullable BlockState block;
     private ItemStack item = ItemStack.EMPTY;
+    //? if >=26
     private final BlockModelRenderState blockModel = new BlockModelRenderState();
 
     ModelContent(Element element) {
@@ -77,7 +83,10 @@ final class ModelContent extends TurnableContent {
         block = null;
         if (!state.isEmpty()) {
             try {
+                //? if >=26 {
                 block = BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, state, false).blockState();
+                //?} else
+                //block = BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK.asLookup(), state, false).blockState();
             } catch (CommandSyntaxException ignored) {
                 // An unknown block or property: nothing to draw.
             }
@@ -90,6 +99,7 @@ final class ModelContent extends TurnableContent {
      * null when there is none.
      */
     private @Nullable Scene scene(float dx, float dy) {
+        //? if >=26 {
         Minecraft mc = Minecraft.getInstance();
         if (block != null) {
             if (resolver == null) resolver = new BlockModelResolver(mc.getModelManager());
@@ -101,6 +111,9 @@ final class ModelContent extends TurnableContent {
         TrackingItemStackRenderState state = new TrackingItemStackRenderState();
         mc.getItemModelResolver().updateForTopItem(state, item, ItemDisplayContext.GUI, mc.level, null, 0);
         return state.isEmpty() ? null : Scene.item(this, state, yaw(), pitch(), dx, dy);
+        //?} else {
+        /*if (block != null) return block.getRenderShape() == RenderShape.INVISIBLE ? null : Scene.block(block, yaw(), pitch(), dx, dy);
+        return item.isEmpty() ? null : Scene.item(item, yaw(), pitch(), dx, dy);
+        *///?}
     }
 }
-//?}
