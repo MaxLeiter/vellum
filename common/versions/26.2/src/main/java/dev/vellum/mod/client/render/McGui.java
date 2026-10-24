@@ -119,16 +119,20 @@ public final class McGui {
                 scissor, bounds));
     }
 
-    /** Whether {@link #shape} can draw. Not on this version: shapes are tessellated. */
+    /** Whether {@link #shape} can draw: the shape shader is compiled. */
     boolean shapesAvailable() {
-        return false;
+        return SdfRenderState.available();
     }
 
-    /** The shape shader's draw (see 26.3's McGui). Never called on this version: {@link #shapesAvailable} is false. */
+    /**
+     * A rounded box, border or box-shadow drawn by the shape shader as one quad; the parameters are
+     * {@link SdfRenderState}'s.
+     */
     void shape(boolean shadow, Matrix3x2fc pose, float x0, float y0, float x1, float y1, float cx, float cy,
                float halfWidth, float halfHeight, short[] radii, float a, float b, boolean inset, boolean cutout, int color,
                ScreenRectangle bounds, @Nullable ScreenRectangle scissor) {
-        throw new UnsupportedOperationException("no shape shader on this Minecraft version");
+        g.guiRenderState.addGuiElement(new SdfRenderState(shadow ? SdfRenderState.SHADOW : SdfRenderState.BOX, pose, x0, y0,
+                x1, y1, cx, cy, halfWidth, halfHeight, radii, a, b, inset, cutout, color, scissor, bounds));
     }
 
     /** Text at (x, y) in {@code m}, scaled by {@code scale}. */

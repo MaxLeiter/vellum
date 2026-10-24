@@ -34,7 +34,7 @@ import java.util.Arrays;
  *       and hide below half opacity, as items do.</li>
  *   <li>Geometry: rectangles and quads are drawn with their own vertices, so fractional positions, rotations and
  *       per-vertex colours all work. Consecutive primitives share one copy of the transform.</li>
- *   <li>Shapes: where the version has the shape shader ({@link McGui#shapesAvailable}, 26.3) and
+ *   <li>Shapes: where the version has the shape shader ({@link McGui#shapesAvailable}, 26.2 and 26.3) and
  *       {@code client.shapeShader} is on, rounded boxes, rounded borders of one width and colour, and box-shadows are
  *       each one quad that the shader fills with antialiased edges and a Gaussian blur. What it can't draw (elliptical
  *       corners, borders that differ by side, shadows with corners that differ, offset inset shadows) is tessellated by

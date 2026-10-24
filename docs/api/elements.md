@@ -70,10 +70,10 @@ A vanilla chest is a few lines with these. See [demo/chest.html](../../common/sr
 
 ## Smooth or pixel-sharp shapes
 
-On Minecraft 26.3, rounded corners, rounded borders and box-shadows are drawn by a shader, so curves have smooth
-edges at any GUI scale or rotation and blurs are a real Gaussian. Square corners stay pixel-exact either way.
+On Minecraft 26.2 and 26.3, rounded corners, rounded borders and box-shadows are drawn by a shader, so curves have
+smooth edges at any GUI scale or rotation and blurs are a real Gaussian. Square corners stay pixel-exact either way.
 
-For hard pixel edges instead, the look of the other versions, set `shape-rendering: crispEdges` on an element. It is
+For hard pixel edges instead, the look of 1.21.1, set `shape-rendering: crispEdges` on an element. It is
 inherited, so `html { shape-rendering: crispEdges; }` covers a whole page. `auto` (the default) and
 `geometricPrecision` allow smooth shapes, and `optimizeSpeed` is the same as `crispEdges`. Players can also turn the
 shader off for everything with `client.shapeShader=false` ([Settings](security.md#settings)).

@@ -1,23 +1,31 @@
 #version 330
+#ifndef VELLUM_26_2
 #extension GL_ARB_separate_shader_objects : require
+#endif
 
 // See sdf_box.vsh. Without SHADOW: a rounded box filled (params.x = 0) or its border of width params.x, antialiased
 // over one device pixel. With SHADOW: a box-shadow, the shape blurred by a Gaussian of sigma params.x, grown (outer)
 // or shrunk (inset) by the spread params.y; inset shadows stay inside the box, and an outer shadow with flags.y set
 // leaves the box itself uncovered.
 
+#ifdef VELLUM_26_2
+#moj_import <minecraft:dynamictransforms.glsl>
+#define AT(n)
+#else
 #include <minecraft:dynamictransforms.glsl>
-
-layout(location = 0) in vec4 vertexColor;
-layout(location = 1) in vec2 local;
-layout(location = 2) flat in vec2 halfSize;
-layout(location = 3) flat in vec4 radii;
-layout(location = 4) flat in vec2 params;
-#ifdef SHADOW
-layout(location = 5) flat in vec2 flags;
+#define AT(n) layout(location = n)
 #endif
 
-layout(location = 0) out vec4 fragColor;
+AT(0) in vec4 vertexColor;
+AT(1) in vec2 local;
+AT(2) flat in vec2 halfSize;
+AT(3) flat in vec4 radii;
+AT(4) flat in vec2 params;
+#ifdef SHADOW
+AT(5) flat in vec2 flags;
+#endif
+
+AT(0) out vec4 fragColor;
 
 /** The corner radius of the quadrant p is in (y down): radii are top-left, top-right, bottom-right, bottom-left. */
 float cornerRadius(vec2 p, vec4 r) {

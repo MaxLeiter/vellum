@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- On Minecraft 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 26.2 and 1.21.1 are unchanged.
+- On Minecraft 26.2 and 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 1.21.1 is unchanged.
 - `Canvas.fillBoxShadow`: a canvas backend can draw box-shadows itself.
 
 ## 0.5.1
