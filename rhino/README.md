@@ -20,9 +20,8 @@ fails the build with its name. This needs `git` on the path.
 | `0004` | `async` functions, arrows and methods, and `await` |
 | `0005` | A size limit on BigInt arithmetic and parsing, which Vellum sets from `Limits.maxBigIntBits` |
 
-Each patch carries its tests, written in Rhino's style. They run in the working copy described below, not in
-Vellum's build; Vellum's own tests (`LanguageConformanceTest`, `NewSyntaxSandboxTest`) cover the result through the
-sandbox.
+The patches hold only Rhino's core module (`rhino/src/main`), the part Vellum builds. Vellum's own tests
+(`LanguageConformanceTest`, `NewSyntaxSandboxTest`) cover them through the sandbox.
 
 ## Changing the patches
 
@@ -38,22 +37,9 @@ add a commit for a new patch. Then write the series back:
 ./gradlew :rhino:rebuildRhinoPatches  # regenerates patches/ from the commits after "upstream"
 ```
 
-The patch files leave out version and diffstat noise, so a change to one shows up as a small diff. Delete
-`rhino/work` when you are done; `applyRhinoPatches` refuses to overwrite it.
-
-To run Rhino's own test suite in the working copy, check out the test262 submodule at the commit upstream uses for
-1.9.1, then use Rhino's build (it wants JDK 21 for Gradle, and Java 11 for its test262 expectations):
-
-```bash
-cd rhino/work
-git clone https://github.com/tc39/test262 tests/test262
-git -C tests/test262 checkout 3fd4ec27f1798ebecafc73b354a45dcdda9bde29
-./gradlew test
-```
-
-When a patch makes test262 tests pass or fail, update `tests/testsrc/test262.properties` the way upstream does
-(`RHINO_TEST_JAVA_VERSION=11 ./gradlew :tests:test --tests Test262SuiteTest -DupdateTest262properties`) and keep
-the change in that patch.
+The patch files leave out version and diffstat noise, so a change to one shows up as a small diff, and keep only
+`rhino/src/main`: tests you write in the working copy stay there. Delete `rhino/work` when you are done;
+`applyRhinoPatches` refuses to overwrite it.
 
 ## Moving to a newer Rhino
 
