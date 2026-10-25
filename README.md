@@ -95,7 +95,7 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 
 ## Building
 
-You need JDK 25 or newer and git; Gradle provisions the toolchains (25 for 26.3 and 26.2, 21 for 1.21.1).
+You need git and any JDK 17 or newer to start Gradle; Gradle downloads Java 25 to run itself (`gradle/gradle-daemon-jvm.properties`) and the toolchains it compiles with (25 for 26.3 and 26.2, 21 for 1.21.1).
 
 Vellum uses a patched Rhino. The build downloads the upstream source pinned in `gradle.properties` (once, checked
 against its SHA-256), applies the patches in `rhino/patches` and compiles it, so there is nothing to install first.
