@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Timers a page sets while it loads wait their full delay. In game, the first frame jumped the clock from 0 to the game's own time, so a load-time `setTimeout` fired at once and `performance.now()` jumped. `performance.now()` and `requestAnimationFrame` now count from the page's first frame, as in browsers.
+- Showing a HUD overlay again from its own `onClose` handler works (it was undone right after), so a queue of toasts is a few lines; `docs/api/hud.md` has the recipe.
 - `-mc-entity-focus: center` fits an `<entity>` like `body` but zooms around its middle with `-mc-model-scale`, so zooming in no longer shows only the feet.
 - `:key` works on any element, not only in a `v-for`: when the key changes the element is re-created, so its entrance animation replays. A keyed `v-if` branch does the same. The journal and Mobdex use it instead of one-item loops.
 - What an animation's `finished` promise or event changes applies before the next frame is drawn, so the journal no longer flickers after a page turn.

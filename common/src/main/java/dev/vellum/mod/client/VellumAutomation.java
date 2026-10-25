@@ -64,6 +64,9 @@ public final class VellumAutomation {
      * overlay above it with the pointer. Then {@link #hover}, {@link #click} and {@link #wheel} take the real input
      * path a screen's page does. Otherwise they return false: the overlay is drawn in the HUD layer without the
      * pointer, and a real click there would go to the screen or the game.
+     *
+     * <p>Empty until the overlay has drawn once: {@link VellumHud#show} loads its page on the next frame, so check
+     * on a later tick, not right after showing it.
      */
     public static Optional<VellumAutomation> hud(Identifier id) {
         DocumentDriver driver = VellumHud.driver(id);

@@ -123,3 +123,20 @@ what the narrator is given on a conversation (its title, a hovered reply, each n
 with a mod's key through `onKey`, fills in the templates demo, clicks a row scrolled out of the Mobdex's list, and
 answers the demo toast through chat, whose hovered button the overlay narrates. It ends by logging how many of its
 checks failed, and on 1.21.1 the ones it skipped because their feature is 26.3 only.
+
+## Running the game without a screen
+
+The autopilot and `VellumAutomation` need a real client. These setups are known to work for `runClient` on 26.3:
+
+- macOS: add `enableVsync:false` to `runs/client/options.txt`, or the client can hang on its first frame, and set
+  `earlyWindowControl = false` in `runs/client/config/fml.toml` on NeoForge.
+- Linux with no GPU (a container or CI):
+  - Run an X server: `Xvfb :1 -screen 0 854x480x24 +extension GLX +render` and `DISPLAY=:1`.
+  - Use Vulkan through Mesa's software driver: install `mesa-vulkan-drivers` and set
+    `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`. Minecraft then picks Vulkan. The OpenGL backend fails
+    there ("Couldn't find matching GLX visual"), because 26.3 asks for an sRGB framebuffer that llvmpipe under Xvfb
+    doesn't offer.
+  - On NeoForge, set `earlyWindowControl = false` in `runs/client/config/fml.toml`, or its early window fails on GLX
+    and the client stops.
+  - Screenshots (`Screenshot.grab`, the autopilot's) work, and `ffmpeg -f x11grab` records the window.
+
