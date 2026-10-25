@@ -34,7 +34,8 @@ neoForge {
 }
 
 dependencies {
-    // Vellum for this Minecraft version. Players install it as its own mod: don't bundle it (jarJar).
+    // Vellum for this Minecraft version, installed by players as its own mod. To bundle it in this mod's jar
+    // instead: jarJar(implementation("dev.vellum:vellum-neoforge-${minecraft_version}:${vellum_version}"))
     implementation "dev.vellum:vellum-neoforge-${minecraft_version}:${vellum_version}"
 }
 

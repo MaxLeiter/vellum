@@ -48,10 +48,24 @@ every version, except:
 - `VellumScreen` and `VellumContainerScreen` override 1.21.1's screen methods (`render`, `mouseClicked(double, double,
   int)`...), so subclasses override those there.
 
-Make Vellum a required dependency: `[[dependencies.<modid>]] modId="vellum" type="required"` in `neoforge.mods.toml`,
-`"depends": {"vellum": ">=0.7.0"}` in `fabric.mod.json`, and a required dependency on your Modrinth and CurseForge
-pages, so launchers install it with your mod. Don't bundle Vellum in your jar (`jarJar` or `include`). Players then
-get Vellum fixes without waiting for every mod that bundles it, and a modpack has one copy.
+The recommended setup is a required dependency: `[[dependencies.<modid>]] modId="vellum" type="required"` in
+`neoforge.mods.toml`, `"depends": {"vellum": ">=0.7.0"}` in `fabric.mod.json`, and a required dependency on your
+Modrinth and CurseForge pages, so launchers install it with your mod. Players then get Vellum fixes without waiting for
+your next release.
+
+You can also bundle Vellum in your jar, so players install one file:
+
+```groovy
+// NeoForge (ModDevGradle)
+dependencies { jarJar(implementation("dev.vellum:vellum-neoforge-26.3:0.7.0")) }
+// Fabric (Loom); on 1.21.1, modImplementation instead of implementation
+dependencies { include(implementation("dev.vellum:vellum-fabric-26.3:0.7.0")) }
+```
+
+Keep the required dependency in `neoforge.mods.toml` or `fabric.mod.json` either way. When several mods bundle
+Vellum, or a player also installs it, the loader loads only the newest copy, so a bundled Vellum may be newer than
+the one you built against. Vellum still shows in the mod list and keeps its own config file. Rhino's licence and
+notices are already inside Vellum's jar.
 
 If your mod works without Vellum, make it optional instead (`type="optional"`, `"suggests"`), and:
 

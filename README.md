@@ -60,7 +60,7 @@ repositories { maven { url = "https://maven.maxleiter.com"; content { includeGro
 dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.7.0") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
-Feel free to bundle Vellum with your mod, or add it as a dependency. [`template/`](template/README.md) has small NeoForge and Fabric mods to start from. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
+Add Vellum as a required dependency (recommended), or bundle it in your jar; [Depending on Vellum](docs/api/setup.md#depending-on-vellum) shows both. [`template/`](template/README.md) has small NeoForge and Fabric mods to start from. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.
 
 ### Servers
 

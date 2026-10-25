@@ -21,7 +21,8 @@ dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
-    // Vellum for this Minecraft version. Players install it as its own mod: don't bundle it (include).
+    // Vellum for this Minecraft version, installed by players as its own mod. To bundle it in this mod's jar
+    // instead: include(implementation("dev.vellum:vellum-fabric-${minecraft_version}:${vellum_version}"))
     implementation "dev.vellum:vellum-fabric-${minecraft_version}:${vellum_version}"
 }
 

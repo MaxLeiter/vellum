@@ -29,9 +29,9 @@ On macOS, if the client hangs on its first frame, add `enableVsync:false` to `ru
 - `Notes.java` opens the page with its data and handles the messages it sends.
 - `ExampleModClient.java` registers `/notes`.
 - `build.gradle` gets Vellum from [maven.maxleiter.com](https://maven.maxleiter.com).
-- `neoforge.mods.toml` or `fabric.mod.json` makes Vellum a required dependency. Don't bundle Vellum in your jar.
-  Players install it like any other mod, and launchers do it for them when you list it as a required dependency on
-  your Modrinth and CurseForge pages.
+- `neoforge.mods.toml` or `fabric.mod.json` makes Vellum a required dependency. Players install it like any other
+  mod, and launchers do it for them when you list it as a required dependency on your Modrinth and CurseForge pages.
+  To ship one jar instead, bundle Vellum in yours ([Depending on Vellum](../docs/api/setup.md#depending-on-vellum)).
 
 While `runClient` is running, saving `notes.html` reloads the open page, so you can change it without restarting
 the game. The [previewer](../preview/README.md) shows a page without launching Minecraft at all.

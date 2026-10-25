@@ -17,8 +17,8 @@ dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.7.0") }   // or
 
 If most of your UI moves to Vellum, make it a required dependency (`type="required"` in `neoforge.mods.toml`,
 `"depends"` in `fabric.mod.json`) rather than keeping a vanilla fallback for every screen. Two UIs for one feature is the
-duplication you are porting to get rid of. Don't bundle Vellum in your jar; list it as a required dependency on your
-Modrinth and CurseForge pages too.
+duplication you are porting to get rid of. List it as a required dependency on your Modrinth and CurseForge pages too,
+or bundle it in your jar ([Depending on Vellum](api/setup.md#depending-on-vellum)).
 
 ## 2. The shape of a Vellum screen
 
