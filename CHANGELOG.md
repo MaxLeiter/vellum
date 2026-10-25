@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Timers a page sets while it loads wait their full delay. In game, the first frame jumped the clock from 0 to the game's own time, so a load-time `setTimeout` fired at once and `performance.now()` jumped. `performance.now()` and `requestAnimationFrame` now count from the page's first frame, as in browsers.
+- What an animation's `finished` promise or event changes applies before the next frame is drawn, so the journal no longer flickers after a page turn.
+- The showcase and demo pages are about 12% smaller and share `showcase/showcase.css`, with the same look.
+
 ## 0.5.1
 
 - `list-style` and `list-style-type` work: `none` removes a list's bullets, and `disc`, `circle` and `square` pick them.

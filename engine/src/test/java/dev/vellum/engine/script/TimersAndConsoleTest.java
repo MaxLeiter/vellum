@@ -48,6 +48,24 @@ class TimersAndConsoleTest {
     }
 
     @Test
+    void timersSetWhileLoadingCountFromTheFirstFrame() {
+        // The host's clock is already at 1,000,000 ms when the page's first frame runs.
+        Page page = new TestHost().loadAt("""
+                <script>
+                const log = [];
+                const start = performance.now();
+                setTimeout(() => log.push('timeout'), 1000);
+                setInterval(() => log.push('tick'), 400);
+                requestAnimationFrame(t => log.push('frame ' + t));
+                </script>""", 1_000_000);
+        assertEquals("0 frame 0", page.eval("start + ' ' + log.join()"), "page time starts at the first frame");
+        page.frame(1_000_500);
+        assertEquals("frame 0,tick", page.eval("log.join()"), "one interval tick, no burst, and no timeout yet");
+        page.frame(1_001_000);
+        assertEquals("frame 0,tick,tick,timeout 1000", page.eval("log.join() + ' ' + performance.now()"));
+    }
+
+    @Test
     void microtasksRunAfterEachTimerCallback() {
         Page page = new TestHost().load("""
                 <script>

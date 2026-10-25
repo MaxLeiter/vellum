@@ -14,6 +14,11 @@ import java.util.function.DoubleConsumer;
  *
  * <p>Bounded by the document's {@link dev.vellum.engine.Limits}: at most {@code maxTimers} pending timers and
  * callbacks, and {@code frameScriptTimeMs} of them per frame, after which the rest wait for the next frame.
+ *
+ * <p>Times are the host's frame times, which can be large (Minecraft passes milliseconds since the game started).
+ * Timers a page sets while it loads, before its first frame, are moved onto the first frame's clock, and scripts see
+ * {@link #pageTime} (as in browsers, milliseconds since the page's first frame) from {@code performance.now()} and
+ * {@code requestAnimationFrame}.
  */
 public final class Scheduler {
     private static final class Timer {
@@ -43,13 +48,25 @@ public final class Scheduler {
     private int nextId = 1;
     private long seq;
     private double now;
+    /** The first frame's time; NaN until then. */
+    private double origin = Double.NaN;
 
     Scheduler(Document document) {
         this.document = document;
     }
 
-    /** The current frame time in ms (monotonic, as {@code performance.now()}). */
+    /** The current frame time in ms, on the host's clock (monotonic). */
     public double now() { return now; }
+
+    /** {@code frameMs} as milliseconds since the page's first frame: what scripts see. 0 before the first frame. */
+    public double pageTime(double frameMs) {
+        return Double.isNaN(origin) ? 0 : frameMs - origin;
+    }
+
+    /** The current frame's {@link #pageTime}: {@code performance.now()}. */
+    public double pageTime() {
+        return pageTime(now);
+    }
 
     public int setTimeout(Runnable task, double delayMs) {
         return schedule(new Timer(nextId++, now + Math.max(0, delayMs), -1, task));
@@ -108,6 +125,17 @@ public final class Scheduler {
      * drive time without the rest of the pipeline.
      */
     public void run(double nowMs) {
+        if (Double.isNaN(origin)) {
+            // Timers set while the page loaded counted from 0: move them onto the host's clock, so a load script's
+            // setTimeout(f, 1000) runs a second after the first frame, not at once.
+            origin = nowMs;
+            List<Timer> pending = new ArrayList<>(timers);
+            timers.clear();
+            for (Timer t : pending) {
+                t.due += nowMs - now;
+                timers.add(t);
+            }
+        }
         now = nowMs;
         long deadline = Document.clock.getAsLong() + document.limits().frameScriptTimeMs() * 1_000_000L;
         int budget = 1000;

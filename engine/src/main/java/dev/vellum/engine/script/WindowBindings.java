@@ -57,7 +57,8 @@ final class WindowBindings {
                 .action("clearInterval", clearTimer)
                 .method("requestAnimationFrame", (d, a) -> {
                     Callable fn = a.fn(0);
-                    return scheduler.requestAnimationFrame(now -> rt.call("Error in requestAnimationFrame callback", fn, global, now));
+                    return scheduler.requestAnimationFrame(now -> rt.call("Error in requestAnimationFrame callback", fn, global,
+                            scheduler.pageTime(now)));
                 })
                 .action("cancelAnimationFrame", (d, a) -> scheduler.cancelAnimationFrame((int) a.num(0, 0)))
                 .action("queueMicrotask", (d, a) -> {
@@ -73,8 +74,8 @@ final class WindowBindings {
 
         ScriptableObject performance = (ScriptableObject) rt.js.newObject();
         global.defineProperty("performance", performance, HIDDEN);
-        // The frame clock: the same timestamps requestAnimationFrame callbacks receive.
-        new Members<>(rt, performance, self -> scheduler).method("now", (s, a) -> s.now());
+        // The frame clock, from the page's first frame: the same timestamps requestAnimationFrame callbacks receive.
+        new Members<>(rt, performance, self -> scheduler).method("now", (s, a) -> s.pageTime());
 
         ScriptableObject console = (ScriptableObject) rt.js.newObject();
         global.defineProperty("console", console, ScriptableObject.DONTENUM);
