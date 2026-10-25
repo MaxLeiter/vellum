@@ -57,7 +57,7 @@ Vellum is in development. It's on [maven.maxleiter.com](https://maven.maxleiter.
 
 ```groovy
 repositories { maven { url = "https://maven.maxleiter.com"; content { includeGroup("dev.vellum") } } }
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.6.0") }   // or vellum-fabric-26.3, and the 1.21.1 ones
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.6.1") }   // or vellum-fabric-26.3, and the 1.21.1 ones
 ```
 
 Feel free to bundle Vellum with your mod, or add it as a dependency. [`template/`](template/README.md) has small NeoForge and Fabric mods to start from. [The docs](docs/index.md) cover the Java side, [`docs/SCRIPTING.md`](docs/SCRIPTING.md) the JavaScript dialect and templates, and [`docs/MIGRATING.md`](docs/MIGRATING.md) porting an existing screen.

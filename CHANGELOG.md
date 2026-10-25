@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
 
 - On Minecraft 26.2 and 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 1.21.1 is unchanged.
 - The previewer draws rounded boxes, borders and shadows the way the shader does, so pages look the same there as in game.
