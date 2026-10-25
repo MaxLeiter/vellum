@@ -233,14 +233,10 @@ final class GridLayout implements FormattingContext {
                     return m.max;
                 }
 
-                /**
-                 * The item's outer height, the same under both constraints. Measuring it first resolves the item's
-                 * margins, so a definite minimum computed earlier (with them unresolved) is computed again.
-                 */
+                /** The item's outer height, the same under both constraints. */
                 private float height(Contribution m, Placed item) {
                     if (m.hasMin) return m.min;
                     if (m.hasMax) return m.max;
-                    m.hasDefinite = false;
                     return outerHeight(item);
                 }
 
@@ -259,7 +255,9 @@ final class GridLayout implements FormattingContext {
                     float pb = BoxModel.paddingBorder(s, axis, Float.NaN);
                     float min = BoxModel.or(size(b, axis, axis.size(s), pb), size(b, axis, axis.minSize(s), pb));
                     if (Float.isNaN(min)) return Float.NaN;
-                    // Heights come from layouts at the area width, so their margins are resolved; widths' are not.
+                    // Widths' percentage margins have nothing to resolve against yet; heights' resolve against the
+                    // width of the item's columns, which are sized by now.
+                    if (!axis.isHorizontal()) BoxModel.resolveEdges(b, area(item, Axis.HORIZONTAL));
                     float margins = axis.isHorizontal() ? BoxModel.margins(s, axis, Float.NaN) : axis.margins(b);
                     return Math.max(min, pb) + margins;
                 }

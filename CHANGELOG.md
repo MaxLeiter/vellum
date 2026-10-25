@@ -7,6 +7,9 @@
 - Less work per frame: animations are only advanced a second time when an event handler changed them, outer box-shadows skip work the shader threw away, and the previewer no longer allocates per pixel.
 - Less work per restyle, relayout and event: colour transitions no longer copy the whole style twice a frame, grid track sizing measures each item once, flex and grid containers skip the anonymous boxes whitespace between items used to make, and event listeners only build error messages when something fails.
 - The build no longer pulls in Mixin, whose annotation processor made every change recompile all of the mod's code.
+- `&amp`, `&lt` and the like without a semicolon decode at the end of text and right before another `&` (`a &amp` was `a &&`).
+- Deselecting an option that wasn't selected, when that leaves a select with no selection, now updates the page (`:checked`, `v-model`).
+- A grid row's minimum counts a scroll container item's percentage margins.
 
 ## 0.6.2
 

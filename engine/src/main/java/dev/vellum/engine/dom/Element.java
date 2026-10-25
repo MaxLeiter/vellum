@@ -605,7 +605,10 @@ public class Element extends Node {
             if (select.selectedOption() == null) select.select(select.firstEnabledOption()); // as HTML resets
             ownerDocument.stateChanged(select);
         } else {
+            // Deselecting another option can still change the selection: once every option is deselected, none is.
+            Element before = select.selectedOption();
             selected = false;
+            if (select.selectedOption() != before) ownerDocument.stateChanged(select);
         }
     }
 

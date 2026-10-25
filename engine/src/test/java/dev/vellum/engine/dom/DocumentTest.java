@@ -15,6 +15,7 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -192,6 +193,19 @@ class DocumentTest {
         assertEquals("", select.value());
         select.setSelectedIndex(0);
         assertEquals("a", select.value());
+    }
+
+    @Test
+    void deselectingTheLastOptionClearsTheSelectionAndRestyles() {
+        Document doc = new TestHost().load("<select><option>a</option></select>").doc;
+        Element select = doc.querySelector("select");
+        select.setSelectedIndex(-1);
+        Element a = select.options().getFirst(), b = select.appendChild(doc.createElement("option"));
+        assertSame(a, select.selectedOption(), "an option never deselected brings back the first enabled one");
+        int version = doc.domVersion();
+        b.setSelected(false);
+        assertNull(select.selectedOption(), "every option deselected: none is");
+        assertNotEquals(version, doc.domVersion(), "the document is told the selection changed");
     }
 
     @Test

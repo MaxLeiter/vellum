@@ -46,6 +46,18 @@ class HtmlParserTest {
     }
 
     @Test
+    void entitiesWithoutSemicolon() {
+        assertEquals("a &", Entities.decode("a &amp", false));
+        assertEquals("<>", Entities.decode("&lt&gt", false));
+        assertEquals("&&", Entities.decode("&amp&amp", false));
+        assertEquals("& b; c", Entities.decode("&amp b; c", false));
+        assertEquals("a < b", Entities.decode("a &lt b", false));
+        assertEquals("&ampx", Entities.decode("&ampx", true)); // not in attributes
+        assertEquals("&nope", Entities.decode("&nope", false));
+        assertEquals("&", Entities.decode("&", false));
+    }
+
+    @Test
     void impliedEndTags() {
         Document doc = parse("<ul><li>one<li>two</ul><p>a<p>b<div>c</div>");
         assertEquals("<ul><li>one</li><li>two</li></ul><p>a</p><p>b</p><div>c</div>", HtmlSerializer.innerHTML(doc.body()));

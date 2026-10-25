@@ -6,8 +6,8 @@ import java.util.Map;
 /** Character references: numeric ({@code &#123;}, {@code &#x1F600;}) and the commonly used named entities. */
 final class Entities {
     private static final Map<String, String> NAMED = new HashMap<>();
-    /** Named references recognised without their semicolon, outside attributes. */
-    private static final String[] LEGACY = {"amp", "lt", "gt", "nbsp", "copy", "quot"};
+    /** Names browsers decode even without their semicolon, outside attributes (the HTML spec calls them legacy). */
+    private static final String[] NO_SEMICOLON = {"amp", "lt", "gt", "nbsp", "copy", "quot"};
 
     static {
         String[] pairs = {
@@ -61,28 +61,32 @@ final class Entities {
                     i = j < s.length() && s.charAt(j) == ';' ? j + 1 : j;
                     continue;
                 }
-            } else if (semi > i + 1 && semi - i <= 12) {
-                String name = s.substring(i + 1, semi);
-                String v = NAMED.get(name);
-                if (v != null) {
-                    sb.append(v);
-                    i = semi + 1;
-                    continue;
-                }
-            } else if (!inAttribute) {
-                // Legacy references without a semicolon (&amp &lt &gt &nbsp &copy).
-                for (String legacy : LEGACY) {
-                    if (s.startsWith(legacy, i + 1)) {
-                        sb.append(NAMED.get(legacy));
-                        i += 1 + legacy.length();
-                        break;
+            } else {
+                if (semi > i + 1 && semi - i <= 12) {
+                    String v = NAMED.get(s.substring(i + 1, semi));
+                    if (v != null) {
+                        sb.append(v);
+                        i = semi + 1;
+                        continue;
                     }
                 }
-                if (i < s.length() && s.charAt(i) != '&') continue;
+                // &amp, &lt and the like without a semicolon, as browsers read them, outside attributes.
+                String name = inAttribute ? null : nameWithoutSemicolon(s, i + 1);
+                if (name != null) {
+                    sb.append(NAMED.get(name));
+                    i += 1 + name.length();
+                    continue;
+                }
             }
             sb.append('&');
             i++;
         }
         return sb.toString();
+    }
+    private static String nameWithoutSemicolon(String s, int at) {
+        for (String name : NO_SEMICOLON) {
+            if (s.startsWith(name, at)) return name;
+        }
+        return null;
     }
 }

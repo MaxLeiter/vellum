@@ -40,6 +40,18 @@ class FlexGridLayoutTest {
     }
 
     @Test
+    void rowMinimumsCountPercentageMargins() {
+        // A scroll container's automatic minimum is its min-height plus margins, the top one 10% of its 100px area.
+        Page page = new TestHost().load("""
+                <div style="display: grid; width: 100px; height: 200px; grid-template-rows: minmax(auto, 0px) 1fr">
+                  <div id=a style="overflow: hidden; min-height: 20px; margin-top: 10%"></div>
+                  <div id=b></div>
+                </div>""");
+        assertRect(page.byId("a"), 0, 10, 100, 20);
+        assertRect(page.byId("b"), 0, 30, 100, 170);
+    }
+
+    @Test
     void autoFillRepeatsAndDensePacking() {
         Page page = new TestHost().load("""
                 <div style="display: grid; width: 100px; grid-template-columns: repeat(auto-fill, 30px); grid-auto-rows: 10px;
