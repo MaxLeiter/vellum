@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.client.render.FolderTextures;
 import dev.vellum.mod.client.render.McFontMetrics;
 import dev.vellum.mod.client.render.McGui;
 import dev.vellum.mod.client.render.McImages;
@@ -58,6 +59,8 @@ public final class VellumClient {
     public static void onResourceReload() {
         McFontMetrics.INSTANCE.clearCache();
         McImages.clearCaches();
+        FolderTextures.clear();
+        VellumPages.checkPacks();
         McGui.reloadShapes();
         DocumentDriver.reloadAll();
     }

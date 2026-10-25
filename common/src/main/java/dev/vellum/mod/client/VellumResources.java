@@ -2,6 +2,8 @@ package dev.vellum.mod.client;
 
 import dev.vellum.engine.host.FileStamps;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.client.render.FolderTextures;
+import dev.vellum.mod.client.render.McImages;
 import dev.vellum.mod.platform.Services;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -19,18 +21,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Where pages, stylesheets and scripts come from. A URL {@code ns:path/file.css} is the resource
- * {@code assets/ns/path/file.css}, read through the resource manager (so resource packs can restyle UIs).
+ * {@code assets/ns/path/file.css}, read through the resource manager (so resource packs can restyle UIs), or the file
+ * {@code path/file.css} when a mod gave the namespace a folder ({@link VellumPages}).
  *
  * <p>In a dev environment the source trees are read first: every {@code src/main/resources/assets} and
  * {@code common/src/main/resources/assets} between the run directory and the project root (the directory with
- * {@code settings.gradle}). The source files pages were read from are watched: saving one reloads open documents
- * without a rebuild.
+ * {@code settings.gradle}). The source and folder files pages were read from are watched: saving one reloads open
+ * documents without a rebuild.
  */
 public final class VellumResources {
     private static final long POLL_MS = 200;
     private static List<Path> sourceAssets = List.of();
-    /** Source files read for pages, which the watcher polls. */
-    private static final Set<Path> SOURCES_READ = ConcurrentHashMap.newKeySet();
+    /** Source and folder files read for pages, which the watcher polls. */
+    private static final Set<Path> FILES_READ = ConcurrentHashMap.newKeySet();
+    private static boolean watching;
 
     private VellumResources() {}
 
@@ -39,7 +43,18 @@ public final class VellumResources {
         sourceAssets = findSourceAssets();
         if (sourceAssets.isEmpty()) return;
         Constants.LOG.info("Vellum: dev mode, reading UI sources from {} and reloading pages when they are saved", sourceAssets);
-        Thread watcher = new Thread(VellumResources::watch, "Vellum source watcher");
+        startWatching();
+    }
+
+    /** A folder was registered: its files are watched in every environment. */
+    static void watchFolders() {
+        startWatching();
+    }
+
+    private static synchronized void startWatching() {
+        if (watching) return;
+        watching = true;
+        Thread watcher = new Thread(VellumResources::watch, "Vellum file watcher");
         watcher.setDaemon(true);
         watcher.start();
     }
@@ -48,10 +63,14 @@ public final class VellumResources {
     public static @Nullable String loadText(String url) {
         Identifier id = Identifier.tryParse(url);
         if (id == null) return null;
-        Path source = sourceFile(id);
         try {
+            if (VellumPages.isFolder(id.getNamespace())) {
+                byte[] bytes = loadFolderBytes(id);
+                return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
+            }
+            Path source = sourceFile(id);
             if (source != null) {
-                SOURCES_READ.add(source);
+                FILES_READ.add(source);
                 return Files.readString(source, StandardCharsets.UTF_8);
             }
             var resource = Minecraft.getInstance().getResourceManager().getResource(id);
@@ -61,6 +80,26 @@ public final class VellumResources {
             }
         } catch (IOException e) {
             Constants.LOG.warn("Vellum: cannot read {}: {}", url, e.toString());
+            return null;
+        }
+    }
+
+    /**
+     * The bytes of a file in a folder namespace ({@link VellumPages}), watched like the pages that use it; null when
+     * the file is missing or outside the folder. A missing file is watched too, so creating it reloads the page.
+     */
+    public static byte @Nullable [] loadFolderBytes(Identifier id) {
+        Path file = VellumPages.file(id);
+        if (file == null) {
+            Path expected = VellumPages.expected(id);
+            if (expected != null) FILES_READ.add(expected);
+            return null;
+        }
+        try {
+            FILES_READ.add(file);
+            return Files.readAllBytes(file);
+        } catch (IOException e) {
+            Constants.LOG.warn("Vellum: cannot read {}: {}", file, e.toString());
             return null;
         }
     }
@@ -89,6 +128,10 @@ public final class VellumResources {
         return List.copyOf(roots);
     }
 
+    /**
+     * Polls modification times, so a file deleted and written again, or saved by an editor that writes a temporary
+     * file and renames it over the old one, still counts as changed.
+     */
     private static void watch() {
         FileStamps stamps = new FileStamps();
         while (true) {
@@ -97,7 +140,14 @@ public final class VellumResources {
             } catch (InterruptedException e) {
                 return;
             }
-            if (stamps.changed(SOURCES_READ)) Minecraft.getInstance().execute(DocumentDriver::reloadAll);
+            if (stamps.changed(FILES_READ)) Minecraft.getInstance().execute(VellumResources::reload);
         }
+    }
+
+    /** Files changed: folder images are read again, and every open page reloads. */
+    private static void reload() {
+        FolderTextures.clear();
+        McImages.clearCaches();
+        DocumentDriver.reloadAll();
     }
 }

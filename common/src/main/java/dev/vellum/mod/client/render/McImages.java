@@ -1,5 +1,7 @@
 package dev.vellum.mod.client.render;
 
+import dev.vellum.mod.client.VellumPages;
+import dev.vellum.mod.client.VellumResources;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 //? if >=26
@@ -61,15 +63,20 @@ public final class McImages {
     /** Width and height from the PNG's IHDR chunk. */
     private static float[] readPngSize(String url) {
         Identifier id = id(url);
-        var resource = id == null ? null : Minecraft.getInstance().getResourceManager().getResource(id).orElse(null);
+        if (id == null) return UNKNOWN;
+        if (VellumPages.isFolder(id.getNamespace())) return pngSize(VellumResources.loadFolderBytes(id));
+        var resource = Minecraft.getInstance().getResourceManager().getResource(id).orElse(null);
         if (resource == null) return UNKNOWN;
         try (InputStream in = resource.open()) {
-            byte[] header = in.readNBytes(24);
-            if (header.length < 24 || header[1] != 'P' || header[2] != 'N' || header[3] != 'G') return UNKNOWN;
-            return new float[] {readInt(header, 16), readInt(header, 20)};
+            return pngSize(in.readNBytes(24));
         } catch (IOException e) {
             return UNKNOWN;
         }
+    }
+
+    private static float[] pngSize(byte @Nullable [] header) {
+        if (header == null || header.length < 24 || header[1] != 'P' || header[2] != 'N' || header[3] != 'G') return UNKNOWN;
+        return new float[] {readInt(header, 16), readInt(header, 20)};
     }
 
     private static float[] readSpriteSize(String spriteId) {

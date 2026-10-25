@@ -1,5 +1,6 @@
 package dev.vellum.mod.client.render;
 
+import dev.vellum.mod.client.VellumPages;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.ScissorStack;
@@ -223,7 +224,8 @@ public final class McCanvas implements Canvas {
     public void drawImage(String url, float x, float y, float width, float height,
                           float u0, float v0, float u1, float v1, int tint, boolean smooth) {
         Identifier texture = McImages.id(url);
-        if (texture != null) blit(texture, x, y, width, height, u0, v0, u1, v1, tint, smooth);
+        if (texture == null || VellumPages.isFolder(texture.getNamespace()) && !FolderTextures.ensure(texture)) return;
+        blit(texture, x, y, width, height, u0, v0, u1, v1, tint, smooth);
     }
 
     @Override

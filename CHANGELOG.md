@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `VellumPages.folder(namespace, dir)` serves a namespace from a folder players can edit, such as one in `config/`. Relative stylesheets, scripts and images resolve inside it, saving any of them reloads the page, and nothing outside the folder can be read. See "Pages players edit" in `docs/api/pages.md`.
 - If the shape shader fails to compile, Vellum draws shapes the old way until the next resource reload, instead of retrying the compile every 5 seconds (a hitch each time).
 - Less work per frame: animations are only advanced a second time when an event handler changed them, outer box-shadows skip work the shader threw away, and the previewer no longer allocates per pixel.
 - Less work per restyle, relayout and event: colour transitions no longer copy the whole style twice a frame, grid track sizing measures each item once, flex and grid containers skip the anonymous boxes whitespace between items used to make, and event listeners only build error messages when something fails.

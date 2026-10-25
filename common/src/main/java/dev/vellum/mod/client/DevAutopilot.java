@@ -30,6 +30,10 @@ import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -200,6 +204,7 @@ public final class DevAutopilot {
         for (int i = 0; i < 4; i++) grab(mc, "showcase_title_hover_" + i, 0);
         leave(); // or the next pages open hovered
         firstHover(mc);
+        folderPages(mc);
         tooltips(mc);
         chronicle(mc);
         modKeys();
@@ -493,6 +498,84 @@ public final class DevAutopilot {
             if (VellumHud.isShown(VellumClient.DEMO_TOAST)) VellumHud.hide(VellumClient.DEMO_TOAST);
             McClient.setScreen(null);
         });
+    }
+
+    /**
+     * Folder pages ({@link VellumPages}): a page, its stylesheet and an image written to a folder as a player would,
+     * a stylesheet linked into the folder from outside it (which must be refused), and an edit, which must reload the
+     * open page.
+     */
+    private static void folderPages(Minecraft mc) {
+        Path dir = mc.gameDirectory.toPath().resolve("vellum-autopilot-folder");
+        Path page = dir.resolve("page.html");
+        steps.add(() -> {
+            try {
+                Files.createDirectories(dir);
+                Files.writeString(page, folderPage("first"));
+                Files.writeString(dir.resolve("style.css"), "p { color: rgb(0, 128, 0); }");
+                Path outside = dir.resolveSibling("vellum-autopilot-outside.css");
+                Files.writeString(outside, "p { font-weight: bold; }");
+                Path link = dir.resolve("escape.css");
+                Files.deleteIfExists(link);
+                Files.createSymbolicLink(link, outside);
+                try (InputStream in = mc.getResourceManager().getResource(Constants.id("icon.png")).orElseThrow().open()) {
+                    Files.write(dir.resolve("pic.png"), in.readAllBytes());
+                }
+            } catch (IOException | UnsupportedOperationException e) {
+                fail("cannot write the folder page: {}", e.toString());
+                return;
+            }
+            if (!VellumPages.isFolder(FOLDER)) VellumPages.folder(FOLDER, dir);
+            check(refused(() -> VellumPages.folder(FOLDER, dir)) && refused(() -> VellumPages.folder(Constants.MOD_ID, dir))
+                            && refused(() -> VellumPages.folder("minecraft", dir)),
+                    "a folder can't take a namespace that is registered or belongs to a mod",
+                    "a folder took a namespace that is registered or belongs to a mod");
+            VellumScreens.open(FOLDER + ":page.html");
+        });
+        settle("the folder page", 0);
+        onPage("the folder page", p -> {
+            String text = p.eval("document.querySelector('p').textContent").map(JsonElement::getAsString).orElse("");
+            String color = p.eval("getComputedStyle(document.querySelector('p')).color").map(JsonElement::getAsString).orElse("");
+            String weight = p.eval("getComputedStyle(document.querySelector('p')).fontWeight").map(JsonElement::getAsString).orElse("");
+            double image = p.eval("document.querySelector('img').getBoundingClientRect().width").map(JsonElement::getAsDouble).orElse(0.0);
+            check(text.equals("first") && color.equals("rgb(0, 128, 0)") && image > 0,
+                    "a folder page loaded with its stylesheet and image ('{}', {}, {} px)",
+                    "the folder page didn't load with its stylesheet and image: text '{}', color {}, image {} px", text, color, image);
+            check(!weight.equals("bold") && !weight.equals("700"), "a stylesheet linked from outside the folder was refused",
+                    "a stylesheet linked from outside the folder was read (font-weight {})", weight);
+        });
+        grab(mc, "folder_page", 0);
+        steps.add(() -> {
+            try {
+                Files.writeString(page, folderPage("second"));
+            } catch (IOException e) {
+                fail("cannot edit the folder page: {}", e.toString());
+            }
+        });
+        until("the folder page reloaded after an edit", ticks -> folderText().equals("second"));
+        onPage("the edited folder page", p -> check(folderText().equals("second"), "saving a folder page reloaded it",
+                "saving a folder page didn't reload it: it still says '{}'", folderText()));
+    }
+
+    private static final String FOLDER = "vellum_autopilot";
+
+    private static String folderPage(String text) {
+        return "<!doctype html><link rel=\"stylesheet\" href=\"style.css\"><link rel=\"stylesheet\" href=\"escape.css\">"
+                + "<body class=\"mc-center\"><p>" + text + "</p><img src=\"pic.png\" style=\"height: 32px\"></body>";
+    }
+
+    private static String folderText() {
+        return VellumAutomation.screen().flatMap(p -> p.eval("document.querySelector('p') ? document.querySelector('p').textContent : ''"))
+                .map(JsonElement::getAsString).orElse("");
+    }
+
+    private static boolean refused(Runnable register) {
+        try {
+            register.run();
+            return false;
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
     }
 
     // ---- Steps ----

@@ -131,6 +131,7 @@ final class ServerPages {
         if (Boolean.FALSE.equals(allowed)) return "the player declined pages from this server";
         if (now < blockedUntil) return "the server kept reopening pages";
         if (p.html().length() > VellumConfig.CLIENT_MAX_INLINE_HTML.get()) return "the page is over client.maxInlineHtmlChars";
+        if (p.html().isEmpty() && VellumPages.isFolderUrl(p.url())) return "the page is in a folder on this computer, which servers may not open";
         if (!dataFits(p.data())) return "its data is over client.maxDataChars or client.maxDataDepth";
         return null;
     }

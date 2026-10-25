@@ -1,6 +1,6 @@
 # Opening pages
 
-Opening a page from the client or from the server, and exchanging data and messages with it. [All docs](../index.md)
+Opening a page from the client or from the server, exchanging data and messages with it, and pages players edit. [All docs](../index.md)
 
 ## Opening a page on the client
 
@@ -66,6 +66,31 @@ book.driver().onKey(e -> {
     return false;
 });
 ```
+
+## Pages players edit
+
+A mod can serve a namespace from a folder, so players change a page by editing files in it instead of building a
+resource pack. Hudsmith does this for its HUD, which lives in `config/hudsmith/`:
+
+```java
+// At client setup. Use a namespace of its own, not your mod id, so your bundled pages still come from your jar.
+VellumPages.folder("hudsmith_hud", configDir.resolve("hudsmith"));
+VellumHud.register(HUD, "hudsmith_hud:hud.html");
+```
+
+- `hudsmith_hud:hud.html` is the file `hud.html` in the folder. Its relative stylesheets, scripts and images
+  resolve next to it, like any page's. Images must be PNGs.
+- Saving any file a page read (the page, a stylesheet, an image, or a file it asked for that didn't exist yet)
+  reloads the page, in every environment, not only in dev. Deleting and recreating a file, or an editor that saves
+  through a temporary file, counts as saving.
+- The folder owns its namespace. Its ids never fall back to resource packs, and a pack providing the same namespace
+  is ignored for it, with a warning in the log. `minecraft:` and other namespaces still come from resources, so
+  `<item>`, sprites and textures work as usual.
+- A page only reads files inside the folder: a path that leaves it, by `..` or a symbolic link to somewhere else, is
+  treated as missing. The folder itself may be behind a link, as launchers often link `.minecraft` or `config`.
+- Pages a server opens can't read folder files, and a server can't open a folder page.
+- `folder` throws if the namespace is already registered or is `minecraft`, `vellum` or a loaded mod's id. A broken
+  page shows the usual error: a panel on a screen, a line in the corner on a HUD overlay.
 
 ## Opening a page from the server
 

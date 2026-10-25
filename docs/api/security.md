@@ -27,6 +27,9 @@ client can send anything.
   a scheme is a resource id like any other (`https://example.com/a.png` names `assets/https/...`), so no request
   leaves the game, no third party learns the player's IP, and no file outside the resource packs is read. In a
   development environment pages are also read from `common/src/main/resources/assets`, and never from outside it.
+- A mod can serve a namespace from a folder players edit ([Pages players edit](pages.md#pages-players-edit)). Those
+  pages read only files inside that folder, `..` and symbolic links pointing out of it included. Pages a server opens
+  can't read them, and a server can't open them.
 - A canvas can only draw other canvases, so `getImageData` can't read the pixels of a texture, a skin or the screen.
   There is no `toDataURL`.
 - Shift+Escape always closes a Vellum screen, and the page never sees the key. Escape pressed three times within 1.5

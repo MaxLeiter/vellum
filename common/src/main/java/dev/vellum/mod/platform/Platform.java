@@ -7,4 +7,6 @@ public interface Platform {
     boolean isDevelopmentEnvironment();
 
     Path configDir();
+
+    boolean isModLoaded(String modId);
 }
