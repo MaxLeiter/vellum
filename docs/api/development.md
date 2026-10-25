@@ -67,7 +67,7 @@ VellumAutomation.screen().filter(VellumAutomation::settled).ifPresent(page -> {
 | `static void stopRecordingNarration()` | Stops recording. |
 | `boolean settled()` | Whether the page has stopped changing by itself (see below). |
 
-`hover`, `click` and `wheel` aim at the centre of the part of the element that shows: its border box cut to the
+`hover`, `click` and `wheel` aim at the center of the part of the element that shows: its border box cut to the
 window and to every scroll container (or other `overflow` clip) it is in. When none of it shows, its scroll
 containers first scroll it into view, as `scrollIntoView` does. Then they hit test that point. If the topmost thing
 painted there is not the element or something inside it (a positioned sibling on top, a HUD overlay over the screen,

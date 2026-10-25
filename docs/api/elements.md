@@ -10,13 +10,13 @@ and `object-fit`, and placed in their box by `object-position`.
 |---|---|---|
 | `<item>` | `id`, `count`, `components`, `tooltip` | An item stack with its count and durability bar; 16×16 by default, scaled to the box. `components` is SNBT, as in `/give`: `components='{"minecraft:enchantments":{"minecraft:sharpness":5}}'`. With `tooltip`, hovering shows the vanilla item tooltip at once, with the lines of any `title` that applies after the item's own (below). Items can't be faded: under 50% opacity they are hidden. |
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
-| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer (`-mc-gaze-reach` and `-mc-gaze-limit` soften it, below); `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
-| `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
+| `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centered and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer (`-mc-gaze-reach` and `-mc-gaze-limit` soften it, below); `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
+| `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centered in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
 | `<scene>` | `structure`, `rotatable`, `notooltips` | A small world in a box: blocks from a structure file and `<block>` children, grouped by `<block-group>`s that show, fade and move with CSS, `<entity>` children standing in it, and `<scene-anchor>` HTML pinned to points in it. Seen as the inventory sees blocks, fitted to its box. Hovering a block shows its name and fires `blockhover`. 160×120 by default. See [Scenes](#scenes). |
 | `<player-head>` | `name`, `uuid` | A player's face with the hat layer. No attributes: your own face. 16×16 by default. |
 | `<sprite>` | `src` | A GUI-atlas sprite such as `minecraft:widget/button`, at its natural size. Nine-slice and tiled sprites keep their borders when resized. |
 | `<img>` | `src` | A texture (`ns:textures/....png`, or relative to the page), a sprite (`sprite:ns:path`) or a canvas (`canvas:<id>`, the `<canvas>` with that id). The natural size comes from the PNG, sprite or canvas. `sprite:` and `canvas:` URLs work in CSS `url()` too. |
-| `<canvas>` | `width`, `height` | A pixel surface for scripts, 300×150 by default (at most 2048 a side). `getContext('2d')` supports `fillStyle`/`strokeStyle` (CSS colours), `lineWidth`, `globalAlpha`, `save`/`restore`, `fillRect`, `strokeRect`, `clearRect`, `getImageData`/`putImageData`/`createImageData` and `drawImage` of another canvas; coordinates are whole pixels (no antialiasing), and there is no text, paths or transforms. Show it elsewhere with `canvas:<id>`. |
+| `<canvas>` | `width`, `height` | A pixel surface for scripts, 300×150 by default (at most 2048 a side). `getContext('2d')` supports `fillStyle`/`strokeStyle` (CSS colors), `lineWidth`, `globalAlpha`, `save`/`restore`, `fillRect`, `strokeRect`, `clearRect`, `getImageData`/`putImageData`/`createImageData` and `drawImage` of another canvas; coordinates are whole pixels (no antialiasing), and there is no text, paths or transforms. Show it elsewhere with `canvas:<id>`. |
 | `<mc-text>` | `key` + `args`, or `json` | Minecraft text as ordinary inline text: a translation (`key="block.minecraft.stone"`, comma-separated `args`) or a chat component (`json='{"text":"Gold","color":"gold","bold":true}'`). Styled parts become spans. Expanded when the element is added to the page and whenever these attributes change, so it works in templates. |
 
 Any element can have a title, which shows as a vanilla tooltip (below).
@@ -24,7 +24,7 @@ Any element can have a title, which shows as a vanilla tooltip (below).
 CSS extras for Minecraft: `font-family: minecraft:default | minecraft:uniform | minecraft:alt |
 minecraft:illageralt | <any font id>` (`monospace` is uniform), `text-shadow: minecraft` (the game's own shadow),
 `-mc-tint` (multiplies images, sprites, entities and models; items cannot be tinted), `sprite(ns:path)` backgrounds,
-and the chat colours as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels: `1px` scales with the GUI scale,
+and the chat colors as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels: `1px` scales with the GUI scale,
 `1dp` is one device pixel.
 
 `<entity>` and `<model>` are turned by CSS, so transitions and animations work on them:
@@ -59,8 +59,8 @@ without a class.
 
 | Class | What it gives you |
 |---|---|
-| `mc-panel` | The light grey container panel with its raised bevel and black outline, as in a chest |
-| `mc-label` | Container label text: dark grey, no shadow ("Inventory") |
+| `mc-panel` | The light gray container panel with its raised bevel and black outline, as in a chest |
+| `mc-label` | Container label text: dark gray, no shadow ("Inventory") |
 | `mc-inset` | The sunken bevel around slots |
 | `mc-tooltip` | The tooltip box: near-black with the purple frame |
 | `mc-dark` | The translucent dark panel behind lists in menus |
@@ -74,12 +74,12 @@ A vanilla chest is a few lines with these. See [demo/chest.html](../../common/sr
 Vellum measures text exactly as vanilla does, so two of the font's habits show up around small boxes of text:
 
 - Every glyph's advance includes the 1 px gap that follows it, the last one too. A one-letter badge with
-  `padding: 0 2px` has 2 px of background left of the glyph and 3 px right of it, and centred text sits half a pixel
-  left of centre, as it does on vanilla buttons. For an exactly centred badge, pad one pixel less on the right:
+  `padding: 0 2px` has 2 px of background left of the glyph and 3 px right of it, and centered text sits half a pixel
+  left of center, as it does on vanilla buttons. For an exactly centered badge, pad one pixel less on the right:
   `padding: 0 1px 0 2px`.
 - A line is 9 px tall at the default size, with the glyphs at its top: capitals fill the first 7 px, and the last
   2 px are for descenders and the gap between lines. One line of capitals in a box therefore has no space above it and
-  2 px below, so pad the top 2 px more than the bottom to balance it. A tight, centred one-letter badge is
+  2 px below, so pad the top 2 px more than the bottom to balance it. A tight, centered one-letter badge is
   `padding: 2px 1px 0 2px`.
 
 ## Smooth or pixel-sharp shapes
@@ -91,7 +91,7 @@ For hard pixel edges instead, the look of 1.21.1, set `shape-rendering: crispEdg
 inherited, so `html { shape-rendering: crispEdges; }` covers a whole page. `auto` (the default) and
 `geometricPrecision` allow smooth shapes, and `optimizeSpeed` is the same as `crispEdges`. Players can also turn the
 shader off for everything with `client.shapeShader=false` ([Settings](security.md#settings)). The previewer draws
-shapes the way the shader does, and honours `crispEdges` too.
+shapes the way the shader does, and honors `crispEdges` too.
 
 ## Placing entities and models
 
@@ -103,7 +103,7 @@ stylesheet, so they take a square as wide as the box's shorter side. Models take
 An `<entity>` is fitted one of three ways:
 
 - `-mc-entity-focus: body` (the default) fits the whole entity, with room to turn it, and `object-position` places
-  that room. Without `object-position` it stands on the bottom edge, centred (`50% 100%`), not in the middle.
+  that room. Without `object-position` it stands on the bottom edge, centered (`50% 100%`), not in the middle.
   `-mc-model-scale` grows it from there, so zooming in shows its feet.
 - `-mc-entity-focus: center` fits it as `body` does, but `-mc-model-scale` zooms around the middle of the entity,
   which stays where it was. Use it for a zoomable viewer.
@@ -245,7 +245,7 @@ Vellum has no timeline. A build that assembles itself is groups, CSS and a timer
 The caption glides from point to point on its `-mc-translate` transition, the camera on its own. An entity walks the
 same way: set its `-mc-translate` with a transition, and `walk` while it moves.
 
-What renders: block models with faces between neighbours in a group culled, connected blocks as their states say
+What renders: block models with faces between neighbors in a group culled, connected blocks as their states say
 (structure files save fences, panes, walls and stairs connected; write the connections yourself on `<block>`), fluids,
 block entities (chests, beds, signs, banners) with their own renderers but at rest, and entities. Blocks are lit full
 bright by the inventory's light, so the world's time and dimension never show. Faces between two groups are drawn,
@@ -255,7 +255,7 @@ previewer draws blocks from their models with simple shading, entities as silhou
 ## Tooltips
 
 Any element can have a `title` (plain text; a newline breaks the line) or a `title-json` (a chat component, for
-coloured text). Once the pointer has rested on the element for its `-mc-tooltip-delay`, half a second unless a rule
+colored text). Once the pointer has rested on the element for its `-mc-tooltip-delay`, half a second unless a rule
 sets it, the vanilla tooltip shows at the pointer, wrapped at 170 px like a widget tooltip. Add `title-nowrap` to the
 element to keep its lines whole; they then break only at newlines. The nearest title from the hovered element up wins,
 and a container slot's item tooltip wins over it. See SCRIPTING.md.

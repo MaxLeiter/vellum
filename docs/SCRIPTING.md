@@ -157,10 +157,10 @@ which are snapshots: they do not update when the document changes.
 - `focus()`, `blur()`, `click()`, `animate(keyframes, options)`.
 - Canvases: `width`/`height` (settable; a new size clears the canvas) and `getContext('2d')`, which returns the
   canvas's one 2D context (null for other types and other elements). The context supports `fillStyle` and
-  `strokeStyle` (CSS colours), `lineWidth`, `globalAlpha`, `save()`/`restore()`, `fillRect`, `strokeRect`,
+  `strokeStyle` (CSS colors), `lineWidth`, `globalAlpha`, `save()`/`restore()`, `fillRect`, `strokeRect`,
   `clearRect`, `getImageData`, `putImageData` (with an optional dirty rectangle), `createImageData(w, h)` or
   `(imageData)`, and `drawImage(canvas, ...)` with 3, 5 or 9 arguments (another canvas only, scaled
-  nearest-neighbour). Image data is `{width, height, data}` with `data` a `Uint8ClampedArray` of RGBA bytes (a plain
+  nearest-neighbor). Image data is `{width, height, data}` with `data` a `Uint8ClampedArray` of RGBA bytes (a plain
   array works for `putImageData` too). Coordinates are canvas pixels, and edges snap to whole pixels: there is no
   antialiasing, text, paths, transforms, gradients or patterns. A canvas can be drawn on before it is added to the
   page.
@@ -209,7 +209,7 @@ element for half a second, the nearest `title` from the hovered element up shows
 element's `-mc-tooltip-delay`, an inherited CSS time: `.map { -mc-tooltip-delay: 0ms }` shows every tooltip on a map
 at once. A newline in the
 value breaks the line (`&#10;` in HTML, `'\n'` in a script string); long lines wrap at 170 px unless the element has
-`title-nowrap`. `title-json` takes a chat component instead, for coloured text
+`title-nowrap`. `title-json` takes a chat component instead, for colored text
 (`title-json='{"text":"Rare","color":"gold"}'`), read like `<mc-text json>`. An empty `title` hides an ancestor's.
 Pressing a button or key hides the tooltip until the pointer moves to another element with one. Changing the
 attribute from a script changes the tooltip while it shows.
@@ -243,7 +243,7 @@ anim.finished.then(() => console.log('shown'));
   `reverse`, `alternate` or `alternate-reverse`; `fill` is `none`, `forwards`, `backwards` or `both`.
 - The returned `Animation` has `play()`, `pause()`, `cancel()`, `finish()`, `reverse()`, `playState` (`idle`,
   `running`, `paused`, `finished`), `currentTime`, `playbackRate`, `onfinish`, `oncancel` and a `finished` promise
-  (rejected with an `AbortError` when cancelled).
+  (rejected with an `AbortError` when canceled).
 
 ## The `vellum` object
 

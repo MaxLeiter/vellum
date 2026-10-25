@@ -64,7 +64,7 @@ dependencies { include(implementation("dev.vellum:vellum-fabric-26.3:0.7.0")) }
 
 Keep the required dependency in `neoforge.mods.toml` or `fabric.mod.json` either way. When several mods bundle
 Vellum, or a player also installs it, the loader loads only the newest copy, so a bundled Vellum may be newer than
-the one you built against. Vellum still shows in the mod list and keeps its own config file. Rhino's licence and
+the one you built against. Vellum still shows in the mod list and keeps its own config file. Rhino's license and
 notices are already inside Vellum's jar.
 
 If your mod works without Vellum, make it optional instead (`type="optional"`, `"suggests"`), and:

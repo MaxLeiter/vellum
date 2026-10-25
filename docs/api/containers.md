@@ -20,7 +20,7 @@ VellumScreens.registerContainer(MyMenus.FORGE, "mymod:vellum/forge.html");   // 
 ```
 
 Recipe viewers (JEI, REI, EMI) lay out around a container screen's GUI area. For a Vellum container that area is
-the page's content, measured every frame as painted: `<body>`'s in-flow child elements (a centred panel), or, when the
+the page's content, measured every frame as painted: `<body>`'s in-flow child elements (a centered panel), or, when the
 page marks any, the elements with a `data-vellum-bounds` attribute. Mark them when the panel is not a direct child
 of `<body>`, when positioned parts (a side tab, a floating inventory) belong to it, or when a full-screen wrapper
 would claim the whole screen:

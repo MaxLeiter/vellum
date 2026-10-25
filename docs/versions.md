@@ -62,7 +62,7 @@ Everything works on 1.21.1, with these differences:
    for what one version needs (a disabled block's lines are commented with `##`, not `#`: the widener parser rejects
    the leading space a single `#` leaves behind). Check the mod metadata too: NeoForge 26.x needs `iconFile` instead
    of `logoFile` in `neoforge.mods.toml` (`neoforge_logo_key`), since NeoForge's deprecation warning screen stops the
-   client at startup. Typical breakage between neighbouring 26.x versions: package moves (`blaze3d` to `renderpearl`),
+   client at startup. Typical breakage between neighboring 26.x versions: package moves (`blaze3d` to `renderpearl`),
    private input handlers that need widening, and changed signatures in tooltip and model submission code;
    26.2 is a worked example (the `>=26.3` comments and the `renderpearl` rename in `stonecutter.gradle`).
 4. `./gradlew build` builds and tests every version on both loaders, including the GameTests. Then look at the

@@ -8,7 +8,7 @@ say so.
 
 ## Why
 
-Every rounded rectangle, border and box-shadow is tessellated on the CPU into flat-colour quads
+Every rounded rectangle, border and box-shadow is tessellated on the CPU into flat-color quads
 (`engine/.../paint/Shapes.java`, `Gradients.java`, `Shadows.java`, collected by `QuadBatch`) and drawn with vanilla's
 `RenderPipelines.GUI`. That has three costs:
 
@@ -30,12 +30,12 @@ The first version replaces three things on 26.3 and 26.2:
 | Primitive | Engine entry point | Shader handles it when | Otherwise |
 |---|---|---|---|
 | Rounded fill | `Canvas.fillRoundedRect` | every corner is circular (rx = ry) | tessellate (today's path) |
-| Border | `Canvas.fillBorder` | one colour and one width on all four sides, circular corners | tessellate |
+| Border | `Canvas.fillBorder` | one color and one width on all four sides, circular corners | tessellate |
 | Box shadow | new `Canvas.fillBoxShadow` | circular corners, and for an unoffset outer shadow, the box is opaque | tessellate |
 
-These cover what pages actually use: `.mc-panel`, buttons, cards, glows. Elliptical corners, per-side border colours
+These cover what pages actually use: `.mc-panel`, buttons, cards, glows. Elliptical corners, per-side border colors
 or widths, and dashed, dotted, groove, ridge and double borders keep the current code, which stays the reference
-behaviour and the 1.21.1 path.
+behavior and the 1.21.1 path.
 
 Not in scope: gradients (they already clip to the rounded shape through `QuadBatch`; moving them is a later step) and
 **rounded `overflow: hidden` clipping**. The SDF cannot do clipping, because the clip has to apply to everything
@@ -87,8 +87,8 @@ vanilla's):
 | Attribute | Type | Carries |
 |---|---|---|
 | `Position` | 3 × float | screen position: the shape's bounds grown by the blur, plus one device px for the antialiased edge |
-| `Color` | RGBA8 | the colour, opacity already multiplied in (as today) |
-| `UV0` | 2 × float | the vertex's position in the box's local space, relative to its centre |
+| `Color` | RGBA8 | the color, opacity already multiplied in (as today) |
+| `UV0` | 2 × float | the vertex's position in the box's local space, relative to its center |
 | `UV3` | 2 × float | half width, half height |
 | `UV1`, `UV2` | 2 × int16 each | the four corner radii in 1/16 px (up to 2047 px) |
 | `LineWidth` | float | mode and size: 0 = fill; > 0 = border of that width; < 0 = shadow with σ = −value (CSS σ = blur / 2) |
@@ -112,7 +112,7 @@ Working in local space and antialiasing with `fwidth(distance)` keeps edges one 
 ### McCanvas
 
 `McCanvas` overrides the three methods. Each checks that the shader can draw the call (circular radii, one border
-colour, and so on), computes the screen bounds as it does for quads, and adds one `SdfBoxRenderState` (a new
+color, and so on), computes the screen bounds as it does for quads, and adds one `SdfBoxRenderState` (a new
 `GuiElementRenderState` beside `QuadsRenderState`); otherwise it calls the `Canvas` default. Clipping, opacity and
 transforms are unchanged.
 
@@ -127,7 +127,7 @@ game, which is what the previewer is for.
 
 As built: `engine/.../paint/SmoothShape` decides what the shader draws and describes it (the quad, the box, radii,
 border width or blur), and holds a Java port of the fragment shader (`coverage`). `McCanvas` turns a `SmoothShape`
-into the shader's vertices; the previewer's `ShapeRasterizer` samples `coverage` at the centre of every device pixel
+into the shader's vertices; the previewer's `ShapeRasterizer` samples `coverage` at the center of every device pixel
 under the quad and blends it as the GPU does. So both draw the same shapes, decided in one place, and the previewer
 matches the game to within the font and a sub-pixel of layout rounding. `SmoothShapeTest` checks the coverage maths.
 

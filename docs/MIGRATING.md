@@ -49,7 +49,7 @@ stylesheet linked from every page.
 | `g.entity(...)` portraits | `<entity type="…" follow-mouse>`, `<entity id="<network id>">`, `<entity player>`; `rotatable`, and CSS `-mc-yaw`/`-mc-pitch`/`-mc-model-scale`; a gentler or capped gaze than the inventory's with `-mc-gaze-reach` and `-mc-gaze-limit`; head-and-shoulders crops with `-mc-entity-focus: eyes` and `object-position`; your own render state (no bubbles or labels) with `VellumEntities.registerPortraitState`; `<model block="…">` or `<model item="…">` for blocks and items |
 | `g.item(...)` icons, item tooltips | `<item id="…" count="…" tooltip>` |
 | `NativeImage` + `DynamicTexture` maps and procedural art | register the texture under an `Identifier` and use `<img src="mymod:dynamic/map">` or `background: url(mymod:dynamic/map)`; or draw with `<canvas>` `getContext('2d')` |
-| `blitSprite(...)` nine-slices | `background: sprite(mymod:widget/panel)` (honours the sprite's `.mcmeta` scaling) |
+| `blitSprite(...)` nine-slices | `background: sprite(mymod:widget/panel)` (honors the sprite's `.mcmeta` scaling) |
 | HUD layers with hand-coded fades | `VellumHud.register(id, url)`, `show`/`hide`/`push`; CSS animations for the fades |
 | chest-style menus | `VellumScreens.registerContainer(menuType, url)` and `<slot index="n">` wherever the slots go |
 | English literals | `<mc-text key="…">` or `vellum.t(key, …args)` (Minecraft language files) |

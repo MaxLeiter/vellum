@@ -26,7 +26,7 @@ boolean containsPointInScissor(int x,int y);
 void requestCursor(CursorType);     // applied once at end of frame
 ```
 - Pose stack depth is limited to about 15 pushes. Don't push once per DOM element. Keep your own matrix stack and `pose().set(...)` it, or push one level and set the matrix for each draw.
-- Colours are ARGB ints. Helpers are in `net.minecraft.util.ARGB` (`color`, `multiplyAlpha`, `alpha/red/green/blue`, `srgbLerp`...).
+- Colors are ARGB ints. Helpers are in `net.minecraft.util.ARGB` (`color`, `multiplyAlpha`, `alpha/red/green/blue`, `srgbLerp`...).
 - `text(...)` is skipped when alpha is 0. **There is no group opacity**: multiply alpha into every element. **Items cannot be tinted or faded**; they are blitted from the item atlas.
 
 ### Rectangles
@@ -147,7 +147,7 @@ Build text with `Component.literal(s).withStyle(style)`. Bold widens glyphs, so 
 
 Fonts: `new FontDescription.Resource(Identifier)` (`FontDescription.DEFAULT` = `minecraft:default`). Vanilla ships `default`, `uniform`, `alt` and `illageralt`, defined by `assets/<ns>/font/<name>.json` (provider types `bitmap`, `ttf`, `space`, `unihex`, `reference`).
 
-Shadow: `ARGB.scaleRGB(color, 0.25)`, offset 1px. A style colour replaces RGB but keeps the alpha passed to `text`.
+Shadow: `ARGB.scaleRGB(color, 0.25)`, offset 1px. A style color replaces RGB but keeps the alpha passed to `text`.
 
 Scaled text:
 ```java
@@ -161,7 +161,7 @@ g.pose().pushMatrix(); g.pose().translate(x, y); g.pose().scale(s, s); g.text(fo
   - Fabric: `PictureInPictureRendererRegistry.register(ctx -> ...)`.
 - Entity helper: `InventoryScreen.extractEntityInInventoryFollowsMouse(GuiGraphicsExtractor g, int x0,int y0,int x1,int y1, int size, float offsetY, float mouseX, float mouseY, LivingEntity e)`.
 - Custom portrait: Chronicle `DialogueScreen.entityPortrait` (~L672). It builds the `EntityRenderState` and calls `g.entity(state, scale, translation, rotation, tilt, x0,y0,x1,y1)`.
-- How a picture is drawn (`PictureInPictureRenderer.prepare`): a texture of `(x1-x0)*guiScale × (y1-y0)*guiScale` px, ortho projection, pose `translate(w/2, getTranslateY(h))` then `scale(guiScale*state.scale(), same, -same)`, so a unit is `state.scale()` GUI px and y points down. `renderToTexture` submits into a `SubmitNodeCollector`; the picture is then blitted (`blitTexture`) with `GUI_TEXTURED_PREMULTIPLIED_ALPHA` and colour `-1`. The texture view is private, so a renderer that blits with a colour (to tint or fade) needs it widened (Vellum's AT/AW). `textureIsReadyToBlit(state)` skips the render when the texture still holds the right picture (vanilla's oversized items use it).
+- How a picture is drawn (`PictureInPictureRenderer.prepare`): a texture of `(x1-x0)*guiScale × (y1-y0)*guiScale` px, ortho projection, pose `translate(w/2, getTranslateY(h))` then `scale(guiScale*state.scale(), same, -same)`, so a unit is `state.scale()` GUI px and y points down. `renderToTexture` submits into a `SubmitNodeCollector`; the picture is then blitted (`blitTexture`) with `GUI_TEXTURED_PREMULTIPLIED_ALPHA` and color `-1`. The texture view is private, so a renderer that blits with a color (to tint or fade) needs it widened (Vellum's AT/AW). `textureIsReadyToBlit(state)` skips the render when the texture still holds the right picture (vanilla's oversized items use it).
 - Pools: NeoForge reuses last frame's renderer for an *equal* state first (record `equals`), then any of the same texture size; two equal states in one frame make it drop a renderer, so states must differ within a frame. Fabric reuses by order within the frame.
 - Entities: `GuiEntityRenderer.renderToTexture` sets `Lighting.Entry.ENTITY_IN_UI`, translates, rotates, sets the camera from the tilt, and calls `entityRenderDispatcher.submit(state, camera, 0,0,0, pose, collector)`. `EntityType.create(level, reason)` returns null for monsters in peaceful worlds (`canSpawn`); display entities use `create(level, new EntitySpawnRequest(reason, true))` after checking `type.isEnabled(level.enabledFeatures())`.
 - Blocks: `new BlockModelResolver(mc.getModelManager()).update(BlockModelRenderState, BlockState, BlockDisplayContext.create())`, then `state.submit(pose, collector, light, OverlayTexture.NO_OVERLAY, 0)`; the model spans 0..1 and includes block-entity special models (chests). `mc.getModelManager().getBlockModelSet().get(blockState)` changes identity on resource reload. Parse states with `BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, "oak_stairs[facing=east]", false)`.
@@ -178,7 +178,7 @@ g.pose().pushMatrix(); g.pose().translate(x, y); g.pose().scale(s, s); g.text(fo
 ## 5. Screen lifecycle and input
 `Screen` (`net.minecraft.client.gui.screens.Screen`):
 - Lifecycle: `init()`, `repositionElements()`, `resize(w,h)`, `tick()`, `added()`, `removed()`, `onClose()`.
-- Behaviour flags: `shouldCloseOnEsc()`, `isPauseScreen()` (default true), `isInGameUi()` (default false; true means a translucent background over the world).
+- Behavior flags: `shouldCloseOnEsc()`, `isPauseScreen()` (default true), `isInGameUi()` (default false; true means a translucent background over the world).
 - Drawing: `extractBackground(g, mx, my, a)`, `extractRenderState(g, mx, my, a)`. `a` is the frame delta in ticks, not partial ticks; use `Util.getMillis()` for animation time.
 
 Input (records in `net.minecraft.client.input.*`):
@@ -212,7 +212,7 @@ Other:
 - Sounds: `minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F))`.
 
 ## 6. AbstractContainerScreen and slots
-- Fields: `imageWidth/imageHeight` (protected final, set in the constructor), `leftPos/topPos` (centred in `init()`), `menu`, `hoveredSlot`.
+- Fields: `imageWidth/imageHeight` (protected final, set in the constructor), `leftPos/topPos` (centered in `init()`), `menu`, `hoveredSlot`.
 - Render flow: `extractContents` translates the pose by `(leftPos, topPos)`, then calls `extractLabels` and `extractSlots` → `extractSlot(g, slot, mx, my)` (item at `slot.x, slot.y` plus decorations). After that comes `extractCarriedItem`, which starts a new stratum.
 - Hit testing goes through private `getHoveredSlot` → `isHovering(slot, mx, my)`. It uses `slot.x/slot.y` (16×16) relative to `leftPos/topPos`.
 - `Slot.x` and `Slot.y` are `public final int`. To place slots at positions computed by layout, make them mutable:

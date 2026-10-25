@@ -39,7 +39,7 @@ widget's tooltip. Anything inside `aria-hidden="true"` is never read.
 | text inputs, `<textarea>`, `role="textbox"` | "Name edit box: Steve" (a password's text is not read) |
 | `<select>` | "Difficulty: Hard button" |
 | `role="tab"` | "Quests tab. Selected tab 2 out of 3", in vanilla's order (a title is read before any position): its place among the tabs of its `role="tablist"` (or its parent), or `aria-posinset` and `aria-setsize` |
-| `<item>`, `<slot>` | "Item: Iron Sword"; a labelled slot "Fuel. Item: Coal". An empty slot nothing labels is not read. |
+| `<item>`, `<slot>` | "Item: Iron Sword"; a labeled slot "Fuel. Item: Coal". An empty slot nothing labels is not read. |
 | anything else | its name |
 
 Controls add how to use them, as vanilla's do ("Left click to activate", "Press Enter to activate", "Drag the slider

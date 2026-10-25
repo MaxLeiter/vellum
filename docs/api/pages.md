@@ -23,7 +23,7 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 - `screen.driver().push(json)` replaces `vellum.data`; template bindings update and `vellum.on('data', fn)`
   listeners run.
 - `screen.driver().patch(key, json)` sets one top-level field, `vellum.data[key]`, and leaves the rest alone, so
-  small updates to a big page stay cheap: only that value is serialised and parsed, and the page's other objects
+  small updates to a big page stay cheap: only that value is serialized and parsed, and the page's other objects
   stay the same objects. A null value (or `JsonNull`) removes the field. Bindings update, `vellum.on('patch', fn)`
   listeners get `{key, value}`, then `'data'` listeners get `(vellum.data, key)`. If `vellum.data` isn't an object,
   it becomes one with just that field.
@@ -37,7 +37,7 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
 - `<a href="other.html">` loads another page in the same screen; `https://` links ask for confirmation first.
 - `screen.driver().onKey(handler)` gives your mod the key presses the page leaves alone, before the screen's own keys
   (Escape, a container screen's inventory key). Use it for your own key mappings; the page doesn't know about them. A
-  key the page uses never reaches the handler: one a `keydown` listener cancelled with `preventDefault()`, one a
+  key the page uses never reaches the handler: one a `keydown` listener canceled with `preventDefault()`, one a
   focused control acted on (Enter on a button), and every key but Escape while a text field has focus, so typing "j"
   in an `<input>` stays text. Return true to consume the key. Handlers run in the order they were added until one
   returns true, and stay through navigation and reloads.
@@ -46,7 +46,7 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   mouse handler, so code that sends a screen `mouseMoved` must move the mouse handler there as well, or the next
   frame moves the page's pointer back. `VellumAutomation` does both.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
-  Only those fields are serialised, but the page gets the whole data again, as with `push`, and parses all of it. For
+  Only those fields are serialized, but the page gets the whole data again, as with `push`, and parses all of it. For
   a field that changes often, `patch` it instead.
 - What you push, merge or patch is kept for the page's next load: a reload (`/vellum reload`, a resource reload, a
   saved file in dev) shows the data as it is now. `driver.receive(channel, json)` only delivers a message, so the
