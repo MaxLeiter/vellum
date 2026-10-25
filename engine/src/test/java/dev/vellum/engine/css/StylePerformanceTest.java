@@ -2,6 +2,8 @@ package dev.vellum.engine.css;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.dom.Text;
+import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
@@ -88,6 +90,50 @@ class StylePerformanceTest {
                 time / 1e6, allocated / 2 / 1024);
         assertTrue(time < 5_000_000, "hover restyle took " + time / 1e6 + " ms");
         assertTrue(allocated / 2 < 256 * 1024, "hover restyle allocated " + allocated / 2 + " bytes");
+    }
+
+    /**
+     * Writes a script makes every frame that no selector reads (an inline style, text, a data attribute) restyle
+     * the changed element without matching every element again; a class change, which selectors read, is timed
+     * alongside for comparison. Hover toggles with the text and data writes so their frames restyle at all.
+     */
+    @Test
+    void perFrameWritesSelectorsCannotSee() {
+        Page page = new TestHost().load("<style>" + stylesheet() + "</style>" + body());
+        int elements = page.doc.querySelectorAll("*").size();
+        Element row = page.doc.querySelectorAll(".row").get(3), hovered = page.doc.querySelectorAll(".row").get(7);
+        Element span = page.doc.querySelectorAll("span").get(11);
+        Text text = (Text) span.childAt(0);
+        double inline = perFrame(page, i -> row.setAttribute("style", "opacity: " + (i % 10) / 10f));
+        double textHover = perFrame(page, i -> {
+            text.setData("x" + i % 10);
+            page.doc.setHovered(hovered, i % 2 == 0);
+        });
+        double dataHover = perFrame(page, i -> {
+            row.setAttribute("data-frame", Integer.toString(i % 10));
+            page.doc.setHovered(hovered, i % 2 == 0);
+        });
+        double classChange = perFrame(page, i -> span.setAttribute("class", "c11" + (i % 2 == 0 ? " off" : "")));
+        System.out.printf("[style] per-frame writes on %d elements: inline style %.3f ms, text + hover %.3f ms, "
+                + "data attribute + hover %.3f ms, class %.3f ms%n", elements, inline, textHover, dataHover,
+                classChange);
+        assertTrue(inline < 20 && textHover < 20 && dataHover < 20 && classChange < 20,
+                "a frame took too long");
+    }
+
+    /** The mean time of a frame after {@code write}, in ms, after warming up. */
+    private static double perFrame(Page page, java.util.function.IntConsumer write) {
+        for (int i = 0; i < 100; i++) {
+            write.accept(i);
+            page.frame();
+        }
+        int runs = 200;
+        long start = System.nanoTime();
+        for (int i = 0; i < runs; i++) {
+            write.accept(i);
+            page.frame();
+        }
+        return (System.nanoTime() - start) / 1e6 / runs;
     }
 
     private static void hover(Document doc, Element element, int i) {
