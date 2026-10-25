@@ -106,8 +106,8 @@ final class PositionedLayout {
         ComputedStyle s = box.style;
         float size = axis.size(box);
         float marginStart = axis.marginStart(box), marginEnd = axis.marginEnd(box);
-        boolean autoStart = axis.marginStart(s).isAuto(), autoEnd = axis.marginEnd(s).isAuto();
-        if (!Float.isNaN(start) && !Float.isNaN(end) && (autoStart || autoEnd)) {
+        if (!Float.isNaN(start) && !Float.isNaN(end) && axis.hasAutoMargin(s)) {
+            boolean autoStart = axis.marginStart(s).isAuto(), autoEnd = axis.marginEnd(s).isAuto();
             float free = cbSize - start - end - size - marginStart - marginEnd;
             if (autoStart && autoEnd) {
                 marginStart = marginEnd = Math.max(0, free) / 2;

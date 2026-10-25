@@ -20,8 +20,9 @@ final class BlockLayout implements FormattingContext {
 
         // A box's margins adjoin its first/last child's when no border, padding or new formatting context separates
         // them (and, at the bottom, when its height is auto).
-        boolean collapseTop = !box.independent && box.borderTop == 0 && box.paddingTop == 0;
-        boolean collapseBottom = !box.independent && box.borderBottom == 0 && box.paddingBottom == 0
+        boolean independent = box.independent();
+        boolean collapseTop = !independent && box.borderTop == 0 && box.paddingTop == 0;
+        boolean collapseBottom = !independent && box.borderBottom == 0 && box.paddingBottom == 0
                 && Float.isNaN(contentHeight);
         float x = box.contentX();
         float cursor = box.contentY();
@@ -37,13 +38,8 @@ final class BlockLayout implements FormattingContext {
                 PositionedLayout.setStaticPosition(child, box, x, staticY);
                 continue;
             }
-            BoxModel.resolveEdges(child, contentWidth);
-            float width = pass.usedWidth(child, contentWidth - child.marginLeft - child.marginRight, contentWidth,
-                    percentHeight, true);
-            BoxModel.resolveAutoMargins(child, Axis.HORIZONTAL,
-                    contentWidth - width - child.marginLeft - child.marginRight);
-            LayoutResult r = measure ? pass.measure(child, width, Float.NaN, contentWidth, percentHeight)
-                    : pass.layout(child, width, Float.NaN, contentWidth, percentHeight);
+            float width = pass.blockLevelWidth(child, contentWidth, percentHeight);
+            LayoutResult r = pass.layoutOrMeasure(child, width, Float.NaN, contentWidth, percentHeight, measure);
             MarginSet childTop = r.top().with(child.marginTop);
             MarginSet childBottom = r.bottom().with(child.marginBottom);
 
@@ -77,7 +73,7 @@ final class BlockLayout implements FormattingContext {
             lastBaseline += shift;
         }
         // An empty box with no vertical border or padding lets margins collapse through it (if its height is 0).
-        boolean collapsesThrough = atStart && collapseTop && !box.independent && box.borderBottom == 0
+        boolean collapsesThrough = atStart && collapseTop && !independent && box.borderBottom == 0
                 && box.paddingBottom == 0;
         return new LayoutResult(end - box.contentY(), firstBaseline, lastBaseline,
                 collapseTop ? first : MarginSet.EMPTY, collapseBottom ? pending : MarginSet.EMPTY, collapsesThrough);

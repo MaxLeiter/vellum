@@ -21,13 +21,19 @@ import java.util.Set;
 public final class HtmlParser {
     static final Set<String> VOID = Set.of("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
             "source", "track", "wbr");
-    private static final Set<String> RAW_TEXT = Set.of("script", "style");
+    static final Set<String> RAW_TEXT = Set.of("script", "style");
     private static final Set<String> RCDATA = Set.of("textarea", "title");
     private static final Set<String> HEAD_ELEMENTS = Set.of("base", "link", "meta", "style", "title", "script", "template");
     /** Start tags that close an open {@code <p>}. */
     private static final Set<String> CLOSES_P = Set.of("address", "article", "aside", "blockquote", "details", "dialog",
             "div", "dl", "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
             "header", "hgroup", "hr", "main", "menu", "nav", "ol", "p", "pre", "section", "table", "ul");
+    /** Elements that stop an implied end tag's search for the open element it closes ({@link #closeImplied}). */
+    private static final Set<String> P_BOUNDARIES = Set.of("button", "td", "th", "li", "dd", "dt");
+    private static final Set<String> LI_BOUNDARIES = Set.of("ul", "ol", "menu");
+    private static final Set<String> DL_BOUNDARIES = Set.of("dl");
+    private static final Set<String> OPTION_BOUNDARIES = Set.of("select", "datalist");
+    private static final Set<String> SELECT_BOUNDARIES = Set.of("select");
 
     private final Document doc;
     private final String src;
@@ -255,12 +261,12 @@ public final class HtmlParser {
     }
 
     private void closeImplied(String name) {
-        if (CLOSES_P.contains(name)) closeIfOpen("p", Set.of("button", "td", "th", "li", "dd", "dt"));
+        if (CLOSES_P.contains(name)) closeIfOpen("p", P_BOUNDARIES);
         switch (name) {
-            case "li" -> closeIfOpen("li", Set.of("ul", "ol", "menu"));
-            case "dt", "dd" -> { closeIfOpen("dt", Set.of("dl")); closeIfOpen("dd", Set.of("dl")); }
-            case "option" -> closeIfOpen("option", Set.of("select", "datalist"));
-            case "optgroup" -> { closeIfOpen("option", Set.of("select")); closeIfOpen("optgroup", Set.of("select")); }
+            case "li" -> closeIfOpen("li", LI_BOUNDARIES);
+            case "dt", "dd" -> { closeIfOpen("dt", DL_BOUNDARIES); closeIfOpen("dd", DL_BOUNDARIES); }
+            case "option" -> closeIfOpen("option", OPTION_BOUNDARIES);
+            case "optgroup" -> { closeIfOpen("option", SELECT_BOUNDARIES); closeIfOpen("optgroup", SELECT_BOUNDARIES); }
             default -> { }
         }
     }

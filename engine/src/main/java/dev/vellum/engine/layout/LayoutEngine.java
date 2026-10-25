@@ -41,9 +41,7 @@ public final class LayoutEngine {
 
         float vw = document.viewportWidth(), vh = document.viewportHeight();
         LayoutPass pass = new LayoutPass(textMeasure(), vw, vh);
-        BoxModel.resolveEdges(box, vw);
-        float width = pass.usedWidth(box, vw - box.marginLeft - box.marginRight, vw, vh, true);
-        BoxModel.resolveAutoMargins(box, Axis.HORIZONTAL, vw - width - box.marginLeft - box.marginRight);
+        float width = pass.blockLevelWidth(box, vw, vh);
         pass.layout(box, width, Float.NaN, vw, vh);
         box.x = box.marginLeft;
         box.y = box.marginTop;

@@ -5,6 +5,7 @@ import dev.vellum.engine.style.GridTrack;
 import dev.vellum.engine.style.Length;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
@@ -116,6 +117,8 @@ final class GridTrackSizing {
     }
 
     private final Track[] tracks;
+    /** {@link #tracks} as a list (a view, not a copy). */
+    private final List<Track> trackList;
     private final Axis axis;
     private final Mode mode;
     private final float available, gap;
@@ -123,6 +126,7 @@ final class GridTrackSizing {
 
     private GridTrackSizing(Track[] tracks, Axis axis, Mode mode, float available, float gap, Contributions c) {
         this.tracks = tracks;
+        this.trackList = Arrays.asList(tracks);
         this.axis = axis;
         this.mode = mode;
         this.available = available;
@@ -390,7 +394,7 @@ final class GridTrackSizing {
     }
 
     private List<Track> spanned(Placed item) {
-        return List.of(tracks).subList(item.start(axis), item.end(axis));
+        return trackList.subList(item.start(axis), item.end(axis));
     }
 
     private void flushBase() {
@@ -435,8 +439,7 @@ final class GridTrackSizing {
         } else if (mode == Mode.DEFINITE) {
             float free = available - usedSpace();
             if (free <= 0) return;
-            List<Track> all = List.of(tracks);
-            upToLimits(free, all, t -> true, t -> 1, Track::fitLimitedGrowth);
+            upToLimits(free, trackList, t -> true, t -> 1, Track::fitLimitedGrowth);
             for (Track t : tracks) {
                 t.base += t.incurred;
                 t.incurred = 0;
@@ -451,7 +454,7 @@ final class GridTrackSizing {
         if (!any || mode == Mode.MIN_CONTENT) return;
         float fr;
         if (mode == Mode.DEFINITE) {
-            fr = available - usedSpace() <= 0 ? 0 : frSize(List.of(tracks), available - gaps());
+            fr = available - usedSpace() <= 0 ? 0 : frSize(trackList, available - gaps());
         } else {
             fr = 0;
             for (Track t : tracks) if (t.flexible()) fr = Math.max(fr, t.flex() > 1 ? t.base / t.flex() : t.base);
@@ -463,8 +466,8 @@ final class GridTrackSizing {
             }
             float size = gaps();
             for (Track t : tracks) size += t.flexible() ? Math.max(t.base, t.flex() * fr) : t.base;
-            if (!Float.isNaN(minSize) && size < minSize) fr = frSize(List.of(tracks), minSize - gaps());
-            else if (!Float.isNaN(maxSize) && size > maxSize) fr = frSize(List.of(tracks), maxSize - gaps());
+            if (!Float.isNaN(minSize) && size < minSize) fr = frSize(trackList, minSize - gaps());
+            else if (!Float.isNaN(maxSize) && size > maxSize) fr = frSize(trackList, maxSize - gaps());
         }
         for (Track t : tracks) if (t.flexible()) t.base = Math.max(t.base, t.flex() * fr);
     }

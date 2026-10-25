@@ -1,6 +1,7 @@
 package dev.vellum.engine.paint;
 
 import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.replaced.CanvasContent;
 import dev.vellum.engine.replaced.ImageSources;
 import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.BackgroundLayer.Repeat;
@@ -63,9 +64,10 @@ final class Backgrounds {
             return;
         }
         // Textures and canvases are drawn through a URL; a canvas that is missing draws nothing.
-        String texture = ImageSources.textureUrl(document, image);
+        CanvasContent source = ImageSources.canvas(document, image);
+        String texture = ImageSources.textureUrl(image, source);
         if (texture == null && (image instanceof Image.Url || image instanceof Image.Canvas)) return;
-        if (!tileSize(layer, ImageSources.size(document, image))) return;
+        if (!tileSize(layer, ImageSources.size(document, image, source))) return;
         if (!axis(0, area[0], area[2], origin[0], origin[2], tileW, layer.positionX().resolve(origin[2] - tileW), layer.repeatX())
                 || !axis(3, area[1], area[3], origin[1], origin[3], tileH, layer.positionY().resolve(origin[3] - tileH), layer.repeatY())
                 || tiling[2] * tiling[5] > MAX_TILES) {

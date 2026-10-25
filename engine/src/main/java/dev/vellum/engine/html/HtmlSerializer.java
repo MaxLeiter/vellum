@@ -12,7 +12,7 @@ public final class HtmlSerializer {
 
     public static String innerHTML(Node node) {
         StringBuilder sb = new StringBuilder();
-        boolean raw = node instanceof Element e && (e.tagName().equals("script") || e.tagName().equals("style"));
+        boolean raw = node instanceof Element e && HtmlParser.RAW_TEXT.contains(e.tagName());
         for (Node c : node.childNodes()) write(sb, c, raw);
         return sb.toString();
     }
@@ -43,7 +43,7 @@ public final class HtmlSerializer {
         }
         sb.append('>');
         if (HtmlParser.VOID.contains(tag)) return;
-        boolean raw = tag.equals("script") || tag.equals("style");
+        boolean raw = HtmlParser.RAW_TEXT.contains(tag);
         for (Node c : e.childNodes()) write(sb, c, raw);
         sb.append("</").append(tag).append('>');
     }

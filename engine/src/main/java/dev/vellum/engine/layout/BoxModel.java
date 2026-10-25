@@ -65,8 +65,8 @@ final class BoxModel {
      * zero (split equally when both are auto; nothing when it is negative). Returns whether there were any.
      */
     static boolean resolveAutoMargins(Box b, Axis axis, float free) {
+        if (!axis.hasAutoMargin(b.style)) return false;
         boolean start = axis.marginStart(b.style).isAuto(), end = axis.marginEnd(b.style).isAuto();
-        if (!start && !end) return false;
         float share = Math.max(0, free) / (start && end ? 2 : 1);
         axis.setMargins(b, axis.marginStart(b) + (start ? share : 0), axis.marginEnd(b) + (end ? share : 0));
         return true;

@@ -10,7 +10,9 @@ import dev.vellum.engine.style.Length;
 
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CSS Grid Layout 1: the explicit grid ({@code grid-template-*} with {@code repeat(auto-fill|auto-fit)} expanded
@@ -159,8 +161,7 @@ final class GridLayout implements FormattingContext {
         /** The item's border-box width in an area {@code areaWidth} wide: stretched, or fit-content. */
         float itemWidth(Placed item, float areaWidth) {
             LayoutBox b = item.box;
-            BoxModel.resolveEdges(b, areaWidth);
-            float available = areaWidth - b.marginLeft - b.marginRight;
+            float available = pass.resolveAvailableWidth(b, areaWidth);
             if (stretches(item, Axis.HORIZONTAL, justify(b))) {
                 return pass.clampWidth(b, available, areaWidth, Float.NaN, available);
             }
@@ -168,9 +169,7 @@ final class GridLayout implements FormattingContext {
         }
 
         boolean stretches(Placed item, Axis axis, Align align) {
-            ComputedStyle s = item.box.style;
-            return align == Align.STRETCH && axis.size(s).isAuto() && !axis.marginStart(s).isAuto()
-                    && !axis.marginEnd(s).isAuto();
+            return Alignment.stretches(align, item.box.style, axis);
         }
 
         /** Sizes the tracks of one axis (rows need the columns sized first). */
@@ -206,19 +205,55 @@ final class GridLayout implements FormattingContext {
 
         /**
          * Items' contributions in one axis: widths from their intrinsic sizes, heights from laying them out at the
-         * width their columns give them.
+         * width their columns give them. Each is computed once per item.
          */
         private GridTrackSizing.Contributions contributions(Axis axis) {
             return new GridTrackSizing.Contributions() {
+                private final Map<Placed, Contribution> memo = new IdentityHashMap<>();
+
+                private Contribution memo(Placed item) {
+                    return memo.computeIfAbsent(item, i -> new Contribution());
+                }
+
                 public float minContent(Placed item) {
-                    return axis.isHorizontal() ? pass.contribution(item.box, false) : outerHeight(item);
+                    Contribution m = memo(item);
+                    if (!m.hasMin) {
+                        m.min = axis.isHorizontal() ? pass.contribution(item.box, false) : height(m, item);
+                        m.hasMin = true;
+                    }
+                    return m.min;
                 }
 
                 public float maxContent(Placed item) {
-                    return axis.isHorizontal() ? pass.contribution(item.box, true) : outerHeight(item);
+                    Contribution m = memo(item);
+                    if (!m.hasMax) {
+                        m.max = axis.isHorizontal() ? pass.contribution(item.box, true) : height(m, item);
+                        m.hasMax = true;
+                    }
+                    return m.max;
+                }
+
+                /**
+                 * The item's outer height, the same under both constraints. Measuring it first resolves the item's
+                 * margins, so a definite minimum computed earlier (with them unresolved) is computed again.
+                 */
+                private float height(Contribution m, Placed item) {
+                    if (m.hasMin) return m.min;
+                    if (m.hasMax) return m.max;
+                    m.hasDefinite = false;
+                    return outerHeight(item);
                 }
 
                 public float definiteMinimum(Placed item) {
+                    Contribution m = memo(item);
+                    if (!m.hasDefinite) {
+                        m.definite = definiteMinimumOf(item);
+                        m.hasDefinite = true;
+                    }
+                    return m.definite;
+                }
+
+                private float definiteMinimumOf(Placed item) {
                     LayoutBox b = item.box;
                     ComputedStyle s = b.style;
                     float pb = BoxModel.paddingBorder(s, axis, Float.NaN);
@@ -248,6 +283,12 @@ final class GridLayout implements FormattingContext {
             LayoutBox b = item.box;
             return pass.measureHeight(b, width, Float.NaN, areaWidth, Float.NaN) + b.marginTop + b.marginBottom;
         }
+    }
+
+    /** An item's contributions in one axis, each computed once per track sizing. */
+    private static final class Contribution {
+        float min, max, definite;
+        boolean hasMin, hasMax, hasDefinite;
     }
 
     // ---- Layout ----
@@ -292,8 +333,7 @@ final class GridLayout implements FormattingContext {
         Align align = g.alignment(b);
         float height = g.stretches(item, Axis.VERTICAL, align)
                 ? pass.clampHeight(b, areaHeight - b.marginTop - b.marginBottom, areaWidth, areaHeight) : Float.NaN;
-        LayoutResult r = measure ? pass.measure(b, width, height, areaWidth, areaHeight)
-                : pass.layout(b, width, height, areaWidth, areaHeight);
+        LayoutResult r = pass.layoutOrMeasure(b, width, height, areaWidth, areaHeight, measure);
         b.x = g.box.contentX() + g.columns[item.columnStart].offset
                 + alignInArea(b, Axis.HORIZONTAL, areaWidth, width, g.justify(b));
         b.y = g.box.contentY() + g.rows[item.rowStart].offset

@@ -39,9 +39,7 @@ final class BoxTreeBuilder {
         clearBoxes(root);
         ComputedStyle s = root.style;
         if (s == null || s.display == Display.NONE) return null;
-        LayoutBox box = elementBox(root, s, s.display == Display.CONTENTS ? Display.BLOCK : s.display.blockified());
-        box.independent = true;
-        return box;
+        return elementBox(root, s, s.display == Display.CONTENTS ? Display.BLOCK : s.display.blockified());
     }
 
     private static void clearBoxes(Node node) {
@@ -57,7 +55,6 @@ final class BoxTreeBuilder {
         LayoutBox.Context context = replaced || Controls.isControl(e.tagName()) ? LayoutBox.Context.LEAF
                 : contextOf(display);
         LayoutBox box = new LayoutBox(replaced ? Box.Kind.REPLACED : Box.Kind.BLOCK, e, s, context);
-        box.independent = s.isScrollContainer();
         e.box = box;
         if (replaced) naturalSize(box);
         buildContent(box, flow -> addChildren(flow, e, flow.root), items -> addItems(items, e));
@@ -67,7 +64,6 @@ final class BoxTreeBuilder {
     /** The box of a ::before/::after that is not an inline span; its only content is the {@code content} text. */
     private LayoutBox pseudoBox(Element host, ComputedStyle s, Display display) {
         LayoutBox box = new LayoutBox(Box.Kind.PSEUDO, host, s, contextOf(display));
-        box.independent = s.isScrollContainer();
         buildContent(box, flow -> flow.run().addText(flow.root, null, s.content),
                 items -> items.text(null, s.content));
         return box;
@@ -98,14 +94,12 @@ final class BoxTreeBuilder {
     private LayoutBox outOfFlowBox(Element e, ComputedStyle s) {
         LayoutBox box = elementBox(e, s, s.display.blockified());
         box.outOfFlow = true;
-        box.independent = true;
         return box;
     }
 
     private LayoutBox outOfFlowPseudo(Element host, ComputedStyle s) {
         LayoutBox box = pseudoBox(host, s, s.display.blockified());
         box.outOfFlow = true;
-        box.independent = true;
         return box;
     }
 
@@ -122,6 +116,13 @@ final class BoxTreeBuilder {
 
     private static boolean rendered(ComputedStyle s) {
         return s != null && s.display != Display.NONE;
+    }
+
+    /** The style of an anonymous block or item in {@code container}: inherited from it, display block. */
+    private static ComputedStyle anonymousStyle(LayoutBox container) {
+        ComputedStyle s = ComputedStyle.inheritFrom(container.style);
+        s.display = Display.BLOCK;
+        return s;
     }
 
     private static boolean hasPseudo(ComputedStyle s) {
@@ -239,7 +240,6 @@ final class BoxTreeBuilder {
 
         void atomic(Span span, LayoutBox box) {
             box.atomicInline = true;
-            box.independent = true;
             run().atomic(span, box);
             run.boxes.add(box);
         }
@@ -274,10 +274,7 @@ final class BoxTreeBuilder {
                     // Only inline content: the container itself establishes the inline formatting context.
                     own(container, r);
                 } else if (entry instanceof Run r && r.content.hasContent()) {
-                    if (anonymousStyle == null) {
-                        anonymousStyle = ComputedStyle.inheritFrom(container.style);
-                        anonymousStyle.display = Display.BLOCK;
-                    }
+                    if (anonymousStyle == null) anonymousStyle = anonymousStyle(container);
                     LayoutBox anonymous = new LayoutBox(Box.Kind.ANONYMOUS, container.element, anonymousStyle,
                             LayoutBox.Context.FLOW);
                     own(anonymous, r);
@@ -326,37 +323,36 @@ final class BoxTreeBuilder {
     private static final class Items {
         final LayoutBox container;
         private InlineContent text;
+        /** The style of the anonymous items, shared by all of them; made on the first loose text. */
+        private ComputedStyle anonymousStyle;
 
         Items(LayoutBox container) {
             this.container = container;
         }
 
         void text(Text node, String data) {
-            if (text == null) text = new InlineContent(new Span(container.element, anonymousStyle(), null, null));
+            if (text == null) {
+                if (anonymousStyle == null) anonymousStyle = anonymousStyle(container);
+                text = new InlineContent(new Span(container.element, anonymousStyle, null, null));
+            }
             text.addText(text.root, node, data);
         }
 
         void add(LayoutBox box) {
             endText();
-            box.independent = true;
             container.add(box);
         }
 
         private void endText() {
-            if (text != null && text.hasContent()) {
+            // Text that collapsed away to nothing leaves the run empty: it is kept for the next loose text.
+            if (text == null || text.items.isEmpty()) return;
+            if (text.hasContent()) {
                 LayoutBox anonymous = new LayoutBox(Box.Kind.ANONYMOUS, container.element, text.root.style,
                         LayoutBox.Context.FLOW);
                 anonymous.inline = text;
-                anonymous.independent = true;
                 container.add(anonymous);
             }
             text = null;
-        }
-
-        private ComputedStyle anonymousStyle() {
-            ComputedStyle s = ComputedStyle.inheritFrom(container.style);
-            s.display = Display.BLOCK;
-            return s;
         }
 
         void finish() {

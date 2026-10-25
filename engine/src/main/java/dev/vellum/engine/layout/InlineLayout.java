@@ -302,11 +302,9 @@ final class InlineLayout {
         LayoutResult[] atomics = new LayoutResult[p.size];
         float[] widths = pieceWidths(content, p, contentWidth, (j, b) -> {
             // Atomic inlines shrink to fit the line's width.
-            BoxModel.resolveEdges(b, contentWidth);
-            float available = contentWidth - b.marginLeft - b.marginRight;
+            float available = pass.resolveAvailableWidth(b, contentWidth);
             float w = pass.usedWidth(b, available, contentWidth, percentHeight, false);
-            atomics[j] = measure ? pass.measure(b, w, Float.NaN, contentWidth, percentHeight)
-                    : pass.layout(b, w, Float.NaN, contentWidth, percentHeight);
+            atomics[j] = pass.layoutOrMeasure(b, w, Float.NaN, contentWidth, percentHeight, measure);
             return w + b.marginLeft + b.marginRight;
         });
 

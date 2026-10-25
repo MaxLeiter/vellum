@@ -79,6 +79,19 @@ final class LayoutPass {
         return measure(box, width, height, true, cbWidth, cbHeight);
     }
 
+    /** {@link #measure} when {@code measure} is set, else {@link #layout}. */
+    LayoutResult layoutOrMeasure(LayoutBox box, float width, float height, boolean heightDefinite, float cbWidth,
+                                 float cbHeight, boolean measure) {
+        return measure ? measure(box, width, height, heightDefinite, cbWidth, cbHeight)
+                : layout(box, width, height, heightDefinite, cbWidth, cbHeight);
+    }
+
+    /** {@link #layoutOrMeasure} with an imposed height (if any) that is definite. */
+    LayoutResult layoutOrMeasure(LayoutBox box, float width, float height, float cbWidth, float cbHeight,
+                                 boolean measure) {
+        return layoutOrMeasure(box, width, height, true, cbWidth, cbHeight, measure);
+    }
+
     /** The border-box height {@code box} gets at {@code width}: a shorthand for {@link #measure}. */
     float measureHeight(LayoutBox box, float width, float height, float cbWidth, float cbHeight) {
         return measure(box, width, height, cbWidth, cbHeight).height();
@@ -138,6 +151,25 @@ final class LayoutPass {
     }
 
     // ---- Widths ----
+
+    /**
+     * Resolves the box's edges against a containing block {@code cbWidth} wide and returns the width an auto width
+     * fills in it: the containing block minus the box's margins.
+     */
+    float resolveAvailableWidth(LayoutBox box, float cbWidth) {
+        BoxModel.resolveEdges(box, cbWidth);
+        return cbWidth - box.marginLeft - box.marginRight;
+    }
+
+    /**
+     * The used border-box width of a block-level box in a containing block {@code cbWidth} wide (CSS 2.1 §10.3.3):
+     * resolves its edges, fills the containing block, and gives auto margins the space left over (centring).
+     */
+    float blockLevelWidth(LayoutBox box, float cbWidth, float cbHeight) {
+        float width = usedWidth(box, resolveAvailableWidth(box, cbWidth), cbWidth, cbHeight, true);
+        BoxModel.resolveAutoMargins(box, Axis.HORIZONTAL, cbWidth - width - box.marginLeft - box.marginRight);
+        return width;
+    }
 
     /**
      * The used border-box width of a box from its style: a definite or keyword {@code width}; else for replaced

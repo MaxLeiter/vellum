@@ -21,11 +21,6 @@ final class LayoutBox extends Box {
     final Context context;
     /** The inline-level content when this box establishes an inline formatting context, else null. */
     InlineContent inline;
-    /**
-     * Establishes an independent formatting context (flex/grid item, inline-block, scroll container, abspos, root):
-     * its margins never collapse with its children's.
-     */
-    boolean independent;
 
     /** Natural (intrinsic) content size of a replaced element; NaN when it has none. */
     float naturalWidth = Float.NaN, naturalHeight = Float.NaN;
@@ -109,6 +104,15 @@ final class LayoutBox extends Box {
     }
 
     boolean isReplaced() { return kind == Kind.REPLACED; }
+
+    /**
+     * Whether the box establishes an independent formatting context (root, scroll container, out-of-flow box, atomic
+     * inline, flex or grid item): its margins never collapse with its children's. Needs the tree built.
+     */
+    boolean independent() {
+        return parent == null || style.isScrollContainer() || outOfFlow || atomicInline
+                || (parent instanceof LayoutBox p && (p.context == Context.FLEX || p.context == Context.GRID));
+    }
 
     void extendOverflow(float right, float bottom) {
         overflowRight = Math.max(overflowRight, right);

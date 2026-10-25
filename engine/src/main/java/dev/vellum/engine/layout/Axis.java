@@ -23,6 +23,9 @@ enum Axis {
     Length marginEnd(ComputedStyle s) { return this == HORIZONTAL ? s.marginRight : s.marginBottom; }
     Length gap(ComputedStyle s) { return this == HORIZONTAL ? s.columnGap : s.rowGap; }
 
+    /** Whether either margin in this axis is {@code auto}. */
+    boolean hasAutoMargin(ComputedStyle s) { return marginStart(s).isAuto() || marginEnd(s).isAuto(); }
+
     // ---- Box geometry ----
 
     float size(Box b) { return this == HORIZONTAL ? b.width : b.height; }

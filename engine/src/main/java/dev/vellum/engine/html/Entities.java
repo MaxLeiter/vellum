@@ -6,6 +6,8 @@ import java.util.Map;
 /** Character references: numeric ({@code &#123;}, {@code &#x1F600;}) and the commonly used named entities. */
 final class Entities {
     private static final Map<String, String> NAMED = new HashMap<>();
+    /** Named references recognised without their semicolon, outside attributes. */
+    private static final String[] LEGACY = {"amp", "lt", "gt", "nbsp", "copy", "quot"};
 
     static {
         String[] pairs = {
@@ -69,11 +71,10 @@ final class Entities {
                 }
             } else if (!inAttribute) {
                 // Legacy references without a semicolon (&amp &lt &gt &nbsp &copy).
-                for (String legacy : new String[] {"amp", "lt", "gt", "nbsp", "copy", "quot"}) {
+                for (String legacy : LEGACY) {
                     if (s.startsWith(legacy, i + 1)) {
                         sb.append(NAMED.get(legacy));
                         i += 1 + legacy.length();
-                        legacy = null;
                         break;
                     }
                 }

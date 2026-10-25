@@ -118,7 +118,8 @@ final class InlineContent {
         TextTransform transform = span.style.textTransform;
         boolean collapse = ws.collapsesSpaces();
         StringBuilder out = new StringBuilder(data.length());
-        int[] source = new int[data.length() + 1];
+        // Generated content (no text node) has no source map.
+        int[] source = node == null ? null : new int[data.length() + 1];
         for (int i = 0; i < data.length(); i++) {
             char c = data.charAt(i);
             if (c == '\r') {
@@ -161,7 +162,7 @@ final class InlineContent {
     }
 
     private static void append(StringBuilder out, int[] source, char c, int sourceIndex) {
-        source[out.length()] = sourceIndex;
+        if (source != null) source[out.length()] = sourceIndex;
         out.append(c);
     }
 
@@ -169,7 +170,7 @@ final class InlineContent {
     private void flushText(Span span, Text node, StringBuilder out, int[] source, int end) {
         if (out.length() > 0) {
             int[] map = null;
-            if (node != null) {
+            if (source != null) {
                 map = Arrays.copyOf(source, out.length() + 1);
                 map[out.length()] = end;
             }

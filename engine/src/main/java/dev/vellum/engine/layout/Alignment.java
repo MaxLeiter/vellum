@@ -1,6 +1,7 @@
 package dev.vellum.engine.layout;
 
 import dev.vellum.engine.style.Align;
+import dev.vellum.engine.style.ComputedStyle;
 
 /** CSS Box Alignment helpers shared by flex and grid. Offsets are measured from the start of the alignment space. */
 final class Alignment {
@@ -27,6 +28,14 @@ final class Alignment {
     /** An item's {@code align-self}/{@code justify-self}: {@code auto} takes the container's {@code *-items}. */
     static Align self(Align self, Align items) {
         return self == Align.AUTO ? items : self;
+    }
+
+    /**
+     * Whether a flex or grid item with self alignment {@code align} stretches in {@code axis}: it aligns as
+     * {@code stretch}, its size in the axis is auto and neither margin in the axis is auto.
+     */
+    static boolean stretches(Align align, ComputedStyle s, Axis axis) {
+        return align == Align.STRETCH && axis.size(s).isAuto() && !axis.hasAutoMargin(s);
     }
 
     /** Self alignment: the offset of one subject in {@code free} space (start, center or end; others as start). */

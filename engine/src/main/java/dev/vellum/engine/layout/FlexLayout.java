@@ -109,8 +109,7 @@ final class FlexLayout implements FormattingContext {
 
         /** Stretched items: align-self stretch, auto cross size, no auto cross margins. */
         boolean stretches(Item it) {
-            return it.align == Align.STRETCH && cross.size(it.style).isAuto()
-                    && !autoMargin(it, cross, true) && !autoMargin(it, cross, false);
+            return Alignment.stretches(it.align, it.style, cross);
         }
 
         /** The item's min or max size in {@code axis}, or one transferred from the other axis through aspect-ratio. */
@@ -223,9 +222,10 @@ final class FlexLayout implements FormattingContext {
         ComputedStyle s = it.style;
         Axis main = c.main;
         float pb = main.paddingBorder(it.box);
-        Length basis = s.flexBasis.isAuto() ? main.size(s) : s.flexBasis;
-        float b = c.size(it, main, basis);
-        if (Float.isNaN(b)) b = BoxModel.transfer(it.box, c.definiteCross(it), c.cross);
+        float specified = c.size(it, main, main.size(s));
+        float definiteCross = c.definiteCross(it);
+        float b = s.flexBasis.isAuto() ? specified : c.size(it, main, s.flexBasis);
+        if (Float.isNaN(b)) b = BoxModel.transfer(it.box, definiteCross, c.cross);
         it.definiteBasis = !Float.isNaN(b);
         if (Float.isNaN(b)) b = c.contentMain(it, max);
         it.flexBasis = Math.max(b, pb);
@@ -238,9 +238,8 @@ final class FlexLayout implements FormattingContext {
         if (main.minSize(s).isAuto() && !s.isScrollContainer()) {
             // Content-based minimum: the min-content size, capped by a specified or transferred size and the max.
             min = c.contentMain(it, false);
-            float specified = c.size(it, main, main.size(s));
             if (!Float.isNaN(specified)) min = Math.min(min, specified);
-            float transferred = BoxModel.transfer(it.box, c.definiteCross(it), c.cross);
+            float transferred = BoxModel.transfer(it.box, definiteCross, c.cross);
             if (!Float.isNaN(transferred)) min = Math.min(min, transferred);
             if (!Float.isNaN(limitMax)) min = Math.min(min, limitMax);
         }
@@ -349,13 +348,12 @@ final class FlexLayout implements FormattingContext {
                             : pass.usedWidth(it.box, c.contentWidth - cross.margins(it.box), c.contentWidth,
                             c.percentHeight, false);
                 } else {
-                    size = pass.measureHeight(it.box, it.targetMain, Float.NaN, c.contentWidth, c.percentHeight);
+                    // A row's item: one measurement gives its height and, for baseline alignment, its baseline.
+                    LayoutResult r = pass.measure(it.box, it.targetMain, Float.NaN, c.contentWidth, c.percentHeight);
+                    size = r.height();
+                    if (participatesInBaseline(c, it)) it.ascent = it.box.marginTop + r.firstBaselineOrBottom();
                 }
                 it.hypotheticalCross = Math.max(size, pb);
-                if (participatesInBaseline(c, it)) {
-                    LayoutResult r = pass.measure(it.box, it.targetMain, Float.NaN, c.contentWidth, c.percentHeight);
-                    it.ascent = it.box.marginTop + r.firstBaselineOrBottom();
-                }
             }
         }
 
@@ -401,7 +399,7 @@ final class FlexLayout implements FormattingContext {
     /** Baseline alignment applies to row items without auto cross margins (wrap-reverse lines align at their start). */
     private static boolean participatesInBaseline(Container c, Item it) {
         return it.align == Align.BASELINE && c.main.isHorizontal() && !c.wrapReverse
-                && !c.autoMargin(it, c.cross, true) && !c.autoMargin(it, c.cross, false);
+                && !c.cross.hasAutoMargin(it.style);
     }
 
     /** Main-axis alignment (§9.5): auto margins take positive free space, else {@code justify-content}. */
@@ -493,8 +491,9 @@ final class FlexLayout implements FormattingContext {
         float width = c.main.pick(it.targetMain, it.cross);
         float height = c.main.pick(it.cross, it.targetMain);
         boolean definite = c.definiteHeight(it);
-        if (measure) return pass.measure(it.box, width, height, definite, c.contentWidth, c.percentHeight);
-        LayoutResult r = pass.layout(it.box, width, height, definite, c.contentWidth, c.percentHeight);
+        LayoutResult r = pass.layoutOrMeasure(it.box, width, height, definite, c.contentWidth, c.percentHeight,
+                measure);
+        if (measure) return r;
         float[] pos = itemPosition(c, line, it);
         it.box.x = pos[0];
         it.box.y = pos[1];
