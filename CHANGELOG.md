@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- If the shape shader fails to compile, Vellum draws shapes the old way until the next resource reload, instead of retrying the compile every 5 seconds (a hitch each time).
+- Less work per frame: animations are only advanced a second time when an event handler changed them, outer box-shadows skip work the shader threw away, and the previewer no longer allocates per pixel.
+
 ## 0.6.2
 
 - The jar is about 12% smaller (2.8 MB to 2.5 MB): classes keep line numbers for stack traces but not local variable tables, and Rhino's French and Chinese error messages are left out.
