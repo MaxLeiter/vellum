@@ -2,6 +2,7 @@ package dev.vellum.neoforge.client;
 
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.DevAutopilot;
+import dev.vellum.mod.client.DevPointer;
 import dev.vellum.mod.client.McClient;
 import dev.vellum.mod.client.TourCursor;
 import dev.vellum.mod.client.VellumClient;
@@ -101,7 +102,11 @@ public final class VellumNeoForgeClient {
             if (VellumHud.mouseScrolled(e.getMouseX(), e.getMouseY(), e.getScrollDeltaX(), e.getScrollDeltaY())) e.setCanceled(true);
         });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> VellumClient.tick());
-        if (DevAutopilot.ENABLED) NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> DevAutopilot.tick(Minecraft.getInstance()));
+        if (DevAutopilot.ENABLED) {
+            NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> DevAutopilot.tick(Minecraft.getInstance()));
+            NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Pre e) -> DevPointer.beforeScreenChange());
+            NeoForge.EVENT_BUS.addListener((ScreenEvent.Closing e) -> DevPointer.beforeScreenChange());
+        }
         //? if >=26 {
         // The dev tour's cursor, over everything: after the screen's tooltips and the overlays above it, else last in the HUD.
         if (TourCursor.ENABLED) {

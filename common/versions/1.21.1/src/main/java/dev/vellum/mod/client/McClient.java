@@ -9,6 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.jspecify.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * The client state and input that Vellum reaches differently on each Minecraft version; this is the one for 1.21.1.
@@ -84,6 +85,18 @@ public final class McClient {
         Minecraft mc = Minecraft.getInstance();
         mc.mouseHandler.setIgnoreFirstMove(); // takes the position without queueing a second move event
         mc.mouseHandler.onMove(window(), x, y);
+    }
+
+    /**
+     * Shuts the real mouse out: its moves, buttons and wheel, and the window's enter and leave, are dropped where GLFW
+     * delivers them, so the pointer moves only through these methods. For the dev autopilot, which owns the pointer
+     * for its whole run ({@link DevPointer}); there is no undoing it.
+     */
+    static void ignoreRealMouse() {
+        GLFW.glfwSetCursorPosCallback(window(), null);
+        GLFW.glfwSetMouseButtonCallback(window(), null);
+        GLFW.glfwSetScrollCallback(window(), null);
+        GLFW.glfwSetCursorEnterCallback(window(), null);
     }
 
     /** Presses or releases DOM button {@code button} (0 left, 1 middle, 2 right) where the pointer is. */
