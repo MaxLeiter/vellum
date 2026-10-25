@@ -61,22 +61,25 @@ public final class VellumResources {
 
     /** The text of a resource, or null when missing. */
     public static @Nullable String loadText(String url) {
+        byte[] bytes = loadBytes(url);
+        return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    /** The bytes of a resource (a {@code <scene>}'s structure file), or null when missing. */
+    public static byte @Nullable [] loadBytes(String url) {
         Identifier id = Identifier.tryParse(url);
         if (id == null) return null;
         try {
-            if (VellumPages.isFolder(id.getNamespace())) {
-                byte[] bytes = loadFolderBytes(id);
-                return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
-            }
+            if (VellumPages.isFolder(id.getNamespace())) return loadFolderBytes(id);
             Path source = sourceFile(id);
             if (source != null) {
                 FILES_READ.add(source);
-                return Files.readString(source, StandardCharsets.UTF_8);
+                return Files.readAllBytes(source);
             }
             var resource = Minecraft.getInstance().getResourceManager().getResource(id);
             if (resource.isEmpty()) return null;
             try (InputStream in = resource.get().open()) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                return in.readAllBytes();
             }
         } catch (IOException e) {
             Constants.LOG.warn("Vellum: cannot read {}: {}", url, e.toString());

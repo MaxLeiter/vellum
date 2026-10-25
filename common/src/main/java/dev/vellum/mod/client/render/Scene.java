@@ -28,7 +28,7 @@ import org.jspecify.annotations.Nullable;
 public final class Scene {
     /** How a picture is drawn: {@code pose} has the origin in its middle, y down, a block per unit. */
     @FunctionalInterface
-    interface Drawer {
+    public interface Drawer {
         void submit(PoseStack pose, SubmitNodeCollector out, GuiSceneRenderState picture);
     }
 
@@ -100,6 +100,14 @@ public final class Scene {
             rotate(pose, Axis.XP, -tilt); // the item's GUI transform tilts it again
             state.submit(pose, out, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
         });
+    }
+
+    /**
+     * A picture drawn by {@code drawer}, lit as the inventory lights blocks. With a {@code key} it is kept while the
+     * same {@code owner} shows an equal key; without one it is drawn every frame.
+     */
+    public static Scene of(Object owner, @Nullable Object key, Drawer drawer) {
+        return new Scene(owner, key, Lighting.Entry.ITEMS_3D, drawer);
     }
 
     private record ModelKey(Object model, float yaw, float pitch, float dx, float dy) {}

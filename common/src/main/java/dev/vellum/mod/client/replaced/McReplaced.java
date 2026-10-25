@@ -12,15 +12,15 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * The Minecraft elements, drawn by Minecraft: {@code <item>}, {@code <slot>}, {@code <entity>}, {@code <model>} and
- * {@code <player-head>} ({@code img}, {@code sprite} and {@code canvas} are the engine's). Layout sizes them like
+ * The Minecraft elements, drawn by Minecraft: {@code <item>}, {@code <slot>}, {@code <entity>}, {@code <model>},
+ * {@code <player-head>} and {@code <scene>} ({@code img}, {@code sprite} and {@code canvas} are the engine's). Layout sizes them like
  * images (intrinsic size, CSS size, object-fit).
  */
 public abstract class McReplaced implements ReplacedContent {
     /** The host's replaced elements, by tag ({@code Host.replacedElements}). */
     public static final Map<String, Function<Element, ReplacedContent>> ELEMENTS = Map.of(
             "item", ItemContent::new, "slot", SlotContent::new, "entity", EntityContent::new, "model", ModelContent::new,
-            "player-head", PlayerHeadContent::new);
+            "player-head", PlayerHeadContent::new, "scene", SceneContent::new);
 
     protected final Element element;
 

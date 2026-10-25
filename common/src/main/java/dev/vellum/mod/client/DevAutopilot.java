@@ -5,8 +5,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.Window;
+import dev.vellum.engine.dom.Document;
+import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.VellumConfig;
+import dev.vellum.mod.client.replaced.SceneContent;
 import dev.vellum.mod.server.VellumServer;
 import dev.vellum.mod.server.VellumSession;
 import net.minecraft.client.Minecraft;
@@ -14,6 +17,7 @@ import net.minecraft.client.Options;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.input.KeyEvent;
 //? if >=26
@@ -65,6 +69,8 @@ import java.util.function.Supplier;
  */
 public final class DevAutopilot {
     public static final boolean ENABLED = Boolean.getBoolean("vellum.autopilot");
+    /** With {@code -Pautopilot=scene}, only the scene showcase's steps run ({@link #scene}), for quick looks. */
+    private static final String ONLY = System.getProperty("vellum.autopilot.only", "");
     /**
      * The fewest ticks before a page's screenshot, so the frame rate logged with it (counted over a second) is the
      * page's own; and how long to wait for a screen that is not a Vellum page.
@@ -171,6 +177,10 @@ public final class DevAutopilot {
             return;
         }
         guiScale(mc, 2);
+        if (ONLY.equals("scene")) {
+            scene(mc);
+            return;
+        }
         serverPages(mc);
         shoot(mc, "canvastest", () -> McClient.setScreen(new CanvasTestScreen()));
         guiScale(mc, 3);
@@ -178,8 +188,9 @@ public final class DevAutopilot {
         guiScale(mc, 2);
         shoot(mc, "showcase_index", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("index")));
         for (String page : VellumClientCommands.SHOWCASE) {
-            shoot(mc, "showcase_" + page, () -> VellumScreens.open(VellumClientCommands.showcaseUrl(page)));
+            if (!page.equals("scene")) shoot(mc, "showcase_" + page, () -> VellumScreens.open(VellumClientCommands.showcaseUrl(page)));
         }
+        scene(mc);
         // The 3D pages again at GUI scale 3, where models and entities are drawn at a different resolution, and the
         // turntables a second later, having turned.
         guiScale(mc, 3);
@@ -255,6 +266,47 @@ public final class DevAutopilot {
      * The autopilot's portraits page, the conversation card, and the Turntable's portraits watching the pointer over
      * the stage's caption, at GUI scales 2 and 3 (where they are sharper).
      */
+    /**
+     * The scene showcase: the finished cottage (opened at its last step) at GUI scale 2 and 3, and the build part way
+     * through. Checks that it drew its blocks, and that hovering one fires {@code blockhover} and shows its name.
+     */
+    private static void scene(Minecraft mc) {
+        String url = VellumClientCommands.showcaseUrl("scene");
+        shoot(mc, "showcase_scene", () -> VellumScreens.open(url, JsonParser.parseString("{\"start\": {\"step\": \"done\"}}")));
+        //? if >=26 {
+        steps.add(() -> {
+            int quads = sceneQuads();
+            check(quads > 300, "the scene drew {} block quads", "the scene drew only {} block quads", quads);
+        });
+        //?} else
+        //steps.add(() -> skip("the scene's blocks", "scenes draw no blocks on 1.21.1"));
+        hover("scene");
+        steps.add(() -> {
+            String hovered = VellumAutomation.screen().flatMap(p -> p.eval("window.lastHover || ''"))
+                    .map(JsonElement::getAsString).orElse("");
+            check(!hovered.isEmpty(), "hovering the scene fired blockhover for {}", "hovering the scene fired no blockhover",
+                    hovered);
+        });
+        //? if >=26 {
+        steps.add(() -> check(shownNow(), "the hovered block's name shows", "no tooltip over the scene's block"));
+        //?}
+        grab(mc, "showcase_scene_hover", 0);
+        leave();
+        shoot(mc, "showcase_scene_step", () -> VellumScreens.open(url, JsonParser.parseString("{\"start\": {\"step\": 4}}")));
+        guiScale(mc, 3);
+        shoot(mc, "showcase_scene_gui3", () -> VellumScreens.open(url, JsonParser.parseString("{\"start\": {\"step\": \"done\"}}")));
+        guiScale(mc, 2);
+    }
+
+    /** How many block quads the open page's scene drew in its last frame. */
+    private static int sceneQuads() {
+        Screen screen = McClient.screen();
+        DocumentDriver driver = screen == null ? null : DocumentDriver.of(screen);
+        Document doc = driver == null ? null : driver.document();
+        Element scene = doc == null ? null : doc.querySelector("scene");
+        return scene != null && scene.replaced instanceof SceneContent content ? content.drawnQuads() : 0;
+    }
+
     private static void portraits(Minecraft mc) {
         for (int scale : new int[] {2, 3}) {
             String suffix = scale == 2 ? "" : "_gui3";
