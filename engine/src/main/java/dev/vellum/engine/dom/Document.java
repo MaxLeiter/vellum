@@ -78,7 +78,7 @@ public final class Document extends Node {
     private int stackingVersion;
     /** Listeners plus inline {@code on*} handlers in this document, by lower-case event type. */
     private final Map<String, int[]> handlers = new HashMap<>();
-    private int domVersion;
+    private int domVersion, selectorVersion;
     /** Nodes in the document tree, the document itself not included. */
     private int nodeCount;
     /** Pixels of the live canvases. */
@@ -479,19 +479,31 @@ public final class Document extends Node {
      */
     public int domVersion() { return domVersion; }
 
+    /**
+     * Incremented on the changes to the {@link #domVersion} kind that can change which rules match or which
+     * stylesheets apply: to the tree, to the attributes selectors or stylesheet collection read
+     * ({@link StyleEngine#matchingReads}), to text in a {@code <style>} or whose emptiness flipped, and to form state.
+     * The style engine matches selectors again only when this changed (or hover, active or focus did).
+     */
+    public int selectorVersion() { return selectorVersion; }
+
     public void invalidateStyle() { styleDirty = true; }
     public void invalidateLayout() { layoutDirty = true; }
     public void invalidateStacking() { stackingVersion++; }
     public boolean needsLayout() { return layoutDirty; }
 
-    /** Marks style dirty, and layout too when {@code layout}. */
+    /** A tree change: marks style dirty, and layout too when {@code layout}. */
     void invalidate(boolean layout) {
-        invalidate(true, layout);
+        invalidate(true, true, layout);
     }
 
-    /** A tree, attribute or text change: bumps {@link #domVersion} and marks style and/or layout dirty. */
-    private void invalidate(boolean style, boolean layout) {
+    /**
+     * A tree, attribute or text change: bumps {@link #domVersion}, and {@link #selectorVersion} when {@code selectors},
+     * and marks style and/or layout dirty.
+     */
+    private void invalidate(boolean selectors, boolean style, boolean layout) {
         domVersion++;
+        if (selectors) selectorVersion++;
         styleDirty |= style;
         layoutDirty |= layout;
     }
@@ -657,26 +669,32 @@ public final class Document extends Node {
             default -> false;
         };
         // Restyle only for attributes a style can read; repaint for any (replaced content and controls draw them).
-        invalidate(styleEngine.readsAttribute(name), layout);
+        invalidate(styleEngine.matchingReads(element, name), styleEngine.readsAttribute(name), layout);
         repaint = true;
         if (MinecraftText.expandsOn(element, name) && !readyState.equals("loading")) MinecraftText.expand(this, element);
     }
 
     /**
      * Text changed: relayout; restyle too when it is a stylesheet's or the parent's emptiness flipped ({@code :empty},
-     * {@code :placeholder-shown}).
+     * {@code :placeholder-shown}). Selectors only see the emptiness, and stylesheets the text of a {@code <style>}.
      */
     void textChanged(Text text, boolean emptinessFlipped) {
         if (!text.isConnected()) return;
         Element parent = text.parentElement();
-        invalidate(emptinessFlipped || parent != null && parent.tagName().equals("style"), true);
+        boolean sheet = parent != null && parent.tagName().equals("style");
+        invalidate(emptinessFlipped || inStyle(parent), emptinessFlipped || sheet, true);
+    }
+
+    /** Whether {@code element} is or is in a {@code <style>}, whose text is the sheet's. */
+    private static boolean inStyle(Element element) {
+        for (Element e = element; e != null; e = e.parentElement()) if (e.tagName().equals("style")) return true;
+        return false;
     }
 
     /** Form state that selectors read changed ({@code :checked}, {@code :placeholder-shown}): restyle. */
     void stateChanged(Element element) {
         if (!element.isConnected()) return;
-        domVersion++;
-        styleDirty = true;
+        invalidate(true, true, false);
     }
 
     /** Adds {@code delta} to the count of handlers (listeners or inline attributes) for an event type. */
