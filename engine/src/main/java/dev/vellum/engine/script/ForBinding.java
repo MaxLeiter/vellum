@@ -170,7 +170,7 @@ final class ForBinding implements Binding {
     }
 
     /** Keys compare as JS would: 1 and 1.0 are the same number, a concatenated string equals a literal one. */
-    private static Object normalize(Object key) {
+    static Object normalize(Object key) {
         if (key instanceof Number n) return n.doubleValue();
         if (key instanceof CharSequence s) return s.toString();
         return key;

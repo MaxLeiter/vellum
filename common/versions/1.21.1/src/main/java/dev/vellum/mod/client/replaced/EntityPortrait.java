@@ -116,7 +116,9 @@ public final class EntityPortrait {
             // the feet and, seen from above or below, by the near or far side of what it sweeps.
             float roomHeight = tall * cos + sweep * sin, lift = -reach.bottom() * cos + sweep / 2 * sin;
             float fitted = Math.min(height * (1 - TOP_MARGIN) / roomHeight, width * (1 - 2 * SIDE_MARGIN) / sweep) * pose.scale();
-            frame = EntityFraming.body(style, x, y, width, height, fitted, sweep, roomHeight, lift);
+            frame = style.entityFocus == EntityFocus.CENTER
+                    ? EntityFraming.center(style, x, y, width, height, fitted, pose.scale(), sweep, roomHeight, lift)
+                    : EntityFraming.body(style, x, y, width, height, fitted, sweep, roomHeight, lift);
         }
         float pixelsPerBlock = frame.pixelsPerBlock();
         float dx = (frame.originX() - x - width / 2) / pixelsPerBlock, up = (y + height - frame.originY()) / pixelsPerBlock;

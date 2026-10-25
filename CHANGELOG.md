@@ -5,6 +5,13 @@
 - On Minecraft 26.2 and 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 1.21.1 is unchanged.
 - The previewer draws rounded boxes, borders and shadows the way the shader does, so pages look the same there as in game.
 - `Canvas.fillBoxShadow`: a canvas backend can draw box-shadows itself.
+- Timers a page sets while it loads wait their full delay. In game, the first frame jumped the clock from 0 to the game's own time, so a load-time `setTimeout` fired at once and `performance.now()` jumped. `performance.now()` and `requestAnimationFrame` now count from the page's first frame, as in browsers.
+- The jar is about 150 KB smaller: Rhino's bytecode compiler, serialization and CommonJS loader, which Vellum never runs, are left out.
+- Showing a HUD overlay again from its own `onClose` handler works (it was undone right after), so a queue of toasts is a few lines; `docs/api/hud.md` has the recipe.
+- `-mc-entity-focus: center` fits an `<entity>` like `body` but zooms around its middle with `-mc-model-scale`, so zooming in no longer shows only the feet.
+- `:key` works on any element, not only in a `v-for`: when the key changes the element is re-created, so its entrance animation replays. A keyed `v-if` branch does the same. The journal and Mobdex use it instead of one-item loops.
+- What an animation's `finished` promise or event changes applies before the next frame is drawn, so the journal no longer flickers after a page turn.
+- The showcase and demo pages are about 12% smaller and share `showcase/showcase.css`, with the same look.
 
 ## 0.5.1
 

@@ -504,7 +504,7 @@
       to { transform: translateY(140px); opacity: 0; }
     }
 
-    /* Runs once per selection (the element is re-created by a keyed v-for): a flash that fades away. */
+    /* Runs once per selection (its :key re-creates the element): a flash that fades away. */
     .flash {
       position: absolute;
       inset: 0;
@@ -755,10 +755,10 @@
         <div class="screen entry">
           <div class="entry-head">
             <span class="no">#{{ pad(mob().no) }}</span>
-            <!-- A keyed v-for of one item re-creates the element whenever the key changes, so its CSS
-                 entrance animation plays again for every new selection. -->
-            <span class="name" v-for="k in [sel]" :key="k">{{ mob().seen ? mob().name.toUpperCase() : '??????' }}</span>
-            <div class="badges" v-for="k in [sel]" :key="k">
+            <!-- :key re-creates an element whenever the key changes, so its CSS entrance animation plays again
+                 for every new selection. -->
+            <span class="name" :key="sel">{{ mob().seen ? mob().name.toUpperCase() : '??????' }}</span>
+            <div class="badges" :key="sel">
               <span class="badge" v-for="c in (mob().seen ? mob().cats : [])" :key="c"
                     :style="{ '--c': color(c) }">{{ c.toUpperCase() }}</span>
             </div>
@@ -776,7 +776,7 @@
               <div class="corner tl"></div><div class="corner tr"></div>
               <div class="corner bl"></div><div class="corner br"></div>
               <div class="scan"></div>
-              <div class="flash" v-for="k in [sel]" :key="k"></div>
+              <div class="flash" :key="sel"></div>
               <div class="live" v-if="mob().seen">{{ hovering ? 'DRAG' : 'LIVE' }}</div>
             </div>
 
@@ -786,7 +786,7 @@
                 <div class="bar"><div class="fill" :style="{ width: statWidth(s) }"></div></div>
                 <span class="v">{{ statText(s) }}</span>
               </div>
-              <div class="hearts" v-for="k in [sel]" :key="k">
+              <div class="hearts" :key="sel">
                 <span class="k">LIFE</span>
                 <div v-for="(h, i) in hearts()" class="heart" :class="h"
                      :style="{ animationDelay: (150 + i * 30) + 'ms' }"></div>
@@ -805,7 +805,7 @@
                 <span class="k">RISK</span>
                 <span v-for="on in threat()" class="skull" :class="{ on: on }">☠</span>
               </div>
-              <div class="drops" v-for="k in [sel]" :key="k">
+              <div class="drops" :key="sel">
                 <span class="k">DROPS</span>
                 <div class="drop" v-for="(d, i) in (mob().seen && mob().drops ? mob().drops : [])" :key="d"
                      :style="{ animationDelay: (200 + i * 70) + 'ms' }">
@@ -817,7 +817,7 @@
               </div>
             </div>
 
-            <div class="stamp" v-for="k in [sel]" :key="k" v-if="mob().caught">CAUGHT</div>
+            <div class="stamp" v-if="mob().caught" :key="sel">CAUGHT</div>
           </div>
 
           <div class="desc">{{ typed() }}<span class="caret" v-if="typing()">█</span></div>

@@ -291,8 +291,10 @@ public final class VellumHud {
             shown = false;
             tracking = false;
             buttons = 0;
-            if (driver != null) driver.close();
+            DocumentDriver closing = driver;
             driver = null;
+            // Last: an onClose handler may show the overlay again (the next toast), with a new driver that stays.
+            if (closing != null) closing.close();
         }
 
         @Override

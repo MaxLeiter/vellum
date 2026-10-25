@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Max Leiter <8675906+MaxLeiter@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 20:04:25 -0700
+Subject: [PATCH] No CommonJS modules
+
+Vellum leaves out Rhino's commonjs package (require() and its module loader); FunctionObject was its only user
+outside it, for calls with a ModuleScope as this.
+
+diff --git a/rhino/src/main/java/org/mozilla/javascript/FunctionObject.java b/rhino/src/main/java/org/mozilla/javascript/FunctionObject.java
+index 91292f55f137..2ed3db65122a 100644
+--- a/rhino/src/main/java/org/mozilla/javascript/FunctionObject.java
++++ b/rhino/src/main/java/org/mozilla/javascript/FunctionObject.java
+@@ -14,7 +14,6 @@ import java.lang.reflect.Constructor;
+ import java.lang.reflect.Member;
+ import java.lang.reflect.Method;
+ import java.lang.reflect.Modifier;
+-import org.mozilla.javascript.commonjs.module.ModuleScope;
+ import org.mozilla.javascript.lc.type.TypeInfo;
+ import org.mozilla.javascript.lc.type.TypeInfoFactory;
+ 
+@@ -394,7 +393,7 @@ public class FunctionObject extends BaseFunction {
+                 }
+                 if (!clazz.isInstance(thisObj)) {
+                     boolean compatible = false;
+-                    if (thisObj == scope || thisObj instanceof ModuleScope) {
++                    if (thisObj == scope) {
+                         Scriptable parentScope = getDeclarationScope();
+                         if (scope != parentScope) {
+                             // Call with dynamic scope for standalone function,

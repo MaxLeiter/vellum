@@ -56,7 +56,7 @@ final class TemplateCompiler {
         this.cloaked = cloaked;
     }
 
-    /** Compiles a node, which is replaced by an anchor when it carries v-for or v-if. */
+    /** Compiles a node, which is replaced by an anchor when it carries v-for, v-if or a :key. */
     void compileNode(Node node, Scriptable scope, Binding.Block block) {
         if (node instanceof Text text) {
             Function<Context, String> render = interpolation(text.data(), scope, "text \"" + text.data().strip() + "\"");
@@ -65,6 +65,7 @@ final class TemplateCompiler {
                 && !el.hasAttribute("v-pre")) {
             if (el.hasAttribute("v-for")) compileFor(el, scope, block);
             else if (el.hasAttribute("v-if")) compileIf(el, scope, block);
+            else if (keyAttribute(el) != null) compileKeyed(el, scope, block);
             else compileElement(el, scope, block);
         }
     }
@@ -224,7 +225,10 @@ final class TemplateCompiler {
             el.removeAttribute(directive);
             el.remove();
             boolean last = directive.equals("v-else");
-            branches.add(new IfBinding.Branch(last ? null : value(condition, where(el, directive, condition)), el));
+            String keyAttribute = keyAttribute(el), key = keyAttribute == null ? null : el.getAttribute(keyAttribute);
+            if (keyAttribute != null) el.removeAttribute(keyAttribute);
+            branches.add(new IfBinding.Branch(last ? null : value(condition, where(el, directive, condition)), el,
+                    key == null ? null : value(key, where(el, keyAttribute, key))));
             if (last) break;
             // The next branch is the next element, past whitespace (which goes, as in Vue).
             List<Node> gap = new ArrayList<>();
@@ -243,6 +247,21 @@ final class TemplateCompiler {
             }
         }
         block.add(new IfBinding(this, anchor, branches, scope));
+    }
+
+    private static String keyAttribute(Element el) {
+        for (String name : List.of(":key", "v-bind:key", "v-key")) if (el.hasAttribute(name)) return name;
+        return null;
+    }
+
+    /** An element with a :key outside a v-for: re-created whenever the key changes (see {@link KeyBinding}). */
+    private void compileKeyed(Element el, Scriptable scope, Binding.Block block) {
+        String attribute = keyAttribute(el), value = el.getAttribute(attribute);
+        el.removeAttribute(attribute);
+        Text anchor = rt.document.createTextNode("");
+        el.parentNode().insertBefore(anchor, el);
+        el.remove();
+        block.add(new KeyBinding(this, el, anchor, scope, value(value, where(el, attribute, value))));
     }
 
     private void compileFor(Element template, Scriptable scope, Binding.Block block) {

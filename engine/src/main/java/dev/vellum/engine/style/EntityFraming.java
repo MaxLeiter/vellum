@@ -8,6 +8,8 @@ package dev.vellum.engine.style;
  * <ul>
  *   <li>The body focus ({@link #body}): the caller fits the entity to the box and says how much room it takes, and
  *   {@code object-position} places that room. Unset, it stands on the bottom edge, centred.</li>
+ *   <li>The center focus ({@link #center}): placed as the body focus is at scale 1, then scaled about the middle of
+ *   its room, so zooming in shows the middle of the entity instead of its feet.</li>
  *   <li>The eyes focus ({@link #eyes}): the box's shorter side spans {@link #EYES_SPAN} of the eye height, and
  *   {@code object-position} places the eye point, the point at its eye height on its upright axis ({@code 50% 40%}
  *   unset). Turning leaves that point where it is.</li>
@@ -59,5 +61,19 @@ public record EntityFraming(float originX, float originY, float pixelsPerBlock) 
         float originX = x + s.objectPositionX.resolve(width - w, (width - w) / 2) + w / 2;
         float originY = y + s.objectPositionY.resolve(height - h, height - h) + h - lift * pixelsPerBlock;
         return new EntityFraming(originX, originY, pixelsPerBlock);
+    }
+
+    /**
+     * The center focus: as {@link #body} for {@code pixelsPerBlock / scale}, then scaled by {@code scale} about the
+     * middle of the room, which stays where it was.
+     */
+    public static EntityFraming center(ComputedStyle s, float x, float y, float width, float height, float pixelsPerBlock,
+                                       float scale, float roomWidth, float roomHeight, float lift) {
+        EntityFraming unscaled = body(s, x, y, width, height, pixelsPerBlock / scale, roomWidth, roomHeight, lift);
+        float unscaledBlock = unscaled.pixelsPerBlock();
+        // The middle of the room at scale 1, from the origin it is placed by.
+        float middleY = unscaled.originY() + lift * unscaledBlock - roomHeight * unscaledBlock / 2;
+        return new EntityFraming(unscaled.originX(), middleY + roomHeight * pixelsPerBlock / 2 - lift * pixelsPerBlock,
+                pixelsPerBlock);
     }
 }

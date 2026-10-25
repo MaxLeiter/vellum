@@ -89,6 +89,53 @@ class TemplatesTest {
     }
 
     @Test
+    void aKeyOutsideALoopRecreatesTheElementWhenItChanges() {
+        Page page = new TestHost().load("""
+                <style>.name { animation: in 100ms both } @keyframes in { from { opacity: 0 } }</style>
+                <div id=d><p class="name" :key="sel">{{ sel }} {{ n }}</p></div>
+                <script>const s = vellum.state({sel: 'a', n: 1})</script>""");
+        Element first = page.byId("d").children().getFirst();
+        assertEquals(List.of("a 1"), texts(page.byId("d")));
+        page.frame(100);
+        assertEquals(1, first.style.opacity, 1e-4, "the entrance has run");
+        page.run("s.n = 2");
+        page.frame(116);
+        assertSame(first, page.byId("d").children().getFirst(), "the same key keeps the element");
+        assertEquals(List.of("a 2"), texts(page.byId("d")));
+        page.run("s.sel = 'b'");
+        page.frame(132);
+        Element second = page.byId("d").children().getFirst();
+        assertTrue(second != first && !first.isConnected(), "a new key replaces it");
+        assertEquals(List.of("b 2"), texts(page.byId("d")));
+        assertEquals(0, second.style.opacity, 1e-4, "and its animation starts over");
+    }
+
+    @Test
+    void aKeyedIfBranchStartsOverWhenItsKeyChanges() {
+        Page page = new TestHost().load("""
+                <div id=d><p v-if="on" :key="sel">{{ sel }}</p></div>
+                <script>const s = vellum.state({on: true, sel: 'a'})</script>""");
+        Element first = page.byId("d").children().getFirst();
+        page.run("s.sel = 'b'");
+        page.frame();
+        Element second = page.byId("d").children().getFirst();
+        assertTrue(second != first, "a new key gives a fresh copy");
+        assertEquals(List.of("b"), texts(page.byId("d")));
+        page.run("s.on = false");
+        page.frame();
+        assertEquals(List.of(), texts(page.byId("d")));
+        page.run("s.on = true");
+        page.frame();
+        assertSame(second, page.byId("d").children().getFirst(), "shown again with the same key: kept");
+        page.run("s.on = false; s.sel = 'c'");
+        page.frame();
+        page.run("s.on = true");
+        page.frame();
+        assertTrue(page.byId("d").children().getFirst() != second, "shown again with a new key: fresh");
+        assertEquals(List.of("c"), texts(page.byId("d")));
+    }
+
+    @Test
     void ifElseChains() {
         Page page = new TestHost().load("""
                 <div id=d>

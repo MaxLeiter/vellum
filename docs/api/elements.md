@@ -33,7 +33,7 @@ and the chat colours as names (`mc-gold`, `mc-gray`...). Lengths are GUI pixels:
 | `-mc-yaw` | angle, `0` | Turns it about the vertical axis; positive turns its front to the right. |
 | `-mc-pitch` | angle, `0` | Views it from above (positive) or below. |
 | `-mc-model-scale` | number, `1` | Multiplies the size that fits the box. |
-| `-mc-entity-focus` | `body` or `eyes`, `body` | `<entity>` only. What fills the box: the whole entity, or its head and shoulders. |
+| `-mc-entity-focus` | `body`, `center` or `eyes`, `body` | `<entity>` only. What fills the box: the whole entity, the whole entity zoomed around its middle, or its head and shoulders. |
 | `-mc-gaze-reach` | length, `40px` | `<entity follow-mouse>` only. How gently the head turns toward the pointer: larger is gentler. |
 | `-mc-gaze-limit` | one to three angles or `none`, `none` | `<entity follow-mouse>` only. The most the head turns to either side, tilts up and tilts down. |
 
@@ -86,10 +86,13 @@ lengths and percentages (`right 4px bottom`, `25% 75%`). Items and heads have `o
 stylesheet, so they take a square as wide as the box's shorter side. Models take that square too, times
 `-mc-model-scale`.
 
-An `<entity>` is fitted one of two ways:
+An `<entity>` is fitted one of three ways:
 
 - `-mc-entity-focus: body` (the default) fits the whole entity, with room to turn it, and `object-position` places
   that room. Without `object-position` it stands on the bottom edge, centred (`50% 100%`), not in the middle.
+  `-mc-model-scale` grows it from there, so zooming in shows its feet.
+- `-mc-entity-focus: center` fits it as `body` does, but `-mc-model-scale` zooms around the middle of the entity,
+  which stays where it was. Use it for a zoomable viewer.
 - `-mc-entity-focus: eyes` crops it to its head and shoulders: the box's shorter side spans 0.7 of the entity's eye
   height (`Entity.getEyeHeight()`, so babies are framed closer), and `object-position` says where the eyes go. Unset,
   they sit at `50% 40%`. `-mc-model-scale` zooms around the eyes, and turning, tilting and `follow-mouse` keep the

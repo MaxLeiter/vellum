@@ -68,6 +68,14 @@ public class TestHost implements Host {
         return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(width, height, 2))).frame(0);
     }
 
+    /**
+     * Like {@link #load(String)}, with the first frame at {@code firstFrameMs}: hosts pass their own clock, which is
+     * not 0 when a page opens (Minecraft's counts from the game's start).
+     */
+    public Page loadAt(String html, double firstFrameMs) {
+        return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(320, 240, 2))).frame(firstFrameMs);
+    }
+
     /** Loads pages with {@code limits} instead of the defaults. */
     public TestHost limits(Limits limits) {
         this.limits = limits;

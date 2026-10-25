@@ -17,6 +17,25 @@ can hide itself with `vellum.close()`, for example when its animation ends. Data
 is kept for the next `show`. `show` returns the page's driver, for `onMessage` and `onClose` handlers; they last
 until the overlay is hidden (showing it again makes a new driver).
 
+A queue of toasts or announcements is a page that closes itself when it's done, and an `onClose` handler that shows
+the next one. Calling `show` from `onClose` is fine: the overlay has already let go of the old page.
+
+```java
+private static final Deque<JsonObject> QUEUE = new ArrayDeque<>();
+
+static void toast(JsonObject toast) {
+    QUEUE.add(toast);
+    if (!VellumHud.isShown(TOAST)) next();
+}
+
+private static void next() {
+    JsonObject toast = QUEUE.poll();
+    if (toast == null) return;
+    VellumHud.push(TOAST, toast);
+    VellumHud.show(TOAST).onClose(Toasts::next); // the page calls vellum.close() when its animation ends
+}
+```
+
 By default overlays take no input. Say over which screens the player can use one with the mouse, and it is drawn
 above those screens and gets their pointer input first:
 

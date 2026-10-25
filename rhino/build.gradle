@@ -130,6 +130,12 @@ sourceSets {
     main {
         java.srcDir(prepareRhinoSources.map { sourceDir.get().dir('rhino/src/main/java') })
         java.exclude('module-info.java')
+        // Parts of Rhino Vellum never runs, left out of the jar: the compiler to Java bytecode (scripts are always
+        // interpreted), serialization of scopes, and the CommonJS require() loader (patch 0006 drops its one use).
+        // Code that is not there cannot be reached, even through a sandbox bug. The class file writer stays: the
+        // Java-adapter code the sandbox blocks still compiles against it.
+        java.exclude('org/mozilla/javascript/optimizer/**', 'org/mozilla/javascript/serialize/**',
+                'org/mozilla/javascript/commonjs/**')
         resources.srcDir(prepareRhinoSources.map { sourceDir.get().dir('rhino/src/main/resources') })
     }
 }

@@ -659,9 +659,9 @@
 
         <section class="page left">
           <!-- Keyed by section: a fresh element per turn, so the ink-in animations replay. -->
-          <div class="content" v-for="k in [left]" :key="k">
+          <div class="content" :key="left">
 
-            <div v-if="k === 'quests'" class="content">
+            <div v-if="left === 'quests'" class="content">
               <div class="running"><span>CHAPTER III</span><span>QUESTS</span></div>
               <h1>The Sunken Archive</h1>
               <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
@@ -687,7 +687,7 @@
               <div class="folio">~ 41 ~</div>
             </div>
 
-            <div v-if="k === 'lore'" class="content">
+            <div v-if="left === 'lore'" class="content">
               <div class="running"><span>THE FIRST AGE</span><span>LORE</span></div>
               <h1>Of the Builders</h1>
               <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
@@ -704,7 +704,7 @@
               <div class="folio">~ 12 ~</div>
             </div>
 
-            <div v-if="k === 'bestiary'" class="content">
+            <div v-if="left === 'bestiary'" class="content">
               <div class="running"><span>DEEP WATER</span><span>BESTIARY</span></div>
               <h1>The Elder Guardian</h1>
               <div class="plate">
@@ -725,7 +725,7 @@
               <div class="folio">~ 77 ~</div>
             </div>
 
-            <div v-if="k === 'map'" class="content">
+            <div v-if="left === 'map'" class="content">
               <div class="running"><span>SURVEYED</span><span>MAP</span></div>
               <h1>The Western Reach</h1>
               <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
@@ -745,12 +745,12 @@
         </section>
 
         <section class="page right">
-          <div class="content" v-for="k in [right]" :key="k">
+          <div class="content" :key="right">
 
-            <div v-if="k === 'quests'" class="content">
+            <div v-if="right === 'quests'" class="content">
               <div class="running"><span>{{ quest().where.toUpperCase() }}</span><span>{{ quest().done ? 'DONE' : 'ACTIVE' }}</span></div>
               <!-- Keyed by quest, so switching quests re-inks the page. -->
-              <div class="content" v-for="qid in [questId]" :key="qid">
+              <div class="content" :key="questId">
                 <h1>{{ quest().title }}</h1>
                 <div class="giver"><player-head :name="quest().giver"></player-head><span>from {{ quest().giver }}</span></div>
                 <p>{{ quest().text }}</p>
@@ -768,11 +768,11 @@
                 <p class="hint" v-if="!quest().done">ⓘ {{ quest().hint }}</p>
               </div>
               <div class="sealed" v-if="quest().done">Sealed on Day {{ quest().sealed }}</div>
-              <div class="seal" v-for="s in [questId]" :key="s" v-if="quest().done">C</div>
+              <div class="seal" v-if="quest().done" :key="questId">C</div>
               <div class="folio">~ 42 ~</div>
             </div>
 
-            <div v-if="k === 'lore'" class="content">
+            <div v-if="right === 'lore'" class="content">
               <div class="running"><span>A SHORT HISTORY</span><span>LORE</span></div>
               <h3>THE AGES OF THE REACH</h3>
               <div class="timeline">
@@ -786,7 +786,7 @@
               <div class="folio">~ 13 ~</div>
             </div>
 
-            <div v-if="k === 'bestiary'" class="content">
+            <div v-if="right === 'bestiary'" class="content">
               <div class="running"><span>FIELD NOTES</span><span>BESTIARY</span></div>
               <p>Seen twice off Gull Point. It does not chase; it waits, and its gaze tires the hands until no pick will bite.</p>
               <h3>SPECIMENS</h3>
@@ -810,7 +810,7 @@
               <div class="folio">~ 78 ~</div>
             </div>
 
-            <div v-if="k === 'map'" class="content">
+            <div v-if="right === 'map'" class="content">
               <div class="running"><span>KEY</span><span>MAP</span></div>
               <div class="legend">
                 <div v-for="b in BIOMES" :key="b.name"><i :style="{ background: b.color }"></i>{{ b.name }}</div>

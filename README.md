@@ -2,7 +2,7 @@
 
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/vellum-gui) | [Modrinth](https://modrinth.com/mod/vellum-gui) | [Docs](docs/index.md)
 
-Vellum is a small web engine inside Minecraft. Write your screens, inventories, HUDs, etc in HTML and Vellum handles the layout, scripting, and rendering with the normal GUI renderer. It runs on Minecraft 26.3, 26.2 and 1.21.1, on NeoForge and Fabric.
+Vellum is a small web engine inside Minecraft. Write your screens, inventories, HUDs, etc in HTML and Vellum handles the layout, scripting, and rendering with the normal GUI renderer. 
 
 You probably don't need to install this on its own; Vellum is a library other mods depend on.
 
@@ -12,7 +12,7 @@ The inspiration for Vellum was three-fold:
 - LLMs are better at web development than Minecraft GUI development
 - Updating GUIs across Minecraft versions has always been a pain. With Vellum, your GUIs stay the same and just the library needs to be updated.
 
-Vellum helps in both these cases. Opus 5.5 was used heavily in the development of Vellum.
+Vellum helps in all three cases. Opus 5.5 was used heavily in the development of Vellum.
 
 <table>
   <tr>
@@ -95,9 +95,9 @@ Flags, keys and how it finds the jar are in [`preview/README.md`](preview/README
 
 ## Building
 
-You need JDK 25 or newer and git; Gradle provisions the toolchains (25 for 26.3 and 26.2, 21 for 1.21.1).
+You need git and any JDK 17 or newer to start Gradle; Gradle downloads Java 25 to run itself (`gradle/gradle-daemon-jvm.properties`) and the toolchains it compiles with.
 
-Vellum uses a patched Rhino. The build downloads the upstream source pinned in `gradle.properties` (once, checked
+Vellum uses a patched [Rhino](https://github.com/mozilla/rhino). The build downloads the upstream source pinned in `gradle.properties` (once, checked
 against its SHA-256), applies the patches in `rhino/patches` and compiles it, so there is nothing to install first.
 [`rhino/README.md`](rhino/README.md) says what the patches do and how to change them.
 
