@@ -156,22 +156,10 @@ final class BoxPainter implements StackingOrder.Visitor {
     /** Replaced content in the content box, sized by object-fit and placed by object-position; clipped when it overflows. */
     private void replaced(Box box, ComputedStyle s, ReplacedContent content, float x, float y) {
         float cx = x + box.contentX(), cy = y + box.contentY(), cw = box.contentWidth(), ch = box.contentHeight();
-        float iw = content.intrinsicWidth(), ih = content.intrinsicHeight(), w = cw, h = ch;
-        if (iw > 0 && ih > 0) {
-            float scale = switch (s.objectFit) {
-                case FILL -> Float.NaN;
-                case CONTAIN -> Math.min(cw / iw, ch / ih);
-                case COVER -> Math.max(cw / iw, ch / ih);
-                case NONE -> 1;
-                case SCALE_DOWN -> Math.min(1, Math.min(cw / iw, ch / ih));
-            };
-            if (!Float.isNaN(scale)) {
-                w = iw * scale;
-                h = ih * scale;
-            }
-        }
+        float[] fitted = Coordinates.objectBox(box, s, content);
+        float w = fitted[2], h = fitted[3];
         boolean overflows = w > cw + 0.01f || h > ch + 0.01f;
-        float ox = cx + s.objectX(cw - w), oy = cy + s.objectY(ch - h);
+        float ox = x + fitted[0], oy = y + fitted[1];
         float x0 = snap(ox), y0 = snap(oy);
         float width = snap(ox + w) - x0, height = snap(oy + h) - y0;
         if (width <= 0 || height <= 0 || overflows && !pushClip(cx, cy, cw, ch)) return;

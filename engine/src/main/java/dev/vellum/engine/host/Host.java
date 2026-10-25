@@ -23,6 +23,12 @@ public interface Host {
      */
     String loadText(String url);
 
+    /**
+     * Loads a binary resource (a {@code <scene>}'s structure file). {@code url} is already resolved against the
+     * document URL. Returns null when missing or when the host has no binary resources.
+     */
+    default byte[] loadBytes(String url) { return null; }
+
     /** Resolves {@code relative} against {@code base}. The default handles {@code ns:path} ids and plain paths. */
     default String resolveUrl(String base, String relative) {
         return Urls.resolve(base, relative);

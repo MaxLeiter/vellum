@@ -37,6 +37,8 @@ public class TestHost implements Host {
     public int sendLimit = Integer.MAX_VALUE;
     /** The host's replaced elements by tag (none unless a test adds them). */
     public final Map<String, Function<Element, ReplacedContent>> replaced = new HashMap<>();
+    /** Binary resources by URL, for {@link #loadBytes}. */
+    public final Map<String, byte[]> binaries = new HashMap<>();
     /** Natural sizes of textures by URL, for {@link #imageSize}. */
     public final Map<String, float[]> imageSizes = new HashMap<>();
     public String clipboard = "";
@@ -97,6 +99,9 @@ public class TestHost implements Host {
 
     @Override
     public String loadText(String url) { return resources.get(url); }
+
+    @Override
+    public byte[] loadBytes(String url) { return binaries.get(url); }
 
     @Override
     public float[] imageSize(String url) { return imageSizes.get(url); }

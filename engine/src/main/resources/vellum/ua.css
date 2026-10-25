@@ -65,6 +65,11 @@ model { display: inline-block; width: 32px; height: 32px; }
 entity[rotatable], model[rotatable] { cursor: grab; }
 entity[rotatable]:active, model[rotatable]:active { cursor: grabbing; }
 player-head { display: inline-block; width: 8px; height: 8px; }
+/* A scene's anchors are placed by the scene; its other children are what it shows, never boxes. */
+scene { display: inline-block; width: 160px; height: 120px; }
+scene[rotatable] { cursor: grab; }
+scene[rotatable]:active { cursor: grabbing; }
+scene > scene-anchor { position: absolute; }
 /* Items and faces are square: in any box, the largest square that fits, placed by object-position. */
 item, player-head { object-fit: contain; }
 sprite { display: inline-block; }

@@ -157,6 +157,14 @@ public final class ComputedStyle implements Cloneable {
      */
     public float gazeReach = 40f;
     public float gazeLimitYaw = Float.NaN, gazeLimitUp = Float.NaN, gazeLimitDown = Float.NaN;
+    /**
+     * Inside a {@code <scene>}, in blocks: {@code -mc-translate} moves a block group, entity or anchor, and
+     * {@code -mc-rotate} turns a block group about its centre (degrees about x, then y, then z).
+     */
+    public float translateX, translateY, translateZ;
+    public float rotateX, rotateY, rotateZ;
+    /** {@code -mc-scene-center}, in blocks: the point a scene turns about and centres; NaN for auto (its middle). */
+    public float sceneCenterX = Float.NaN, sceneCenterY = Float.NaN, sceneCenterZ = Float.NaN;
 
     // ---- Scrolling ----
     public boolean scrollSmooth = true;
@@ -334,7 +342,11 @@ public final class ComputedStyle implements Cloneable {
                 && tint == o.tint && same(modelYaw, o.modelYaw) && same(modelPitch, o.modelPitch)
                 && same(modelScale, o.modelScale) && entityFocus == o.entityFocus && same(gazeReach, o.gazeReach)
                 && same(gazeLimitYaw, o.gazeLimitYaw) && same(gazeLimitUp, o.gazeLimitUp)
-                && same(gazeLimitDown, o.gazeLimitDown) && scrollSmooth == o.scrollSmooth
+                && same(gazeLimitDown, o.gazeLimitDown) && same(translateX, o.translateX)
+                && same(translateY, o.translateY) && same(translateZ, o.translateZ) && same(rotateX, o.rotateX)
+                && same(rotateY, o.rotateY) && same(rotateZ, o.rotateZ) && same(sceneCenterX, o.sceneCenterX)
+                && same(sceneCenterY, o.sceneCenterY) && same(sceneCenterZ, o.sceneCenterZ)
+                && scrollSmooth == o.scrollSmooth
                 && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && same(tooltipDelay, o.tooltipDelay)
                 && listStyleType == o.listStyleType && shapeRendering == o.shapeRendering

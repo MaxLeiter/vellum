@@ -50,7 +50,7 @@ final class Layers {
             ComputedStyle s = StackingOrder.styleOf(child);
             if (StackingOrder.isLayer(s)) {
                 out.add(child);
-                if (s.createsStackingContext()) continue;
+                if (StackingOrder.isContext(child, s)) continue;
             }
             collect(child, out);
         }
