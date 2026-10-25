@@ -34,9 +34,9 @@ final class WindowBindings {
         global.defineProperty("document", rt.dom.wrap(document), HIDDEN);
 
         ScriptableObject location = (ScriptableObject) rt.js.newObject();
-        Members.Action<Document> go = (d, a) -> navigate(d, a.str(0));
+        Members.Action<Document> go = (d, a) -> d.navigate(a.str(0));
         new Members<>(rt, location, self -> document)
-                .prop("href", Document::url, (d, v) -> navigate(d, Js.str(v)))
+                .prop("href", Document::url, (d, v) -> d.navigate(Js.str(v)))
                 .action("assign", go)
                 .action("replace", go)
                 .action("reload", (d, a) -> host.navigate(d.url()))
@@ -47,7 +47,7 @@ final class WindowBindings {
                 .get("innerWidth", Document::viewportWidth)
                 .get("innerHeight", Document::viewportHeight)
                 .get("devicePixelRatio", Document::devicePixelRatio)
-                .prop("location", d -> location, (d, v) -> navigate(d, Js.str(v)))
+                .prop("location", d -> location, (d, v) -> d.navigate(Js.str(v)))
                 .action("addEventListener", (d, a) -> rt.events.addListener(d, a))
                 .action("removeEventListener", (d, a) -> rt.events.removeListener(d, a))
                 .method("dispatchEvent", (d, a) -> rt.events.dispatch(d, a))
@@ -57,13 +57,13 @@ final class WindowBindings {
                 .action("clearInterval", clearTimer)
                 .method("requestAnimationFrame", (d, a) -> {
                     Callable fn = a.fn(0);
-                    return scheduler.requestAnimationFrame(now -> rt.call("Error in requestAnimationFrame callback", fn, global,
+                    return scheduler.requestAnimationFrame(now -> rt.call(() -> "Error in requestAnimationFrame callback", fn, global,
                             scheduler.pageTime(now)));
                 })
                 .action("cancelAnimationFrame", (d, a) -> scheduler.cancelAnimationFrame((int) a.num(0, 0)))
                 .action("queueMicrotask", (d, a) -> {
                     Callable fn = a.fn(0);
-                    Context.getCurrentContext().enqueueMicrotask(() -> rt.call("Error in microtask", fn, global));
+                    Context.getCurrentContext().enqueueMicrotask(() -> rt.call(() -> "Error in microtask", fn, global));
                 })
                 .method("structuredClone", (d, a) -> {
                     String json = rt.js.stringify(a.get(0));
@@ -98,16 +98,12 @@ final class WindowBindings {
         global.defineProperty("sessionStorage", storage.wrap(new Storage(rt.limits.storageQuota())), HIDDEN);
     }
 
-    private static void navigate(Document document, String url) {
-        document.host().navigate(document.resolveUrl(url));
-    }
-
     /** setTimeout / setInterval: a function plus extra arguments, or a string of code. */
     private static int timer(RhinoScriptRuntime rt, Args a, boolean repeat) {
         Object handler = a.get(0);
         Object[] extra = a.from(2);
         Runnable task = handler instanceof Callable fn
-                ? () -> rt.call("Error in timer", fn, rt.global, extra)
+                ? () -> rt.call(() -> "Error in timer", fn, rt.global, extra)
                 : () -> rt.evaluate(Js.str(handler), rt.document.url() + "#timer");
         double delay = a.num(1, 0);
         if (!(delay > 0)) delay = 0; // also NaN

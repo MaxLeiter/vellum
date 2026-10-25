@@ -50,9 +50,7 @@ final class CanvasBindings {
 
     /** The canvas's context wrapper, created on first use. */
     private HostObject wrap(Element canvas) {
-        HostObject w = rt.dom.wrap(canvas);
-        if (w.getAssociatedValue(CONTEXT) instanceof HostObject ctx) return ctx;
-        return (HostObject) w.associateValue(CONTEXT, context.wrap(new Context2D(canvas)));
+        return rt.dom.wrap(canvas).companion(CONTEXT, HostObject.class, () -> context.wrap(new Context2D(canvas)));
     }
 
     /** A canvas's pixel size (its attribute until it has pixels); other elements read the attribute. */

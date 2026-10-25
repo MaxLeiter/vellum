@@ -39,7 +39,7 @@ final class VellumApi {
                 .action("close", (v, a) -> host.close())
                 .action("playSound", (v, a) -> host.playSound(a.str(0), (float) a.num(1, 1), (float) a.num(2, 1)))
                 .method("t", (v, a) -> host.translate(a.str(0), Arrays.stream(a.from(1)).map(Js::str).toArray(String[]::new)))
-                .action("open", (v, a) -> host.navigate(rt.document.resolveUrl(a.str(0))))
+                .action("open", (v, a) -> rt.document.navigate(a.str(0)))
                 .method("state", (v, a) -> rt.templates.state(a.has(0) ? a.get(0) : rt.js.newObject()))
                 .action("nextTick", (v, a) -> rt.templates.nextTick(a.fn(0)));
     }
@@ -54,11 +54,11 @@ final class VellumApi {
      * channel get the value. Templates re-render afterwards, like after any entry.
      */
     void receive(String channel, String json) {
-        rt.enter("Error in message '" + channel + "'", cx -> {
+        rt.enter(() -> "Error in message '" + channel + "'", cx -> {
             Object value = rt.js.parseJson(json);
             if (channel.equals("data")) data = value;
             for (Callable fn : List.copyOf(listeners.getOrDefault(channel, List.of()))) {
-                rt.call("Error in vellum.on('" + channel + "') listener", fn, rt.global, value);
+                rt.call(() -> "Error in vellum.on('" + channel + "') listener", fn, rt.global, value);
             }
             return null;
         });

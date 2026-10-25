@@ -44,7 +44,6 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     final Js js;
     final EventBindings events;
     final DomBindings dom;
-    final CanvasBindings canvases;
     final StyleBindings styles;
     final AnimationBindings animations;
     final Templates templates;
@@ -73,7 +72,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         js = new Js(this);
         events = new EventBindings(this);
         dom = new DomBindings(this);
-        canvases = new CanvasBindings(this);
+        new CanvasBindings(this);
         styles = new StyleBindings(this);
         animations = new AnimationBindings(this);
         templates = new Templates(this);
@@ -95,9 +94,9 @@ final class RhinoScriptRuntime implements ScriptRuntime {
 
     /** Runs a script as an entry; its completion value, as JSON when {@code json}. */
     private Object run(String source, String sourceName, boolean json) {
-        String what = "Error in script " + sourceName;
+        Supplier<String> what = () -> "Error in script " + sourceName;
         return enter(what, cx -> {
-            Script script = compile(what, source, () -> cx.compileString(source, sourceName, 1, null));
+            Script script = compile(what.get(), source, () -> cx.compileString(source, sourceName, 1, null));
             if (script == null) return null;
             Object value = script.exec(cx, global, global);
             return json ? js.stringify(value) : value;
@@ -106,11 +105,11 @@ final class RhinoScriptRuntime implements ScriptRuntime {
 
     @Override
     public void runInlineHandler(Element element, String code, Event event) {
-        String what = "Error in on" + event.type + " handler";
+        Supplier<String> what = () -> "Error in on" + event.type + " handler";
         enter(what, cx -> {
             Callable handler = inlineHandlers.get(code);
             if (handler == null) {
-                handler = compile(what, code, () -> cx.compileFunction(global, "function (event) {\n" + code + "\n}",
+                handler = compile(what.get(), code, () -> cx.compileFunction(global, "function (event) {\n" + code + "\n}",
                         document.url() + "#on" + event.type, 0, null));
                 if (handler == null) return null;
                 inlineHandlers.put(code, handler);
@@ -129,7 +128,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     /** Templates bind once scripts have run (so their {@code vellum.state()} calls are in). */
     @Override
     public void documentLoaded() {
-        enter("Error in templates", cx -> {
+        enter(() -> "Error in templates", cx -> {
             templates.install(cx);
             return null;
         });
@@ -138,7 +137,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     @Override
     public void beforeRestyle() {
         if (!templates.needsDigest()) return;
-        enter("Error in templates", cx -> {
+        enter(() -> "Error in templates", cx -> {
             templates.digest(cx);
             return null;
         });
@@ -157,18 +156,19 @@ final class RhinoScriptRuntime implements ScriptRuntime {
     // ---- Entries ----
 
     /** Calls a script function as an entry, converting {@code args} to script values. */
-    Object call(String what, Callable fn, Scriptable thisObj, Object... args) {
+    Object call(Supplier<String> what, Callable fn, Scriptable thisObj, Object... args) {
         return enter(what, cx -> fn.call(cx, global, thisObj, js.toJsArgs(args)));
     }
 
     /**
-     * Runs script work on behalf of the host. Errors are reported with {@code what} as the prefix and never thrown.
+     * Runs script work on behalf of the host. Errors are reported with {@code what} as the prefix and never thrown;
+     * {@code what} is only built when there is something to report.
      * A nested entry (a listener run by a script's {@code el.click()}) shares the outer budget, and running out of
      * budget unwinds to the outermost entry, which reports it and skips settling: the page's state is unknown.
      * Entries while the document loads (its scripts, the first template render, {@code DOMContentLoaded}) get the
      * load's wall-clock budget.
      */
-    Object enter(String what, Function<Context, Object> action) {
+    Object enter(Supplier<String> what, Function<Context, Object> action) {
         if (disposed) return Undefined.instance;
         boolean loading = !document.readyState().equals("complete");
         return Sandbox.run(limits, loading, cx -> {
@@ -189,7 +189,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
                 overrun(what, new IllegalStateException("too much recursion", e), false);
                 return Undefined.instance;
             } catch (Sandbox.HeapExhausted e) {
-                document.stop(what + ": " + e.getMessage(), new OutOfMemoryError(e.getMessage()));
+                document.stop(what.get() + ": " + e.getMessage(), new OutOfMemoryError(e.getMessage()));
                 return Undefined.instance;
             } finally {
                 depth--;
@@ -201,8 +201,8 @@ final class RhinoScriptRuntime implements ScriptRuntime {
      * Reports an entry stopped by its budget, and stops the document once that has happened too often. When the
      * memory budget was among the overruns, the stop lets go of the page's memory, as running out of it would.
      */
-    private void overrun(String what, Throwable error, boolean memory) {
-        report(what, error);
+    private void overrun(Supplier<String> what, Throwable error, boolean memory) {
+        report(what.get(), error);
         memoryOverrun |= memory;
         if (++overruns >= limits.maxBudgetOverruns()) {
             String message = "The page stopped: its scripts ran out of budget " + overruns + " times";
@@ -210,11 +210,11 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         }
     }
 
-    private Object attempt(String what, Context cx, Function<Context, Object> action) {
+    private Object attempt(Supplier<String> what, Context cx, Function<Context, Object> action) {
         try {
             return action.apply(cx);
         } catch (RuntimeException e) {
-            report(what, e);
+            report(what.get(), e);
             return Undefined.instance;
         }
     }

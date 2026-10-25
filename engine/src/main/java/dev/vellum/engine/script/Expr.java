@@ -26,6 +26,11 @@ final class Expr {
                 Context.getCurrentContext().compileString(source, rt.document.url() + "#template", 1, null));
     }
 
+    /** The prefix of this expression's error reports. */
+    String what() {
+        return what;
+    }
+
     /** Evaluates with {@code this} = window. */
     Object eval(Context cx, Scriptable scope) {
         return eval(cx, scope, rt.global);

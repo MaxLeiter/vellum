@@ -56,6 +56,11 @@ public abstract class Node {
     public Node firstChild() { return children.isEmpty() ? null : children.get(0); }
     public Node lastChild() { return children.isEmpty() ? null : children.get(children.size() - 1); }
 
+    /** This node's position among its parent's children; -1 when it has no parent. */
+    public int indexInParent() {
+        return parent != null ? index : -1;
+    }
+
     public Node nextSibling() {
         return parent != null && index + 1 < parent.children.size() ? parent.children.get(index + 1) : null;
     }

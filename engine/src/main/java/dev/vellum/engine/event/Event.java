@@ -16,7 +16,6 @@ public class Event {
     boolean defaultPrevented;
     boolean propagationStopped;
     boolean immediatePropagationStopped;
-    boolean dispatching;
 
     /** Slot for the script runtime's wrapper object, so every listener of a dispatch sees the same script object. */
     public Object scriptWrapper;
@@ -58,7 +57,6 @@ public class Event {
 
         public static void begin(Event e, Node target) {
             e.target = target;
-            e.dispatching = true;
             e.propagationStopped = false;
             e.immediatePropagationStopped = false;
         }
@@ -71,7 +69,6 @@ public class Event {
         public static void end(Event e) {
             e.currentTarget = null;
             e.phase = Phase.NONE;
-            e.dispatching = false;
         }
     }
 }

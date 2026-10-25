@@ -151,9 +151,9 @@ final class ForBinding implements Binding {
         return moved;
     }
 
+    /** {@code child}'s position in {@code parent}; -1 when it is not one of its children (a listener moved it). */
     private static int indexOf(Node parent, Node child) {
-        for (int i = 0, n = parent.childCount(); i < n; i++) if (parent.childAt(i) == child) return i;
-        return -1;
+        return child.parentNode() == parent ? child.indexInParent() : -1;
     }
 
     private Instance create() {

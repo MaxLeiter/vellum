@@ -165,6 +165,11 @@ public final class Document extends Node {
         return host.resolveUrl(url, relative);
     }
 
+    /** Asks the host to open a URL, resolved relative to this document. */
+    public void navigate(String url) {
+        host.navigate(resolveUrl(url));
+    }
+
     @Override
     Node cloneShallow() {
         throw new UnsupportedOperationException("Documents cannot be cloned");

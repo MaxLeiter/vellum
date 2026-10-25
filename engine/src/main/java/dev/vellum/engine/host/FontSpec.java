@@ -17,6 +17,8 @@ public final class FontSpec {
     private final List<String> families;
     private final float size;
     private final boolean bold, italic;
+    /** Computed once: specs key the text measurement caches. */
+    private final int hash;
     /** The host's resolved font for this spec; see {@link #hostFont()}. */
     private Object hostFont;
 
@@ -25,6 +27,7 @@ public final class FontSpec {
         this.size = size;
         this.bold = bold;
         this.italic = italic;
+        this.hash = Objects.hash(families, size, bold, italic);
     }
 
     /** The style's font: memoized on the style, so this is cheap to call per text run. */
@@ -63,7 +66,7 @@ public final class FontSpec {
 
     @Override
     public int hashCode() {
-        return Objects.hash(families, size, bold, italic);
+        return hash;
     }
 
     @Override

@@ -16,6 +16,7 @@ import dev.vellum.shadow.rhino.Scriptable;
 import dev.vellum.shadow.rhino.ScriptableObject;
 
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Events for scripts: one prototype per event class, the {@code Event} and {@code CustomEvent} constructors, and the
@@ -168,7 +169,7 @@ final class EventBindings {
     }
 
     private void deliver(Object handler, Event e) {
-        String what = "Error in '" + e.type + "' listener";
+        Supplier<String> what = () -> "Error in '" + e.type + "' listener";
         if (handler instanceof Callable fn) {
             rt.call(what, fn, rt.dom.wrap(e.currentTarget()), e);
         } else if (handler instanceof Scriptable object && Js.property(object, "handleEvent") instanceof Callable fn) {

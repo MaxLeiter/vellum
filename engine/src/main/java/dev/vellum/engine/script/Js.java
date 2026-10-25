@@ -54,7 +54,9 @@ final class Js {
     }
 
     Object[] toJsArgs(Object... values) {
-        return Arrays.stream(values).map(this::toJs).toArray();
+        Object[] args = new Object[values.length];
+        for (int i = 0; i < values.length; i++) args[i] = toJs(values[i]);
+        return args;
     }
 
     Scriptable array(Collection<?> items) {
@@ -122,6 +124,11 @@ final class Js {
 
     static String str(Object value) {
         return Context.toString(value);
+    }
+
+    /** {@link #str}, with null and undefined as the empty string (values assigned to text, style and markup). */
+    static String strOrEmpty(Object value) {
+        return isNullish(value) ? "" : str(value);
     }
 
     static double num(Object value) {

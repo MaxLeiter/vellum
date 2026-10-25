@@ -4,6 +4,7 @@ import dev.vellum.shadow.rhino.Scriptable;
 import dev.vellum.shadow.rhino.ScriptableObject;
 
 import java.util.Arrays;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -64,6 +65,16 @@ final class HostObject extends ScriptableObject {
     public Object[] getIds() {
         Object[] own = super.getIds();
         return named == null ? own : Stream.concat(Arrays.stream(own), Arrays.stream(named.ids())).toArray();
+    }
+
+    /**
+     * The companion stored on this wrapper under {@code key} ({@code classList}, a canvas's context, an
+     * {@code on<type>} listener), made by {@code create} on first use so its identity holds.
+     */
+    <T> T companion(Object key, Class<T> type, Supplier<? extends T> create) {
+        Object value = getAssociatedValue(key);
+        if (type.isInstance(value)) return type.cast(value);
+        return type.cast(associateValue(key, create.get()));
     }
 
     /** Named properties never shadow the prototype's methods and accessors. */

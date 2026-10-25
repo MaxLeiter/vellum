@@ -20,7 +20,7 @@ final class Activation {
         Document doc = e.ownerDocument();
         switch (e.tagName()) {
             case "label" -> forward(e, event);
-            case "a" -> doc.host().navigate(doc.resolveUrl(e.getAttribute("href")));
+            case "a" -> doc.navigate(e.getAttribute("href"));
             case "summary" -> {
                 playClick(doc);
                 Element details = e.parentElement();

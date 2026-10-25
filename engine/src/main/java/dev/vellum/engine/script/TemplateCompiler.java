@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,6 +45,8 @@ final class TemplateCompiler {
     private static final Map<String, Integer> BUTTONS = Map.of("left", 0, "middle", 1, "right", 2);
     private static final Map<String, Predicate<Modifiers>> SYSTEM_KEYS = Map.of("ctrl", Modifiers::ctrl,
             "shift", Modifiers::shift, "alt", Modifiers::alt, "meta", Modifiers::meta);
+    /** The attributes that key an element, by precedence. */
+    private static final List<String> KEY_ATTRIBUTES = List.of(":key", "v-bind:key", "v-key");
     /** A v-model read that must not write the model (an unchecked radio). */
     private static final Object NO_CHANGE = new Object();
 
@@ -59,7 +62,7 @@ final class TemplateCompiler {
     /** Compiles a node, which is replaced by an anchor when it carries v-for, v-if or a :key. */
     void compileNode(Node node, Scriptable scope, Binding.Block block) {
         if (node instanceof Text text) {
-            Function<Context, String> render = interpolation(text.data(), scope, "text \"" + text.data().strip() + "\"");
+            Function<Context, String> render = interpolation(text.data(), scope, () -> "text \"" + text.data().strip() + "\"");
             if (render != null) block.add(new Binding.Value<>(render, text::setData));
         } else if (node instanceof Element el && !RAW_TEXT.contains(el.tagName()) && !el.hasInertContent()
                 && !el.hasAttribute("v-pre")) {
@@ -86,31 +89,30 @@ final class TemplateCompiler {
 
     /** Compiles one attribute; returns whether it was a directive, which then leaves the element. */
     private boolean compileAttribute(Element el, String name, String value, Scriptable scope, Binding.Block block) {
-        String where = where(el, name, value);
         if (name.startsWith("@") || name.startsWith("v-on:")) {
-            listen(el, name.substring(name.startsWith("@") ? 1 : 5), value, scope, where);
+            listen(el, name.substring(name.startsWith("@") ? 1 : 5), value, scope, where(el, name, value));
         } else if (name.startsWith(":") || name.startsWith("v-bind:") || name.equals("v-class") || name.equals("v-style")) {
             String attribute = name.substring(name.startsWith(":") ? 1 : name.startsWith("v-bind:") ? 7 : 2);
-            if (!attribute.equals("key")) block.add(bind(el, attribute, value(value, where), scope));
+            if (!attribute.equals("key")) block.add(bind(el, attribute, value(value, where(el, name, value)), scope));
         } else if (name.equals("v-model") || name.startsWith("v-model.")) {
-            model(el, modifiers(name), value, scope, block, where);
+            model(el, modifiers(name), value, scope, block, where(el, name, value));
         } else if (name.equals("v-show")) {
-            Expr shown = value(value, where);
+            Expr shown = value(value, where(el, name, value));
             block.add(new Binding.Value<>(cx -> Js.bool(shown.eval(cx, scope)), on -> el.toggleAttribute("v-hidden", !on)));
         } else if (name.equals("v-text")) {
-            Expr text = value(value, where);
+            Expr text = value(value, where(el, name, value));
             block.add(new Binding.Value<>(cx -> display(text.eval(cx, scope)), el::setTextContent));
         } else if (name.equals("v-html")) {
-            Expr html = value(value, where);
+            Expr html = value(value, where(el, name, value));
             block.add(new Binding.Value<>(cx -> DomBindings.markup(rt, html.eval(cx, scope)), el::setInnerHTML));
         } else if (name.equals("v-cloak")) {
             cloaked.add(el); // stays until the first digest has run
             return false;
         } else if (name.startsWith("v-else")) {
-            rt.report("Error in template " + where, new IllegalStateException("there is no v-if before it"));
+            rt.report("Error in template " + where(el, name, value), new IllegalStateException("there is no v-if before it"));
         } else if (!name.equals("v-key")) {
             // A plain attribute, perhaps with {{ }} holes.
-            Function<Context, String> render = interpolation(value, scope, where);
+            Function<Context, String> render = interpolation(value, scope, () -> where(el, name, value));
             if (render != null) block.add(new Binding.Value<>(render, v -> el.setAttribute(name, v)));
             return false;
         }
@@ -141,10 +143,11 @@ final class TemplateCompiler {
         return scope;
     }
 
-    /** Text with {@code {{ }}} holes as a render function, or null when it has none. */
-    private Function<Context, String> interpolation(String text, Scriptable scope, String where) {
+    /** Text with {@code {{ }}} holes as a render function, or null when it has none (and {@code site} is not built). */
+    private Function<Context, String> interpolation(String text, Scriptable scope, Supplier<String> site) {
         int open = text.indexOf("{{");
         if (open < 0) return null;
+        String where = site.get();
         List<Object> parts = new ArrayList<>();
         int pos = 0;
         for (int close; open >= 0 && (close = text.indexOf("}}", open + 2)) >= 0; open = text.indexOf("{{", pos)) {
@@ -153,6 +156,7 @@ final class TemplateCompiler {
             pos = close + 2;
         }
         if (pos < text.length()) parts.add(text.substring(pos));
+        if (parts.size() == 1 && parts.getFirst() instanceof Expr e) return cx -> display(e.eval(cx, scope));
         return cx -> {
             StringBuilder out = new StringBuilder();
             for (Object part : parts) out.append(part instanceof Expr e ? display(e.eval(cx, scope)) : part);
@@ -247,7 +251,7 @@ final class TemplateCompiler {
     }
 
     private static String keyAttribute(Element el) {
-        for (String name : List.of(":key", "v-bind:key", "v-key")) if (el.hasAttribute(name)) return name;
+        for (String name : KEY_ATTRIBUTES) if (el.hasAttribute(name)) return name;
         return null;
     }
 
@@ -303,31 +307,45 @@ final class TemplateCompiler {
         String trimmed = code.trim();
         Expr handler = statements(METHOD_PATH.matcher(trimmed).matches() ? trimmed + "($event)"
                 : FUNCTION.matcher(trimmed).find() ? "(" + trimmed + ")($event)" : code, where);
+        Filter filter = Filter.of(modifiers);
+        boolean prevent = modifiers.contains("prevent"), stop = modifiers.contains("stop");
+        Supplier<String> what = handler::what;
         el.addEventListener(type, event -> {
-            if (!accepts(modifiers, event, el)) return;
-            if (modifiers.contains("prevent")) event.preventDefault();
-            if (modifiers.contains("stop")) event.stopPropagation();
-            rt.enter("Error in template " + where, cx ->
-                    handler.eval(cx, childScope(scope, "$event", rt.js.toJs(event)), rt.dom.wrap(el)));
+            if (filter != null && !filter.accepts(event, el)) return;
+            if (prevent) event.preventDefault();
+            if (stop) event.stopPropagation();
+            rt.enter(what, cx -> handler.eval(cx, childScope(scope, "$event", rt.js.toJs(event)), rt.dom.wrap(el)));
         }, modifiers.contains("capture"), modifiers.contains("once"));
     }
 
-    /** Whether an event passes a handler's filters: {@code .self}, system keys, key names and mouse buttons. */
-    private static boolean accepts(Set<String> modifiers, Event event, Element el) {
-        if (modifiers.contains("self") && event.target() != el) return false;
-        Modifiers held = event instanceof KeyboardEvent k ? k.modifiers : event instanceof MouseEvent m ? m.modifiers : null;
-        for (String modifier : modifiers) {
-            Predicate<Modifiers> key = SYSTEM_KEYS.get(modifier);
-            if (key != null && (held == null || !key.test(held))) return false;
-        }
-        if (event instanceof MouseEvent mouse) {
-            return modifiers.stream().map(BUTTONS::get).filter(Objects::nonNull).allMatch(b -> b == mouse.button);
-        }
-        if (event instanceof KeyboardEvent keyboard) {
+    /** A handler's event filters, from its modifiers: {@code .self}, system keys, key names and mouse buttons. */
+    private record Filter(boolean self, List<Predicate<Modifiers>> systemKeys, List<Integer> buttons, List<Set<String>> keys) {
+        /** The filters among {@code modifiers}, or null when there are none. */
+        static Filter of(Set<String> modifiers) {
+            List<Predicate<Modifiers>> systemKeys = modifiers.stream().map(SYSTEM_KEYS::get).filter(Objects::nonNull).toList();
+            List<Integer> buttons = modifiers.stream().map(BUTTONS::get).filter(Objects::nonNull).toList();
             List<Set<String>> keys = modifiers.stream().map(KEYS::get).filter(Objects::nonNull).toList();
-            return keys.isEmpty() || keys.stream().anyMatch(k -> k.contains(keyboard.key));
+            boolean self = modifiers.contains("self");
+            return self || !systemKeys.isEmpty() || !buttons.isEmpty() || !keys.isEmpty()
+                    ? new Filter(self, systemKeys, buttons, keys) : null;
         }
-        return true;
+
+        /** Whether an event passes the filters. */
+        boolean accepts(Event event, Element el) {
+            if (self && event.target() != el) return false;
+            Modifiers held = event instanceof KeyboardEvent k ? k.modifiers : event instanceof MouseEvent m ? m.modifiers : null;
+            for (Predicate<Modifiers> key : systemKeys) if (held == null || !key.test(held)) return false;
+            if (event instanceof MouseEvent mouse) {
+                for (int button : buttons) if (button != mouse.button) return false;
+                return true;
+            }
+            if (event instanceof KeyboardEvent keyboard) {
+                if (keys.isEmpty()) return true;
+                for (Set<String> names : keys) if (names.contains(keyboard.key)) return true;
+                return false;
+            }
+            return true;
+        }
     }
 
     // ---- v-model ----
@@ -361,7 +379,8 @@ final class TemplateCompiler {
             };
             default -> textModel(el, read, scope, modifiers, numeric, type.equals("range"));
         });
-        EventListener update = event -> rt.enter("Error in template " + where, cx -> {
+        Supplier<String> what = write::what;
+        EventListener update = event -> rt.enter(what, cx -> {
             String own = modifiers.contains("trim") ? el.value().strip() : el.value();
             Object typed = numeric ? number(own) : own;
             Object value = switch (type) {

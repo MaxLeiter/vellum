@@ -79,7 +79,7 @@ final class Templates {
         if (!afterDigest.isEmpty()) {
             List<Callable> callbacks = afterDigest;
             afterDigest = new ArrayList<>();
-            for (Callable fn : callbacks) rt.call("Error in vellum.nextTick callback", fn, rt.global);
+            for (Callable fn : callbacks) rt.call(() -> "Error in vellum.nextTick callback", fn, rt.global);
             dirty = true; // what the callbacks changed shows at the next frame
         }
     }

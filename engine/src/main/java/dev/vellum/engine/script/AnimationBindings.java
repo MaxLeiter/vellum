@@ -95,7 +95,7 @@ final class AnimationBindings {
 
     /** Settles {@code finished} and calls {@code onfinish} / {@code oncancel}. */
     private void settle(HostObject w, String type, Callable resolveOrReject) {
-        rt.enter("Error in animation on" + type, cx -> {
+        rt.enter(() -> "Error in animation on" + type, cx -> {
             Object value = w;
             if (type.equals("cancel")) {
                 Scriptable error = cx.newObject(rt.global, "Error", new Object[] {"The animation was cancelled"});

@@ -6,7 +6,6 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.shadow.rhino.Scriptable;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -32,9 +31,9 @@ final class StyleBindings {
         declaration.members()
                 .method("getPropertyValue", (e, a) -> InlineStyle.getPropertyValue(e, cssName(a.str(0))))
                 .method("getPropertyPriority", (e, a) -> InlineStyle.getPropertyPriority(e, cssName(a.str(0))))
-                .action("setProperty", (e, a) -> InlineStyle.setProperty(e, cssName(a.str(0)), cssValue(a.get(1)), a.str(2, "")))
+                .action("setProperty", (e, a) -> InlineStyle.setProperty(e, cssName(a.str(0)), Js.strOrEmpty(a.get(1)), a.str(2, "")))
                 .method("removeProperty", (e, a) -> InlineStyle.removeProperty(e, cssName(a.str(0))))
-                .prop("cssText", InlineStyle::cssText, (e, v) -> InlineStyle.setCssText(e, cssValue(v)))
+                .prop("cssText", InlineStyle::cssText, (e, v) -> InlineStyle.setCssText(e, Js.strOrEmpty(v)))
                 .get("length", InlineStyle::length)
                 .method("item", (e, a) -> InlineStyle.item(e, (int) a.num(0, 0)));
 
@@ -52,9 +51,10 @@ final class StyleBindings {
                 .prop("value", e -> classAttribute(e), (e, v) -> e.setAttribute("class", Js.str(v)))
                 .method("toString", (e, a) -> classAttribute(e))
                 .method("item", (e, a) -> {
-                    List<String> classes = List.copyOf(e.classes());
                     int i = (int) a.num(0, -1);
-                    return i >= 0 && i < classes.size() ? classes.get(i) : null;
+                    if (i < 0) return null;
+                    for (String c : e.classes()) if (i-- == 0) return c;
+                    return null;
                 })
                 .method("contains", (e, a) -> e.hasClass(a.str(0)))
                 .action("add", (e, a) -> {
@@ -70,9 +70,9 @@ final class StyleBindings {
                 })
                 .method("replace", (e, a) -> e.replaceClass(a.str(0), a.str(1)))
                 .action("forEach", (e, a) -> {
-                    List<String> classes = List.copyOf(e.classes());
-                    for (int i = 0; i < classes.size(); i++) {
-                        rt.js.invoke(a.fn(0), rt.global, classes.get(i), i, companion(e));
+                    int i = 0;
+                    for (String c : e.classes()) { // an immutable snapshot: the callback may change the classes
+                        rt.js.invoke(a.fn(0), rt.global, c, i++, companion(e));
                     }
                 });
 
@@ -84,7 +84,7 @@ final class StyleBindings {
         return declaration.wrap(e, new HostObject.Named() {
             @Override public boolean has(String name) { return true; }
             @Override public Object get(String name) { return InlineStyle.getPropertyValue(e, cssName(name)); }
-            @Override public void put(String name, Object value) { InlineStyle.setProperty(e, cssName(name), cssValue(value), ""); }
+            @Override public void put(String name, Object value) { InlineStyle.setProperty(e, cssName(name), Js.strOrEmpty(value), ""); }
         });
     }
 
@@ -131,8 +131,7 @@ final class StyleBindings {
     }
 
     private static String classAttribute(Element e) {
-        String value = e.getAttribute("class");
-        return value == null ? "" : value;
+        return DomBindings.attribute(e, "class");
     }
 
     // ---- Names ----
@@ -174,10 +173,5 @@ final class StyleBindings {
 
     private static String dataAttribute(String key) {
         return "data-" + kebabCase(key).toLowerCase(Locale.ROOT);
-    }
-
-    /** A value assigned to a style property; null and undefined clear it. */
-    private static String cssValue(Object value) {
-        return Js.isNullish(value) ? "" : Js.str(value);
     }
 }

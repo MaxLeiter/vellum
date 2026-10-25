@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -88,9 +87,9 @@ final class DomBindings {
                 .get("previousSibling", Node::previousSibling)
                 .get("nextSibling", Node::nextSibling)
                 .get("children", Node::children)
-                .get("childElementCount", n -> n.children().size())
-                .get("firstElementChild", n -> n.children().stream().findFirst().orElse(null))
-                .get("lastElementChild", n -> n.children().isEmpty() ? null : n.children().getLast())
+                .get("childElementCount", DomBindings::childElementCount)
+                .get("firstElementChild", n -> elementChild(n, true))
+                .get("lastElementChild", n -> elementChild(n, false))
                 .get("previousElementSibling", n -> elementSibling(n, false))
                 .get("nextElementSibling", n -> elementSibling(n, true))
                 .prop("textContent", Node::textContent, DomBindings::setText)
@@ -124,8 +123,9 @@ final class DomBindings {
                 .action("removeEventListener", (n, a) -> rt.events.removeListener(n, a))
                 .method("dispatchEvent", (n, a) -> rt.events.dispatch(n, a));
         for (String type : HANDLER_EVENTS) {
-            m.prop("on" + type, n -> wrap(n).getAssociatedValue("on" + type) instanceof HandlerProperty h ? h.fn : null,
-                    (n, v) -> handler(n, type).fn = v instanceof Callable fn ? fn : null);
+            String property = "on" + type;
+            m.prop(property, n -> wrap(n).getAssociatedValue(property) instanceof HandlerProperty h ? h.fn : null,
+                    (n, v) -> handler(n, type, property).fn = v instanceof Callable fn ? fn : null);
         }
     }
 
@@ -133,9 +133,9 @@ final class DomBindings {
         m.get("tagName", Element::nodeName)
                 .get("localName", Element::tagName)
                 .prop("id", Element::id, (e, v) -> e.setAttribute("id", Js.str(v)))
-                .get("classList", e -> companion(e, "classList", rt.styles::classList))
-                .get("dataset", e -> companion(e, "dataset", rt.styles::dataset))
-                .prop("style", e -> companion(e, "style", rt.styles::style), (e, v) -> InlineStyle.setCssText(e, Js.str(v)))
+                .get("classList", e -> companion(e, "classList", () -> rt.styles.classList(e)))
+                .get("dataset", e -> companion(e, "dataset", () -> rt.styles.dataset(e)))
+                .prop("style", e -> companion(e, "style", () -> rt.styles.style(e)), (e, v) -> InlineStyle.setCssText(e, Js.str(v)))
                 .get("attributes", e -> e.attributes().entrySet().stream()
                         .map(en -> Map.of("name", en.getKey(), "value", en.getValue())).toList())
                 .method("getAttribute", (e, a) -> e.getAttribute(a.str(0)))
@@ -159,7 +159,7 @@ final class DomBindings {
                 .method("matches", (e, a) -> syntax(() -> e.matches(a.str(0))))
                 .method("closest", (e, a) -> syntax(() -> e.closest(a.str(0))))
                 // Form state.
-                .prop("value", Element::value, (e, v) -> e.setValue(Js.isNullish(v) ? "" : Js.str(v)))
+                .prop("value", Element::value, (e, v) -> e.setValue(Js.strOrEmpty(v)))
                 .prop("checked", Element::checked, (e, v) -> e.setChecked(Js.bool(v)))
                 .prop("selected", Element::selected, (e, v) -> e.setSelected(Js.bool(v)))
                 .prop("selectedIndex", Element::selectedIndex, (e, v) -> e.setSelectedIndex((int) Js.num(v)))
@@ -219,6 +219,20 @@ final class DomBindings {
         return n instanceof Element ? 1 : n instanceof Text ? 3 : n instanceof Document ? 9 : 11;
     }
 
+    private static int childElementCount(Node n) {
+        int count = 0;
+        for (int i = 0, size = n.childCount(); i < size; i++) if (n.childAt(i) instanceof Element) count++;
+        return count;
+    }
+
+    /** The first or last child element. */
+    private static Element elementChild(Node n, boolean first) {
+        for (int i = 0, size = n.childCount(); i < size; i++) {
+            if (n.childAt(first ? i : size - 1 - i) instanceof Element e) return e;
+        }
+        return null;
+    }
+
     private static Element elementSibling(Node n, boolean next) {
         for (Node s = next ? n.nextSibling() : n.previousSibling(); s != null; s = next ? s.nextSibling() : s.previousSibling()) {
             if (s instanceof Element e) return e;
@@ -227,7 +241,7 @@ final class DomBindings {
     }
 
     private static void setText(Node n, Object value) {
-        if (!(n instanceof Document)) n.setTextContent(Js.isNullish(value) ? "" : Js.str(value));
+        if (!(n instanceof Document)) n.setTextContent(Js.strOrEmpty(value));
     }
 
     /** The nodes (strings become text) of {@code append(...)}, {@code before(...)} and friends, as one fragment. */
@@ -258,20 +272,22 @@ final class DomBindings {
     // ---- Element helpers ----
 
     private static void reflect(Members<Element> m, String property, String attribute) {
-        m.prop(property, e -> Objects.requireNonNullElse(e.getAttribute(attribute), ""),
-                (e, v) -> e.setAttribute(attribute, Js.str(v)));
+        m.prop(property, e -> attribute(e, attribute), (e, v) -> e.setAttribute(attribute, Js.str(v)));
+    }
+
+    /** A reflected attribute's value: the empty string when it is absent. */
+    static String attribute(Element e, String name) {
+        return Objects.requireNonNullElse(e.getAttribute(name), "");
     }
 
     /** A per-element companion object ({@code classList}, {@code dataset}, {@code style}) created once, so identity holds. */
-    private Scriptable companion(Element e, String key, Function<Element, Scriptable> create) {
-        HostObject w = wrap(e);
-        if (w.getAssociatedValue(key) instanceof Scriptable s) return s;
-        return (Scriptable) w.associateValue(key, create.apply(e));
+    private Scriptable companion(Element e, String key, Supplier<Scriptable> create) {
+        return wrap(e).companion(key, Scriptable.class, create);
     }
 
     /** Markup set by scripts, capped at {@link dev.vellum.engine.Limits#maxMarkupLength}. */
     static String markup(RhinoScriptRuntime rt, Object value) {
-        String html = Js.isNullish(value) ? "" : Js.str(value);
+        String html = Js.strOrEmpty(value);
         int max = rt.limits.maxMarkupLength();
         if (html.length() > max) throw Js.error("RangeError", "Markup longer than " + max + " characters");
         return html;
@@ -342,7 +358,7 @@ final class DomBindings {
     }
 
     private static ScrollBehavior behavior(Object value) {
-        return switch (Js.isNullish(value) ? "auto" : Js.str(value)) {
+        return switch (Js.strOrEmpty(value)) {
             case "smooth" -> ScrollBehavior.SMOOTH;
             case "instant" -> ScrollBehavior.INSTANT;
             default -> ScrollBehavior.AUTO;
@@ -350,7 +366,7 @@ final class DomBindings {
     }
 
     private static ScrollAlign align(Object value, ScrollAlign fallback) {
-        return switch (Js.isNullish(value) ? "" : Js.str(value)) {
+        return switch (Js.strOrEmpty(value)) {
             case "start" -> ScrollAlign.START;
             case "center" -> ScrollAlign.CENTER;
             case "end" -> ScrollAlign.END;
@@ -368,17 +384,17 @@ final class DomBindings {
         @Override
         public void handleEvent(Event e) {
             if (fn == null) return;
-            Object result = rt.call("Error in on" + e.type + " handler", fn, wrap(e.currentTarget()), e);
+            Object result = rt.call(() -> "Error in on" + e.type + " handler", fn, wrap(e.currentTarget()), e);
             if (Boolean.FALSE.equals(result)) e.preventDefault();
         }
     }
 
     /** The property's listener, added on first assignment. */
-    private HandlerProperty handler(Node n, String type) {
-        HostObject w = wrap(n);
-        if (w.getAssociatedValue("on" + type) instanceof HandlerProperty h) return h;
-        HandlerProperty h = new HandlerProperty();
-        n.addEventListener(type, h);
-        return (HandlerProperty) w.associateValue("on" + type, h);
+    private HandlerProperty handler(Node n, String type, String property) {
+        return wrap(n).companion(property, HandlerProperty.class, () -> {
+            HandlerProperty h = new HandlerProperty();
+            n.addEventListener(type, h);
+            return h;
+        });
     }
 }
