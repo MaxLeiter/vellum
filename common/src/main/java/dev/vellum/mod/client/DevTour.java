@@ -49,6 +49,8 @@ final class DevTour {
     static final boolean ENABLED = Boolean.getBoolean("vellum.tour");
     private static final String GO = System.getProperty("vellum.tour.go");
     private static final boolean SHOTS = Boolean.getBoolean("vellum.tour.shots");
+    /** A GUI scale to use instead of the tour's own; stills use a smaller one than videos, to fit more in. */
+    private static final int SCALE = Integer.getInteger("vellum.tour.scale", 0);
     /** The music's volume; the pages' sounds play over it at their own. */
     private static final float MUSIC_VOLUME = 0.35f;
     /** How long a click holds the button down, so the cursor's dip and the page's {@code :active} style show. */
@@ -97,7 +99,7 @@ final class DevTour {
         at(() -> {
             // The largest scale that leaves 500 GUI px of width: the showcase pages are about 470 wide, and auto
             // (the largest that fits 320x240) squeezes them into 427x240 at 1280x720 on a retina screen.
-            mc.options.guiScale().set(Math.max(1, mc.getWindow().getWidth() / 500));
+            mc.options.guiScale().set(SCALE > 0 ? SCALE : Math.max(1, mc.getWindow().getWidth() / 500));
             mc.resizeGui();
             mc.getMusicManager().stopPlaying();
             seePolarBear();

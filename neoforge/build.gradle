@@ -21,12 +21,14 @@ neoForge {
             if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
                 systemProperty('vellum.autopilot', 'true')
             }
-            // `-Ptour [-PtourGo=<file>] [-PtourShots]`: the scripted showcase tour for demo videos, in a 1280x720 window
-            // (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each beat.
+            // `-Ptour [-PtourGo=<file>] [-PtourShots] [-PtourScale=<n>]`: the scripted showcase tour for demo videos, in a
+            // 1280x720 window (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each
+            // beat, and tourScale sets the GUI scale (the README's stills use 4 on a retina screen).
             if (project.hasProperty('tour')) {
                 systemProperty('vellum.tour', 'true')
                 if (project.hasProperty('tourGo')) systemProperty('vellum.tour.go', project.property('tourGo').toString())
                 if (project.hasProperty('tourShots')) systemProperty('vellum.tour.shots', 'true')
+                if (project.hasProperty('tourScale')) systemProperty('vellum.tour.scale', project.property('tourScale').toString())
                 programArguments.addAll('--width', '1280', '--height', '720')
             }
         }
