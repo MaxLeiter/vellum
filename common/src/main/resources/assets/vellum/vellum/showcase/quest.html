@@ -1,0 +1,784 @@
+<!doctype html>
+<html>
+<head>
+  <title>Quest: The Ruined Portal</title>
+  <link rel="stylesheet" href="showcase.css">
+  <style>
+    /*
+     * QUEST: a briefing for a quest, with the place it sends you to as a <scene> (tools/scene_portal.py) that the
+     * camera circles on a CSS animation of -mc-yaw. Accepting puts the portal's missing blocks back: each is a
+     * <block-group> holding one <block>, dropped in on its own delay, then a group of portal blocks fades in.
+     * The quest-giver is an <entity> portrait that follows the pointer.
+     */
+    :root {
+      --ink: #fbefe4;
+      --muted: #c4a9b4;
+      --dim: #8a6f7d;
+      --gold: #ffcf5a;
+      --gold-dark: #6a4100;
+      --ember: #ff7b3a;
+      --violet: #c070ff;
+      --panel: rgba(22, 8, 20, 0.82);
+      --line: rgba(255, 190, 140, 0.18);
+      --line-hi: rgba(255, 207, 90, 0.6);
+    }
+
+    body {
+      position: relative;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 70% 72%, rgba(255, 110, 50, 0.45), rgba(255, 110, 50, 0) 48%),
+        radial-gradient(ellipse at 66% 40%, rgba(160, 60, 220, 0.22), rgba(160, 60, 220, 0) 45%),
+        linear-gradient(to bottom, #0b0414, #2a0a2c 38%, #5a1530 70%, #a8381f 100%);
+    }
+
+    /* ---------- The sky: stars and embers ---------- */
+
+    .sky { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .sky i { position: absolute; display: block; }
+
+    .star {
+      width: 1px;
+      height: 1px;
+      background: #fff;
+      animation: twinkle 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes twinkle { to { opacity: 0.15; } }
+
+    .ember {
+      width: 1px;
+      height: 1px;
+      background: #ffb36b;
+      box-shadow: 0 0 2px 1px rgba(255, 110, 40, 0.55);
+      opacity: 0;
+      animation: ember 7s linear infinite;
+    }
+
+    @keyframes ember {
+      0% { opacity: 0; transform: translate(0, 0); }
+      15% { opacity: 1; }
+      60% { transform: translate(8px, -90px); }
+      100% { opacity: 0; transform: translate(-4px, -170px); }
+    }
+
+    /* ---------- The scene ---------- */
+
+    scene {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 64%;
+      height: 100%;
+      -mc-pitch: 4deg;
+      -mc-model-scale: 1.02;
+      -mc-scene-center: 8 7.5 8;
+      -mc-tint: #ffe2d4;
+      animation: orbit 80s linear infinite, sway 17s ease-in-out infinite alternate;
+      transition: -mc-model-scale 2600ms ease-in-out, -mc-scene-center 2600ms ease-in-out, -mc-tint 1500ms;
+    }
+
+    /* After accepting, the camera moves in on the portal while it keeps circling. */
+    scene.lit { -mc-model-scale: 1.3; -mc-scene-center: 7.5 9.5 8.5; -mc-tint: #f6e0ff; }
+
+    @keyframes orbit {
+      from { -mc-yaw: -40deg; }
+      to { -mc-yaw: 320deg; }
+    }
+
+    @keyframes sway {
+      from { -mc-pitch: -2deg; }
+      to { -mc-pitch: 12deg; }
+    }
+
+    block-group.repair, block-group.gate { opacity: 0; }
+    block-group.repair.in { animation: slot-in 900ms cubic-bezier(0.3, 0.9, 0.35, 1.1) both; }
+    block-group.gate.in { animation: gate-in 1400ms ease-out both; }
+
+    @keyframes slot-in {
+      from { opacity: 0; -mc-translate: 0 4 0; -mc-rotate: 0deg 160deg 0deg; }
+      55% { opacity: 1; }
+      to { opacity: 1; -mc-translate: 0 0 0; -mc-rotate: 0deg 0deg 0deg; }
+    }
+
+    @keyframes gate-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    scene-anchor { pointer-events: none; }
+
+    /* The quest marker over the portal. */
+    .marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+    }
+
+    .marker .gem {
+      width: 9px;
+      height: 9px;
+      background: linear-gradient(135deg, #fff3b8, var(--gold) 45%, #d48a10);
+      border: 1px solid #5a3200;
+      transform: rotate(45deg);
+      box-shadow: 0 0 6px rgba(255, 200, 80, 0.8);
+      animation: bob-gem 1600ms ease-in-out infinite;
+    }
+
+    @keyframes bob-gem {
+      50% { transform: translateY(-3px) rotate(45deg); }
+    }
+
+    .marker span {
+      margin-top: 4px;
+      padding: 1px 3px 0;
+      color: var(--gold);
+      white-space: nowrap;
+      background: rgba(10, 2, 12, 0.6);
+      border-radius: 2px;
+    }
+
+    .marker.tracked .gem { background: linear-gradient(135deg, #f4dcff, var(--violet) 45%, #6c20b0); border-color: #2a0848; box-shadow: 0 0 8px rgba(190, 110, 255, 0.9); }
+    .marker.tracked span { color: #e6c8ff; }
+
+    /* Light from the portal, once it is lit: a soft glow drawn over it. */
+    .glow {
+      width: 60px;
+      height: 74px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(ellipse at center, rgba(200, 110, 255, 0.5), rgba(160, 60, 255, 0.18) 45%, rgba(160, 60, 255, 0) 70%);
+      opacity: 0;
+    }
+
+    .glow.on { animation: glow-in 1200ms ease-out 1.9s both, pulse 2600ms ease-in-out 3.1s infinite; }
+
+    @keyframes glow-in {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.55; transform: translate(-50%, -50%) scale(0.9); }
+    }
+
+    /* ---------- The quest card ---------- */
+
+    .quest {
+      position: absolute;
+      left: 7px;
+      top: 7px;
+      display: flex;
+      flex-direction: column;
+      width: 44%;
+      height: calc(100% - 14px);
+      max-height: 316px;
+      max-width: 232px;
+      padding: 7px 8px 8px;
+      background: linear-gradient(160deg, rgba(255, 210, 150, 0.08), rgba(255, 210, 150, 0) 40%), var(--panel);
+      border: 1px solid var(--line);
+      border-top: 1px solid rgba(255, 207, 90, 0.4);
+      border-radius: 3px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      animation: card-in 700ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    }
+
+    @keyframes card-in {
+      from { opacity: 0; transform: translateX(-16px); }
+    }
+
+    /* The rows come in one after another. */
+    .quest > * { animation: rise 450ms ease-out backwards; }
+    .quest > :nth-child(1) { animation-delay: 250ms; }
+    .quest > :nth-child(2) { animation-delay: 330ms; }
+    .quest > :nth-child(3) { animation-delay: 450ms; }
+    .quest > :nth-child(4) { animation-delay: 570ms; }
+    .quest > :nth-child(5) { animation-delay: 690ms; }
+    .quest > :nth-child(6) { animation-delay: 810ms; }
+    .quest > :nth-child(7) { animation-delay: 930ms; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(5px); }
+    }
+
+    .kicker {
+      display: flex;
+      justify-content: space-between;
+      color: var(--ember);
+      letter-spacing: 1px;
+    }
+
+    .kicker span { color: var(--dim); }
+
+    h1 {
+      margin: 2px 0 6px;
+      font-size: 16px;
+      color: var(--gold);
+      text-shadow: 1px 1px 0 var(--gold-dark), 2px 2px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    /* The quest-giver: a portrait and what they say. */
+    .giver { display: flex; gap: 6px; }
+
+    .portrait {
+      position: relative;
+      flex: none;
+      width: 40px;
+      height: 40px;
+      background: radial-gradient(circle at 50% 35%, #5a2a58, #1c0a1c);
+      border: 1px solid rgba(255, 207, 90, 0.5);
+      border-radius: 2px;
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+    }
+
+    .portrait entity {
+      width: 40px;
+      height: 40px;
+      -mc-entity-focus: eyes;
+      object-position: 50% 42%;
+      -mc-gaze-reach: 90px;
+      -mc-gaze-limit: 35deg 10deg;
+    }
+
+    .speech { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+    .speech b { color: #ffe2a8; }
+    .speech b span { color: var(--dim); }
+
+    .speech p {
+      height: 36px;
+      margin: 2px 0 0;
+      color: #eadbe0;
+      overflow: hidden;
+    }
+
+    .speech p .caret { color: var(--gold); animation: blink 600ms steps(1) infinite; --blink-opacity: 0; }
+
+    h2 {
+      margin: 7px 0 3px;
+      color: var(--dim);
+      letter-spacing: 1px;
+    }
+
+    .objectives { display: flex; flex-direction: column; gap: 3px; }
+
+    .objective {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 13px;
+      transition: color 300ms;
+    }
+
+    .objective item { width: 12px; height: 12px; flex: none; }
+    .objective .what { flex: 1; min-width: 0; }
+    .objective .count { color: var(--muted); }
+
+    .objective .bar {
+      width: 34px;
+      height: 3px;
+      flex: none;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 1px;
+    }
+
+    .objective .bar div {
+      height: 100%;
+      background: linear-gradient(to right, var(--ember), var(--gold));
+      border-radius: 1px;
+      transition: width 900ms ease-out;
+    }
+
+    .objective.optional .what { color: var(--muted); }
+    .tracked-row .what { color: #f0d4ff; }
+    .tracked-row .bar div { background: linear-gradient(to right, #8a3cff, var(--violet)); }
+
+    /* Rewards in slot frames, with the vanilla tooltip. */
+    .rewards { display: flex; gap: 3px; }
+
+    .slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 207, 90, 0.25);
+      border-radius: 2px;
+      transition: border-color 150ms, background-color 150ms, transform 150ms;
+    }
+
+    .slot:hover { border-color: var(--gold); background: rgba(255, 207, 90, 0.14); transform: translateY(-1px); }
+    .slot item { width: 16px; height: 16px; }
+
+    .slot.xp {
+      width: auto;
+      padding: 0 4px 0 3px;
+      color: #b9ff6e;
+      text-shadow: 1px 1px 0 #2a4a00;
+    }
+
+    /* How dangerous it is, and what to bring. */
+    .intel { display: flex; gap: 10px; }
+    .intel > div { display: flex; flex-direction: column; }
+    .intel span { margin-top: 2px; color: var(--muted); }
+    .pips { display: flex; gap: 2px; height: 12px; align-items: center; }
+
+    .pips i {
+      display: block;
+      width: 7px;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      transform: rotate(45deg);
+    }
+
+    .pips i.on { background: #e8442c; border-color: #ff9a6a; box-shadow: 0 0 3px rgba(255, 80, 40, 0.7); }
+    .gear { display: flex; gap: 2px; }
+    .gear item { width: 12px; height: 12px; }
+
+    .actions {
+      display: flex;
+      gap: 4px;
+      margin-top: auto;
+      padding-top: 6px;
+    }
+
+    .actions button {
+      height: 20px;
+      color: var(--ink);
+      border-radius: 2px;
+      transition: transform 140ms ease-out, background-color 160ms, border-color 160ms, box-shadow 200ms, color 160ms;
+    }
+
+    .actions .accept {
+      flex: 1;
+      color: #2a1600;
+      background: linear-gradient(to bottom, #ffe08a, var(--gold) 50%, #e8a42c);
+      border: 1px solid #fff0b8;
+      border-bottom-color: #8a5200;
+      box-shadow: 0 0 0 1px #3a1e00, 0 3px 8px rgba(255, 160, 40, 0.35);
+      text-shadow: none;
+      animation: call 2400ms ease-in-out 1.6s infinite;
+    }
+
+    @keyframes call {
+      50% { box-shadow: 0 0 0 1px #3a1e00, 0 0 14px rgba(255, 190, 70, 0.75); }
+    }
+
+    .actions .accept:hover { transform: translateY(-1px); color: #000; }
+    .accept:active { transform: translateY(1px) scale(0.98); }
+
+    .actions .accept.done {
+      color: #f2ddff;
+      background: linear-gradient(to bottom, #7a3ac8, #4c1890);
+      border-color: #c890ff;
+      border-bottom-color: #2a0848;
+      box-shadow: 0 0 0 1px #12001f, 0 0 12px rgba(170, 90, 255, 0.6);
+      animation: thump 500ms cubic-bezier(0.3, 1.8, 0.5, 1);
+    }
+
+    @keyframes thump {
+      from { transform: scale(0.86); }
+    }
+
+    .actions .decline {
+      width: 54px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .actions .decline:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.3); }
+    .actions .decline:disabled { color: rgba(255, 255, 255, 0.3); background: none; border-color: rgba(255, 255, 255, 0.08); }
+
+    /* ---------- Where the quest is ---------- */
+
+    .place {
+      position: absolute;
+      right: 8px;
+      bottom: 7px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 6px 3px 4px;
+      text-align: right;
+      background: rgba(12, 2, 12, 0.55);
+      border-radius: 2px;
+      animation: rise 600ms ease-out 1.1s backwards;
+    }
+
+    .place item { width: 16px; height: 16px; }
+    .place div { display: flex; flex-direction: column; }
+    .place b { color: var(--gold); }
+    .place span { color: var(--muted); }
+
+    .drag-hint {
+      position: absolute;
+      right: 8px;
+      top: 7px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* ---------- Accepting: a banner and a burst of light ---------- */
+
+    .burst {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .burst.go { visibility: visible; animation: burst-out 3000ms ease-in both; }
+
+    @keyframes burst-out {
+      0%, 72% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .burst .flash {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(255, 230, 160, 0.5), rgba(255, 140, 60, 0.12) 45%, rgba(0, 0, 0, 0) 75%);
+      opacity: 0;
+    }
+
+    .burst.go .flash { animation: flash 900ms ease-out both; }
+
+    @keyframes flash {
+      0% { opacity: 0; }
+      15% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .banner {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 18px 7px;
+      background: linear-gradient(to bottom, rgba(40, 14, 4, 0.92), rgba(20, 4, 10, 0.92));
+      border-top: 2px solid var(--gold);
+      border-bottom: 2px solid var(--gold);
+      box-shadow: 0 0 24px rgba(255, 170, 60, 0.5);
+    }
+
+    .burst.go .banner { animation: slam 650ms cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+    @keyframes slam {
+      from { opacity: 0; transform: scale(2.4) rotate(-6deg); }
+      60% { opacity: 1; }
+      to { transform: scale(1) rotate(0deg); }
+    }
+
+    .banner small { color: var(--ember); letter-spacing: 2px; }
+
+    .banner strong {
+      font-size: 16px;
+      font-weight: 400;
+      letter-spacing: 2px;
+      color: var(--gold);
+      text-shadow: 1px 1px 0 #c27a00, 2px 2px 0 var(--gold-dark);
+    }
+
+    /* Rays behind the banner, and sparks flying out. Both are made by the script. */
+    .rays { position: absolute; left: 50%; top: 50%; }
+
+    .rays i {
+      position: absolute;
+      display: block;
+      left: 0;
+      top: 0;
+      width: 120px;
+      height: 2px;
+      transform-origin: 0 50%;
+      background: linear-gradient(to right, rgba(255, 220, 120, 0.85), rgba(255, 160, 60, 0));
+      opacity: 0;
+    }
+
+    .burst.go .rays i { animation: ray 1100ms ease-out both; }
+
+    @keyframes ray {
+      from { opacity: 0; width: 10px; }
+      20% { opacity: 1; }
+      to { opacity: 0; width: 170px; }
+    }
+
+    .sparks { position: absolute; left: 50%; top: 50%; }
+
+    .sparks i {
+      position: absolute;
+      display: block;
+      width: 2px;
+      height: 2px;
+      background: #fff1b0;
+      box-shadow: 0 0 3px 1px rgba(255, 180, 60, 0.7);
+      opacity: 0;
+    }
+
+    .burst.go .sparks i { animation: spark 1300ms cubic-bezier(0.1, 0.7, 0.3, 1) both; }
+
+    @keyframes spark {
+      from { opacity: 1; transform: translate(0, 0); }
+      to { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+    }
+
+    /* Short windows: the giver's speech gets one line less, and the hint goes. */
+    @media (max-height: 290px) {
+      h1 { margin-bottom: 3px; }
+      h2 { margin-top: 4px; }
+      .drag-hint { display: none; }
+      .intel { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      scene { animation: none; -mc-yaw: -40deg; }
+      .ember, .star { animation: none; }
+    }
+  </style>
+</head>
+<body class="fullscreen">
+  <div class="sky"></div>
+
+  <scene structure="vellum:structures/ruined_portal.nbt" rotatable>
+    <!-- The frame's missing blocks and the portal itself, shown when the quest is accepted. -->
+    <block-group class="repair"><block at="9 11 8" state="minecraft:obsidian"></block></block-group>
+    <block-group class="repair"><block at="9 12 8" state="minecraft:crying_obsidian"></block></block-group>
+    <block-group class="repair"><block at="8 12 8" state="minecraft:obsidian"></block></block-group>
+    <block-group class="gate">
+      <block at="7 9 8" state="minecraft:nether_portal[axis=x]"></block>
+      <block at="8 9 8" state="minecraft:nether_portal[axis=x]"></block>
+      <block at="7 10 8" state="minecraft:nether_portal[axis=x]"></block>
+      <block at="8 10 8" state="minecraft:nether_portal[axis=x]"></block>
+      <block at="7 11 8" state="minecraft:nether_portal[axis=x]"></block>
+      <block at="8 11 8" state="minecraft:nether_portal[axis=x]"></block>
+    </block-group>
+    <!-- The blocks that fell off the frame go when they are put back. -->
+    <block-group class="fallen"></block-group>
+
+    <scene-anchor class="glow" at="8 10.5 8.5"></scene-anchor>
+    <scene-anchor class="marker" at="8 13.6 8.5"><div class="gem"></div><span>1,240 m</span></scene-anchor>
+  </scene>
+
+  <section class="quest">
+    <div class="kicker">MAIN QUEST<span>Chapter III</span></div>
+    <h1>The Ruined Portal</h1>
+    <div class="giver">
+      <div class="portrait"><entity type="minecraft:wandering_trader" follow-mouse></entity></div>
+      <div class="speech">
+        <b>Odric <span>the Wanderer</span></b>
+        <p><span class="said"></span><span class="caret">_</span></p>
+      </div>
+    </div>
+    <div>
+      <h2>OBJECTIVES</h2>
+      <div class="objectives">
+        <div class="objective" data-goal="travel">
+          <item id="minecraft:compass"></item><span class="what truncate">Reach the ruins</span>
+          <span class="count">0/1</span><div class="bar"><div style="width: 0"></div></div>
+        </div>
+        <div class="objective" data-goal="obsidian">
+          <item id="minecraft:obsidian"></item><span class="what truncate">Recover lost obsidian</span>
+          <span class="count">0/3</span><div class="bar"><div style="width: 0"></div></div>
+        </div>
+        <div class="objective" data-goal="light">
+          <item id="minecraft:flint_and_steel"></item><span class="what truncate">Light the portal</span>
+          <span class="count">0/1</span><div class="bar"><div style="width: 0"></div></div>
+        </div>
+        <div class="objective optional" data-goal="loot">
+          <item id="minecraft:chest"></item><span class="what truncate">Optional: loot the chest</span>
+          <span class="count">0/1</span><div class="bar"><div style="width: 0"></div></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h2>REWARDS</h2>
+      <div class="rewards">
+        <div class="slot"><item id="minecraft:emerald" count="24" tooltip></item></div>
+        <div class="slot"><item id="minecraft:diamond" count="3" tooltip></item></div>
+        <div class="slot"><item id="minecraft:enchanted_golden_apple" tooltip></item></div>
+        <div class="slot"><item id="minecraft:golden_helmet" tooltip components='{"minecraft:enchantments":{"minecraft:protection":3,"minecraft:unbreaking":2}}'></item></div>
+        <div class="slot"><item id="minecraft:fire_charge" count="8" tooltip></item></div>
+        <div class="slot xp" title="Experience">+350 XP</div>
+      </div>
+    </div>
+    <div class="intel">
+      <div><h2>THREAT</h2><div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div><span>Piglins, ghasts, lava</span></div>
+      <div><h2>BRING</h2><div class="gear">
+        <item id="minecraft:flint_and_steel" tooltip></item>
+        <item id="minecraft:potion" tooltip components='{"minecraft:potion_contents":{"potion":"minecraft:long_fire_resistance"}}'></item>
+        <item id="minecraft:golden_boots" tooltip></item>
+        <item id="minecraft:water_bucket" tooltip></item>
+      </div></div>
+    </div>
+    <div class="actions">
+      <button class="accept">Accept Quest</button>
+      <button class="decline">Decline</button>
+    </div>
+  </section>
+
+  <div class="place"><div><b>Ruined Portal</b><span>Overworld, north-east</span></div><item id="minecraft:filled_map"></item></div>
+  <div class="drag-hint">Drag to look around</div>
+
+  <div class="burst">
+    <div class="flash"></div>
+    <div class="rays"></div>
+    <div class="sparks"></div>
+    <div class="banner"><small>QUEST ACCEPTED</small><strong>The Ruined Portal</strong></div>
+  </div>
+
+  <script>
+    // A seeded random generator, so the sky is the same every time the page opens.
+    function seeded(seed) {
+      return () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    }
+
+    function shape(parent, cls, css) {
+      const el = document.createElement('i');
+      el.className = cls;
+      el.style.cssText = css;
+      parent.appendChild(el);
+      return el;
+    }
+
+    const random = seeded(31);
+    const sky = document.querySelector('.sky');
+    for (let i = 0; i < 40; i++) {
+      shape(sky, 'star', `left:${(random() * 100).toFixed(1)}%; top:${(random() * 55).toFixed(1)}%;
+        animation-duration:${(1.5 + random() * 3).toFixed(2)}s; animation-delay:${(-random() * 4).toFixed(2)}s;`);
+    }
+    for (let i = 0; i < 22; i++) {
+      shape(sky, 'ember', `left:${(30 + random() * 70).toFixed(1)}%; top:${(70 + random() * 32).toFixed(1)}%;
+        animation-duration:${(5 + random() * 5).toFixed(2)}s; animation-delay:${(-random() * 10).toFixed(2)}s;`);
+    }
+
+    // ---- The quest-giver talks, a letter at a time ----
+
+    const LINES = {
+      intro: 'There is a gate in the hills, broken and still warm. Three of its stones fell. Put them back and light it.',
+      accepted: 'Good. Bring flint, and fire resistance if you have it. The other side is not friendly.',
+      declined: 'Then it waits a while longer. Ask me again when you are braver.',
+    };
+    const said = document.querySelector('.said');
+    let typing = 0;
+
+    function say(text) {
+      clearInterval(typing);
+      let n = 0;
+      said.textContent = '';
+      vellum.playSound('minecraft:entity.wandering_trader.ambient', 0.35, 1.1);
+      typing = setInterval(() => {
+        n = Math.min(text.length, n + 2);
+        said.textContent = text.slice(0, n);
+        if (n === text.length) clearInterval(typing);
+      }, 30);
+    }
+
+    // A click on the speech finishes the line at once.
+    document.querySelector('.speech').addEventListener('click', () => {
+      clearInterval(typing);
+      said.textContent = LINES[state];
+    });
+
+    // ---- Accepting ----
+
+    const scene = document.querySelector('scene');
+    const accept = document.querySelector('.accept');
+    const decline = document.querySelector('.decline');
+    const burst = document.querySelector('.burst');
+    const marker = scene.querySelector('.marker');
+    let state = 'intro';
+    // Where the frame's missing stones lie on the ground, in the order they go back.
+    const FALLEN = [[10, 8, 10], [11, 8, 9], [4, 8, 7]];
+
+    // The rays and sparks of the burst.
+    const rays = burst.querySelector('.rays');
+    for (let i = 0; i < 16; i++) {
+      shape(rays, '', `transform: rotate(${i * 22.5 + 6}deg); animation-delay:${(i % 4) * 40}ms;`);
+    }
+    const sparks = burst.querySelector('.sparks');
+    for (let i = 0; i < 28; i++) {
+      const a = random() * Math.PI * 2, d = 60 + random() * 110;
+      const spark = shape(sparks, '', `animation-delay:${Math.round(random() * 150)}ms;`);
+      spark.style.setProperty('--dx', (Math.cos(a) * d).toFixed(0) + 'px');
+      spark.style.setProperty('--dy', (Math.sin(a) * d * 0.6).toFixed(0) + 'px');
+    }
+
+    function setGoal(goal, done, total, tracked) {
+      const row = document.querySelector(`[data-goal="${goal}"]`);
+      row.querySelector('.count').textContent = done + '/' + total;
+      row.querySelector('.bar div').style.width = (100 * done / total) + '%';
+      row.classList.toggle('tracked-row', !!tracked);
+    }
+
+    accept.addEventListener('click', () => {
+      if (state === 'accepted') return;
+      state = 'accepted';
+      accept.textContent = 'Quest Tracked';
+      accept.classList.add('done');
+      decline.disabled = true;
+      say(LINES.accepted);
+      vellum.playSound('minecraft:ui.toast.challenge_complete', 0.5, 1);
+
+      // The banner: restarting its animations on a fresh copy, so it plays again on a reload.
+      burst.classList.remove('go');
+      const fresh = burst.cloneNode(true);
+      burst.replaceWith(fresh);
+      fresh.classList.add('go');
+
+      // The scene: the camera moves in, the stones go back one by one, then the portal lights.
+      scene.classList.add('lit');
+      // The stones that fell off the frame go from the ground as they go back: an air <block> erases one.
+      const fallen = scene.querySelector('.fallen');
+      scene.querySelectorAll('.repair').forEach((g, i) => {
+        g.style.animationDelay = (500 + i * 380) + 'ms';
+        g.classList.add('in');
+        setTimeout(() => {
+          const b = document.createElement('block');
+          b.setAttribute('at', FALLEN[i].join(' '));
+          b.setAttribute('state', 'minecraft:air');
+          fallen.appendChild(b);
+        }, 500 + i * 380);
+      });
+      setTimeout(() => {
+        vellum.playSound('minecraft:item.flintandsteel.use', 0.6, 1);
+        const gate = scene.querySelector('.gate');
+        gate.classList.add('in');
+        scene.querySelector('.glow').classList.add('on');
+        vellum.playSound('minecraft:block.portal.trigger', 0.2, 1.4);
+      }, 1900);
+      marker.classList.add('tracked');
+      marker.querySelector('span').textContent = 'Tracked';
+      setGoal('travel', 0, 1, true);
+      setTimeout(() => setGoal('obsidian', 0, 3, true), 200);
+      setTimeout(() => setGoal('light', 0, 1, true), 400);
+    });
+
+    decline.addEventListener('click', () => {
+      if (state !== 'intro') return;
+      state = 'declined';
+      say(LINES.declined);
+      vellum.playSound('minecraft:entity.wandering_trader.no', 0.5, 1);
+      setTimeout(() => {
+        if (state === 'declined') {
+          state = 'intro';
+          say(LINES.intro);
+        }
+      }, 5000);
+    });
+
+    // Opened already accepted ({"start": "accepted"}), else from the briefing.
+    if (vellum.data.start === 'accepted') {
+      setTimeout(() => accept.click(), 50);
+    } else {
+      setTimeout(() => say(LINES.intro), 900);
+    }
+  </script>
+</body>
+</html>
