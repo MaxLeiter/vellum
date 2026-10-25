@@ -66,43 +66,36 @@ public record SmoothShape(boolean shadow, float x0, float y0, float x1, float y1
      */
     public float coverage(float x, float y, float aa) {
         float r = cornerRadius(x, y, radii);
-        float box = coverage(roundedBox(x, y, halfWidth, halfHeight, r), aa);
         if (!shadow) {
+            float box = coverage(roundedBox(x, y, halfWidth, halfHeight, r), aa);
             if (a <= 0) return box;
             float iw = halfWidth - a, ih = halfHeight - a;
             if (iw <= 0 || ih <= 0) return box;
-            float inner = cornerRadius(x, y, offsetRadii(radii, -a));
-            return box * (1 - coverage(roundedBox(x, y, iw, ih, inner), aa));
+            return box * (1 - coverage(roundedBox(x, y, iw, ih, Shapes.inset(r, a)), aa));
         }
+        // An outer shadow that is not a cutout ignores the box; a cutout's inside needs no blur.
+        float box = inset || cutout ? coverage(roundedBox(x, y, halfWidth, halfHeight, r), aa) : 0;
+        if (cutout && !inset && box >= 1) return 0;
         float sigma = Math.max(a, aa * 0.5f), spread = inset ? -b : b;
         float sw = halfWidth + spread, sh = halfHeight + spread;
-        float corner = Math.min(offsetRadius(r, spread), Math.min(sw, sh));
+        float corner = Math.min(Shapes.inset(r, -spread), Math.min(sw, sh));
         float blurred = sw > 0 && sh > 0 ? blurredBox(x, y, sw, sh, corner, sigma) : 0;
-        if (inset) return box * (1 - blurred);
-        return cutout ? blurred * (1 - box) : blurred;
+        return inset ? box * (1 - blurred) : blurred * (1 - box);
     }
 
     /** The radius of the corner whose quadrant (x, y) is in (y down). */
     private static float cornerRadius(float x, float y, float[] r) {
-        return x < 0 ? (y < 0 ? r[0] : r[6]) : (y < 0 ? r[2] : r[4]);
+        boolean right = !(x < 0), bottom = !(y < 0);
+        int k = 0;
+        while (Shapes.isRight(k) != right || Shapes.isBottom(k) != bottom) k++;
+        return r[Shapes.CORNER_RADIUS[k]];
     }
 
     /** Signed distance from (x, y) to a rounded box of half size (bx, by) centred on the origin: negative inside. */
     private static float roundedBox(float x, float y, float bx, float by, float r) {
         float qx = Math.abs(x) - bx + r, qy = Math.abs(y) - by + r;
-        float outside = (float) Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
-        return Math.min(Math.max(qx, qy), 0) + outside - r;
-    }
-
-    /** A radius grown (d > 0) or shrunk by d, as CSS spreads shadows and insets borders: square corners stay square. */
-    private static float offsetRadius(float r, float d) {
-        return r > 0.0001f ? Math.max(r + d, 0) : 0;
-    }
-
-    private static float[] offsetRadii(float[] r, float d) {
-        float[] out = new float[8];
-        for (int i = 0; i < 8; i++) out[i] = offsetRadius(r[i], d);
-        return out;
+        float ox = Math.max(qx, 0), oy = Math.max(qy, 0);
+        return Math.min(Math.max(qx, qy), 0) + (float) Math.sqrt(ox * ox + oy * oy) - r;
     }
 
     private static float coverage(float d, float aa) {

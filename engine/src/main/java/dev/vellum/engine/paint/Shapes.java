@@ -117,7 +117,7 @@ public final class Shapes {
         out[7] = inset(radii[7], bottom);
     }
 
-    private static float inset(float radius, float by) {
+    static float inset(float radius, float by) {
         return radius <= 0 ? 0 : Math.max(0, radius - by);
     }
 

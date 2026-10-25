@@ -88,22 +88,23 @@ void main() {
     // One device pixel in local units, under any canvas transform.
     float aa = max(length(fwidth(local)) * 0.70710678, 1e-4);
     float r = cornerRadius(local, radii);
-    float box = coverage(roundedBox(local, halfSize, r), aa);
     float alpha;
 #ifdef SHADOW
+    bool inset = flags.x > 0.5, cutout = flags.y > 0.5;
+    // An outer shadow that is not a cutout ignores the box; a cutout's inside needs no blur.
+    float box = inset || cutout ? coverage(roundedBox(local, halfSize, r), aa) : 0.0;
+    if (cutout && !inset && box >= 1.0) {
+        discard;
+    }
     float sigma = max(params.x, aa * 0.5);
-    float spread = flags.x > 0.5 ? -params.y : params.y;
+    float spread = inset ? -params.y : params.y;
     vec2 shape = halfSize + spread;
     // Shadows only reach here with one radius for every corner (McCanvas checks), so the blur needs just one.
     float corner = offsetRadii(vec4(r), spread).x;
     float shadow = shape.x > 0.0 && shape.y > 0.0 ? blurredBox(local, shape, min(corner, min(shape.x, shape.y)), sigma) : 0.0;
-    if (flags.x > 0.5) {
-        alpha = box * (1.0 - shadow);
-    } else {
-        alpha = flags.y > 0.5 ? shadow * (1.0 - box) : shadow;
-    }
+    alpha = inset ? box * (1.0 - shadow) : shadow * (1.0 - box);
 #else
-    alpha = box;
+    alpha = coverage(roundedBox(local, halfSize, r), aa);
     float width = params.x;
     if (width > 0.0) {
         vec2 inner = halfSize - width;

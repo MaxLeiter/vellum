@@ -22,7 +22,7 @@ final class Shadows {
 
     private final QuadBatch batch = new QuadBatch();
     private final float[] shape = new float[8], ringRadii = new float[8], widths = new float[4];
-    private final float[] padding = new float[4], paddingRadii = new float[8], path = new float[2 * 72];
+    private final float[] path = new float[2 * 72];
     private final int[] outerColors = new int[4], innerColors = new int[4];
     /** The shadow shape being drawn: border-box rect offset and spread, radii in {@link #shape}. */
     private float sx, sy, sw, sh;
@@ -66,17 +66,15 @@ final class Shadows {
     /** An inset shadow of the padding box {@code box} {x, y, width, height} with corner radii {@code radii}. */
     private void inset(Shadow shadow, float[] box, float[] radii, float dp) {
         if (Colors.isTransparent(shadow.color())) return;
-        System.arraycopy(box, 0, padding, 0, 4);
-        System.arraycopy(radii, 0, paddingRadii, 0, 8);
-        if (padding[2] <= 0 || padding[3] <= 0) return;
-        batch.setClip(padding[0], padding[1], padding[2], padding[3], paddingRadii, dp);
+        if (box[2] <= 0 || box[3] <= 0) return;
+        batch.setClip(box[0], box[1], box[2], box[3], radii, dp);
         float spread = shadow.spread();
-        if (!begin(shadow, padding[0] + shadow.offsetX() + spread, padding[1] + shadow.offsetY() + spread,
-                padding[2] - 2 * spread, padding[3] - 2 * spread, paddingRadii, spread)) {
-            batch.rect(padding[0], padding[1], padding[2], padding[3], shadow.color()); // shrunk to nothing: all shadow
+        if (!begin(shadow, box[0] + shadow.offsetX() + spread, box[1] + shadow.offsetY() + spread,
+                box[2] - 2 * spread, box[3] - 2 * spread, radii, spread)) {
+            batch.rect(box[0], box[1], box[2], box[3], shadow.color()); // shrunk to nothing: all shadow
         } else {
             if (blur > 0) ramp(-Math.min(blur, Math.min(sw, sh) / 2), blur, dp);
-            outside(blur, dp);
+            outside(box, blur, dp);
         }
         batch.clearClip();
     }
@@ -117,7 +115,7 @@ final class Shadows {
      * blur. Its bounding box leaves four strips; the grown shape's rounded corners leave the bits between each arc
      * and its bounding corner, fanned from that corner.
      */
-    private void outside(float e, float dp) {
+    private void outside(float[] padding, float e, float dp) {
         float x0 = sx - e, y0 = sy - e, x1 = sx + sw + e, y1 = sy + sh + e;
         float px0 = padding[0], py0 = padding[1], px1 = padding[0] + padding[2], py1 = padding[1] + padding[3];
         if (y0 > py0) batch.rect(px0, py0, px1 - px0, y0 - py0, color);

@@ -125,16 +125,9 @@ final class BoxPainter implements StackingOrder.Visitor {
     /** Outer shadows, background, inset shadows and border (CSS paints the first shadow on top). */
     private void decorations(ComputedStyle s, Geometry g) {
         canvas.crispShapes(s.shapeRendering == ShapeRendering.CRISP_EDGES);
-        List<Shadow> boxShadows = s.boxShadow;
-        if (!boxShadows.isEmpty()) g.area(BackgroundLayer.Box.BORDER_BOX, shadowBox, shadowRadii);
-        for (int i = boxShadows.size() - 1; i >= 0; i--) {
-            if (!boxShadows.get(i).inset()) canvas.fillBoxShadow(shadowBox, shadowRadii, boxShadows.get(i));
-        }
+        paintShadows(g, s.boxShadow, false, BackgroundLayer.Box.BORDER_BOX);
         backgrounds.paint(canvas, batch, g, s, dp);
-        if (!boxShadows.isEmpty()) g.area(BackgroundLayer.Box.PADDING_BOX, shadowBox, shadowRadii);
-        for (int i = boxShadows.size() - 1; i >= 0; i--) {
-            if (boxShadows.get(i).inset()) canvas.fillBoxShadow(shadowBox, shadowRadii, boxShadows.get(i));
-        }
+        paintShadows(g, s.boxShadow, true, BackgroundLayer.Box.PADDING_BOX);
         if (!s.hasBorder()) return;
         rect[0] = g.x;
         rect[1] = g.y;
@@ -149,6 +142,15 @@ final class BoxPainter implements StackingOrder.Visitor {
         colors[2] = s.borderBottomColor;
         colors[3] = s.borderLeftColor;
         borders.paint(canvas, batch, dp, rect, g.radii, g.border, styles, colors);
+    }
+
+    /** The outer or inset shadows, last first, drawn from {@code area}. */
+    private void paintShadows(Geometry g, List<Shadow> shadows, boolean inset, BackgroundLayer.Box area) {
+        if (shadows.isEmpty()) return;
+        g.area(area, shadowBox, shadowRadii);
+        for (int i = shadows.size() - 1; i >= 0; i--) {
+            if (shadows.get(i).inset() == inset) canvas.fillBoxShadow(shadowBox, shadowRadii, shadows.get(i));
+        }
     }
 
     /** Replaced content in the content box, sized by object-fit and placed by object-position; clipped when it overflows. */

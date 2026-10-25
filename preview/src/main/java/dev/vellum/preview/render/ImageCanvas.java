@@ -2,7 +2,6 @@ package dev.vellum.preview.render;
 
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
-import dev.vellum.engine.paint.Shapes;
 import dev.vellum.engine.paint.SmoothShape;
 import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.Shadow;
@@ -190,25 +189,22 @@ public final class ImageCanvas implements Canvas {
 
     @Override
     public void fillRoundedRect(float x, float y, float width, float height, float[] radii, int argb) {
-        if (!Shapes.isRounded(radii)) fillRect(x, y, width, height, argb);
-        else if (!smooth(crisp ? null : SmoothShape.box(x, y, width, height, radii, 0, argb))) {
-            Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
-        }
+        if (!smooth(SmoothShape.box(x, y, width, height, radii, 0, argb))) Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
     }
 
     @Override
     public void fillBorder(float[] outer, float[] radii, float[] widths, int[] colors) {
-        if (!smooth(crisp ? null : SmoothShape.border(outer, radii, widths, colors))) Canvas.super.fillBorder(outer, radii, widths, colors);
+        if (!smooth(SmoothShape.border(outer, radii, widths, colors))) Canvas.super.fillBorder(outer, radii, widths, colors);
     }
 
     @Override
     public void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
-        if (!smooth(crisp ? null : SmoothShape.shadow(box, radii, shadow))) Canvas.super.fillBoxShadow(box, radii, shadow);
+        if (!smooth(SmoothShape.shadow(box, radii, shadow))) Canvas.super.fillBoxShadow(box, radii, shadow);
     }
 
-    /** Draws a smooth shape; false (null) to tessellate it instead. */
+    /** Draws a smooth shape; false (null, or crisp edges asked for) to tessellate it instead. */
     private boolean smooth(SmoothShape s) {
-        if (s == null) return false;
+        if (s == null || crisp) return false;
         int c = modulate(s.argb());
         if (s != SmoothShape.NOTHING && (c >>> 24) != 0) shapes.fill(s, transform, clip, devicePixel(), c);
         return true;

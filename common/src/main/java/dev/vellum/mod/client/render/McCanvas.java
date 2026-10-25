@@ -246,35 +246,27 @@ public final class McCanvas implements Canvas {
 
     @Override
     public void fillRoundedRect(float x, float y, float width, float height, float[] radii, int argb) {
-        if (!Shapes.isRounded(radii)) fillRect(x, y, width, height, argb);
-        else if (!draw(smooth() ? SmoothShape.box(x, y, width, height, radii, 0, argb) : null)) {
-            Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
-        }
+        if (!draw(SmoothShape.box(x, y, width, height, radii, 0, argb))) Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
     }
 
     @Override
     public void fillBorder(float[] outer, float[] radii, float[] widths, int[] colors) {
         // Square borders stay exact quads: on whole device pixels they are as crisp as anything the shader draws.
-        if (!draw(smooth() ? SmoothShape.border(outer, radii, widths, colors) : null)) Canvas.super.fillBorder(outer, radii, widths, colors);
+        if (!draw(SmoothShape.border(outer, radii, widths, colors))) Canvas.super.fillBorder(outer, radii, widths, colors);
     }
 
     @Override
     public void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
-        if (!draw(smooth() ? SmoothShape.shadow(box, radii, shadow) : null)) Canvas.super.fillBoxShadow(box, radii, shadow);
-    }
-
-    /** Whether shapes may go to the shader: it is on and the box being painted did not ask for crisp edges. */
-    private boolean smooth() {
-        return shapes && !crisp;
+        if (!draw(SmoothShape.shadow(box, radii, shadow))) Canvas.super.fillBoxShadow(box, radii, shadow);
     }
 
     /**
      * Submits a shape to the shader (see {@link McGui#shape}), with a device pixel of room on every side for its
-     * antialiased edge. False to tessellate it instead: null (the shader can't draw it) or a radius too large for the
-     * shader's 16 bits.
+     * antialiased edge. False to tessellate it instead: null (the shader can't draw it), the shader is off or the box
+     * being painted asked for crisp edges, or a radius too large for the shader's 16 bits.
      */
     private boolean draw(@Nullable SmoothShape s) {
-        if (s == null) return false;
+        if (s == null || !shapes || crisp) return false;
         if (s == SmoothShape.NOTHING || clippedAway()) return true;
         int c = color(s.argb());
         if (alpha(c) == 0) return true;
