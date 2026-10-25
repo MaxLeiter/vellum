@@ -30,7 +30,7 @@ Vellum helps in all three cases. Opus 5.5 was used heavily in the development of
 - Most of CSS: block, inline, flexbox, and grid support, transitions, selectors, and `@keyframes`. Its goal is to be a 90-10 solution compared to a complete browser.
 - Elements use vanilla sprites by default. 
 - Use `<slot index="0">` for inventory slots and vanilla mechanics will Just Work(tm): clicking, dragging, shift-clicking and tooltips.
-- Minecraft-specific elements: `<item>`, `<slot>`, 3D `<entity>` and `<model>`, sprites, translations and player heads.
+- Minecraft-specific elements: `<item>`, `<slot>`, 3D `<entity>` and `<model>`, `<scene>` (a small 3D world of blocks and mobs), sprites, translations and player heads.
 - JavaScript with Vue-style templates (`v-for`, `v-if`, `v-model`, `@click`).
 - Narration/accessibility support and a standalone previewer with hot reload, so you (or your agent) can preview without launching the game.
 - Speed. A few hundred elements restyle and relayout in well under a millisecond.

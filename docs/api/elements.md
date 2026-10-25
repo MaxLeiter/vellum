@@ -1,6 +1,6 @@
 # Minecraft elements
 
-Items, slots, entities, models, player heads and sprites on a page, and how your entities are drawn in them. [All docs](../index.md)
+Items, slots, entities, models, scenes, player heads and sprites on a page, and how your entities are drawn in them. [All docs](../index.md)
 
 
 These elements are drawn by Minecraft. They lay out like images: an intrinsic size, scaled by CSS `width`/`height`
@@ -12,6 +12,7 @@ and `object-fit`, and placed in their box by `object-position`.
 | `<slot>` | `index` | A container slot (container screens only), 18×18. The look comes from CSS; vanilla draws the item. |
 | `<entity>` | `type`, `player`, `id`, `rotatable`, `follow-mouse`, `walk`, `baby`, `variant`, `color`, `components`, `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`, `body`, `saddle` | A live entity: `type="minecraft:pig"` (a client-side copy), `player` (you), or `id` (a world entity). It stands on the bottom of its box, centred and fitted to the room it needs to turn, or with `-mc-entity-focus: eyes` its head and shoulders fill the box (below). CSS turns it (`-mc-yaw`, `-mc-pitch`, `-mc-model-scale`); `rotatable` lets the player drag it round; `follow-mouse` turns its head toward the pointer (`-mc-gaze-reach` and `-mc-gaze-limit` soften it, below); `walk` (or `walk="0.4"`, a speed) swings its legs. Created entities play their idle animations and take `baby`, `variant` and `color` (`variant="minecraft:black"` on a cat, `color="pink"` on a sheep: the `<type>/variant` and `<type>/color` components), `components` (SNBT of entity components, e.g. `{"minecraft:wolf/collar":"red"}`) and items by equipment slot (`mainhand="minecraft:iron_sword"`). 32×48 by default. |
 | `<model>` | `block` or `item`, `count`, `components`, `rotatable` | A block state (`block="minecraft:oak_stairs[facing=east]"`, as in `/setblock`) or an item (`item="minecraft:trident"`, with `count` and `components` as on `<item>`) in 3D, centred in its box, at the size an item fills its slot. At yaw and pitch 0 an item looks as in the inventory and a block is seen as most blocks are there (30° from above, turned 225°); CSS turns it as it does entities. Blocks without a model (fluids, air) draw nothing. 32×32 by default. |
+| `<scene>` | `structure`, `rotatable`, `notooltips` | A small world in a box: blocks from a structure file and `<block>` children, grouped by `<block-group>`s that show, fade and move with CSS, `<entity>` children standing in it, and `<scene-anchor>` HTML pinned to points in it. Seen as the inventory sees blocks, fitted to its box. Hovering a block shows its name and fires `blockhover`. 160×120 by default. See [Scenes](#scenes). |
 | `<player-head>` | `name`, `uuid` | A player's face with the hat layer. No attributes: your own face. 16×16 by default. |
 | `<sprite>` | `src` | A GUI-atlas sprite such as `minecraft:widget/button`, at its natural size. Nine-slice and tiled sprites keep their borders when resized. |
 | `<img>` | `src` | A texture (`ns:textures/....png`, or relative to the page), a sprite (`sprite:ns:path`) or a canvas (`canvas:<id>`, the `<canvas>` with that id). The natural size comes from the PNG, sprite or canvas. `sprite:` and `canvas:` URLs work in CSS `url()` too. |
@@ -145,6 +146,111 @@ from it applies at once, or halfway through in `@keyframes`. Both act only on wh
 `-mc-pitch` and dragging a `rotatable` entity turn it as before, and the gaze turns it further from there. The
 pointer's distance is measured from the eye point with `-mc-entity-focus: eyes`, and from a third of the way down the
 box with `body`, as in the inventory.
+
+## Scenes
+
+`<scene>` is a small world in a box: a build, a machine, a room. It draws as one picture, and a scene that doesn't
+change costs a blit a frame.
+
+```html
+<scene structure="mymod:structures/hut.nbt" rotatable style="-mc-yaw: -90deg; -mc-pitch: 10deg">
+  <block at="1 1 1" state="minecraft:furnace[lit=true]"></block>   <!-- add or replace a block -->
+  <block at="2 0 0" state="minecraft:air"></block>                  <!-- erase one -->
+  <block-group id="roof" select="0 3 0 4 4 4" class="hidden"></block-group>
+  <entity type="minecraft:villager" at="2.5 1 2.5"></entity>
+  <scene-anchor at="1.5 2 0.5" class="caption">Put the furnace here</scene-anchor>
+</scene>
+```
+
+What it shows:
+
+| Child or attribute | |
+|---|---|
+| `structure` | A structure file, as a structure block saves one (`ns:path/file.nbt` is `assets/ns/path/file.nbt`, or a file in a [page folder](pages.md)). Its blocks keep the states and block entity data they were saved with. Its entities are left out. |
+| `<block at="x y z" state="...">` | Adds or replaces a block, on top of the structure, in document order. `state` is a block state as in `/setblock` (`minecraft:oak_stairs[facing=east]`), and `minecraft:air` erases. `nbt` gives a block entity's data as SNBT. |
+| `<block-group select="x1 y1 z1 x2 y2 z2">` | Claims the blocks in that box (both corners included), and its own `<block>` children. Each block belongs to the first group in document order that claims it; the rest are the scene's base. |
+| `<entity at="x y z">` | An `<entity>` standing at that point, with its usual attributes. `-mc-yaw` faces it as Minecraft yaws go (0 south, 90 west), and `walk` swings its legs. |
+| `<scene-anchor at="x y z">` | Ordinary HTML, laid out as an absolutely positioned box and moved every frame so its top-left corner is where the point is seen. `transform: translate(-50%, -100%)` puts its bottom middle there instead. |
+| `rotatable` | Dragging turns and tilts it, as `<model rotatable>`, adding to the CSS. |
+| `notooltips` | No block name tooltip. |
+
+Coordinates are block coordinates, x east, y up and z south; a block at `0 0 0` fills the cube from there to `1 1 1`.
+
+A group is what shows, fades and moves. Groups follow their style every frame, so transitions and `@keyframes` work:
+
+- `display: none`, `visibility: hidden` and `opacity: 0` hide it, and hidden groups can't be hovered.
+- `opacity` fades it. A faded group draws see-through; its block entities show only while it is at least half opaque.
+- `-mc-translate: x y z` moves it, in blocks. Values left out are 0: `-mc-translate: 0 -0.5`.
+- `-mc-rotate` turns it about the middle of its blocks: one angle turns it about the vertical axis, three
+  (`10deg 90deg 0deg`) about x, then y, then z.
+
+`-mc-translate` moves entities and anchors too. Each group is meshed once and again only when its blocks change, so
+moving and fading groups is cheap; adding, removing or changing `<block>` and `<block-group>` children from a script
+updates the scene on the next frame. Layer views are groups too: one per layer, hidden above the one shown.
+
+The camera uses the properties `<model>` uses. At `-mc-yaw` and `-mc-pitch` 0 a scene is seen as the inventory sees a
+block: 30° from above, from the north-east, so the north and east sides show. `-mc-yaw: -90deg` shows the south and
+east sides, `180deg` the south and west. The scene fits its box at any turn, `-mc-model-scale` zooms, and
+`-mc-scene-center: x y z` is the point it turns about and keeps in the middle (`auto`, the middle of its blocks, by
+default). All of them animate.
+
+Hovering a block shows its name as a vanilla tooltip, unless the scene has `notooltips`, and fires `blockhover` on the
+scene with `detail` `{x, y, z, state, group}` (`group` is the `<block-group>` that holds it, or null). It fires again
+with a null `detail` when the pointer leaves the blocks. A click that didn't drag fires `blockclick` with the same
+`detail`. Blocks count as whole cubes for both.
+
+### A build, step by step
+
+Vellum has no timeline. A build that assembles itself is groups, CSS and a timer, as the Cottage showcase
+(`/vellum showcase scene`) does it:
+
+```html
+<style>
+  scene { transition: -mc-yaw 1600ms ease-in-out, -mc-pitch 1600ms ease-in-out; -mc-yaw: -90deg; }
+  scene.roof-view { -mc-yaw: -20deg; -mc-pitch: 10deg; }
+  block-group.pending { opacity: 0; }
+  block-group.drop { animation: drop 900ms ease-out both; }
+  @keyframes drop { from { opacity: 0; -mc-translate: 0 5 0; } 45% { opacity: 1; } }
+  .caption { transform: translate(-50%, -100%); transition: -mc-translate 1200ms ease-in-out; }
+</style>
+<scene structure="mymod:structures/hut.nbt">
+  <block-group class="pending" select="0 0 0 6 0 6"></block-group>
+  <block-group class="pending" select="0 1 0 6 3 6"></block-group>
+  <block-group class="pending" select="0 4 0 6 6 6"></block-group>
+  <scene-anchor class="caption" at="0 0 0"></scene-anchor>
+</scene>
+<script>
+  const steps = [
+    {text: 'Floor', point: '3 1 3'},
+    {text: 'Walls', point: '3 4 6'},
+    {text: 'Roof', point: '3 7 3', view: 'roof-view'},
+  ];
+  const scene = document.querySelector('scene');
+  const groups = scene.querySelectorAll('block-group');
+  const caption = scene.querySelector('.caption');
+  let step = 0;
+  function next() {
+    if (step === steps.length) return;
+    groups[step].className = 'drop';
+    caption.textContent = steps[step].text;
+    caption.style.setProperty('-mc-translate', steps[step].point);
+    scene.className = steps[step].view || '';
+    step++;
+    setTimeout(next, 2000);
+  }
+  next();
+</script>
+```
+
+The caption glides from point to point on its `-mc-translate` transition, the camera on its own. An entity walks the
+same way: set its `-mc-translate` with a transition, and `walk` while it moves.
+
+What renders: block models with faces between neighbours in a group culled, connected blocks as their states say
+(structure files save fences, panes, walls and stairs connected; write the connections yourself on `<block>`), fluids,
+block entities (chests, beds, signs, banners) with their own renderers but at rest, and entities. Blocks are lit full
+bright by the inventory's light, so the world's time and dimension never show. Faces between two groups are drawn,
+so a group can move away without leaving holes. On 1.21.1 scenes draw nothing ([versions](../versions.md)). The
+previewer draws blocks from their models with simple shading, entities as silhouettes, and no block entities.
 
 ## Tooltips
 
