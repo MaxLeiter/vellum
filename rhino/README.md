@@ -19,6 +19,11 @@ fails the build with its name. This needs `git` on the path.
 | `0003` | `class`: methods, accessors, statics, `extends`, `super`, fields, static blocks, `new.target` |
 | `0004` | `async` functions, arrows and methods, and `await` |
 | `0005` | A size limit on BigInt arithmetic and parsing, which Vellum sets from `Limits.maxBigIntBits` |
+| `0006` | No CommonJS modules: drops the one use of the `require()` loader outside its package |
+
+The build also leaves three packages of the core module out of the jar, because Vellum never runs them: the
+compiler to Java bytecode (`optimizer`; scripts are always interpreted), `serialize`, and `commonjs`. See
+`build.gradle`.
 
 The patches hold only Rhino's core module (`rhino/src/main`), the part Vellum builds. Vellum's own tests
 (`LanguageConformanceTest`, `NewSyntaxSandboxTest`) cover them through the sandbox.
