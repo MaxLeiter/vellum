@@ -19,9 +19,14 @@ record TestScene(MinecraftAssets assets, PageScene scene, FrameRenderer renderer
         implements AutoCloseable {
     /** Opens {@code page} with Minecraft's jar, or the bundled stand-ins without one. */
     static TestScene open(Path page, Optional<Path> jar, int width, int height, int scale) {
+        return open(page, null, jar, width, height, scale);
+    }
+
+    /** {@link #open(Path, Optional, int, int, int)} with {@code data} (JSON, or null) as the page's data. */
+    static TestScene open(Path page, String data, Optional<Path> jar, int width, int height, int scale) {
         MinecraftAssets assets = MinecraftAssets.open(PreviewHost.packRoot(page).stream().toList(), jar);
         MinecraftFont font = new MinecraftFont(assets);
-        PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), null,
+        PageScene scene = new PageScene(new PreviewHost(assets, font), PreviewHost.pageUrl(page), data,
                 new Viewport(width, height, scale));
         return new TestScene(assets, scene, new FrameRenderer(assets, font), width, height, scale);
     }

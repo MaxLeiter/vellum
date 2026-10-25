@@ -110,6 +110,11 @@ final class StackingOrder {
         return s.position.isPositioned() || s.createsStackingContext();
     }
 
+    /** Whether a box is a stacking context: by its style, or as a scene anchor (which moves like a transform). */
+    static boolean isContext(Box box, ComputedStyle s) {
+        return s.createsStackingContext() || box.anchored;
+    }
+
     static int zIndex(Box box) {
         ComputedStyle s = styleOf(box);
         boolean applies = !s.zIndexAuto && (s.position.isPositioned() || s.isFlexOrGridItemHint);
@@ -279,7 +284,7 @@ final class StackingOrder {
         if (visible) {
             ComputedStyle s = styleOf(item);
             Coordinates.offset(item, space, offset);
-            layer(item, s, offset.e, offset.f, s.createsStackingContext(), v);
+            layer(item, s, offset.e, offset.f, isContext(item, s), v);
         }
         for (; pushed > 0; pushed--) v.popClip();
     }

@@ -16,6 +16,7 @@ import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.paint.Painter;
 import dev.vellum.engine.replaced.ReplacedElements;
+import dev.vellum.engine.scene.SceneContent;
 import dev.vellum.engine.script.ScriptRuntime;
 
 import java.util.ArrayList;
@@ -321,6 +322,7 @@ public final class Document extends Node {
                 laidOut = false;
                 input.afterLayout();
             }
+            if (updateScenes()) repaint = true;
         });
         frameNanos += clock.getAsLong() - start;
     }
@@ -368,6 +370,18 @@ public final class Document extends Node {
     private boolean updateReplaced() {
         boolean changed = false;
         for (int i = 0; i < replaced.size(); i++) changed |= replaced.get(i).update();
+        return changed;
+    }
+
+    /**
+     * Brings scenes up to date with the tree, styles and layout: their blocks, camera and anchors, and the block
+     * under the pointer (which may fire events). True if anything they paint changed.
+     */
+    private boolean updateScenes() {
+        boolean changed = false;
+        for (int i = 0; i < replaced.size(); i++) {
+            if (replaced.get(i) instanceof SceneContent scene && scene.scene() != null) changed |= scene.scene().update();
+        }
         return changed;
     }
 

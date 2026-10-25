@@ -2,6 +2,7 @@ package dev.vellum.engine.paint;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.style.ComputedStyle;
 
@@ -24,13 +25,17 @@ public final class Coordinates {
     /**
      * Sets {@code out} to a box's CSS transform, {@code translate(origin) · transform · translate(-origin)} with
      * percentages against its border box, mapping its border-box space into the space it is placed in (origin at
-     * its border-box origin). Returns false, leaving {@code out} alone, when it has none: no transform, or an
-     * inline box, which CSS transforms do not apply to. {@code s} is the style it is painted with.
+     * its border-box origin), after a scene anchor's offset ({@link Box#anchored}). Returns false, leaving
+     * {@code out} alone, when it has none: no transform and no anchor, or an inline box, which CSS transforms do not
+     * apply to. {@code s} is the style it is painted with.
      */
     static boolean transform(Box box, ComputedStyle s, Affine out) {
-        if (box.kind == Box.Kind.INLINE || !s.hasTransform()) return false;
+        if (box.kind == Box.Kind.INLINE || !s.hasTransform() && !box.anchored) return false;
+        out.identity();
+        if (box.anchored) out.translate(box.anchorX, box.anchorY);
+        if (!s.hasTransform()) return true;
         float ox = s.transformOriginX.resolve(box.width), oy = s.transformOriginY.resolve(box.height);
-        out.identity().translate(ox, oy).concat(s.transform, box.width, box.height).translate(-ox, -oy);
+        out.translate(ox, oy).concat(s.transform, box.width, box.height).translate(-ox, -oy);
         return true;
     }
 
@@ -133,5 +138,29 @@ public final class Coordinates {
         for (Box p = b; p != holder && p != null; p = p.parent) out.preTranslate(p.x, p.y);
         if (holder != null) out.preTranslate(-holder.scrollLeft(), -holder.scrollTop());
         return holder;
+    }
+
+    /**
+     * Where replaced content is painted in its box, {x, y, width, height} from the border-box origin: the content box,
+     * sized by object-fit against the content's intrinsic size and placed by object-position (before snapping to
+     * device pixels).
+     */
+    public static float[] objectBox(Box box, ComputedStyle s, ReplacedContent content) {
+        float cw = box.contentWidth(), ch = box.contentHeight();
+        float iw = content.intrinsicWidth(), ih = content.intrinsicHeight(), w = cw, h = ch;
+        if (iw > 0 && ih > 0) {
+            float scale = switch (s.objectFit) {
+                case FILL -> Float.NaN;
+                case CONTAIN -> Math.min(cw / iw, ch / ih);
+                case COVER -> Math.max(cw / iw, ch / ih);
+                case NONE -> 1;
+                case SCALE_DOWN -> Math.min(1, Math.min(cw / iw, ch / ih));
+            };
+            if (!Float.isNaN(scale)) {
+                w = iw * scale;
+                h = ih * scale;
+            }
+        }
+        return new float[] {box.contentX() + s.objectX(cw - w), box.contentY() + s.objectY(ch - h), w, h};
     }
 }

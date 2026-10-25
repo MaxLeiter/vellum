@@ -5,6 +5,8 @@ import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.dom.Text;
 import dev.vellum.engine.input.Controls;
 import dev.vellum.engine.layout.InlineContent.Span;
+import dev.vellum.engine.scene.SceneContent;
+import dev.vellum.engine.scene.SceneModel;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Display;
 
@@ -24,7 +26,8 @@ import java.util.function.Consumer;
  *   <li>flex and grid containers blockify their children and wrap loose text in anonymous items;</li>
  *   <li>{@code ::before}/{@code ::after} with content become {@link Box.Kind#PSEUDO} boxes, or inline spans of
  *       text;</li>
- *   <li>replaced elements and form controls are leaves; their DOM children are never laid out;</li>
+ *   <li>replaced elements and form controls are leaves; their DOM children are never laid out, except a scene's
+ *       {@code <scene-anchor>} children, which are out-of-flow boxes of the scene ({@link Box#anchored});</li>
  *   <li>absolutely and fixed positioned boxes are children of their nearest box (an anonymous block's, when they sit
  *       in a wrapped inline run), with an inline placeholder or their place among the block children marking the
  *       static position.</li>
@@ -58,7 +61,20 @@ final class BoxTreeBuilder {
         e.box = box;
         if (replaced) naturalSize(box);
         buildContent(box, flow -> addChildren(flow, e, flow.root), items -> addItems(items, e));
+        if (e.replaced instanceof SceneContent) addAnchors(box, e);
         return box;
+    }
+
+    /** A scene's anchors: out-of-flow boxes placed at its padding-box origin, which the scene then moves. */
+    private void addAnchors(LayoutBox scene, Element e) {
+        for (int i = 0, n = e.childCount(); i < n; i++) {
+            if (!(e.childAt(i) instanceof Element child) || !child.tagName().equals(SceneModel.ANCHOR)) continue;
+            ComputedStyle s = child.style;
+            if (!rendered(s)) continue;
+            LayoutBox box = outOfFlowBox(child, s);
+            box.anchored = true;
+            scene.add(box);
+        }
     }
 
     /** The box of a ::before/::after that is not an inline span; its only content is the {@code content} text. */

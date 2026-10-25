@@ -73,6 +73,13 @@ public class Box {
      * inline; null for the viewport. Set by layout; null for in-flow boxes.
      */
     public Box containingBlock;
+    /**
+     * A {@code <scene-anchor>}'s box: laid out at its scene's padding-box origin, then moved by ({@link #anchorX},
+     * {@link #anchorY}) before its CSS transform, so the scene can put it at a projected point every frame without a
+     * relayout. Always a stacking context.
+     */
+    public boolean anchored;
+    public float anchorX, anchorY;
 
     Box(Kind kind, Element element, ComputedStyle style) {
         this.kind = kind;

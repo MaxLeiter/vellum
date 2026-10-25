@@ -1,0 +1,539 @@
+<!doctype html>
+<html>
+<head>
+  <title>Cottage</title>
+  <link rel="stylesheet" href="showcase.css">
+  <style>
+    /*
+     * COTTAGE: a <scene> that builds itself. The cottage is a structure file; each step of the build is a
+     * <block-group> that claims a box of it, and the steps are plain JS adding classes on a timer. CSS animations
+     * drop each group in, the camera glides between steps on transitions of -mc-yaw, -mc-pitch, -mc-model-scale and
+     * -mc-scene-center, and the builder (you) walks from spot to spot on a -mc-translate transition. Captions are
+     * <scene-anchor>s: ordinary HTML that follows a point in the scene.
+     */
+    :root {
+      --ink: #fff7e6;
+      --muted: #b9c4d9;
+      --gold: #ffd36b;
+      --panel: rgba(14, 18, 30, 0.78);
+      --line: rgba(255, 220, 150, 0.22);
+    }
+
+    body {
+      position: relative;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 50% 108%, rgba(255, 196, 120, 0.55), rgba(255, 196, 120, 0) 55%),
+        radial-gradient(ellipse at 18% 12%, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0) 40%),
+        linear-gradient(to bottom, #20304f, #4a6290 55%, #9a8fa6 88%, #d9a982);
+    }
+
+    /* The scene takes the whole page; everything else floats over it. */
+    scene {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      -mc-yaw: -95deg;
+      -mc-pitch: 12deg;
+      -mc-model-scale: 1.15;
+      -mc-scene-center: 6.8 2 5.5;
+      transition: -mc-yaw 1600ms ease-in-out, -mc-pitch 1600ms ease-in-out, -mc-model-scale 1600ms ease-in-out,
+        -mc-scene-center 1600ms ease-in-out;
+    }
+
+    /* Where the camera looks at each step. At yaw 0 a scene is seen as the inventory sees a block, from the north-east;
+       -90deg turns it to show the cottage's front (south) and its east side. */
+    scene.cam-foundation { -mc-yaw: -65deg; -mc-pitch: 28deg; -mc-model-scale: 1.3; -mc-scene-center: 5.5 1.5 6; }
+    scene.cam-walls { -mc-yaw: -105deg; -mc-pitch: 8deg; -mc-model-scale: 1.3; -mc-scene-center: 5.5 2.5 5.5; }
+    scene.cam-inside { -mc-yaw: -80deg; -mc-pitch: 42deg; -mc-model-scale: 1.5; -mc-scene-center: 5.5 2.5 4.8; }
+    scene.cam-chimney { -mc-yaw: -25deg; -mc-pitch: 14deg; -mc-model-scale: 1.25; -mc-scene-center: 6.5 5 4; }
+    scene.cam-roof-n { -mc-yaw: -5deg; -mc-pitch: 6deg; -mc-model-scale: 1.15; -mc-scene-center: 5.5 4.5 4.5; }
+    scene.cam-roof-s { -mc-yaw: -110deg; -mc-pitch: 10deg; -mc-model-scale: 1.15; -mc-scene-center: 5.5 4.5 5.5; }
+    scene.cam-garden { -mc-yaw: -75deg; -mc-pitch: 22deg; -mc-model-scale: 1.4; -mc-scene-center: 6.5 1.5 8; }
+    scene.cam-tree { -mc-yaw: -120deg; -mc-pitch: 8deg; -mc-model-scale: 1.25; -mc-scene-center: 10 3.5 5; }
+    scene.cam-done { -mc-yaw: -112deg; -mc-pitch: 6deg; -mc-model-scale: 1.2; -mc-scene-center: 6.8 3.8 5.5; }
+    scene.cam-layers { -mc-yaw: -100deg; -mc-pitch: 30deg; -mc-model-scale: 1.2; -mc-scene-center: 6.8 3 5.5; }
+
+    /* A step not built yet: there, but not drawn (fully transparent groups aren't drawn or picked). */
+    block-group.pending { opacity: 0; }
+    block-group.drop { animation: drop 900ms cubic-bezier(0.25, 0.8, 0.3, 1.15) both; }
+    block-group.rise { animation: rise 900ms ease-out both; }
+    block-group.fade { animation: fade 700ms ease-out both; }
+    block-group.grow { animation: grow 1100ms cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+
+    @keyframes drop {
+      from { opacity: 0; -mc-translate: 0 5 0; }
+      45% { opacity: 1; }
+      to { -mc-translate: 0 0 0; }
+    }
+
+    @keyframes rise {
+      from { opacity: 0; -mc-translate: 0 -1.2 0; }
+      to { opacity: 1; -mc-translate: 0 0 0; }
+    }
+
+    @keyframes fade {
+      from { opacity: 0; -mc-translate: 0 0.6 0; }
+    }
+
+    @keyframes grow {
+      from { opacity: 0; -mc-translate: 0 -3 0; }
+      40% { opacity: 1; }
+    }
+
+    /* A block that was clicked hops. */
+    block-group.hop { animation: hop 450ms ease-out; }
+
+    @keyframes hop {
+      40% { -mc-translate: 0 0.6 0; -mc-rotate: 12deg; }
+    }
+
+    /* Slicing: the layers above the one shown lift away. */
+    block-group.layer { transition: opacity 350ms ease-out, -mc-translate 450ms ease-out; }
+    block-group.layer.peeled { opacity: 0; -mc-translate: 0 2.5 0; }
+
+    /* The builder walks between spots. */
+    entity.builder { transition: -mc-translate 1500ms ease-in-out, -mc-yaw 300ms ease-out; }
+
+    /* ---- Captions: HTML in the scene ---- */
+
+    scene-anchor { pointer-events: none; }
+
+    .caption {
+      transform: translate(-50%, -100%);
+      transition: -mc-translate 1200ms ease-in-out;
+    }
+
+    .caption .bubble {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      padding: 3px 6px 2px;
+      margin-bottom: 5px;
+      white-space: nowrap;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      animation: pop 450ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+    }
+
+    .caption .bubble b { color: var(--gold); text-shadow: 1px 1px 0 #5a3d10; }
+    .caption .bubble span { color: var(--muted); }
+
+    /* The little pointer under the bubble, and the dot on the spot. */
+    .caption .bubble::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -4px;
+      width: 5px;
+      height: 5px;
+      margin-left: -3px;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      transform: rotate(45deg);
+    }
+
+    .caption .dot {
+      width: 5px;
+      height: 5px;
+      margin: 0 auto -2px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 4px var(--gold);
+      animation: blink 1200ms ease-in-out infinite;
+    }
+
+    @keyframes pop {
+      from { opacity: 0; transform: translateY(4px) scale(0.6); }
+    }
+
+    .caption.hidden { opacity: 0; }
+
+    /* The builder's name plate. */
+    .nameplate {
+      transform: translate(-50%, -100%);
+      transition: -mc-translate 1500ms ease-in-out;
+      padding: 1px 3px 0;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.35);
+      white-space: nowrap;
+    }
+
+    /* ---- The panel and the toolbar ---- */
+
+    .panel {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      width: 112px;
+      padding: 5px 6px 6px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+    }
+
+    .panel h1 {
+      font-size: 8px;
+      letter-spacing: 2px;
+      color: var(--gold);
+      text-shadow: 1px 1px 0 #5a3d10;
+    }
+
+    .panel p { margin: 1px 0 4px; color: var(--muted); }
+
+    .steps { display: flex; flex-direction: column; gap: 1px; }
+
+    .steps button {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 4px;
+      height: 11px;
+      padding: 0 2px;
+      color: var(--muted);
+      text-align: left;
+      background: none;
+      border: none;
+      border-radius: 2px;
+      transition: color 200ms, background-color 200ms;
+    }
+
+    .steps button:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+
+    .steps i {
+      width: 5px;
+      height: 5px;
+      border: 1px solid var(--muted);
+      border-radius: 50%;
+      transition: background-color 300ms, border-color 300ms;
+    }
+
+    .steps .built { color: var(--ink); }
+    .steps .built i { background: var(--gold); border-color: var(--gold); }
+    .steps .current { color: var(--gold); }
+    .steps .current i { animation: blink 700ms steps(1) infinite; background: var(--gold); border-color: var(--gold); }
+
+    .progress {
+      height: 2px;
+      margin-top: 5px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .progress div {
+      height: 100%;
+      background: linear-gradient(to right, #ffb347, var(--gold));
+      transition: width 600ms ease-out;
+    }
+
+    .toolbar {
+      position: absolute;
+      left: 50%;
+      bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px;
+      transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+    }
+
+    .toolbar button {
+      height: 14px;
+      padding: 0 5px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 2px;
+    }
+
+    .toolbar button:hover { background: rgba(255, 211, 107, 0.25); border-color: var(--gold); }
+    .toolbar button:disabled { color: rgba(255, 255, 255, 0.3); background: none; }
+    .toolbar .layer { min-width: 38px; color: var(--muted); text-align: center; }
+    .toolbar .hint { padding: 0 3px; color: var(--muted); }
+
+    /* What the pointer is on. */
+    .info {
+      position: absolute;
+      right: 6px;
+      top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 140px;
+      padding: 3px 5px 3px 3px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      transition: opacity 200ms;
+    }
+
+    .info.empty { opacity: 0; }
+    .info item { width: 16px; height: 16px; flex: none; }
+    .info div { display: flex; flex-direction: column; min-width: 0; }
+    .info span { color: var(--muted); }
+  </style>
+</head>
+<body class="fullscreen">
+  <scene structure="vellum:structures/cottage.nbt" rotatable class="cam-start">
+    <!-- Each step claims a box of the cottage; a block goes to the first group whose box holds it. The furniture
+         comes before the walls, whose box surrounds it, and the chimney before the roof. -->
+    <block-group id="g-foundation" class="pending" select="2 1 2 8 1 8"></block-group>
+    <block-group id="g-inside" class="pending" select="3 2 3 7 3 6"></block-group>
+    <block-group id="g-walls" class="pending" select="2 2 2 8 4 8"></block-group>
+    <block-group id="g-chimney" class="pending" select="7 5 3 7 10 3"></block-group>
+    <block-group id="g-roof-n" class="pending" select="1 5 1 9 9 4"></block-group>
+    <block-group id="g-roof-s" class="pending" select="1 5 5 9 9 8"></block-group>
+    <block-group id="g-garden" class="pending" select="0 1 8 13 1 10"></block-group>
+    <block-group id="g-tree" class="pending" select="10 1 0 13 9 7"></block-group>
+
+    <entity player class="builder" at="0 0 0"></entity>
+    <scene-anchor class="nameplate" at="0 2.15 0"></scene-anchor>
+    <scene-anchor class="caption hidden" at="0 0 0"><div class="bubble"><b></b><span></span></div><div class="dot"></div></scene-anchor>
+  </scene>
+
+  <section class="panel">
+    <h1>COTTAGE</h1>
+    <p>A structure file, built step by step</p>
+    <div class="steps"></div>
+    <div class="progress"><div style="width: 0"></div></div>
+  </section>
+
+  <section class="info empty"><item></item><div><b></b><span></span></div></section>
+
+  <nav class="toolbar">
+    <button class="replay">Replay</button>
+    <button class="down" title="Show one layer less">-</button>
+    <span class="layer">All</span>
+    <button class="up" title="Show one layer more">+</button>
+    <span class="hint">Drag to turn</span>
+  </nav>
+
+  <script>
+    // The build: each step shows a group with an animation, moves the camera, walks the builder to a spot and
+    // points a caption at the work. Positions are block coordinates in the cottage; the builder's yaw is Minecraft's
+    // (0 faces south, 90 west, 180 north).
+    const STEPS = [
+      {group: 'g-foundation', anim: 'drop', cam: 'foundation', title: 'Foundation', text: 'Cobblestone, spruce floor',
+        at: [5.5, 2, 5], walk: [1.4, 1, 8.8]},
+      {group: 'g-walls', anim: 'rise', cam: 'walls', title: 'Walls', text: 'Oak logs at the corners',
+        at: [8.5, 5, 7.5], walk: [10, 1, 8.6]},
+      {group: 'g-inside', anim: 'fade', cam: 'inside', title: 'Furnishing', text: 'Furnace, chest and a bed',
+        at: [3.5, 3.2, 3.5], walk: [5.5, 2, 5.2]},
+      {group: 'g-chimney', anim: 'rise', cam: 'chimney', title: 'Chimney', text: 'Up through the roof',
+        at: [7.5, 11, 3.5], walk: [9.6, 1, 1.4]},
+      {group: 'g-roof-n', anim: 'drop', cam: 'roof-n', title: 'Roof', text: 'Spruce stairs, north side',
+        at: [5.5, 9, 3], walk: [9.4, 1, 0.6]},
+      {group: 'g-roof-s', anim: 'drop', cam: 'roof-s', title: 'Roof', text: 'And the south side',
+        at: [5.5, 9, 6], walk: [10.2, 1, 8.6]},
+      {group: 'g-garden', anim: 'rise', cam: 'garden', title: 'Garden', text: 'A fence, flowers, a pond',
+        at: [8.5, 1.4, 8.5], walk: [3.6, 1, 8.6]},
+      {group: 'g-tree', anim: 'grow', cam: 'tree', title: 'Tree', text: 'Oak, for shade',
+        at: [12.5, 8, 4.5], walk: [10.4, 1, 7.4]},
+    ];
+    const DONE = {cam: 'done', title: 'Home', text: 'Drag to look around', at: [5.5, 3.6, 7.6], walk: [6.6, 1, 9.1],
+      face: -50};
+    const STEP_MS = 2300;
+    const TOP_LAYER = 10;
+
+    const scene = document.querySelector('scene');
+    const builder = scene.querySelector('.builder');
+    const nameplate = scene.querySelector('.nameplate');
+    const caption = scene.querySelector('.caption');
+    const stepList = document.querySelector('.steps');
+    const bar = document.querySelector('.progress div');
+    const layerLabel = document.querySelector('.layer');
+
+    let step = 0;
+    let timer = 0;
+    let walkTimer = 0;
+    let layer = TOP_LAYER;
+    let where = [5.5, 1, 9.5];
+    let facing = 180;
+
+    for (let i = 0; i < STEPS.length; i++) {
+      const b = document.createElement('button');
+      b.innerHTML = '<i></i>' + STEPS[i].title + (STEPS[i].group === 'g-roof-s' ? ' (south)' : '');
+      b.addEventListener('click', () => jump(i + 1));
+      stepList.appendChild(b);
+    }
+    nameplate.textContent = 'You';
+    caption.style.setProperty('-mc-translate', STEPS[0].at.join(' '));
+
+    /** The yaw that faces from {@code from} to {@code to} (Minecraft's: 0 is south, 90 west). */
+    function yawTowards(from, to) {
+      return Math.atan2(-(to[0] - from[0]), to[2] - from[2]) * 180 / Math.PI;
+    }
+
+    /** Puts the camera, the builder and the caption where step {@code s} wants them. */
+    function stage(s, instant) {
+      scene.className = 'cam-' + s.cam;
+      walkTo(s.walk, s.face !== undefined ? s.face : yawTowards(s.walk, s.at), instant);
+      caption.classList.remove('hidden');
+      caption.querySelector('b').textContent = s.title;
+      caption.querySelector('span').textContent = s.text;
+      // Replaying the bubble's pop: a new bubble each time.
+      const bubble = caption.querySelector('.bubble');
+      bubble.replaceWith(bubble.cloneNode(true));
+      caption.style.setProperty('-mc-translate', s.at.join(' '));
+    }
+
+    /** Walks the builder to {@code to}, facing the way it goes, then turns to {@code face}. */
+    function walkTo(to, face, instant) {
+      const dx = to[0] - where[0], dz = to[2] - where[2];
+      clearTimeout(walkTimer);
+      if (instant || dx * dx + dz * dz < 0.01) {
+        turn(face);
+        builder.removeAttribute('walk');
+      } else {
+        turn(yawTowards(where, to));
+        builder.setAttribute('walk', '0.9');
+        walkTimer = setTimeout(() => {
+          builder.removeAttribute('walk');
+          turn(face);
+        }, 1450);
+      }
+      where = to;
+      const at = to.join(' ');
+      builder.style.setProperty('-mc-translate', at);
+      nameplate.style.setProperty('-mc-translate', at);
+    }
+
+    /** Turns the builder to {@code yaw} the short way round: -mc-yaw transitions go by the numbers. */
+    function turn(yaw) {
+      facing += ((yaw - facing) % 360 + 540) % 360 - 180;
+      builder.style.setProperty('-mc-yaw', facing + 'deg');
+    }
+
+    /** Shows the steps before {@code n} as built, at once. */
+    function built(n) {
+      for (let i = 0; i < STEPS.length; i++) {
+        const g = document.getElementById(STEPS[i].group);
+        g.className = i < n ? '' : 'pending';
+      }
+      const rows = stepList.children;
+      for (let i = 0; i < rows.length; i++) rows[i].className = i < n ? 'built' : '';
+      bar.style.width = (100 * n / STEPS.length) + '%';
+    }
+
+    function play() {
+      if (step >= STEPS.length) {
+        stage(DONE, false);
+        return;
+      }
+      const s = STEPS[step];
+      const g = document.getElementById(s.group);
+      g.className = s.anim;
+      stage(s, false);
+      stepList.children[step].className = 'current';
+      if (step > 0) stepList.children[step - 1].className = 'built';
+      step++;
+      bar.style.width = (100 * step / STEPS.length) + '%';
+      timer = setTimeout(play, STEP_MS);
+    }
+
+    /** Goes straight to after step {@code n} (0 to start over): the earlier steps built, that one shown. */
+    function jump(n) {
+      clearTimeout(timer);
+      leaveLayers();
+      step = n;
+      built(n);
+      const s = n === 0 ? null : n >= STEPS.length ? DONE : STEPS[n - 1];
+      if (s) stage(s, true);
+      if (n > 0 && n < STEPS.length) stepList.children[n - 1].className = 'current';
+      if (n < STEPS.length) timer = setTimeout(play, n === 0 ? 600 : STEP_MS);
+    }
+
+    // ---- Slicing: one group per layer, made when first asked for ----
+
+    function enterLayers() {
+      if (scene.querySelector('.layer')) return;
+      clearTimeout(timer);
+      step = STEPS.length;
+      built(STEPS.length);
+      for (let i = 0; i < STEPS.length; i++) document.getElementById(STEPS[i].group).remove();
+      for (let y = 1; y <= TOP_LAYER; y++) {
+        const g = document.createElement('block-group');
+        g.className = 'layer';
+        g.setAttribute('select', '0 ' + y + ' 0 13 ' + y + ' 10');
+        g.dataset.y = y;
+        scene.insertBefore(g, scene.firstChild);
+      }
+      scene.className = 'cam-layers';
+      caption.classList.add('hidden');
+    }
+
+    function leaveLayers() {
+      const layers = scene.querySelectorAll('.layer');
+      if (layers.length === 0) return;
+      for (let i = 0; i < layers.length; i++) layers[i].remove();
+      for (let i = STEPS.length - 1; i >= 0; i--) {
+        const g = document.createElement('block-group');
+        g.id = STEPS[i].group;
+        scene.insertBefore(g, scene.firstChild);
+      }
+      // The boxes, as in the markup.
+      const boxes = ['2 1 2 8 1 8', '3 2 3 7 3 6', '2 2 2 8 4 8', '7 5 3 7 10 3', '1 5 1 9 9 4', '1 5 5 9 9 8',
+        '0 1 8 13 1 10', '10 1 0 13 9 7'];
+      const order = ['g-foundation', 'g-inside', 'g-walls', 'g-chimney', 'g-roof-n', 'g-roof-s', 'g-garden', 'g-tree'];
+      for (let i = 0; i < order.length; i++) document.getElementById(order[i]).setAttribute('select', boxes[i]);
+      layer = TOP_LAYER;
+      layerLabel.textContent = 'All';
+    }
+
+    function showLayers(top) {
+      enterLayers();
+      layer = Math.max(0, Math.min(TOP_LAYER, top));
+      const groups = scene.querySelectorAll('.layer');
+      for (let i = 0; i < groups.length; i++) groups[i].classList.toggle('peeled', Number(groups[i].dataset.y) > layer);
+      layerLabel.textContent = layer === TOP_LAYER ? 'All' : 'Layer ' + layer;
+    }
+
+    document.querySelector('.down').addEventListener('click', () => showLayers(layer - 1));
+    document.querySelector('.up').addEventListener('click', () => showLayers(layer + 1));
+    document.querySelector('.replay').addEventListener('click', () => jump(0));
+
+    // ---- What the pointer is on ----
+
+    const info = document.querySelector('.info');
+    scene.addEventListener('blockhover', e => {
+      window.lastHover = e.detail ? e.detail.state : '';
+      if (!e.detail) {
+        info.classList.add('empty');
+        return;
+      }
+      const id = e.detail.state.split('[')[0];
+      const path = id.split(':')[1] || id;
+      info.querySelector('item').setAttribute('id', id);
+      info.querySelector('b').textContent = vellum.t('block.minecraft.' + path);
+      info.querySelector('span').textContent = e.detail.x + ' ' + e.detail.y + ' ' + e.detail.z;
+      info.classList.remove('empty');
+    });
+
+    // A clicked block hops: a group of its own, first so it claims the block, gone when the hop ends.
+    scene.addEventListener('blockclick', e => {
+      const d = e.detail;
+      const g = document.createElement('block-group');
+      g.className = 'hop';
+      g.setAttribute('select', [d.x, d.y, d.z, d.x, d.y, d.z].join(' '));
+      g.addEventListener('animationend', () => g.remove());
+      scene.insertBefore(g, scene.firstChild);
+    });
+
+    // Opened at a step ({"start": {"step": 3}} or "done"), else from the start.
+    const start = (vellum.data.start || {}).step;
+    walkTo(where, 180, true);
+    if (start === 'done') jump(STEPS.length);
+    else if (typeof start === 'number') jump(start);
+    else jump(0);
+  </script>
+</body>
+</html>

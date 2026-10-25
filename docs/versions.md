@@ -39,6 +39,8 @@ Everything works on 1.21.1, with these differences:
 
 - Rounded boxes, borders and box-shadows are drawn as quads, without the shape shader.
 - `<entity>` and `<model>` can't fade: under half opacity they aren't drawn, as items aren't on either version. `-mc-tint` works.
+- `<scene>` draws nothing. It still lays out, places its anchors and fires `blockhover` and `blockclick`, so a page
+  works, but the blocks, block entities and entities in it are only drawn on 26.x.
 - `VellumEntities.registerPortraitState` doesn't exist, since 1.21.1 has no entity render states. Entity `components`
   are ignored, and `variant` and `color` are set through the entity's NBT.
 - The CSS `cursor` shows over screens only, not over HUD overlays.

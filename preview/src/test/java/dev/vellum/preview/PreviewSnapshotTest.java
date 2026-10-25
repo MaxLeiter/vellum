@@ -101,6 +101,30 @@ class PreviewSnapshotTest {
         }
     }
 
+    /**
+     * The scene showcase opened at its last step: the cottage from its structure file, the builder and the captions.
+     * Then a block hovered in it fires its event and shows its name.
+     */
+    @Test
+    void sceneShowcaseMatchesGoldens() throws IOException {
+        assumeTrue(JAR.isPresent(), "no Minecraft " + MinecraftAssets.MINECRAFT_VERSION + " jar found");
+        try (TestScene t = TestScene.open(modPages("showcase").orElseThrow().resolve("scene.html"),
+                "{\"start\": {\"step\": \"done\"}}", JAR, CanvasTest.WIDTH, CanvasTest.HEIGHT, SCALE)) {
+            for (int frame = 0; frame < 10; frame++) t.render(frame * 16.0);
+            BufferedImage image = t.render(2000);
+            assertNull(t.scene().error(), () -> "failed: " + t.scene().error());
+            Snapshots.assertMatches("scene-showcase", image);
+
+            float[] at = t.scene().document().querySelector("scene").getBoundingClientRect();
+            t.hover(new float[] {at[0] + at[2] / 2, at[1] + at[3] / 2});
+            image = t.render(2016);
+            assertTrue(t.scene().document().input().tooltip() != null, "the hovered block shows its name");
+            assertTrue(!t.scene().document().scripts().evaluateToJson("String(window.lastHover)", "test").contains("undefined"),
+                    "the page heard blockhover");
+            Snapshots.assertMatches("scene-tooltip", image);
+        }
+    }
+
     /** A page of {@code src/test/resources/tooltip}, at the canvas test's size. */
     private static TestScene tooltipPage(String name) throws URISyntaxException {
         Path page = Path.of(PreviewSnapshotTest.class.getResource("/tooltip/" + name).toURI());

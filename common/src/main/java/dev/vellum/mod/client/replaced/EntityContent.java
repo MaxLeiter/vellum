@@ -89,6 +89,17 @@ final class EntityContent extends TurnableContent {
         EntityPortrait.draw(canvas, entity, pose, element.computedStyle(), tint, x, y, width, height);
     }
 
+    //? if >=26 {
+    /**
+     * Its render state in a {@code <scene>}: facing its {@code -mc-yaw} as Minecraft yaws go (0 south), limbs swinging
+     * with {@code walk}. Null when there is no entity to show.
+     */
+    net.minecraft.client.renderer.entity.state.@Nullable EntityRenderState sceneState() {
+        Entity entity = entity();
+        return entity == null ? null : EntityPortrait.sceneState(entity, element.computedStyle().modelYaw, walk);
+    }
+    //?}
+
     private void load() {
         player = element.hasAttribute("player");
         followMouse = element.hasAttribute("follow-mouse");

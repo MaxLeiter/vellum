@@ -12,6 +12,8 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.scene.SceneBlock;
+import dev.vellum.engine.scene.SceneContent;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
 
@@ -74,13 +76,14 @@ final class TooltipPainter {
 
     /**
      * An item's name, as its tooltip's first line: the translation of its item key, else of its block key (as the
-     * stand-in's texture falls back from item to block), else its id.
+     * stand-in's texture falls back from item to block), else its id. A scene's is its hovered block's.
      */
     private static String itemName(Host host, Element item) {
-        String id = item.getAttribute("id");
+        SceneBlock block = item.replaced instanceof SceneContent scene ? scene.scene().tooltipBlock() : null;
+        String id = block != null ? block.id() : item.getAttribute("id");
         if (id == null || id.isBlank()) return "";
         id = id.strip();
-        for (String kind : new String[] {"item", "block"}) {
+        for (String kind : block != null ? new String[] {"block", "item"} : new String[] {"item", "block"}) {
             String key = MinecraftAssets.descriptionId(kind, id), text = host.translate(key);
             if (!text.equals(key)) return text;
         }

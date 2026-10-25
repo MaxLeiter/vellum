@@ -433,6 +433,11 @@ public final class InputHandler {
         return pointer.known() ? new float[] {pointer.x, pointer.y} : null;
     }
 
+    /** The element the pointer is over (or that captured it), or null. */
+    public Element hoverTarget() {
+        return pointer.known() ? pointer.hoverTarget() : null;
+    }
+
     /**
      * The tooltip to show now, or null. On an element whose content shows its own tooltip (an
      * {@code <item tooltip>}), that one at once, with the lines of the {@code title} / {@code title-json} that applies

@@ -314,6 +314,12 @@ final class Properties {
         add(List.of(Prop.GAZE_LIMIT_YAW, Prop.GAZE_LIMIT_UP, Prop.GAZE_LIMIT_DOWN),
                 or(Map.of("none", Float.NaN), nonNegative(Numeric::angle)),
                 v -> Float.isNaN((Float) v) ? "none" : CssText.deg((Float) v));
+        add(List.of(Prop.TRANSLATE_X, Prop.TRANSLATE_Y, Prop.TRANSLATE_Z), Numeric::number, NUMBER);
+        add(List.of(Prop.ROTATE_X, Prop.ROTATE_Y, Prop.ROTATE_Z), Numeric::angle, v -> CssText.deg((Float) v));
+        // -mc-scene-center's parts: block coordinates, or auto (NaN, so it flips rather than interpolates).
+        add(List.of(Prop.SCENE_CENTER_X, Prop.SCENE_CENTER_Y, Prop.SCENE_CENTER_Z),
+                or(Map.of("auto", Float.NaN), Numeric::number),
+                v -> Float.isNaN((Float) v) ? "auto" : CssText.number((Float) v));
         add(Prop.SCROLL_BEHAVIOR, Keywords.parser(Map.of("auto", false, "smooth", true)),
                 v -> (Boolean) v ? "smooth" : "auto");
         add(Prop.SCROLLBAR_WIDTH, Keywords.parser(Map.of("auto", 2, "thin", 1, "none", 0)),

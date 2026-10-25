@@ -100,16 +100,7 @@ public final class EntityPortrait {
         if (!canvas.sceneVisible(tint, x, y, width, height)) return;
         float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
         EntityRenderState supplied = supplied(entity, partialTick);
-        EntityRenderState state = supplied != null ? supplied
-                : Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, partialTick);
-        state.shadowPieces.clear();
-        state.outlineColor = 0;
-        state.nameTag = null;
-        state.scoreText = null;
-        state.leashStates = null;
-        state.passengerOffset = null;
-        state.lightCoords = LightCoordsUtil.FULL_BRIGHT;
-        if (entity.getId() < 0) state.ageInTicks = Util.getMillis() / 50F;
+        EntityRenderState state = prepare(entity, supplied, partialTick);
 
         // The point it looks from: with the eyes focus, also where its eyes go.
         float[] eyes = EntityFraming.gazeOrigin(style, x, y, width, height);
@@ -156,6 +147,47 @@ public final class EntityPortrait {
         float pixelsPerBlock = frame.pixelsPerBlock();
         float dx = (frame.originX() - x - width / 2) / pixelsPerBlock, up = (y + height - frame.originY()) / pixelsPerBlock;
         canvas.drawScene(Scene.entity(state, dx, up, rotation, view), pixelsPerBlock, tint, x, y, width, height);
+    }
+
+    /**
+     * {@code entity}'s render state for a {@code <scene>}: prepared as {@link #draw} prepares one (no shadow, name
+     * tag, leash or passenger offset, full bright, display entities on the clock, scale 1). A living entity's body
+     * faces {@code yaw} (Minecraft's: 0 faces south, 90 west) with its head straight ahead, unless a mod's state turned
+     * the head, and its limbs swing at {@code walk}.
+     */
+    public static EntityRenderState sceneState(Entity entity, float yaw, float walk) {
+        float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        EntityRenderState supplied = supplied(entity, partialTick);
+        EntityRenderState state = prepare(entity, supplied, partialTick);
+        if (state instanceof LivingEntityRenderState living) {
+            living.bodyRot = yaw;
+            if (supplied == null) {
+                living.yRot = 0;
+                living.xRot = 0;
+            }
+            living.walkAnimationPos = living.ageInTicks * walk;
+            living.walkAnimationSpeed = walk;
+            living.boundingBoxWidth /= living.scale;
+            living.boundingBoxHeight /= living.scale;
+            living.eyeHeight /= living.scale;
+            living.scale = 1.0F;
+        }
+        return state;
+    }
+
+    /** The state to draw: the supplied one or the renderer's, without what a GUI picture never shows. */
+    private static EntityRenderState prepare(Entity entity, @Nullable EntityRenderState supplied, float partialTick) {
+        EntityRenderState state = supplied != null ? supplied
+                : Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, partialTick);
+        state.shadowPieces.clear();
+        state.outlineColor = 0;
+        state.nameTag = null;
+        state.scoreText = null;
+        state.leashStates = null;
+        state.passengerOffset = null;
+        state.lightCoords = LightCoordsUtil.FULL_BRIGHT;
+        if (entity.getId() < 0) state.ageInTicks = Util.getMillis() / 50F;
+        return state;
     }
 
     /** The state the function registered for the entity's type makes, or null when there is none or it made none. */

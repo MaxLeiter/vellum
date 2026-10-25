@@ -17,7 +17,7 @@ import java.util.function.Function;
 /**
  * The previewer's stand-ins for the Minecraft elements, at the game's sizes: items and models as their flat item (or
  * block) texture (items with the stack size), player heads as the default skin's face, entities as a silhouette,
- * and slots as nothing (CSS draws the slot). Items and heads fill the square {@code object-fit: contain} gives them;
+ * slots as nothing (CSS draws the slot), and scenes as their blocks' models ({@link PreviewScene}). Items and heads fill the square {@code object-fit: contain} gives them;
  * models and silhouettes place themselves by object-position, as in game. Attributes are read when painting, so
  * edits show up without reloading.
  */
@@ -34,7 +34,8 @@ final class ReplacedElements {
                 "slot", element -> new Fixed(18, 18, (canvas, x, y, w, h) -> {}),
                 "entity", element -> new Fixed(48, 48, (canvas, x, y, w, h) -> paintSilhouette(canvas, element.computedStyle(), x, y, w, h)),
                 "model", element -> new Fixed(32, 32, (canvas, x, y, w, h) -> paintModel(canvas, element, assets, x, y, w, h)),
-                "player-head", element -> new Fixed(16, 16, ReplacedElements::paintFace));
+                "player-head", element -> new Fixed(16, 16, ReplacedElements::paintFace),
+                "scene", element -> new PreviewScene(element, assets));
     }
 
     private interface Paint {

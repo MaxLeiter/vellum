@@ -51,12 +51,19 @@ final class McHost implements Host {
 
     @Override
     public @Nullable String loadText(String url) {
-        // A page a server opened can't read the player's files: it could send them back with vellum.send.
-        if (driver.serverSession() && VellumPages.isFolderUrl(url)) {
-            if (reported.add("folder " + url)) Constants.LOG.warn("Vellum: a server's page tried to read {}, which is in a folder on this computer; refused", url);
-            return null;
-        }
-        return VellumResources.loadText(url);
+        return readable(url) ? VellumResources.loadText(url) : null;
+    }
+
+    @Override
+    public byte @Nullable [] loadBytes(String url) {
+        return readable(url) ? VellumResources.loadBytes(url) : null;
+    }
+
+    /** A page a server opened can't read the player's files: it could send them back with vellum.send. */
+    private boolean readable(String url) {
+        if (!driver.serverSession() || !VellumPages.isFolderUrl(url)) return true;
+        if (reported.add("folder " + url)) Constants.LOG.warn("Vellum: a server's page tried to read {}, which is in a folder on this computer; refused", url);
+        return false;
     }
 
     @Override

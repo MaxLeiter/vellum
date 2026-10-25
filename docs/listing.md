@@ -54,7 +54,7 @@ You don't need to install this on its own. It's a library: mods that use it list
 - Most of CSS: block, inline, flexbox, grid and positioning, plus transitions and `@keyframes`. It's a 90-10 solution, not a browser.
 - The game's own look by default. Buttons, text fields, panels, slots and tooltips use vanilla sprites and the game font, so an unstyled page already fits in.
 - Real inventories. Put `<slot index="0">` wherever you want a slot and vanilla's clicking, dragging, shift-clicking and tooltips keep working. Recipe viewers like JEI see the page's real bounds.
-- Minecraft elements: `<item>`, `<slot>`, live 3D `<entity>` and `<model>`, sprites, translations and player heads.
+- Minecraft elements: `<item>`, `<slot>`, live 3D `<entity>` and `<model>`, `<scene>` for a small build in a box, sprites, translations and player heads.
 - JavaScript with Vue-style templates (`v-for`, `v-if`, `v-model`, `@click`). Classes, async/await and the rest of the modern syntax you'd reach for work.
 - HUD overlays, narration support, and a standalone previewer with hot reload, so you can build a page without launching the game.
 

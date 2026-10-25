@@ -116,7 +116,7 @@ is one), so cap the wait. A HUD overlay is not settled until its page has loaded
 its error panel is settled.
 
 Vellum's own autopilot (`./gradlew :neoforge:26.3:runClient -Pautopilot`, or `:fabric:26.3`, `:neoforge:1.21.1`
-and `:fabric:1.21.1`) uses all of this: it waits for each page to settle, hovers the showcase title screen, drags a
+and `:fabric:1.21.1`; `-Pautopilot=scene` runs only the scene showcase's steps) uses all of this: it waits for each page to settle, hovers the showcase title screen, drags a
 turntable, opens a page under a resting cursor and checks it is hovered within its first frames, hovers items and
 titles for their tooltips, checks that a map pin with `-mc-tooltip-delay: 0ms` shows its title on the first frame and
 what the narrator is given on a conversation (its title, a hovered reply, each new line of its log), closes a page

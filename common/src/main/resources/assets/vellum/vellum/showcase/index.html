@@ -42,9 +42,12 @@
 
     header span { flex: 1; }
 
-    /* The Turntable page: a real block model spinning as the link's icon. */
+    /* The Turntable and Cottage pages: a real block model spinning as each link's icon. */
+    .links { display: flex; flex-direction: column; gap: 1px; }
+
     header a {
       display: flex;
+      white-space: nowrap;
       align-items: center;
       gap: 3px;
       text-decoration: none;
@@ -357,7 +360,10 @@
   <header>
     <h1>Vellum showcase</h1>
     <span>HTML and CSS, painted by Minecraft</span>
-    <a href="models.html"><model block="minecraft:grass_block"></model>Turntable: blocks, items and mobs in 3D</a>
+    <div class="links">
+      <a href="models.html"><model block="minecraft:grass_block"></model>Turntable: blocks, items and mobs in 3D</a>
+      <a href="scene.html"><model block="minecraft:oak_stairs[facing=east]"></model>Cottage: a scene that builds itself</a>
+    </div>
   </header>
 
   <nav class="grid">

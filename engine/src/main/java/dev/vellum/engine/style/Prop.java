@@ -136,6 +136,18 @@ public enum Prop {
     GAZE_LIMIT_YAW("-vellum-gaze-limit-yaw", false, false, Interp.FLOAT, s -> s.gazeLimitYaw, (s, v) -> s.gazeLimitYaw = (Float) v),
     GAZE_LIMIT_UP("-vellum-gaze-limit-up", false, false, Interp.FLOAT, s -> s.gazeLimitUp, (s, v) -> s.gazeLimitUp = (Float) v),
     GAZE_LIMIT_DOWN("-vellum-gaze-limit-down", false, false, Interp.FLOAT, s -> s.gazeLimitDown, (s, v) -> s.gazeLimitDown = (Float) v),
+    /** {@code -mc-translate}'s parts, in blocks: moves a block group, entity or anchor in a {@code <scene>}. */
+    TRANSLATE_X("-vellum-translate-x", false, false, Interp.FLOAT, s -> s.translateX, (s, v) -> s.translateX = (Float) v),
+    TRANSLATE_Y("-vellum-translate-y", false, false, Interp.FLOAT, s -> s.translateY, (s, v) -> s.translateY = (Float) v),
+    TRANSLATE_Z("-vellum-translate-z", false, false, Interp.FLOAT, s -> s.translateZ, (s, v) -> s.translateZ = (Float) v),
+    /** {@code -mc-rotate}'s parts, in degrees about x, y and z: turns a block group in a {@code <scene>}. */
+    ROTATE_X("-vellum-rotate-x", false, false, Interp.FLOAT, s -> s.rotateX, (s, v) -> s.rotateX = (Float) v),
+    ROTATE_Y("-vellum-rotate-y", false, false, Interp.FLOAT, s -> s.rotateY, (s, v) -> s.rotateY = (Float) v),
+    ROTATE_Z("-vellum-rotate-z", false, false, Interp.FLOAT, s -> s.rotateZ, (s, v) -> s.rotateZ = (Float) v),
+    /** {@code -mc-scene-center}'s parts, in blocks (NaN for auto): the point a {@code <scene>} turns about. */
+    SCENE_CENTER_X("-vellum-scene-center-x", false, false, Interp.FLOAT, s -> s.sceneCenterX, (s, v) -> s.sceneCenterX = (Float) v),
+    SCENE_CENTER_Y("-vellum-scene-center-y", false, false, Interp.FLOAT, s -> s.sceneCenterY, (s, v) -> s.sceneCenterY = (Float) v),
+    SCENE_CENTER_Z("-vellum-scene-center-z", false, false, Interp.FLOAT, s -> s.sceneCenterZ, (s, v) -> s.sceneCenterZ = (Float) v),
     /** {@code -mc-tooltip-delay}, in ms. Read by input, not by layout or paint. */
     TOOLTIP_DELAY("-mc-tooltip-delay", true, false, Interp.DISCRETE, s -> s.tooltipDelay, (s, v) -> s.tooltipDelay = (Float) v),
 
