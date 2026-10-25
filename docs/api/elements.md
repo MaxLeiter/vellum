@@ -78,8 +78,8 @@ Vellum measures text exactly as vanilla does, so two of the font's habits show u
   `padding: 0 1px 0 2px`.
 - A line is 9 px tall at the default size, with the glyphs at its top: capitals fill the first 7 px, and the last
   2 px are for descenders and the gap between lines. One line of capitals in a box therefore has no space above it and
-  2 px below. `padding-top: 1px` with `padding-bottom: 0`, or a 10 px `line-height`, balances it; text with
-  descenders already fills the lower rows.
+  2 px below, so pad the top 2 px more than the bottom to balance it. A tight, centred one-letter badge is
+  `padding: 2px 1px 0 2px`.
 
 ## Smooth or pixel-sharp shapes
 
