@@ -7,7 +7,6 @@ import dev.vellum.engine.style.Length;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -132,10 +131,7 @@ final class Images {
                 size == null ? Image.RadialSize.FARTHEST_CORNER : size);
     }
 
-    private static final Map<String, Image.RadialSize.Extent> EXTENTS = Map.of(
-            "closest-side", Image.RadialSize.Extent.CLOSEST_SIDE, "farthest-side", Image.RadialSize.Extent.FARTHEST_SIDE,
-            "closest-corner", Image.RadialSize.Extent.CLOSEST_CORNER,
-            "farthest-corner", Image.RadialSize.Extent.FARTHEST_CORNER);
+    private static final Map<String, Image.RadialSize.Extent> EXTENTS = Keywords.table(Image.RadialSize.Extent.class, Map.of());
 
     /**
      * Colour stops ({@code color [pos [pos]]}); transition hints (a bare position between two stops) are ignored.
@@ -248,7 +244,7 @@ final class Images {
     private static String size(Image.RadialGradient g) {
         Image.RadialSize size = g.size();
         if (size.extent() == Image.RadialSize.Extent.FARTHEST_CORNER) return "";
-        if (size.extent() != null) return size.extent().name().toLowerCase(Locale.ROOT).replace('_', '-') + " ";
+        if (size.extent() != null) return Keywords.css(size.extent()) + " ";
         return size.radiusX() + (g.circle() ? "" : " " + size.radiusY()) + " ";
     }
 

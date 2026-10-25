@@ -20,6 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.IntPredicate;
 
 /**
  * An element. Holds the DOM state (tag, attributes, interaction and form state) plus per-element results of the
@@ -317,17 +318,21 @@ public class Element extends Node {
      * text and the document title.
      */
     public String collapsedText() {
-        String text = textContent();
-        StringBuilder sb = new StringBuilder(text.length());
-        boolean space = false;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (isAsciiWhitespace(c)) {
-                space = !sb.isEmpty();
+        return collapse(textContent(), c -> isAsciiWhitespace((char) c));
+    }
+
+    /** {@code s} with runs of the characters {@code space} accepts collapsed to single spaces, and stripped. */
+    public static String collapse(CharSequence s, IntPredicate space) {
+        StringBuilder sb = new StringBuilder(s.length());
+        boolean pending = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (space.test(c)) {
+                pending = !sb.isEmpty();
             } else {
-                if (space) sb.append(' ');
+                if (pending) sb.append(' ');
                 sb.append(c);
-                space = false;
+                pending = false;
             }
         }
         return sb.toString();

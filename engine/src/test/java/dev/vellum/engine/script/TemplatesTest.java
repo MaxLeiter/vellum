@@ -65,6 +65,30 @@ class TemplatesTest {
     }
 
     @Test
+    void aThrowingConditionStaysHidden() {
+        Page page = new TestHost().recordErrors().load("""
+                <div id=d><p v-if="source !== 'server'">client</p><p v-if="source === 'server'">server</p></div>
+                <div style="height: 2000px"></div>""");
+        assertEquals(List.of(), texts(page.byId("d")), "source is not defined: both conditions throw");
+        page.input.wheel(10, 10, 0, 40, Modifiers.NONE);
+        page.frame();
+        page.run("1");
+        page.frame();
+        assertEquals(List.of(), texts(page.byId("d")), "and still do after later entries");
+    }
+
+    @Test
+    void aThrowingConditionFallsToItsElseFromTheFirstFrame() {
+        Page page = new TestHost().recordErrors().load("""
+                <div id=d><p v-if="source === 'server'">server</p><p v-else>client</p></div>
+                <div style="height: 2000px"></div>""");
+        assertEquals(List.of("client"), texts(page.byId("d")), "source is not defined, so the else branch shows");
+        page.input.wheel(10, 10, 0, 40, Modifiers.NONE);
+        page.frame();
+        assertEquals(List.of("client"), texts(page.byId("d")));
+    }
+
+    @Test
     void ifElseChains() {
         Page page = new TestHost().load("""
                 <div id=d>

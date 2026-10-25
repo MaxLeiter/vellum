@@ -1,14 +1,11 @@
 package dev.vellum.engine.layout;
 
 import dev.vellum.engine.dom.Element;
-import dev.vellum.engine.host.ReplacedContent;
-import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.testing.Page;
 import dev.vellum.engine.testing.TestHost;
+import dev.vellum.engine.testing.TestItem;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-import java.util.function.Function;
 
 import static dev.vellum.engine.layout.BlockLayoutTest.assertRect;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,20 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Replaced elements sized from host content or attributes, and form controls as CSS-sized leaves. */
 class ReplacedLayoutTest {
     /** A host whose {@code <item>} elements are 16x16 replaced content. */
-    private static final class ItemHost extends TestHost {
-        @Override
-        public Map<String, Function<Element, ReplacedContent>> replacedElements() {
-            return Map.of("item", element -> new ReplacedContent() {
-                public float intrinsicWidth() { return 16; }
-                public float intrinsicHeight() { return 16; }
-                public void paint(Canvas canvas, float x, float y, float width, float height) {}
-            });
-        }
+    private static TestHost itemHost() {
+        TestHost host = new TestHost();
+        host.replaced.put("item", TestItem::new);
+        return host;
     }
 
     @Test
     void naturalSizeRatioAndAttributes() {
-        Page page = new ItemHost().load("""
+        Page page = itemHost().load("""
                 <style>item { width: auto; height: auto }</style>
                 <div id=p><item id=item></item></div>
                 <item id=scaled style="display: block; width: 32px"></item>

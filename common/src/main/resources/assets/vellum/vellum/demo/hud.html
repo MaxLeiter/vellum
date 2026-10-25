@@ -10,10 +10,7 @@
       100% { opacity: 0; }
     }
 
-    @keyframes rule {
-      from { width: 0; }
-      to { width: 160px; }
-    }
+    @keyframes rule { from { width: 0; } }
 
     .card {
       position: absolute;
@@ -40,6 +37,7 @@
     }
 
     .rule {
+      width: 160px;
       height: 1px;
       background: linear-gradient(to right, transparent, #f4e3b5, transparent);
       animation: rule 800ms 300ms ease-out both;

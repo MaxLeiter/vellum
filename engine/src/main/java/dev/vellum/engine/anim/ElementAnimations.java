@@ -28,7 +28,7 @@ final class ElementAnimations {
     private final AnimationEngine engine;
     private final List<CssTransition> transitions = new ArrayList<>();
     private List<CssAnimation> cssAnimations = new ArrayList<>();
-    private final List<ScriptAnimation> scripted = new ArrayList<>();
+    private final List<Animation> scripted = new ArrayList<>();
     /** All of the above, bottom layer first; rebuilt by {@link #layer} whenever one of them changes. */
     private final List<Player> players = new ArrayList<>();
     /** Something changed since the last tick (a restyle or a script call), so the next tick must update. */
@@ -123,7 +123,7 @@ final class ElementAnimations {
     }
 
     /** Adds a scripted animation that is (again) playing and marks the element for the next tick. */
-    void attach(ScriptAnimation animation) {
+    void attach(Animation animation) {
         if (!animation.isIdle() && !scripted.contains(animation)) {
             scripted.add(animation);
             layer();
@@ -248,7 +248,7 @@ final class ElementAnimations {
         int before = scripted.size();
         EnumSet<Prop> covered = null;
         for (int i = scripted.size() - 1; i >= 0; i--) {
-            ScriptAnimation a = scripted.get(i);
+            Animation a = scripted.get(i);
             boolean finished = a.isFinished(now);
             if (a.isIdle() || finished && (!a.hasEffect() || covered != null && covered.containsAll(a.effect.props()))) {
                 scripted.remove(i);

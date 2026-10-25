@@ -40,37 +40,22 @@ body {
 .window > header h1 {
   flex: 1;
   margin: 0;
-  font-size: 16px;
   text-shadow: minecraft;
 }
 
 h2 {
   margin: 0;
   font-size: 8px;
-  color: mc-gray;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
-a.back {
-  color: mc-gray;
-  text-decoration: none;
-}
-
-a.back:hover {
-  color: mc-yellow;
-}
-
-.muted {
-  color: mc-gray;
-}
+h2, a.back, .muted { color: mc-gray; }
+a.back { text-decoration: none; }
+a.back:hover { color: mc-yellow; }
 
 .row {
   display: flex;
   gap: 6px;
   align-items: center;
-}
-
-.spacer {
-  flex: 1;
 }

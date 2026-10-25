@@ -1,0 +1,24 @@
+/* What the showcase pages share. Their colours stay in each page: every demo has its own look. */
+
+/* One weight throughout: Minecraft's bold draws each glyph twice, which looks heavy at this size. So <b> only
+   colours its text here; a page that wants real bold uses <strong>. */
+h1, h2, h3, b { font-weight: 400; }
+h1 { margin: 0; }
+
+/* The page is exactly one screen and never scrolls. With mc-center as well, the one panel it centres can take
+   height: 100% (mc-center alone sets min-height, which a percentage height can't resolve against). */
+.fullscreen { height: 100vh; overflow: hidden; }
+
+/* Text that doesn't fit ends in an ellipsis. */
+.truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Shared animations. Each reads its amount from a custom property on the animated element, with a default. */
+
+/* Dims to --blink-opacity half way through. With steps(1) it is a hard on/off blink. */
+@keyframes blink { 50% { opacity: var(--blink-opacity, 0.4); } }
+
+/* Rises --bob-height half way through, then settles back. */
+@keyframes bob { 50% { transform: translateY(calc(-1 * var(--bob-height, 2px))); } }
+
+/* One full turn of a <model> or <entity> about its vertical axis. */
+@keyframes turn { to { -mc-yaw: 360deg; } }

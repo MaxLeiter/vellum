@@ -189,7 +189,7 @@ tasks.register('applyRhinoPatches') {
 
 tasks.register('rebuildRhinoPatches') {
     group = 'rhino'
-    description = 'Regenerates rhino/patches from the commits in rhino/work after the upstream tag.'
+    description = 'Regenerates rhino/patches (rhino/src/main only) from the commits in rhino/work after the upstream tag.'
     doLast {
         File work = workDir.asFile
         if (!new File(work, '.git').exists()) throw new GradleException("$work is missing; run applyRhinoPatches first.")
@@ -197,7 +197,7 @@ tasks.register('rebuildRhinoPatches') {
         dir.mkdirs()
         patchFiles(dir).each { it.delete() }
         git(work, 'git format-patch', ['format-patch', '-q', '--zero-commit', '--no-signature', '--no-stat',
-                                       '--abbrev=12', '-N', '-o', dir.absolutePath, 'upstream..HEAD'])
+                                       '--abbrev=12', '-N', '-o', dir.absolutePath, 'upstream..HEAD', '--', 'rhino/src/main'])
         logger.lifecycle("Wrote ${patchFiles(dir).size()} patches to $dir")
     }
 }

@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Chronicle Journal</title>
+  <link rel="stylesheet" href="showcase.css">
   <style>
     /*
      * A Chronicle-style journal: a leather book open on a two-page spread, with ribbon tabs on the side.
@@ -19,15 +20,32 @@
       --gold-hi: #f1cf74;
       --leather: #5b3820;
       --leather-lo: #3a2112;
+      --pin: #c0261b;
     }
 
-    body {
+    /* The wider right padding leaves room for the ribbon tabs, which stick out past the book. */
+    body { padding: 4px 26px 4px 4px; }
+
+    h1, h3, b { color: var(--oxblood); }
+    h1 { font-size: 12px; line-height: 14px; }
+    h3 { margin: 0 0 2px; letter-spacing: 1px; }
+    p { margin: 0 0 4px; }
+
+    /* Faded ink for secondary text. */
+    .soft, .running, .folio, .progress, .giver, .hint, .sealed, .diary, .quote, .here, .rewards .k, .obj .n,
+    .obj.met .t, .plate .fig, .scale .ticks, .wp .d, .era small { color: var(--ink-soft); }
+
+    /* Rows that centre their parts on one line. */
+    .orn, .quest, .progress, .giver, .obj, .rewards, .era, .legend div, .wp, .here, .ribbon {
       display: flex;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      padding: 4px 26px 4px 4px;
     }
+
+    /* Boxes that centre what is inside them. */
+    .era .mark, .dropcap, .seal, .plate { display: flex; align-items: center; justify-content: center; }
+
+    /* Lists with a pixel between rows. */
+    .quests, .objectives, .toc, .waypoints { display: flex; flex-direction: column; gap: 1px; }
 
     /* A flex column so the cover fills the book's height (a % height inside a flex item does not resolve). */
     .book {
@@ -73,18 +91,12 @@
       pointer-events: none;
     }
 
-    /* Brass corner caps: border triangles. */
-    .cap {
-      position: absolute;
-      width: 0;
-      height: 0;
-      border: 6px solid transparent;
-    }
-
-    .cap.tl { left: -1px; top: -1px; border-top-color: var(--gold); border-left-color: var(--gold); }
-    .cap.tr { right: -1px; top: -1px; border-top-color: var(--gold); border-right-color: var(--gold); }
-    .cap.bl { left: -1px; bottom: -1px; border-bottom-color: var(--gold); border-left-color: var(--gold); }
-    .cap.br { right: -1px; bottom: -1px; border-bottom-color: var(--gold); border-right-color: var(--gold); }
+    /* Brass corner caps: an empty box whose two outer borders meet in a triangle. */
+    .cap { position: absolute; border: 6px solid transparent; }
+    .cap.tl { left: -1px; top: -1px; border-color: var(--gold) transparent transparent var(--gold); }
+    .cap.tr { right: -1px; top: -1px; border-color: var(--gold) var(--gold) transparent transparent; }
+    .cap.bl { left: -1px; bottom: -1px; border-color: transparent transparent var(--gold) var(--gold); }
+    .cap.br { right: -1px; bottom: -1px; border-color: transparent var(--gold) var(--gold) transparent; }
 
     /* ---------------------------------------------------------------- the paper */
 
@@ -107,24 +119,24 @@
       overflow: hidden;
     }
 
-    /* Vignette + gutter shadow; the shadow sits on the inner edge of each page. */
+    /* Vignette + gutter shadow; the shadow sits on the inner edge of each page. The box-shadows are the stacked
+       page edges: hard-edged shadows in alternating paper tones. */
     .page.left {
+      padding-right: 12px;
       background:
         linear-gradient(to right, rgba(110, 70, 20, 0) 82%, rgba(110, 70, 20, 0.28)),
         radial-gradient(ellipse at 45% 45%, #f6ead0 0%, var(--paper) 55%, var(--paper-lo) 100%);
-      /* The stacked page edges: hard-edged shadows in alternating paper tones. */
       box-shadow: -1px 1px 0 #cdb27a, -2px 2px 0 #eedcb2, -3px 3px 0 #c2a46a;
       border-radius: 3px 0 0 3px;
-      padding-right: 12px;
     }
 
     .page.right {
+      padding-left: 12px;
       background:
         linear-gradient(to left, rgba(110, 70, 20, 0) 82%, rgba(110, 70, 20, 0.28)),
         radial-gradient(ellipse at 55% 45%, #f6ead0 0%, var(--paper) 55%, var(--paper-lo) 100%);
       box-shadow: 1px 1px 0 #cdb27a, 2px 2px 0 #eedcb2, 3px 3px 0 #c2a46a;
       border-radius: 0 3px 3px 0;
-      padding-left: 12px;
     }
 
     /* The fold itself: a thin dark crease. */
@@ -157,52 +169,19 @@
       display: flex;
       justify-content: space-between;
       margin-bottom: 3px;
-      color: var(--ink-soft);
       letter-spacing: 1px;
     }
 
     .folio {
-      margin-top: auto;
       flex: none;
+      margin-top: auto;
       padding-top: 2px;
-      color: var(--ink-soft);
       text-align: center;
     }
 
-    h1 {
-      margin: 0;
-      font-size: 12px;
-      line-height: 14px;
-      font-weight: 400;
-      color: var(--oxblood);
-    }
-
-    h3 {
-      margin: 0 0 2px;
-      font-weight: 400;
-      color: var(--oxblood);
-      letter-spacing: 1px;
-    }
-
-    p { margin: 0 0 4px; }
-
-    .soft { color: var(--ink-soft); }
-
     /* Ornamental divider: two fading rules and a diamond made of a rotated square. */
-    .orn {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      height: 8px;
-      margin: 2px 0 4px;
-    }
-
-    .orn::before, .orn::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-    }
-
+    .orn { gap: 3px; height: 8px; margin: 2px 0 4px; }
+    .orn::before, .orn::after { content: ""; flex: 1; height: 1px; }
     .orn::before { background: linear-gradient(to right, rgba(125, 31, 18, 0), var(--oxblood)); }
     .orn::after { background: linear-gradient(to left, rgba(125, 31, 18, 0), var(--oxblood)); }
 
@@ -223,15 +202,7 @@
 
     /* ---------------------------------------------------------------- quests */
 
-    .quests {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
     .quest {
-      display: flex;
-      align-items: center;
       gap: 4px;
       height: 14px;
       padding: 0 3px;
@@ -248,9 +219,8 @@
       background: linear-gradient(to right, rgba(214, 160, 60, 0.45), rgba(214, 160, 60, 0.08));
     }
 
-    .quest .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .quest .t { flex: 1; }
     .quest.done .t { color: var(--ink-soft); text-decoration: line-through; }
-    .quest item { width: 16px; height: 16px; }
 
     /* A hand-drawn checkbox: an ink square; the tick is a glyph in red ink that pops in. */
     .check {
@@ -266,7 +236,6 @@
       position: absolute;
       left: 0;
       top: -3px;
-      font-weight: 400;
       color: #b0231a;
       animation: tick 250ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
     }
@@ -276,13 +245,7 @@
       to { transform: none; }
     }
 
-    .progress {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-top: 4px;
-      color: var(--ink-soft);
-    }
+    .progress { gap: 4px; margin-top: 4px; }
 
     /* An ink bar: a hatched fill inside a ruled box. A flex row so the fill takes the bar's height. */
     .inkbar {
@@ -298,89 +261,45 @@
       transition: width 500ms cubic-bezier(0.2, 0.8, 0.3, 1);
     }
 
-    .giver {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin: 1px 0 4px;
-      color: var(--ink-soft);
-    }
+    .giver { gap: 4px; margin: 1px 0 4px; }
+    .giver player-head { outline: 1px solid var(--ink-faint); }
 
-    .giver player-head {
-      width: 8px;
-      height: 8px;
-      outline: 1px solid var(--ink-faint);
-    }
-
-    .objectives {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-      margin-bottom: 4px;
-    }
-
-    .obj {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      height: 16px;
-    }
-
-    .obj item { width: 16px; height: 16px; }
+    .objectives { margin-bottom: 4px; }
+    .obj { gap: 3px; height: 16px; }
     .obj .t { flex: 1; }
-    .obj .n { color: var(--ink-soft); }
-    .obj.met .t { color: var(--ink-soft); }
     .obj.met .n { color: #2f6a2a; }
 
-    .rewards {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    }
-
-    .rewards .k {
-      margin-right: 2px;
-      color: var(--ink-soft);
-    }
+    .rewards { gap: 2px; }
+    .rewards .k { margin-right: 2px; }
 
     /* Item slots drawn as pencil boxes on the paper. */
     .rslot {
       width: 18px;
       height: 18px;
-      padding: 0;
       border: 1px solid var(--ink-faint);
       background: rgba(120, 80, 30, 0.1);
     }
-
-    .rslot item { width: 16px; height: 16px; }
 
     .diary {
       display: flex;
       gap: 3px;
       margin-top: auto;
       padding: 3px 4px 3px 2px;
-      color: var(--ink-soft);
       background: rgba(255, 250, 230, 0.45);
       border: 1px dashed var(--ink-faint);
       box-shadow: 1px 1px 0 rgba(110, 70, 20, 0.15);
     }
 
     .diary + .folio { margin-top: 2px; }
-
-    .diary item { flex: none; width: 16px; height: 16px; }
+    .diary item { flex: none; }
     .diary p { margin: 0; }
-    .diary b { font-weight: 400; color: var(--oxblood); }
 
-    .hint {
-      margin: 6px 0 0;
-      color: var(--ink-soft);
-    }
+    .hint { margin: 6px 0 0; }
 
     .sealed {
       position: absolute;
       right: 42px;
       bottom: 24px;
-      color: var(--ink-soft);
       animation: ink-in 300ms ease-out 300ms both;
     }
 
@@ -389,9 +308,6 @@
       position: absolute;
       right: 10px;
       bottom: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       width: 26px;
       height: 26px;
       border-radius: 13px;
@@ -411,19 +327,13 @@
 
     /* ---------------------------------------------------------------- lore */
 
-    .opening {
-      display: flex;
-      gap: 4px;
-      align-items: flex-start;
-    }
+    .opening { display: flex; gap: 4px; align-items: flex-start; }
+    .opening p { margin: 0; }
 
     /* The illuminated capital: gold leaf, a double frame, and a glint that sweeps across now and then. */
     .dropcap {
       position: relative;
       flex: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       width: 30px;
       height: 30px;
       overflow: hidden;
@@ -438,8 +348,6 @@
       margin: 2px 0 0 2px;
       font-size: 24px;
       line-height: 24px;
-      font-weight: 400;
-      color: var(--oxblood);
       text-shadow: 1px 1px 0 #f9dc8c;
     }
 
@@ -459,8 +367,6 @@
       25%, 100% { transform: translateX(64px) rotate(30deg); }
     }
 
-    .opening p { margin: 0; }
-
     .runes {
       margin: 2px 0 1px;
       font-family: minecraft:alt;
@@ -468,12 +374,7 @@
       letter-spacing: 1px;
     }
 
-    .quote {
-      padding-left: 6px;
-      border-left: 2px solid var(--gold);
-      color: var(--ink-soft);
-      font-style: italic;
-    }
+    .quote { padding-left: 6px; border-left: 2px solid var(--gold); font-style: italic; }
 
     .timeline {
       position: relative;
@@ -493,20 +394,13 @@
       border-left: 1px dashed var(--ink-soft);
     }
 
-    .era {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      animation: ink-in 350ms ease-out both;
-    }
+    .era { gap: 5px; animation: ink-in 350ms ease-out both; }
 
-    /* A 16px item is a square, so the ring around it needs room for its corners: 20px inside the border. */
+    /* A 16px item is a square, so the ring around it needs room for its corners: a 20px ring, border included,
+       with the item centred in it. */
     .era .mark {
       position: relative; /* above the spine */
       flex: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       width: 20px;
       height: 20px;
       background: var(--paper);
@@ -514,84 +408,43 @@
       border-radius: 11px;
     }
 
-    .era.now .mark {
-      border-color: var(--oxblood);
-      animation: now 1.6s ease-in-out infinite;
-    }
+    .era.now .mark { border-color: var(--oxblood); animation: now 1.6s ease-in-out infinite; }
 
     @keyframes now {
       0%, 100% { box-shadow: 0 0 0 0 rgba(125, 31, 18, 0.6); }
       50% { box-shadow: 0 0 0 3px rgba(125, 31, 18, 0); }
     }
 
-    .era .yr {
-      width: 34px;
-      color: var(--oxblood);
-    }
-
+    .era .yr { width: 34px; color: var(--oxblood); }
     .era .what { flex: 1; }
-    .era .what small { display: block; color: var(--ink-soft); }
+    .era small { display: block; }
 
     /* ---------------------------------------------------------------- bestiary */
 
     .plate {
       position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       height: 92px;
-      margin: 2px 8px 2px;
+      margin: 2px 8px;
       background: radial-gradient(ellipse at 50% 60%, rgba(70, 110, 120, 0.35), rgba(70, 110, 120, 0) 70%);
       border: 1px solid var(--ink);
       outline: 1px solid var(--gold);
       outline-offset: 1px;
     }
 
-    .plate entity {
-      width: 80px;
-      height: 84px;
-    }
+    .plate entity { width: 80px; height: 84px; }
+    .plate .fig { position: absolute; left: 3px; bottom: 2px; }
 
-    .plate .fig {
-      position: absolute;
-      left: 3px;
-      bottom: 2px;
-      color: var(--ink-soft);
-    }
-
-    .facts {
-      display: grid;
-      grid-template-columns: 40px 1fr;
-      row-gap: 1px;
-      margin-top: 3px;
-    }
-
-    .facts .k { color: var(--ink-soft); }
+    .facts, .sightings { display: grid; grid-template-columns: 40px 1fr; row-gap: 1px; }
+    .facts { margin-top: 3px; }
     .facts .drops { display: flex; gap: 1px; margin-top: -4px; }
-    .facts .drops item { width: 16px; height: 16px; }
+    .sightings { grid-template-columns: 44px 1fr; margin-bottom: 4px; }
 
-    .sightings {
-      display: grid;
-      grid-template-columns: 44px 1fr;
-      row-gap: 1px;
-      margin-bottom: 4px;
-    }
     .skulls { color: var(--oxblood); letter-spacing: 1px; }
     .skulls span { color: var(--ink-faint); }
 
-    .specimens {
-      display: flex;
-      gap: 2px;
-      margin: 2px 0 4px;
-    }
+    .specimens { display: flex; gap: 2px; margin: 2px 0 4px; }
 
     /* Dot leaders: the dots are a flex filler with a dotted bottom border. */
-    .toc {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
     .toc div {
       display: flex;
       align-items: flex-end;
@@ -600,12 +453,7 @@
     }
 
     .toc div:hover { color: var(--oxblood); }
-
-    .toc i {
-      flex: 1;
-      height: 6px;
-      border-bottom: 1px dotted var(--ink-soft);
-    }
+    .toc i { flex: 1; height: 6px; border-bottom: 1px dotted var(--ink-soft); }
 
     /* ---------------------------------------------------------------- map */
 
@@ -618,12 +466,8 @@
       outline-offset: 1px;
     }
 
-    /* The terrain: a CSS grid of tiles, one div each, coloured by a tiny noise function in the script. */
-    .tiles {
-      display: grid;
-      grid-template-columns: repeat(18, 9px);
-      grid-auto-rows: 9px;
-    }
+    /* The terrain: a CSS grid of 9px tiles, one div each, coloured by a tiny noise function in the script. */
+    .tiles { display: grid; grid-template-columns: repeat(18, 9px); grid-auto-rows: 9px; }
 
     .poi {
       position: absolute;
@@ -636,21 +480,18 @@
       transition: transform 150ms ease-out;
     }
 
-    .poi.hot {
-      color: var(--oxblood);
-      transform: scale(1.6);
-    }
+    .poi.hot { color: var(--oxblood); transform: scale(1.6); }
 
-    /* "You are here": a red dot with a ring that pings outward. */
-    .you {
-      position: absolute;
+    /* "You are here": a red dot, on the map with a ring that pings outward, and in the key with a fixed ring. */
+    .you, .you-key {
       width: 5px;
       height: 5px;
-      margin: 2px;
-      background: #c0261b;
+      background: var(--pin);
       border: 1px solid #fff2d0;
       border-radius: 3px;
     }
+
+    .you { position: absolute; margin: 2px; }
 
     .you::after {
       content: "";
@@ -659,7 +500,7 @@
       top: -5px;
       width: 13px;
       height: 13px;
-      border: 1px solid #c0261b;
+      border: 1px solid var(--pin);
       border-radius: 7px;
       animation: ping 1.4s ease-out infinite;
     }
@@ -668,6 +509,8 @@
       from { transform: scale(0.3); opacity: 1; }
       to { transform: scale(1.6); opacity: 0; }
     }
+
+    .you-key { position: relative; margin: 0 2px 0 1px; outline: 1px solid var(--pin); }
 
     /* The trail from you to the quest: a dashed line, rotated into place. */
     .trail {
@@ -702,14 +545,6 @@
     .rose .n { top: 1px; border-bottom: 7px solid var(--oxblood); }
     .rose .s { top: 8px; border-top: 7px solid var(--ink); }
 
-    .rose b {
-      position: absolute;
-      left: 6px;
-      top: -10px;
-      font-weight: 400;
-      color: var(--oxblood);
-    }
-
     .legend {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -717,27 +552,10 @@
       margin-bottom: 4px;
     }
 
-    .legend div {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-    }
-
-    .legend i {
-      width: 7px;
-      height: 7px;
-      border: 1px solid var(--ink-faint);
-    }
-
-    .waypoints {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
+    .legend div { gap: 3px; }
+    .legend i { width: 7px; height: 7px; border: 1px solid var(--ink-faint); }
 
     .wp {
-      display: flex;
-      align-items: center;
       gap: 4px;
       height: 12px;
       padding: 0 2px;
@@ -748,31 +566,11 @@
     .wp:hover, .wp.hot { background: rgba(214, 160, 60, 0.3); }
     .wp .g { width: 8px; color: var(--oxblood); text-align: center; }
     .wp .nm { flex: 1; }
-    .wp .d { color: var(--ink-soft); }
 
-    .here {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin: 4px 0 0 2px;
-      color: var(--ink-soft);
-    }
+    .here { gap: 4px; margin: 4px 0 0 2px; }
 
-    .you-key {
-      position: relative;
-      width: 5px;
-      height: 5px;
-      margin: 0 2px 0 1px;
-      background: #c0261b;
-      border: 1px solid #fff2d0;
-      border-radius: 3px;
-      outline: 1px solid #c0261b;
-    }
-
-    .scale {
-      width: 96px;
-      margin: 5px 0 0 2px;
-    }
+    /* A surveyor's scale bar: alternating ink and paper blocks. */
+    .scale { width: 96px; margin: 5px 0 0 2px; }
 
     .scale .bar {
       height: 4px;
@@ -780,11 +578,7 @@
       background: repeating-linear-gradient(to right, var(--ink) 0 23px, var(--paper) 23px 46px);
     }
 
-    .scale .ticks {
-      display: flex;
-      justify-content: space-between;
-      color: var(--ink-soft);
-    }
+    .scale .ticks { display: flex; justify-content: space-between; }
 
     /* ---------------------------------------------------------------- the page-turn leaves */
 
@@ -826,8 +620,6 @@
 
     .ribbon {
       position: relative;
-      display: flex;
-      align-items: center;
       width: 22px;
       height: 22px;
       padding-left: 5px;
@@ -854,20 +646,17 @@
       border-right: 5px solid transparent;
     }
 
-    .ribbon item { width: 16px; height: 16px; }
-
     @media (prefers-reduced-motion: reduce) {
       .you::after, .dropcap .glint, .era.now .mark { animation: none; }
     }
   </style>
 </head>
-<body>
+<body class="mc-center fullscreen">
   <main class="book">
     <div class="cover">
       <div class="cap tl"></div><div class="cap tr"></div><div class="cap bl"></div><div class="cap br"></div>
       <div class="spread">
 
-        <!-- ============================================================== LEFT PAGE -->
         <section class="page left">
           <!-- Keyed by section: a fresh element per turn, so the ink-in animations replay. -->
           <div class="content" v-for="k in [left]" :key="k">
@@ -881,7 +670,7 @@
                      :class="{ sel: q.id === questId, done: q.done }"
                      :style="{ animationDelay: (i * 60 + 100) + 'ms' }" @click="pickQuest(q.id)">
                   <div class="check" @click.stop="toggleQuest(q)"><b v-if="q.done">✔</b></div>
-                  <span class="t">{{ q.title }}</span>
+                  <span class="t truncate">{{ q.title }}</span>
                   <item :id="q.icon"></item>
                 </div>
               </div>
@@ -923,10 +712,10 @@
                 <span class="fig">Fig. 7</span>
               </div>
               <div class="facts">
-                <span class="k">Threat</span><span class="skulls">☠☠☠☠<span>☠</span></span>
-                <span class="k">Lair</span><span>Ocean monuments</span>
-                <span class="k">Health</span><span>40 hearts</span>
-                <span class="k">Drops</span>
+                <span class="soft">Threat</span><span class="skulls">☠☠☠☠<span>☠</span></span>
+                <span class="soft">Lair</span><span>Ocean monuments</span>
+                <span class="soft">Health</span><span>40 hearts</span>
+                <span class="soft">Drops</span>
                 <span class="drops">
                   <item id="minecraft:tide_armor_trim_smithing_template"></item>
                   <item id="minecraft:prismarine_shard"></item>
@@ -942,12 +731,12 @@
               <div class="orn"><i class="dot"></i><i></i><i class="dot"></i></div>
               <div class="mapframe">
                 <div class="tiles">
-                  <div class="tile" v-for="t in TILES" :key="t.i" :style="{ background: t.color }"></div>
+                  <div v-for="t in TILES" :key="t.i" :style="{ background: t.color }"></div>
                 </div>
                 <div class="trail" :style="trailStyle()"></div>
                 <div class="poi" v-for="p in POIS" :key="p.id" :class="{ hot: p.id === hotPoi }"
-                     :style="{ left: (p.x * 9 + 2) + 'px', top: (p.y * 9 + 2) + 'px' }">{{ p.glyph }}</div>
-                <div class="you" :style="{ left: (YOU.x * 9 + 2) + 'px', top: (YOU.y * 9 + 2) + 'px' }"></div>
+                     :style="onMap(p)">{{ p.glyph }}</div>
+                <div class="you" :style="onMap(YOU)"></div>
                 <div class="rose"><div class="n"></div><div class="s"></div></div>
               </div>
               <div class="folio">~ 88 ~</div>
@@ -955,7 +744,6 @@
           </div>
         </section>
 
-        <!-- ============================================================== RIGHT PAGE -->
         <section class="page right">
           <div class="content" v-for="k in [right]" :key="k">
 
@@ -1040,7 +828,6 @@
                 <div class="you-key"></div>
                 <span>You, at 576 / 70 / -448</span>
               </div>
-              <!-- A surveyor's scale bar: alternating ink and paper blocks. -->
               <div class="scale">
                 <div class="bar"></div>
                 <div class="ticks"><span>0</span><span>128</span><span>256 m</span></div>
@@ -1068,10 +855,10 @@
   <script>
     // ---- Content. Chronicle would send this as data; here it is inline.
     const SECTIONS = [
-      { id: 'quests', name: 'Quests', icon: 'minecraft:writable_book', color: '#8e2a20', hi: '#c0453a' },
-      { id: 'lore', name: 'Lore', icon: 'minecraft:enchanted_book', color: '#2b5582', hi: '#4b7cb0' },
-      { id: 'bestiary', name: 'Bestiary', icon: 'minecraft:bone', color: '#3d6e34', hi: '#5c9a50' },
-      { id: 'map', name: 'Map', icon: 'minecraft:filled_map', color: '#9a6d1f', hi: '#cf9c3e' }
+      { id: 'quests', icon: 'minecraft:writable_book', color: '#8e2a20', hi: '#c0453a' },
+      { id: 'lore', icon: 'minecraft:enchanted_book', color: '#2b5582', hi: '#4b7cb0' },
+      { id: 'bestiary', icon: 'minecraft:bone', color: '#3d6e34', hi: '#5c9a50' },
+      { id: 'map', icon: 'minecraft:filled_map', color: '#9a6d1f', hi: '#cf9c3e' }
     ];
 
     const QUESTS = [
@@ -1130,7 +917,7 @@
       { name: 'Hills', color: '#a89878', max: 0.84 },
       { name: 'Peaks', color: '#efe8d8', max: 2 }
     ];
-    const COLS = 18, ROWS = 14;
+    const COLS = 18, ROWS = 14, TILE = 9; // as in the .tiles grid
     function hash(x, y) {
       const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
       return s - Math.floor(s);
@@ -1159,17 +946,17 @@
       { id: 'ash', glyph: '†', name: 'Ashfield Barrow', x: 15, y: 10 }
     ];
 
-    function distance(p) {
-      return Math.round(Math.hypot(p.x - YOU.x, p.y - YOU.y) * 64);
-    }
+    // Where a tile's top-left corner is inside the map frame (past its 2px padding).
+    function onMap(p) { return { left: (p.x * TILE + 2) + 'px', top: (p.y * TILE + 2) + 'px' }; }
+    function distance(p) { return Math.round(Math.hypot(p.x - YOU.x, p.y - YOU.y) * 64); }
 
-    // A dashed line from you to the quest marker: its length and angle, applied as width + rotate.
+    // A dashed line from the middle of your tile to the quest marker: its length and angle, as width and rotate.
     function trailStyle() {
       const p = POIS[0];
-      const dx = (p.x - YOU.x) * 9, dy = (p.y - YOU.y) * 9;
+      const dx = (p.x - YOU.x) * TILE, dy = (p.y - YOU.y) * TILE;
       return {
-        left: (YOU.x * 9 + 6) + 'px',
-        top: (YOU.y * 9 + 6) + 'px',
+        left: (YOU.x * TILE + 6) + 'px',
+        top: (YOU.y * TILE + 6) + 'px',
         width: Math.round(Math.hypot(dx, dy)) + 'px',
         transform: 'rotate(' + (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1) + 'deg)'
       };
@@ -1183,9 +970,9 @@
       left: opening.section || 'quests',
       right: opening.section || 'quests',
       questId: opening.quest || 'archive',
-      hotPoi: null,
-      turning: false
+      hotPoi: null
     });
+    let turning = false;
 
     // A mod can open the journal and flip to a section with an animated turn: data {start: {flipTo: 'map'}}.
     if (opening.flipTo) setTimeout(() => turnTo(opening.flipTo), 400);
@@ -1208,8 +995,8 @@
     // ---- The page turn. The right page's leaf lifts off (scaleX 1 -> 0 around the spine), revealing the new
     // right page; then it lands on the left (scaleX 0 -> 1), the left page swaps under it, and the leaf fades.
     function turnTo(id) {
-      if (id === state.right || state.turning) return;
-      state.turning = true;
+      if (id === state.right || turning) return;
+      turning = true;
       state.right = id;
       vellum.playSound('minecraft:item.book.page_turn', 0.8, 1);
       const leafR = document.getElementById('leafR'), leafL = document.getElementById('leafL');
@@ -1230,7 +1017,7 @@
         return leafL.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, delay: 32 }).finished;
       }).then(() => {
         land.cancel();
-        state.turning = false;
+        turning = false;
       });
     }
   </script>
