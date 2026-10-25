@@ -333,7 +333,7 @@ Templates are compiled once. Markup added later (by `innerHTML` or `v-html`) is 
 | `:style` / `v-style` | A string, an array, or an object of `{property: value}` (camelCase or CSS names; `null` and `false` values are skipped); added to the static `style`. |
 | `v-if`, `v-else-if`, `v-else` | On sibling elements. Only the first branch whose condition holds is in the document. A branch's element is created once and kept while hidden, so its state (typed text, scroll position) survives. |
 | `v-for="item in items"` | Also `(item, index) in items`, `(value, key, index) in object`, and `n in 5` (1 to 5); `of` works like `in`. Repeats the element. |
-| `:key="expr"` / `v-key` | On a `v-for` element: the item's identity. Reordering a keyed list moves the existing elements; without a key, elements are reused by position. Keys should be unique. |
+| `:key="expr"` / `v-key` | On a `v-for` element: the item's identity. Reordering a keyed list moves the existing elements; without a key, elements are reused by position. Keys should be unique. On any other element: when the key changes, the element is replaced by a fresh copy, so `<h1 class="title" :key="selected">` replays its entrance animation on every selection. A keyed `v-if` branch starts over the same way. |
 | `v-show="expr"` | Hides the element (it gets the `v-hidden` attribute, which the default stylesheet hides) without removing it. |
 | `@event="..."` / `v-on:event` | A statement (`count++`), a method name (`save`, called with the event), or a function (`e => pick(e.key)`). The event is `$event`. |
 | `v-model="path"` | Two-way binding for `input`, `textarea` and `select` (see below). |
