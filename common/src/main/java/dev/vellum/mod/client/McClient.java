@@ -13,6 +13,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.component.ResolvableProfile;
 import org.jspecify.annotations.Nullable;
+//? if >=26.3 {
+import org.lwjgl.sdl.SDLEvents;
+//?} else
+//import org.lwjgl.glfw.GLFW;
 
 /**
  * The client state and input that Vellum reaches differently on each Minecraft version; this is the one for 26.x.
@@ -97,6 +101,27 @@ public final class McClient {
         mc.mouseHandler.onMove(window(), x, y, 0, 0);
         //?} else
         //mc.mouseHandler.onMove(window(), x, y);
+    }
+
+    /**
+     * Shuts the real mouse out: its moves, buttons and wheel, and the window's enter and leave, are dropped where the
+     * platform delivers them (SDL's event queue, GLFW's callbacks before 26.3), so the pointer moves only through these
+     * methods. For the dev autopilot, which owns the pointer for its whole run ({@link DevPointer}); there is no
+     * undoing it.
+     */
+    static void ignoreRealMouse() {
+        //? if >=26.3 {
+        for (int type : new int[] {SDLEvents.SDL_EVENT_MOUSE_MOTION, SDLEvents.SDL_EVENT_MOUSE_BUTTON_DOWN,
+                SDLEvents.SDL_EVENT_MOUSE_BUTTON_UP, SDLEvents.SDL_EVENT_MOUSE_WHEEL,
+                SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER, SDLEvents.SDL_EVENT_WINDOW_MOUSE_LEAVE}) {
+            SDLEvents.SDL_SetEventEnabled(type, false);
+        }
+        //?} else {
+        /*GLFW.glfwSetCursorPosCallback(window(), null);
+        GLFW.glfwSetMouseButtonCallback(window(), null);
+        GLFW.glfwSetScrollCallback(window(), null);
+        GLFW.glfwSetCursorEnterCallback(window(), null);
+        *///?}
     }
 
     /** Presses or releases DOM button {@code button} (0 left, 1 middle, 2 right) where the pointer is. */

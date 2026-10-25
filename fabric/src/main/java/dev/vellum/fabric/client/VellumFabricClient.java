@@ -2,6 +2,7 @@ package dev.vellum.fabric.client;
 
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.DevAutopilot;
+import dev.vellum.mod.client.DevPointer;
 import dev.vellum.mod.client.TourCursor;
 import dev.vellum.mod.client.VellumClient;
 import dev.vellum.mod.client.VellumClientCommands;
@@ -84,7 +85,13 @@ public final class VellumFabricClient implements ClientModInitializer {
         *///?}
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> dispatcher.register(VellumClientCommands.create()));
         ClientTickEvents.END_CLIENT_TICK.register(client -> VellumClient.tick());
-        if (DevAutopilot.ENABLED) ClientTickEvents.END_CLIENT_TICK.register(DevAutopilot::tick);
+        if (DevAutopilot.ENABLED) {
+            ClientTickEvents.END_CLIENT_TICK.register(DevAutopilot::tick);
+            ScreenEvents.BEFORE_INIT.register((client, screen, width, height) -> {
+                DevPointer.beforeScreenChange();
+                ScreenEvents.remove(screen).register(s -> DevPointer.beforeScreenChange());
+            });
+        }
         //? if >=26
         if (TourCursor.ENABLED) HudElementRegistry.addLast(Constants.id("tour_cursor"), TourCursor::extractHud);
     }

@@ -95,6 +95,8 @@ public final class DevAutopilot {
             // A fresh run directory first shows the accessibility onboarding screen instead of the title screen.
             if (!(McClient.screen() instanceof TitleScreen || McClient.screen() instanceof AccessibilityOnboardingScreen)) return;
             started = true;
+            // The pointer is the autopilot's from here on, wherever the real mouse is.
+            DevPointer.own();
             mc.options.onboardingAccessibilityFinished();
             // The window may never have focus while the autopilot runs; don't pause or show tutorial toasts.
             mc.options.pauseOnLostFocus = false;
@@ -117,6 +119,7 @@ public final class DevAutopilot {
             *///?}
             return;
         }
+        DevPointer.hold(); // after screens the server opened
         if (!loaded) {
             if (mc.player == null || mc.level == null) return;
             loaded = true;
@@ -142,6 +145,7 @@ public final class DevAutopilot {
         } catch (RuntimeException e) {
             fail("a step failed", e);
         }
+        DevPointer.hold(); // after screens the step opened, before their first frame
     }
 
     private static void plan(Minecraft mc) {
@@ -273,8 +277,9 @@ public final class DevAutopilot {
     /**
      * Opens the first hover page ({@code dev/first_hover.html}) with the cursor resting at the window's centre, as a
      * screen opening leaves it: the mouse handler has the position, and no move event reaches the screen (Minecraft
-     * drops the first move after a screen opens). The button must be hovered within the first frames, with no mouse
-     * movement; half a second later its title tooltip shows, and the screenshot has both.
+     * drops the first move after a screen opens). {@link DevPointer} keeps it there as the screen opens, wherever the
+     * real mouse is. The button must be hovered within the first frames, with no mouse movement; half a second later
+     * its title tooltip shows, and the screenshot has both.
      */
     private static void firstHover(Minecraft mc) {
         steps.add(() -> {
