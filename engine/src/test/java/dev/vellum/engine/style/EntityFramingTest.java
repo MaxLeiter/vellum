@@ -21,6 +21,17 @@ class EntityFramingTest {
     }
 
     @Test
+    void theCenterFocusZoomsAroundTheMiddleOfTheRoom() {
+        ComputedStyle center = styleOf("-mc-entity-focus: center");
+        // At scale 1 it is the body focus: the 1 x 2 room on the bottom edge, its middle 10 px up, at y 250.
+        assertFrame(120, 260, 10, EntityFraming.center(center, 100, 200, 40, 60, 10, 1, 1, 2, 0));
+        // At scale 2 the middle stays at y 250, so the feet go 20 px below it.
+        assertFrame(120, 270, 20, EntityFraming.center(center, 100, 200, 40, 60, 20, 2, 1, 2, 0));
+        assertFrame(120, 264, 20, EntityFraming.center(center, 100, 200, 40, 60, 20, 2, 1, 2, 0.3f),
+                "the lift scales with it");
+    }
+
+    @Test
     void theEyesSitAtFiftyFortyUntilPlaced() {
         ComputedStyle eyes = styleOf("-mc-entity-focus: eyes");
         assertArrayEquals(new float[] {16, 12.8f}, EntityFraming.gazeOrigin(eyes, 0, 0, 32, 32), EPS);
