@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - On Minecraft 26.2 and 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 1.21.1 is unchanged.
 - The previewer draws rounded boxes, borders and shadows the way the shader does, so pages look the same there as in game.
@@ -11,6 +11,7 @@
 - `-mc-entity-focus: center` fits an `<entity>` like `body` but zooms around its middle with `-mc-model-scale`, so zooming in no longer shows only the feet.
 - `:key` works on any element, not only in a `v-for`: when the key changes the element is re-created, so its entrance animation replays. A keyed `v-if` branch does the same. The journal and Mobdex use it instead of one-item loops.
 - What an animation's `finished` promise or event changes applies before the next frame is drawn, so the journal no longer flickers after a page turn.
+- The templates and the Vellum build start from any JDK 17 or newer: Gradle downloads Java 25 for itself, which Fabric Loom needs.
 - The showcase and demo pages are about 12% smaller and share `showcase/showcase.css`, with the same look.
 
 ## 0.5.1
