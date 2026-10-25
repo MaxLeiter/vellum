@@ -272,6 +272,7 @@ public final class DevAutopilot {
      */
     private static void scene(Minecraft mc) {
         String url = VellumClientCommands.showcaseUrl("scene");
+        leave();
         shoot(mc, "showcase_scene", () -> VellumScreens.open(url, JsonParser.parseString("{\"start\": {\"step\": \"done\"}}")));
         //? if >=26 {
         steps.add(() -> {

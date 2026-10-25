@@ -35,24 +35,26 @@
       top: 0;
       width: 100%;
       height: 100%;
-      -mc-yaw: 25deg;
-      -mc-pitch: 5deg;
-      -mc-model-scale: 1.05;
-      -mc-scene-center: 7 3 5.5;
+      -mc-yaw: -95deg;
+      -mc-pitch: 12deg;
+      -mc-model-scale: 1.15;
+      -mc-scene-center: 6.8 2 5.5;
       transition: -mc-yaw 1600ms ease-in-out, -mc-pitch 1600ms ease-in-out, -mc-model-scale 1600ms ease-in-out,
         -mc-scene-center 1600ms ease-in-out;
     }
 
-    /* Where the camera looks at each step. */
-    scene.cam-foundation { -mc-yaw: 40deg; -mc-pitch: 18deg; -mc-model-scale: 1.25; -mc-scene-center: 5.5 1.5 6; }
-    scene.cam-walls { -mc-yaw: 10deg; -mc-pitch: 6deg; -mc-model-scale: 1.25; -mc-scene-center: 5.5 2.5 5.5; }
-    scene.cam-inside { -mc-yaw: 30deg; -mc-pitch: 38deg; -mc-model-scale: 1.6; -mc-scene-center: 5.5 2.5 5; }
-    scene.cam-roof { -mc-yaw: -18deg; -mc-pitch: 0deg; -mc-model-scale: 1.1; -mc-scene-center: 5.5 4.5 5; }
-    scene.cam-chimney { -mc-yaw: -35deg; -mc-pitch: 10deg; -mc-model-scale: 1.15; -mc-scene-center: 6 5.5 4.5; }
-    scene.cam-garden { -mc-yaw: 30deg; -mc-pitch: 12deg; -mc-model-scale: 1.25; -mc-scene-center: 6.5 2 7.5; }
-    scene.cam-tree { -mc-yaw: -40deg; -mc-pitch: 6deg; -mc-model-scale: 1.1; -mc-scene-center: 9 3.5 5; }
-    scene.cam-done { -mc-yaw: 22deg; -mc-pitch: 4deg; -mc-model-scale: 1; -mc-scene-center: 7 4 5.5; }
-    scene.cam-layers { -mc-yaw: 22deg; -mc-pitch: 26deg; -mc-model-scale: 1.05; -mc-scene-center: 7 3 5.5; }
+    /* Where the camera looks at each step. At yaw 0 a scene is seen as the inventory sees a block, from the north-east;
+       -90deg turns it to show the cottage's front (south) and its east side. */
+    scene.cam-foundation { -mc-yaw: -65deg; -mc-pitch: 28deg; -mc-model-scale: 1.3; -mc-scene-center: 5.5 1.5 6; }
+    scene.cam-walls { -mc-yaw: -105deg; -mc-pitch: 8deg; -mc-model-scale: 1.3; -mc-scene-center: 5.5 2.5 5.5; }
+    scene.cam-inside { -mc-yaw: -80deg; -mc-pitch: 42deg; -mc-model-scale: 1.5; -mc-scene-center: 5.5 2.5 4.8; }
+    scene.cam-chimney { -mc-yaw: -25deg; -mc-pitch: 14deg; -mc-model-scale: 1.25; -mc-scene-center: 6.5 5 4; }
+    scene.cam-roof-n { -mc-yaw: -5deg; -mc-pitch: 6deg; -mc-model-scale: 1.15; -mc-scene-center: 5.5 4.5 4.5; }
+    scene.cam-roof-s { -mc-yaw: -110deg; -mc-pitch: 10deg; -mc-model-scale: 1.15; -mc-scene-center: 5.5 4.5 5.5; }
+    scene.cam-garden { -mc-yaw: -75deg; -mc-pitch: 22deg; -mc-model-scale: 1.4; -mc-scene-center: 6.5 1.5 8; }
+    scene.cam-tree { -mc-yaw: -120deg; -mc-pitch: 8deg; -mc-model-scale: 1.25; -mc-scene-center: 10 3.5 5; }
+    scene.cam-done { -mc-yaw: -112deg; -mc-pitch: 6deg; -mc-model-scale: 1.2; -mc-scene-center: 6.8 3.8 5.5; }
+    scene.cam-layers { -mc-yaw: -100deg; -mc-pitch: 30deg; -mc-model-scale: 1.2; -mc-scene-center: 6.8 3 5.5; }
 
     /* A step not built yet: there, but not drawn (fully transparent groups aren't drawn or picked). */
     block-group.pending { opacity: 0; }
@@ -321,23 +323,24 @@
     // (0 faces south, 90 west, 180 north).
     const STEPS = [
       {group: 'g-foundation', anim: 'drop', cam: 'foundation', title: 'Foundation', text: 'Cobblestone, spruce floor',
-        at: [5.5, 2, 5], walk: [1.2, 1, 9.3], face: 210},
+        at: [5.5, 2, 5], walk: [1.4, 1, 8.8]},
       {group: 'g-walls', anim: 'rise', cam: 'walls', title: 'Walls', text: 'Oak logs at the corners',
-        at: [2, 5, 7.6], walk: [0.6, 1, 6], face: 120},
+        at: [8.5, 5, 7.5], walk: [10, 1, 8.6]},
       {group: 'g-inside', anim: 'fade', cam: 'inside', title: 'Furnishing', text: 'Furnace, chest and a bed',
-        at: [3.5, 3.2, 3.5], walk: [5.5, 2, 5], face: 160},
+        at: [3.5, 3.2, 3.5], walk: [5.5, 2, 5.2]},
       {group: 'g-chimney', anim: 'rise', cam: 'chimney', title: 'Chimney', text: 'Up through the roof',
-        at: [7.5, 11, 3.5], walk: [9.5, 1, 1.2], face: 130},
-      {group: 'g-roof-n', anim: 'drop', cam: 'roof', title: 'Roof', text: 'Spruce stairs, north side',
-        at: [5.5, 9, 3], walk: [9.6, 1, 2.5], face: 100},
-      {group: 'g-roof-s', anim: 'drop', cam: 'roof', title: 'Roof', text: 'And the south side',
-        at: [5.5, 9, 6], walk: [7.5, 1, 8.6], face: 160},
+        at: [7.5, 11, 3.5], walk: [9.6, 1, 1.4]},
+      {group: 'g-roof-n', anim: 'drop', cam: 'roof-n', title: 'Roof', text: 'Spruce stairs, north side',
+        at: [5.5, 9, 3], walk: [9.4, 1, 0.6]},
+      {group: 'g-roof-s', anim: 'drop', cam: 'roof-s', title: 'Roof', text: 'And the south side',
+        at: [5.5, 9, 6], walk: [10.2, 1, 8.6]},
       {group: 'g-garden', anim: 'rise', cam: 'garden', title: 'Garden', text: 'A fence, flowers, a pond',
-        at: [8.5, 1.4, 8.5], walk: [4.4, 1, 9.2], face: 60},
+        at: [8.5, 1.4, 8.5], walk: [3.6, 1, 8.6]},
       {group: 'g-tree', anim: 'grow', cam: 'tree', title: 'Tree', text: 'Oak, for shade',
-        at: [12.5, 8, 4.5], walk: [10.2, 1, 7.6], face: 200},
+        at: [12.5, 8, 4.5], walk: [10.4, 1, 7.4]},
     ];
-    const DONE = {cam: 'done', title: 'Home', text: 'Drag to look around', at: [5.5, 3.6, 7.6], walk: [6.6, 1, 9.3], face: 10};
+    const DONE = {cam: 'done', title: 'Home', text: 'Drag to look around', at: [5.5, 3.6, 7.6], walk: [6.6, 1, 9.1],
+      face: -50};
     const STEP_MS = 2300;
     const TOP_LAYER = 10;
 
@@ -354,6 +357,7 @@
     let walkTimer = 0;
     let layer = TOP_LAYER;
     let where = [5.5, 1, 9.5];
+    let facing = 180;
 
     for (let i = 0; i < STEPS.length; i++) {
       const b = document.createElement('button');
@@ -364,10 +368,15 @@
     nameplate.textContent = 'You';
     caption.style.setProperty('-mc-translate', STEPS[0].at.join(' '));
 
+    /** The yaw that faces from {@code from} to {@code to} (Minecraft's: 0 is south, 90 west). */
+    function yawTowards(from, to) {
+      return Math.atan2(-(to[0] - from[0]), to[2] - from[2]) * 180 / Math.PI;
+    }
+
     /** Puts the camera, the builder and the caption where step {@code s} wants them. */
     function stage(s, instant) {
       scene.className = 'cam-' + s.cam;
-      walkTo(s.walk, s.face, instant);
+      walkTo(s.walk, s.face !== undefined ? s.face : yawTowards(s.walk, s.at), instant);
       caption.classList.remove('hidden');
       caption.querySelector('b').textContent = s.title;
       caption.querySelector('span').textContent = s.text;
@@ -382,20 +391,26 @@
       const dx = to[0] - where[0], dz = to[2] - where[2];
       clearTimeout(walkTimer);
       if (instant || dx * dx + dz * dz < 0.01) {
-        builder.style.setProperty('-mc-yaw', face + 'deg');
+        turn(face);
         builder.removeAttribute('walk');
       } else {
-        builder.style.setProperty('-mc-yaw', Math.atan2(-dx, dz) * 180 / Math.PI + 'deg');
+        turn(yawTowards(where, to));
         builder.setAttribute('walk', '0.9');
         walkTimer = setTimeout(() => {
           builder.removeAttribute('walk');
-          builder.style.setProperty('-mc-yaw', face + 'deg');
+          turn(face);
         }, 1450);
       }
       where = to;
       const at = to.join(' ');
       builder.style.setProperty('-mc-translate', at);
       nameplate.style.setProperty('-mc-translate', at);
+    }
+
+    /** Turns the builder to {@code yaw} the short way round: -mc-yaw transitions go by the numbers. */
+    function turn(yaw) {
+      facing += ((yaw - facing) % 360 + 540) % 360 - 180;
+      builder.style.setProperty('-mc-yaw', facing + 'deg');
     }
 
     /** Shows the steps before {@code n} as built, at once. */
