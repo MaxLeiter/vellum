@@ -109,6 +109,19 @@ public final class PreviewHost implements Host {
         }).orElse(null);
     }
 
+    @Override
+    public byte[] loadBytes(String url) {
+        return assets.locate(url).map(file -> {
+            if (file.getFileSystem() == FileSystems.getDefault()) loadedFiles.add(file);
+            try {
+                return Files.readAllBytes(file);
+            } catch (IOException e) {
+                log(LogLevel.WARN, "Cannot read " + file + ": " + e);
+                return null;
+            }
+        }).orElse(null);
+    }
+
     /** {@code ns:} ids resolve as in game; references from a file-path page resolve on the file system. */
     @Override
     public String resolveUrl(String base, String relative) {
