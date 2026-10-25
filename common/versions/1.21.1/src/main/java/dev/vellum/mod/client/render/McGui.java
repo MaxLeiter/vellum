@@ -12,6 +12,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.vellum.engine.paint.ScissorStack;
+import dev.vellum.engine.paint.SmoothShape;
 import dev.vellum.engine.style.Cursor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -151,10 +152,12 @@ public final class McGui {
         return false;
     }
 
+    /** Resources reloaded. Nothing to do: there is no shape shader on this version. */
+    public static void reloadShapes() {}
+
     /** The shape shader's draw (see 26.3's McGui). Never called on this version: {@link #shapesAvailable} is false. */
-    void shape(boolean shadow, Matrix3x2fc pose, float x0, float y0, float x1, float y1, float cx, float cy,
-               float halfWidth, float halfHeight, short[] radii, float a, float b, boolean inset, boolean cutout, int color,
-               ScreenRectangle bounds, @Nullable ScreenRectangle scissor) {
+    void shape(Matrix3x2fc pose, SmoothShape shape, float edge, short[] radii, int color, ScreenRectangle bounds,
+               @Nullable ScreenRectangle scissor) {
         throw new UnsupportedOperationException("no shape shader on this Minecraft version");
     }
 

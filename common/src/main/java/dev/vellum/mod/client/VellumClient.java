@@ -2,6 +2,7 @@ package dev.vellum.mod.client;
 
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.client.render.McFontMetrics;
+import dev.vellum.mod.client.render.McGui;
 import dev.vellum.mod.client.render.McImages;
 import dev.vellum.mod.client.showcase.Mobdex;
 import dev.vellum.mod.net.ClosePayload;
@@ -50,10 +51,14 @@ public final class VellumClient {
         }
     }
 
-    /** Resources reloaded (F3+T, resource packs): fonts and images may have changed, so reload every open page. */
+    /**
+     * Resources reloaded (F3+T, resource packs): fonts, images and shaders may have changed, so reload every open page
+     * and try the shape shader again.
+     */
     public static void onResourceReload() {
         McFontMetrics.INSTANCE.clearCache();
         McImages.clearCaches();
+        McGui.reloadShapes();
         DocumentDriver.reloadAll();
     }
 

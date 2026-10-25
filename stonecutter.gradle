@@ -43,14 +43,20 @@ stonecutter.parameters { sc ->
     sc.replacements.regex(modern) { spec ->
         spec.replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
     }
-    // GLFW's Windows keys, for KeyNames on 26.2 and 1.21.1.
-    sc.replacements.regex(modern) { spec ->
-        spec.replace('\\bKEY_([LR])WIN\\b', 'KEY_$1SUPER', '\\bKEY_([LR])SUPER\\b', 'KEY_$1WIN')
+    // The Windows keys, for KeyNames: KEY_LGUI on 26.3 (SDL), KEY_LSUPER on 26.2, KEY_LWIN on 1.21.1. Replacements
+    // don't chain (Stonecutter replaces each match once), so this one goes from any of the three to this version's,
+    // both ways.
+    String metaKeys = '\\bKEY_([LR])(?:GUI|SUPER|WIN)\\b'
+    String metaKey = 'KEY_$1' + (sc.current.parsed >= '26.3' ? 'GUI' : modern ? 'SUPER' : 'WIN')
+    sc.replacements.regex(true) { spec ->
+        spec.replace(metaKeys, metaKey, metaKeys, metaKey)
     }
-    // 26.3 moved the render pipeline and texture types from blaze3d to renderpearl.
+    // 26.3 moved the render pipeline, texture and vertex format types from blaze3d to renderpearl. PrimitiveTopology
+    // moved to another sub-package as well, so SdfRenderState imports it per version.
+    String renderpearlTypes = '(GpuFormat|pipeline\\.(?:RenderPipeline|BlendFunction|ColorTargetState)|textures\\.FilterMode|vertex\\.VertexFormat)'
     sc.replacements.regex(sc.current.parsed >= '26.3') { spec ->
-        spec.replace('\\bcom\\.mojang\\.blaze3d\\.(pipeline\\.RenderPipeline|textures\\.FilterMode)\\b', 'com.mojang.renderpearl.api.$1',
-                '\\bcom\\.mojang\\.renderpearl\\.api\\.(pipeline\\.RenderPipeline|textures\\.FilterMode)\\b', 'com.mojang.blaze3d.$1')
+        spec.replace("\\bcom\\.mojang\\.blaze3d\\.$renderpearlTypes\\b", 'com.mojang.renderpearl.api.$1',
+                "\\bcom\\.mojang\\.renderpearl\\.api\\.$renderpearlTypes\\b", 'com.mojang.blaze3d.$1')
     }
     // 26.x has input event records; for older versions Vellum has records of the same shape in its own package.
     String inputEvents = '(KeyEvent|MouseButtonEvent|MouseButtonInfo|CharacterEvent)'

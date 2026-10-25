@@ -155,8 +155,8 @@ not worth the code until someone asks.
 - **One pipeline per kind.** `vellum:pipeline/sdf_box` (fills and borders) and `vellum:pipeline/sdf_shadow` (the same
   shaders with `SHADOW` defined), no culling, so mirrored transforms need no rewinding.
 - **No loader registration yet.** Vanilla compiles a pipeline it was not told about on first use;
-  `SdfRenderState.available()` asks for both, and a failure (shaders not loaded, a driver that rejects them) is logged
-  once, retried every few seconds, and tessellated meanwhile.
+  `SdfRenderState.available()` asks for both, and a failure (shaders not loaded, a driver that rejects them) is logged,
+  and shapes are tessellated until resources reload (`VellumClient.onResourceReload`), when it asks again.
 - **The cutout.** The proposal's `boxOpaque` flag is not needed: `fillBoxShadow` passes the box and the `Shadow`, so the
   shader knows the box and leaves it uncovered under an outer shadow that is not offset, as the tessellation does.
 - **Square shapes stay quads.** Unrounded fills and borders, and unblurred square shadows, keep the exact quads, which
@@ -177,7 +177,7 @@ not worth the code until someone asks.
   differently on the two versions, so the shader has to use them), and inputs and outputs without `layout(location)`,
   because both of 26.2's backends match attributes and varyings by name.
 - `GpuDevice.precompilePipeline(...).isValid()` stands in for 26.3's `getCompiledPipelineNullable`. The device keeps
-  a pipeline that failed until resources reload, so the retry only succeeds after a reload.
+  a pipeline that failed until resources reload, which is when `available()` asks again.
 - Checked under the dev autopilot on NeoForge 26.2 with the OpenGL backend (macOS, GL 4.1 on Metal): the shapes page
   looks as it does on 26.3.
 

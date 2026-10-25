@@ -276,14 +276,11 @@ public final class McCanvas implements Canvas {
             if (!(sixteenths < Short.MAX_VALUE)) return false;
             r[k] = (short) Math.round(Math.max(0, sixteenths));
         }
-        float edge = devicePixel(), x0 = s.x0() - edge, y0 = s.y0() - edge, x1 = s.x1() + edge, y1 = s.y1() + edge;
-        boundsOf(x0, y0, x1, y1);
+        float edge = devicePixel();
+        boundsOf(s.x0() - edge, s.y0() - edge, s.x1() + edge, s.y1() + edge);
         ScreenRectangle scissor = gui.scissor();
         ScreenRectangle bounds = clippedBounds(scissor);
-        if (bounds != null) {
-            gui.shape(s.shadow(), pose(), x0, y0, x1, y1, s.cx(), s.cy(), s.halfWidth(), s.halfHeight(), r, s.a(), s.b(),
-                    s.inset(), s.cutout(), c, bounds, scissor);
-        }
+        if (bounds != null) gui.shape(pose(), s, edge, r, c, bounds, scissor);
         return true;
     }
 

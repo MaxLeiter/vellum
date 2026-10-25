@@ -1,17 +1,22 @@
-//? if >=26.3 {
 package dev.vellum.mod.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.vellum.engine.event.Modifiers;
 import net.minecraft.client.input.KeyEvent;
 import org.jspecify.annotations.Nullable;
+//? if >=26.3 {
 import org.lwjgl.sdl.SDLKeyboard;
 import org.lwjgl.sdl.SDLScancode;
+//?} else {
+/*import net.minecraft.client.Minecraft;
+import org.lwjgl.glfw.GLFW;
+*///?}
 
 /**
- * Minecraft's input to DOM names, on 26.3 (SDL). {@code code} comes from the scancode (the physical key:
- * {@code KeyA}, {@code Digit1}, {@code ArrowLeft}); {@code key} from the keycode (the layout's character: {@code a},
- * {@code A} with shift, {@code Enter}, {@code Escape}). 26.2 and 1.21.1 have GLFW's instead, below.
+ * Minecraft's input to DOM names. {@code code} is the physical key ({@code KeyA}, {@code Digit1}, {@code ArrowLeft}),
+ * from the key number: an SDL scancode on 26.3, a GLFW key code (a key's place on a US keyboard) on 26.2 and 1.21.1.
+ * {@code key} is what the key means on the current layout ({@code a}, {@code A} with shift, {@code Enter},
+ * {@code Escape}): the SDL keycode on 26.3, what GLFW says the key types before.
  */
 final class KeyNames {
     private KeyNames() {}
@@ -23,14 +28,18 @@ final class KeyNames {
 
     /** The DOM {@code key} of a key event: what the key means on the current layout, with shift. */
     static String key(KeyEvent e) {
+        //? if >=26.3 {
         return key(e.key(), e.keycode(), e.hasShiftDown());
+        //?} else
+        //return key(e.key(), e.scancode(), e.hasShiftDown());
     }
 
-    static String code(int scancode) {
-        if (scancode >= InputConstants.KEY_A && scancode <= InputConstants.KEY_Z) return "Key" + (char) ('A' + scancode - InputConstants.KEY_A);
-        if (scancode >= InputConstants.KEY_1 && scancode <= InputConstants.KEY_9) return "Digit" + (scancode - InputConstants.KEY_1 + 1);
-        if (scancode >= InputConstants.KEY_F1 && scancode <= InputConstants.KEY_F12) return "F" + (scancode - InputConstants.KEY_F1 + 1);
-        return switch (scancode) {
+    static String code(int key) {
+        if (key >= InputConstants.KEY_A && key <= InputConstants.KEY_Z) return "Key" + (char) ('A' + key - InputConstants.KEY_A);
+        // SDL numbers the digit keys 1 to 9, then 0; GLFW 0 to 9.
+        if (key >= InputConstants.KEY_1 && key <= InputConstants.KEY_9) return "Digit" + (key - InputConstants.KEY_1 + 1);
+        if (key >= InputConstants.KEY_F1 && key <= InputConstants.KEY_F12) return "F" + (key - InputConstants.KEY_F1 + 1);
+        return switch (key) {
             case InputConstants.KEY_0 -> "Digit0";
             case InputConstants.KEY_RETURN -> "Enter";
             case InputConstants.KEY_NUMPADENTER -> "NumpadEnter";
@@ -71,8 +80,12 @@ final class KeyNames {
         };
     }
 
-    static String key(int scancode, int keycode, boolean shift) {
-        String named = switch (scancode) {
+    /**
+     * The DOM {@code key} of key number {@code key}. {@code layout} is what {@link #typed} needs besides it: the SDL
+     * keycode on 26.3, the GLFW scancode before.
+     */
+    static String key(int key, int layout, boolean shift) {
+        String named = switch (key) {
             case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> "Enter";
             case InputConstants.KEY_ESCAPE -> "Escape";
             case InputConstants.KEY_BACKSPACE -> "Backspace";
@@ -95,13 +108,23 @@ final class KeyNames {
             default -> null;
         };
         if (named != null) return named;
-        if (scancode >= InputConstants.KEY_F1 && scancode <= InputConstants.KEY_F12) return code(scancode);
-        // Printable keys: SDL keycodes are the unshifted character of the current layout.
-        if (keycode > 0 && keycode < 0x40000000 && Character.isValidCodePoint(keycode) && !Character.isISOControl(keycode)) {
-            String ch = Character.toString(keycode);
-            return shift ? ch.toUpperCase() : ch;
-        }
-        return "Unidentified";
+        if (key >= InputConstants.KEY_F1 && key <= InputConstants.KEY_F12) return code(key);
+        String typed = typed(key, layout);
+        if (typed == null) return "Unidentified";
+        return shift ? typed.toUpperCase() : typed;
+    }
+
+    /** Modifier state now, for input that carries none (pointer moves, scrolling). */
+    static Modifiers current() {
+        return new Modifiers(isDown(InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT), isDown(InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL),
+                isDown(InputConstants.KEY_LALT, InputConstants.KEY_RALT), isDown(InputConstants.KEY_LGUI, InputConstants.KEY_RGUI));
+    }
+
+    //? if >=26.3 {
+    /** The character a printable key types on the current layout, unshifted, or null: SDL keycodes are that character. */
+    private static @Nullable String typed(int scancode, int keycode) {
+        boolean printable = keycode > 0 && keycode < 0x40000000 && Character.isValidCodePoint(keycode) && !Character.isISOControl(keycode);
+        return printable ? Character.toString(keycode) : null;
     }
 
     /**
@@ -127,12 +150,6 @@ final class KeyNames {
                 (mods & InputConstants.MOD_ALT) != 0, (mods & InputConstants.MOD_SUPER) != 0);
     }
 
-    /** Modifier state now, for input that carries none (pointer moves, scrolling). */
-    static Modifiers current() {
-        return new Modifiers(isDown(InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT), isDown(InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL),
-                isDown(InputConstants.KEY_LALT, InputConstants.KEY_RALT), isDown(InputConstants.KEY_LGUI, InputConstants.KEY_RGUI));
-    }
-
     private static boolean isDown(int left, int right) {
         return InputConstants.isKeyDown(left) || InputConstants.isKeyDown(right);
     }
@@ -146,114 +163,16 @@ final class KeyNames {
     static int mcButton(int domButton) {
         return domButton + 1;
     }
-}
-//?} else {
-/*package dev.vellum.mod.client;
-
-import com.mojang.blaze3d.platform.InputConstants;
-import dev.vellum.engine.event.Modifiers;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.input.KeyEvent;
-import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
-
-/^*
- * Minecraft's input to DOM names, on 26.2 and 1.21.1 (GLFW). {@code code} comes from the GLFW key code, which names a key by
- * its place on a US keyboard ({@code KeyA}, {@code Digit1}, {@code ArrowLeft}); {@code key} from what GLFW says the
- * key types on the current layout ({@code a}, {@code A} with shift, {@code Enter}, {@code Escape}).
- ^/
-final class KeyNames {
-    /^* The GLFW key codes, from space to the last one. ^/
+    //?} else {
+    /*/^* The GLFW key codes, from space to the last one. ^/
     private static final int FIRST_KEY = GLFW.GLFW_KEY_SPACE, LAST_KEY = GLFW.GLFW_KEY_LAST;
 
-    private KeyNames() {}
-
-    /^* The DOM {@code code} of a key event: the physical key. ^/
-    static String code(KeyEvent e) {
-        return code(e.key());
-    }
-
-    /^* The DOM {@code key} of a key event: what the key means on the current layout, with shift. ^/
-    static String key(KeyEvent e) {
-        return key(e.key(), e.scancode(), e.hasShiftDown());
-    }
-
-    static String code(int key) {
-        if (key >= InputConstants.KEY_A && key <= InputConstants.KEY_Z) return "Key" + (char) ('A' + key - InputConstants.KEY_A);
-        if (key >= InputConstants.KEY_0 && key <= InputConstants.KEY_9) return "Digit" + (key - InputConstants.KEY_0);
-        if (key >= InputConstants.KEY_F1 && key <= InputConstants.KEY_F12) return "F" + (key - InputConstants.KEY_F1 + 1);
-        return switch (key) {
-            case InputConstants.KEY_RETURN -> "Enter";
-            case InputConstants.KEY_NUMPADENTER -> "NumpadEnter";
-            case InputConstants.KEY_ESCAPE -> "Escape";
-            case InputConstants.KEY_BACKSPACE -> "Backspace";
-            case InputConstants.KEY_TAB -> "Tab";
-            case InputConstants.KEY_SPACE -> "Space";
-            case InputConstants.KEY_MINUS -> "Minus";
-            case InputConstants.KEY_EQUALS -> "Equal";
-            case InputConstants.KEY_LBRACKET -> "BracketLeft";
-            case InputConstants.KEY_RBRACKET -> "BracketRight";
-            case InputConstants.KEY_BACKSLASH -> "Backslash";
-            case InputConstants.KEY_SEMICOLON -> "Semicolon";
-            case InputConstants.KEY_APOSTROPHE -> "Quote";
-            case InputConstants.KEY_GRAVE -> "Backquote";
-            case InputConstants.KEY_COMMA -> "Comma";
-            case InputConstants.KEY_PERIOD -> "Period";
-            case InputConstants.KEY_SLASH -> "Slash";
-            case InputConstants.KEY_LEFT -> "ArrowLeft";
-            case InputConstants.KEY_RIGHT -> "ArrowRight";
-            case InputConstants.KEY_UP -> "ArrowUp";
-            case InputConstants.KEY_DOWN -> "ArrowDown";
-            case InputConstants.KEY_HOME -> "Home";
-            case InputConstants.KEY_END -> "End";
-            case InputConstants.KEY_PAGEUP -> "PageUp";
-            case InputConstants.KEY_PAGEDOWN -> "PageDown";
-            case InputConstants.KEY_DELETE -> "Delete";
-            case InputConstants.KEY_INSERT -> "Insert";
-            case InputConstants.KEY_LSHIFT -> "ShiftLeft";
-            case InputConstants.KEY_RSHIFT -> "ShiftRight";
-            case InputConstants.KEY_LCONTROL -> "ControlLeft";
-            case InputConstants.KEY_RCONTROL -> "ControlRight";
-            case InputConstants.KEY_LALT -> "AltLeft";
-            case InputConstants.KEY_RALT -> "AltRight";
-            case InputConstants.KEY_LSUPER -> "MetaLeft";
-            case InputConstants.KEY_RSUPER -> "MetaRight";
-            default -> "Unidentified";
-        };
-    }
-
-    static String key(int key, int scancode, boolean shift) {
-        String named = switch (key) {
-            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> "Enter";
-            case InputConstants.KEY_ESCAPE -> "Escape";
-            case InputConstants.KEY_BACKSPACE -> "Backspace";
-            case InputConstants.KEY_TAB -> "Tab";
-            case InputConstants.KEY_SPACE -> " ";
-            case InputConstants.KEY_LEFT -> "ArrowLeft";
-            case InputConstants.KEY_RIGHT -> "ArrowRight";
-            case InputConstants.KEY_UP -> "ArrowUp";
-            case InputConstants.KEY_DOWN -> "ArrowDown";
-            case InputConstants.KEY_HOME -> "Home";
-            case InputConstants.KEY_END -> "End";
-            case InputConstants.KEY_PAGEUP -> "PageUp";
-            case InputConstants.KEY_PAGEDOWN -> "PageDown";
-            case InputConstants.KEY_DELETE -> "Delete";
-            case InputConstants.KEY_INSERT -> "Insert";
-            case InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT -> "Shift";
-            case InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL -> "Control";
-            case InputConstants.KEY_LALT, InputConstants.KEY_RALT -> "Alt";
-            case InputConstants.KEY_LSUPER, InputConstants.KEY_RSUPER -> "Meta";
-            default -> null;
-        };
-        if (named != null) return named;
-        if (key >= InputConstants.KEY_F1 && key <= InputConstants.KEY_F12) return code(key);
-        // Printable keys: GLFW names the character the key types on the current layout, unshifted.
+    /^* The character a printable key types on the current layout, unshifted, as GLFW names it; or null. ^/
+    private static @Nullable String typed(int key, int scancode) {
         String typed = GLFW.glfwGetKeyName(key, scancode);
-        if (typed != null && !typed.isEmpty()) {
-            int cp = typed.codePointAt(0);
-            if (Character.charCount(cp) == typed.length() && !Character.isISOControl(cp)) return shift ? typed.toUpperCase() : typed;
-        }
-        return "Unidentified";
+        if (typed == null || typed.isEmpty()) return null;
+        int cp = typed.codePointAt(0);
+        return Character.charCount(cp) == typed.length() && !Character.isISOControl(cp) ? typed : null;
     }
 
     /^*
@@ -280,12 +199,6 @@ final class KeyNames {
                 (mods & GLFW.GLFW_MOD_ALT) != 0, (mods & GLFW.GLFW_MOD_SUPER) != 0);
     }
 
-    /^* Modifier state now, for input that carries none (pointer moves, scrolling). ^/
-    static Modifiers current() {
-        return new Modifiers(isDown(InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT), isDown(InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL),
-                isDown(InputConstants.KEY_LALT, InputConstants.KEY_RALT), isDown(InputConstants.KEY_LSUPER, InputConstants.KEY_RSUPER));
-    }
-
     private static boolean isDown(int left, int right) {
         //? if >=26 {
         var window = Minecraft.getInstance().getWindow();
@@ -307,5 +220,5 @@ final class KeyNames {
     static int mcButton(int domButton) {
         return button(domButton); // the same swap both ways
     }
+    *///?}
 }
-*///?}

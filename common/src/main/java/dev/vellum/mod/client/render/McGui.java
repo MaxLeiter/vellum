@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import dev.vellum.engine.paint.ScissorStack;
+import dev.vellum.engine.paint.SmoothShape;
 import dev.vellum.engine.style.Cursor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -126,15 +127,18 @@ public final class McGui {
         return SdfRenderState.available();
     }
 
+    /** Resources reloaded: if the shape shader failed to compile, {@link #shapesAvailable} tries it again. */
+    public static void reloadShapes() {
+        SdfRenderState.reload();
+    }
+
     /**
      * A rounded box, border or box-shadow drawn by the shape shader as one quad; the parameters are
      * {@link SdfRenderState}'s.
      */
-    void shape(boolean shadow, Matrix3x2fc pose, float x0, float y0, float x1, float y1, float cx, float cy,
-               float halfWidth, float halfHeight, short[] radii, float a, float b, boolean inset, boolean cutout, int color,
-               ScreenRectangle bounds, @Nullable ScreenRectangle scissor) {
-        g.guiRenderState.addGuiElement(new SdfRenderState(shadow ? SdfRenderState.SHADOW : SdfRenderState.BOX, pose, x0, y0,
-                x1, y1, cx, cy, halfWidth, halfHeight, radii, a, b, inset, cutout, color, scissor, bounds));
+    void shape(Matrix3x2fc pose, SmoothShape shape, float edge, short[] radii, int color, ScreenRectangle bounds,
+               @Nullable ScreenRectangle scissor) {
+        g.guiRenderState.addGuiElement(new SdfRenderState(pose, shape, edge, radii, color, scissor, bounds));
     }
 
     /** Text at (x, y) in {@code m}, scaled by {@code scale}. */
