@@ -16,10 +16,10 @@ repositories {
 }
 
 // common/ (compiles against vanilla): the API, plus the engine types it exposes
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.6.1") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.6.2") }
 
 // neoforge/ and fabric/: the loader jar, so dev runs load Vellum as a mod (it bundles the engine and Rhino)
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.6.1") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.6.2") }   // or vellum-fabric-26.3
 ```
 
 To build against an unreleased Vellum, run `./gradlew publishToMavenLocal` in a Vellum checkout and add

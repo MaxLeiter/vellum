@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.2
 
 - The jar is about 12% smaller (2.8 MB to 2.5 MB): classes keep line numbers for stack traces but not local variable tables, and Rhino's French and Chinese error messages are left out.
 
