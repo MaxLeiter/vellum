@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Style changes cost much less when selectors can't see them: a script writing `el.style` or text every frame no longer rematches every selector in the page (about 1 ms a frame down to 0.2 ms on a 500-element page). Selectors are matched again only after tree changes, state changes (`:hover`, `:checked`...), changes to attributes some selector reads, `id` and `class`, and text that empties or fills an element.
+- Changing a `<link>`'s `href`, `rel` or `media`, or text inside an element in a `<style>`, restyles the page at once, not with the next change that happens to.
 - `DocumentDriver.patch(key, value)` sets one top-level field of `vellum.data` without sending the rest. Only the value is serialised and parsed, the page's other objects stay as they are, and the page gets `vellum.on('patch', ({key, value}) => ...)`, then its `'data'` listeners with the key as a second argument. A null value removes the field. Patches are kept across reloads, as pushes are. `VellumSession.patch` and `VellumHud.patch` do the same from a server and for HUD overlays; a server's patches count toward `client.maxDataChars` and `client.maxDataDepth`.
 - `merge` no longer parses and re-serialises the whole data: the driver keeps each top-level field's JSON and only serialises the fields you pass. The page still gets the whole data.
 
