@@ -28,8 +28,8 @@ final class ValueContext {
     boolean dependent;
     /** Set when a value read an attribute ({@code attr()}): such styles must be recomputed on every restyle. */
     boolean attributeRead;
-    /** Every attribute {@code attr()} has read, so a change to one restyles. */
-    final Set<String> attributesRead = new HashSet<>();
+    /** Every attribute {@code attr()} has read, so a change to one restyles; null until the first. */
+    private Set<String> attributesRead;
 
     float em() { dependent = true; return em; }
     float rem() { dependent = true; return rem; }
@@ -43,9 +43,15 @@ final class ValueContext {
     String attr(String name) {
         dependent = true;
         attributeRead = true;
+        if (attributesRead == null) attributesRead = new HashSet<>();
         attributesRead.add(name.toLowerCase(Locale.ROOT));
         String v = element == null ? null : element.getAttribute(name);
         return v == null ? "" : v;
+    }
+
+    /** Whether {@code attr()} has read attribute {@code name} (lower case). */
+    boolean hasReadAttribute(String name) {
+        return attributesRead != null && attributesRead.contains(name);
     }
 
     /** Resolves a {@code url()} against the declaring stylesheet. Not element-specific. */

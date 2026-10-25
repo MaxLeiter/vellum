@@ -41,6 +41,7 @@ import dev.vellum.engine.style.WordBreak;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -61,6 +62,8 @@ final class Properties {
     private static final Map<String, Longhand> BY_NAME = new HashMap<>();
     private static final List<Longhand> ALL = new ArrayList<>();
     private static final Longhand[] BY_PROP = new Longhand[Prop.values().length];
+    /** Each list group's components, in component order; built once registration is done. */
+    private static final Map<ListGroup, List<Longhand>> COMPONENTS;
 
     // ---- Shared serialisers ----
     private static final Function<Object, String> TEXT = String::valueOf;
@@ -121,6 +124,11 @@ final class Properties {
         alias("overflow-wrap", "word-break");
         alias("word-wrap", "word-break");
         alias("-webkit-line-clamp", "line-clamp");
+        Map<ListGroup, List<Longhand>> components = new EnumMap<>(ListGroup.class);
+        for (ListGroup g : ListGroup.values()) {
+            components.put(g, ALL.stream().filter(l -> l.group == g).toList());
+        }
+        COMPONENTS = Collections.unmodifiableMap(components);
     }
 
     private Properties() {}
@@ -140,9 +148,7 @@ final class Properties {
 
     /** The components of a list group, in component order. */
     static List<Longhand> components(ListGroup group) {
-        List<Longhand> out = new ArrayList<>(group.size());
-        for (Longhand l : ALL) if (l.group == group) out.add(l);
-        return out;
+        return COMPONENTS.get(group);
     }
 
     // ---- Registration ----

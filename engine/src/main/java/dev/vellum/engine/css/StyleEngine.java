@@ -44,6 +44,9 @@ import java.util.function.Consumer;
  */
 public final class StyleEngine {
     private static final Stylesheet USER_AGENT = loadUserAgentSheet();
+    /** {@link #transitionProperties} for {@code all} and by shorthand; callers get copies. */
+    private static final EnumSet<Prop> ALL_TRANSITIONS = allTransitions();
+    private static final Map<String, EnumSet<Prop>> SHORTHAND_TRANSITIONS = shorthandTransitions();
 
     private final Document document;
     private final Host host;
@@ -174,7 +177,7 @@ public final class StyleEngine {
             document.invalidateLayout();
             return fresh;
         }
-        return old.sameAs(fresh) ? old : fresh;
+        return old.sameBesidesLayout(fresh) ? old : fresh;
     }
 
     /**
@@ -355,21 +358,34 @@ public final class StyleEngine {
      * longhand of that name. Empty for names it doesn't know.
      */
     public static EnumSet<Prop> transitionProperties(String name) {
+        EnumSet<Prop> set = name.equals("all") ? ALL_TRANSITIONS : SHORTHAND_TRANSITIONS.get(name);
+        if (set != null) return set.clone();
+        set = EnumSet.noneOf(Prop.class);
+        Prop p = Prop.byName(name);
+        if (p != null) set.add(p);
+        return set;
+    }
+
+    /** What {@code transition-property: all} names: every property that interpolates. */
+    private static EnumSet<Prop> allTransitions() {
         EnumSet<Prop> set = EnumSet.noneOf(Prop.class);
-        Shorthand shorthand = Shorthands.get(name);
-        if (name.equals("all")) {
-            for (Prop p : Prop.values()) {
-                if (p.interpolation != Prop.Interp.NONE && p.interpolation != Prop.Interp.DISCRETE) set.add(p);
-            }
-            set.add(Prop.VISIBILITY); // discrete, but CSS interpolates it specially so fades can hide at the end
-        } else if (shorthand != null) {
+        for (Prop p : Prop.values()) {
+            if (p.interpolation != Prop.Interp.NONE && p.interpolation != Prop.Interp.DISCRETE) set.add(p);
+        }
+        set.add(Prop.VISIBILITY); // discrete, but CSS interpolates it specially so fades can hide at the end
+        return set;
+    }
+
+    /** What naming each shorthand in {@code transition-property} names: its longhands that animate. */
+    private static Map<String, EnumSet<Prop>> shorthandTransitions() {
+        Map<String, EnumSet<Prop>> out = new HashMap<>();
+        for (Shorthand shorthand : Shorthands.all()) {
+            EnumSet<Prop> set = EnumSet.noneOf(Prop.class);
             for (Longhand l : shorthand.longhands()) {
                 if (l.prop != null && l.prop.interpolation != Prop.Interp.NONE) set.add(l.prop);
             }
-        } else {
-            Prop p = Prop.byName(name);
-            if (p != null) set.add(p);
+            out.put(shorthand.name(), set);
         }
-        return set;
+        return out;
     }
 }

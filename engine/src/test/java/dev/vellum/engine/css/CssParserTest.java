@@ -9,6 +9,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CssParserTest {
@@ -71,7 +72,7 @@ class CssParserTest {
                 .rules.get(0)).decls();
         assertEquals(dev.vellum.engine.style.Length.px(10), decls.get(0).constant);
         assertNull(decls.get(1).constant, "em depends on the element");
-        assertNull(decls.get(2).constant, "currentColor depends on the element");
+        assertSame(Decl.CURRENT_COLOR, decls.get(2).constant, "currentColor depends on the element");
     }
 
     @Test

@@ -20,6 +20,12 @@ final class Decl {
     /** CSS-wide keywords. {@code revert} and {@code revert-layer} behave as {@code unset} (there is no user origin). */
     enum Keyword { INHERIT, INITIAL, UNSET }
 
+    /**
+     * {@link #constant} of a colour declared as just {@code currentcolor} (such as the initial border and outline
+     * colours): it computes to the context's current colour, without parsing the value again.
+     */
+    static final Object CURRENT_COLOR = new Object();
+
     /** The longhand, or null for a custom property. */
     final Longhand property;
     /** The custom property name ({@code --x}), or null. */
@@ -31,7 +37,10 @@ final class Decl {
     final Shorthand pending;
     final boolean important;
     final Keyword keyword;
-    /** The computed value when it does not depend on the element; null otherwise. */
+    /**
+     * The computed value when it does not depend on the element, {@link #CURRENT_COLOR} for a colour that is
+     * {@code currentcolor}; null otherwise.
+     */
     final Object constant;
     final boolean hasVar;
     /** Base for relative {@code url()}s: the declaring stylesheet's URL. */
@@ -99,7 +108,8 @@ final class Decl {
         probe.dependent = false;
         Object v = parse(p, value, probe);
         if (v == null) return null;
-        return new Decl(p, null, value, null, important, null, probe.dependent ? null : v, baseUrl);
+        Object constant = !probe.dependent ? v : v instanceof Integer && isCurrentColor(value) ? CURRENT_COLOR : null;
+        return new Decl(p, null, value, null, important, null, constant, baseUrl);
     }
 
     /** A declaration of the CSS initial value, for {@link Longhand#initial}. */
@@ -126,6 +136,10 @@ final class Decl {
             case "unset", "revert", "revert-layer" -> Keyword.UNSET;
             default -> null;
         };
+    }
+
+    private static boolean isCurrentColor(List<ComponentValue> value) {
+        return value.size() == 1 && value.get(0) instanceof Token t && t.isIdent("currentcolor");
     }
 
     static boolean containsVar(List<ComponentValue> values) {

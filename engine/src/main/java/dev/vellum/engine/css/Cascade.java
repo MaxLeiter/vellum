@@ -10,7 +10,6 @@ import dev.vellum.engine.style.Prop;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -30,11 +29,7 @@ final class Cascade {
     private static final List<Longhand> LONGHANDS = Properties.all();
     private static final Longhand FONT_SIZE = Properties.of(Prop.FONT_SIZE), COLOR = Properties.of(Prop.COLOR);
     private static final List<Longhand> WITH_INITIAL = LONGHANDS.stream().filter(l -> l.initial != null).toList();
-    private static final Map<ListGroup, List<Longhand>> COMPONENTS = new EnumMap<>(ListGroup.class);
-
-    static {
-        for (ListGroup g : ListGroup.values()) COMPONENTS.put(g, Properties.components(g));
-    }
+    private static final ListGroup[] GROUPS = ListGroup.values();
 
     private final ValueContext ctx = new ValueContext();
     private final Decl[] winners = new Decl[LONGHANDS.size()];
@@ -84,7 +79,7 @@ final class Cascade {
 
     /** Whether any computation so far read attribute {@code name} through {@code attr()}. */
     boolean hasReadAttribute(String name) {
-        return ctx.attributesRead.contains(name);
+        return ctx.hasReadAttribute(name);
     }
 
     /**
@@ -172,7 +167,7 @@ final class Cascade {
             Longhand l = LONGHANDS.get(declared[i]);
             if (l.group == null && l != FONT_SIZE && l != COLOR) applyLonghand(l, s, parent);
         }
-        for (ListGroup g : ListGroup.values()) applyGroup(g, s, parent);
+        for (ListGroup g : GROUPS) applyGroup(g, s, parent);
         // Unitless line heights inherit as factors; border and outline widths compute to 0 without a style.
         if (!Float.isNaN(s.lineHeightFactor)) s.lineHeight = s.lineHeightFactor * s.fontSize;
         if (!s.borderTopStyle.isVisible()) s.borderTopWidth = 0;
@@ -191,7 +186,7 @@ final class Cascade {
     /** Assembles a list property (background layers, transitions, animations) when any component was declared. */
     private void applyGroup(ListGroup g, ComputedStyle s, ComputedStyle parent) {
         List<List<?>> lists = null;
-        for (Longhand c : COMPONENTS.get(g)) {
+        for (Longhand c : Properties.components(g)) {
             Decl d = winners[c.id];
             if (d == null) continue;
             if (lists == null) lists = new ArrayList<>(g.decompose((List<?>) g.prop.get(s)));
@@ -203,6 +198,7 @@ final class Cascade {
     /** The computed value of a declaration for this element. */
     private Object value(Longhand l, Decl d, ComputedStyle s, ComputedStyle parent) {
         if (d.keyword != null) return keyword(l, d.keyword, s, parent);
+        if (d.constant == Decl.CURRENT_COLOR) return ctx.currentColor();
         if (d.constant != null) return d.constant;
         if (d.hasVar) return substituted(l, d, s, parent);
         ctx.baseUrl(d.baseUrl);

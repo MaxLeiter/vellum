@@ -5,6 +5,7 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.Host;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -27,25 +28,37 @@ import java.util.Set;
 public final class InlineStyle {
     private InlineStyle() {}
 
-    /** One declaration as written, with the longhand declarations it expands to for the cascade. */
-    record Entry(String name, String value, boolean important, List<Decl> decls) {
-        /** The longhands (or custom property) this entry sets. */
-        List<String> longhands() {
-            return InlineStyle.longhands(name);
+    /**
+     * One declaration as written, with the longhand declarations it expands to for the cascade, the longhands (or
+     * custom property) it sets, and for a shorthand each longhand's part of the value (null otherwise).
+     */
+    record Entry(String name, String value, boolean important, List<Decl> decls, List<String> longhands,
+                 Map<String, String> parts) {
+        Entry(String name, String value, boolean important, List<Decl> decls) {
+            this(name, value, important, decls, InlineStyle.longhands(name), parts(name, value));
         }
 
         boolean covers(String longhand) {
-            return longhands().contains(longhand);
+            return longhands.contains(longhand);
         }
 
         /** This entry's value for one of its longhands; "" if it cannot be told (var() in a shorthand). */
         String valueOf(String longhand) {
+            return parts == null ? value : parts.get(longhand);
+        }
+
+        /** Each longhand's part of a shorthand's value, by longhand name; null when {@code name} is no shorthand. */
+        private static Map<String, String> parts(String name, String value) {
             Shorthand s = Shorthands.get(name);
-            if (s == null) return value;
+            if (s == null) return null;
             List<ComponentValue> parsed = CssParser.parseComponentValues(value);
-            if (Decl.keyword(parsed) != null) return value;
-            Map<Longhand, List<ComponentValue>> parts = Decl.containsVar(parsed) ? null : s.expand(parsed);
-            return parts == null ? "" : ComponentValue.text(parts.get(Properties.longhand(longhand)));
+            boolean keyword = Decl.keyword(parsed) != null;
+            Map<Longhand, List<ComponentValue>> parts = keyword || Decl.containsVar(parsed) ? null : s.expand(parsed);
+            Map<String, String> out = new HashMap<>();
+            for (Longhand l : s.longhands()) {
+                out.put(l.name, keyword ? value : parts == null ? "" : ComponentValue.text(parts.get(l)));
+            }
+            return out;
         }
     }
 

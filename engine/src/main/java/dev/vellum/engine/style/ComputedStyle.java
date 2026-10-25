@@ -25,6 +25,9 @@ public final class ComputedStyle implements Cloneable {
     /** Ratio of Minecraft's line height (9) to its em (8): {@code line-height: normal}. */
     public static final float NORMAL_LINE_HEIGHT = 9f / 8f;
     public static final String DEFAULT_FONT = FontFamilies.DEFAULT;
+    // Shared initial values; declared before INITIAL, which is built while the class initialises.
+    private static final List<GridTrack> AUTO_TRACKS = List.of(new GridTrack.Keyword(Length.AUTO));
+    private static final List<String> DEFAULT_FAMILIES = List.of(DEFAULT_FONT);
 
     // ---- Box ----
     public Display display = Display.INLINE;
@@ -79,8 +82,8 @@ public final class ComputedStyle implements Cloneable {
     public List<GridTrack> gridTemplateColumns = List.of(), gridTemplateRows = List.of();
     /** Rows of area names from {@code grid-template-areas} ("." for empty cells), or null for none. */
     public List<List<String>> gridTemplateAreas;
-    public List<GridTrack> gridAutoColumns = List.of(new GridTrack.Keyword(Length.AUTO));
-    public List<GridTrack> gridAutoRows = List.of(new GridTrack.Keyword(Length.AUTO));
+    public List<GridTrack> gridAutoColumns = AUTO_TRACKS;
+    public List<GridTrack> gridAutoRows = AUTO_TRACKS;
     public GridAutoFlow gridAutoFlow = GridAutoFlow.ROW;
     public GridLine gridColumnStart = GridLine.AUTO, gridColumnEnd = GridLine.AUTO;
     public GridLine gridRowStart = GridLine.AUTO, gridRowEnd = GridLine.AUTO;
@@ -88,7 +91,7 @@ public final class ComputedStyle implements Cloneable {
     // ---- Text (inherited) ----
     public int color = Colors.BLACK;
     /** Font family names in preference order. Minecraft font ids ({@code minecraft:uniform}) or aliases. */
-    public List<String> fontFamily = List.of(DEFAULT_FONT);
+    public List<String> fontFamily = DEFAULT_FAMILIES;
     public float fontSize = DEFAULT_FONT_SIZE;
     public int fontWeight = 400;
     public boolean fontItalic;
@@ -304,8 +307,15 @@ public final class ComputedStyle implements Cloneable {
 
     /** Whether every property, and the engine's own fields, equal {@code o}'s. */
     public boolean sameAs(ComputedStyle o) {
-        return this == o || sameLayout(o)
-                && borderTopColor == o.borderTopColor && borderRightColor == o.borderRightColor
+        return this == o || sameLayout(o) && sameBesidesLayout(o);
+    }
+
+    /**
+     * Whether the properties and engine fields {@link #sameLayout} does not compare equal {@code o}'s: for a style
+     * already known to lay out the same, {@link #sameAs} without comparing the layout half again.
+     */
+    public boolean sameBesidesLayout(ComputedStyle o) {
+        return this == o || borderTopColor == o.borderTopColor && borderRightColor == o.borderRightColor
                 && borderBottomColor == o.borderBottomColor && borderLeftColor == o.borderLeftColor
                 && radiusTopLeft.equals(o.radiusTopLeft) && radiusTopRight.equals(o.radiusTopRight)
                 && radiusBottomRight.equals(o.radiusBottomRight) && radiusBottomLeft.equals(o.radiusBottomLeft)

@@ -251,10 +251,7 @@ final class Selector {
 
     /** The index of the first CSS whitespace character at or after {@code from}, or -1. */
     private static int indexOfWhitespace(String s, int from) {
-        for (int i = from, n = s.length(); i < n; i++) {
-            char c = s.charAt(i);
-            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') return i;
-        }
+        for (int i = from, n = s.length(); i < n; i++) if (Tokenizer.isWhitespace(s.charAt(i))) return i;
         return -1;
     }
 
