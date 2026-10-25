@@ -94,4 +94,36 @@ class ShadowsTest {
         RecordingCanvas c = paint("background: #123456; border-top: 1px solid; box-shadow: inset 0 0 2px black, 1px 1px 2px black");
         assertEquals(List.of("fillQuads", "fillRect", "fillQuads", "fillBorder"), c.calls.stream().map(RecordingCanvas.Call::op).toList());
     }
+
+    @Test
+    void backendsGetTheBorderBoxForOuterShadowsAndThePaddingBoxForInsetOnes() {
+        RecordingCanvas c = new RecordingCanvas();
+        c.recordShadows = true;
+        new TestHost().load("<div style='position: absolute; left: 20px; top: 20px; width: 40px; height: 20px; "
+                + "border: 2px solid red; border-radius: 6px; "
+                + "box-shadow: 1px 2px 3px 4px #ff000080, inset 0 0 5px black, 0 0 2px blue'></div>").paint(c);
+        List<RecordingCanvas.Call> shadows = c.ops("fillBoxShadow");
+        assertEquals(List.of("shadow 20,20 40x20 #ff0000ff", "shadow 20,20 40x20 #80ff0000", "inset-shadow 22,22 36x16 #ff000000"),
+                shadows.stream().map(RecordingCanvas.Call::toString).toList(), "outer shadows last to first, then inset");
+        float[] outer = shadows.get(1).args(), inset = shadows.get(2).args();
+        assertEquals(6, outer[4], 1e-4, "the border box's radius");
+        assertEquals(4, inset[4], 1e-4, "the padding box's radius: 6 less the 2px border");
+        assertEquals(1, outer[12], 1e-4);
+        assertEquals(2, outer[13], 1e-4);
+        assertEquals(3, outer[14], 1e-4);
+        assertEquals(4, outer[15], 1e-4);
+        assertEquals(0, c.quadCount(), "nothing tessellated");
+    }
+
+    @Test
+    void shapeRenderingCrispEdgesIsPassedToTheCanvasPerBox() {
+        RecordingCanvas c = new RecordingCanvas();
+        new TestHost().load("<div style='border-radius: 4px; background: red; height: 4px'></div>"
+                + "<div style='shape-rendering: crispEdges; height: 10px'><p style='border-radius: 4px; background: blue; height: 4px'></p></div>"
+                + "<div style='shape-rendering: optimizeSpeed; height: 4px'></div><div style='shape-rendering: geometricPrecision; height: 4px'></div>")
+                .paint(c);
+        List<Boolean> last = c.crispHints.subList(c.crispHints.size() - 5, c.crispHints.size());
+        assertEquals(List.of(false, true, true, true, false), last,
+                "per box, inherited by the paragraph; optimizeSpeed is crisp too, geometricPrecision is not");
+    }
 }

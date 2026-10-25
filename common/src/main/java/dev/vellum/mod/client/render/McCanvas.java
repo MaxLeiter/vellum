@@ -4,6 +4,9 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.ScissorStack;
 import dev.vellum.engine.paint.Shapes;
+import dev.vellum.engine.paint.SmoothShape;
+import dev.vellum.engine.style.Shadow;
+import dev.vellum.mod.VellumConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
@@ -31,6 +34,12 @@ import java.util.Arrays;
  *       and hide below half opacity, as items do.</li>
  *   <li>Geometry: rectangles and quads are drawn with their own vertices, so fractional positions, rotations and
  *       per-vertex colours all work. Consecutive primitives share one copy of the transform.</li>
+ *   <li>Shapes: where the version has the shape shader ({@link McGui#shapesAvailable}, 26.2 and 26.3) and
+ *       {@code client.shapeShader} is on, rounded boxes, rounded borders of one width and colour, and box-shadows are
+ *       each one quad that the shader fills with antialiased edges and a Gaussian blur. What it can't draw (elliptical
+ *       corners, borders that differ by side, shadows with corners that differ, offset inset shadows) is tessellated by
+ *       the {@link Canvas} defaults, as everything is on other versions, and as boxes with
+ *       {@code shape-rendering: crispEdges} are.</li>
  * </ul>
  */
 public final class McCanvas implements Canvas {
@@ -46,6 +55,10 @@ public final class McCanvas implements Canvas {
     private final float mouseX, mouseY;
     private final float guiScale;
     private final @Nullable SlotSink slots;
+    /** Whether shapes go to the shape shader this frame. */
+    private final boolean shapes;
+    /** The box being painted asked for hard pixel edges ({@code shape-rendering: crispEdges}). */
+    private boolean crisp;
 
     private final Matrix3x2f m;
     private final Matrix3x2f scratch = new Matrix3x2f();
@@ -83,6 +96,7 @@ public final class McCanvas implements Canvas {
         // Clips start from what the GUI renderer can draw this frame (McGui.drawableArea).
         this.clips = gui.drawableArea();
         this.m = gui.begin();
+        this.shapes = VellumConfig.CLIENT_SHAPE_SHADER.get() && gui.shapesAvailable();
     }
 
     /** Pops the scissors clipped outside any save and restores the pose. */
@@ -221,6 +235,64 @@ public final class McCanvas implements Canvas {
         if (sprite == null || alpha(c) == 0 || w <= 0 || h <= 0) return;
         // Nine-slice and tiling work at integer sizes; scale the remainder so the sprite still fills the box exactly.
         gui.sprite(m, x, y, width / w, height / h, sprite, w, h, c);
+    }
+
+    // ---- Shapes ----
+
+    @Override
+    public void crispShapes(boolean crisp) {
+        this.crisp = crisp;
+    }
+
+    @Override
+    public void fillRoundedRect(float x, float y, float width, float height, float[] radii, int argb) {
+        if (!Shapes.isRounded(radii)) fillRect(x, y, width, height, argb);
+        else if (!draw(smooth() ? SmoothShape.box(x, y, width, height, radii, 0, argb) : null)) {
+            Canvas.super.fillRoundedRect(x, y, width, height, radii, argb);
+        }
+    }
+
+    @Override
+    public void fillBorder(float[] outer, float[] radii, float[] widths, int[] colors) {
+        // Square borders stay exact quads: on whole device pixels they are as crisp as anything the shader draws.
+        if (!draw(smooth() ? SmoothShape.border(outer, radii, widths, colors) : null)) Canvas.super.fillBorder(outer, radii, widths, colors);
+    }
+
+    @Override
+    public void fillBoxShadow(float[] box, float[] radii, Shadow shadow) {
+        if (!draw(smooth() ? SmoothShape.shadow(box, radii, shadow) : null)) Canvas.super.fillBoxShadow(box, radii, shadow);
+    }
+
+    /** Whether shapes may go to the shader: it is on and the box being painted did not ask for crisp edges. */
+    private boolean smooth() {
+        return shapes && !crisp;
+    }
+
+    /**
+     * Submits a shape to the shader (see {@link McGui#shape}), with a device pixel of room on every side for its
+     * antialiased edge. False to tessellate it instead: null (the shader can't draw it) or a radius too large for the
+     * shader's 16 bits.
+     */
+    private boolean draw(@Nullable SmoothShape s) {
+        if (s == null) return false;
+        if (s == SmoothShape.NOTHING || clippedAway()) return true;
+        int c = color(s.argb());
+        if (alpha(c) == 0) return true;
+        short[] r = new short[4];
+        for (int k = 0; k < 4; k++) {
+            float sixteenths = s.radii()[2 * k] * 16;
+            if (!(sixteenths < Short.MAX_VALUE)) return false;
+            r[k] = (short) Math.round(Math.max(0, sixteenths));
+        }
+        float edge = devicePixel(), x0 = s.x0() - edge, y0 = s.y0() - edge, x1 = s.x1() + edge, y1 = s.y1() + edge;
+        boundsOf(x0, y0, x1, y1);
+        ScreenRectangle scissor = gui.scissor();
+        ScreenRectangle bounds = clippedBounds(scissor);
+        if (bounds != null) {
+            gui.shape(s.shadow(), pose(), x0, y0, x1, y1, s.cx(), s.cy(), s.halfWidth(), s.halfHeight(), r, s.a(), s.b(),
+                    s.inset(), s.cutout(), c, bounds, scissor);
+        }
+        return true;
     }
 
     // ---- For Minecraft content ----

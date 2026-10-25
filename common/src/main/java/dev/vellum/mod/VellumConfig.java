@@ -93,6 +93,9 @@ public final class VellumConfig {
             "Show a notice while you type into a page that a server opened.");
     public static final Setting<Boolean> CLIENT_REDUCED_MOTION = bool("client.reducedMotion", false,
             "Pages see prefers-reduced-motion: reduce and should skip or shorten animations.");
+    public static final Setting<Boolean> CLIENT_SHAPE_SHADER = bool("client.shapeShader", true,
+            "Draw rounded boxes, borders and box-shadows with a shader, for smooth edges and real blur (Minecraft 26.2 and 26.3). "
+                    + "false draws them as flat quads.");
 
     // ---- Limits ----
 

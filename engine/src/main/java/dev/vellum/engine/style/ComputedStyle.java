@@ -169,6 +169,7 @@ public final class ComputedStyle implements Cloneable {
      */
     public float tooltipDelay = 500f;
     public ListStyleType listStyleType = ListStyleType.DISC;
+    public ShapeRendering shapeRendering = ShapeRendering.AUTO;
 
     // ---- Animation ----
     public List<TransitionSpec> transitions = List.of();
@@ -238,6 +239,7 @@ public final class ComputedStyle implements Cloneable {
         scrollbarTrackColor = parent.scrollbarTrackColor;
         tooltipDelay = parent.tooltipDelay;
         listStyleType = parent.listStyleType;
+        shapeRendering = parent.shapeRendering;
         customProperties = parent.customProperties;
     }
 
@@ -257,7 +259,7 @@ public final class ComputedStyle implements Cloneable {
                 && imageRendering == o.imageRendering && accentColor == o.accentColor && tint == o.tint
                 && scrollbarThumbColor == o.scrollbarThumbColor && scrollbarTrackColor == o.scrollbarTrackColor
                 && same(tooltipDelay, o.tooltipDelay) && listStyleType == o.listStyleType
-                && customProperties.equals(o.customProperties);
+                && shapeRendering == o.shapeRendering && customProperties.equals(o.customProperties);
     }
 
     /**
@@ -325,7 +327,7 @@ public final class ComputedStyle implements Cloneable {
                 && same(gazeLimitDown, o.gazeLimitDown) && scrollSmooth == o.scrollSmooth
                 && scrollbarThumbColor == o.scrollbarThumbColor
                 && scrollbarTrackColor == o.scrollbarTrackColor && same(tooltipDelay, o.tooltipDelay)
-                && listStyleType == o.listStyleType
+                && listStyleType == o.listStyleType && shapeRendering == o.shapeRendering
                 && transitions.equals(o.transitions)
                 && animations.equals(o.animations) && customProperties.equals(o.customProperties)
                 && isFlexOrGridItemHint == o.isFlexOrGridItemHint;

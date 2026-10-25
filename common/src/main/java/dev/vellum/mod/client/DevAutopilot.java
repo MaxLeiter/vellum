@@ -44,7 +44,7 @@ import java.util.function.Supplier;
  * Dev-only visual check ({@code ./gradlew :neoforge:26.3:runClient -Pautopilot}, or {@code :fabric:26.3}, {@code :neoforge:1.21.1}, {@code :fabric:1.21.1},
  * i.e. {@code -Dvellum.autopilot=true}): creates a superflat creative world, opens the canvas test, every showcase
  * page and demo, screenshots each to {@code runs/client/screenshots/vellum_<name>.png} at GUI scale 2 (the canvas
- * test and the 3D pages also at 3), logs the frame rate of each (and of benchmark pages of 3D content), and quits.
+ * test, the shapes page and the 3D pages also at 3), logs the frame rate of each (and of benchmark pages of 3D content), and quits.
  *
  * <p>It drives pages with {@link VellumAutomation}: hovers the title screen's first button for a burst of screenshots
  * a tick apart, drags a turntable, opens a page under the resting cursor (hovered within its first frames, without a
@@ -232,6 +232,11 @@ public final class DevAutopilot {
         grab(mc, "hud", 5);
         steps.add(() -> VellumHud.hide(VellumClient.DEMO_HUD));
         toast(mc);
+        // Last, so that nothing after it depends on the time it takes.
+        guiScale(mc, 3);
+        shoot(mc, "shapes_gui3", () -> VellumScreens.open(devUrl("shapes")));
+        guiScale(mc, 2);
+        shoot(mc, "shapes", () -> VellumScreens.open(devUrl("shapes")));
     }
 
     /**
