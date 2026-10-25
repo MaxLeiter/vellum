@@ -743,6 +743,18 @@ public final class Document extends Node {
         });
     }
 
+    /**
+     * Sets {@code vellum.data[key]} to {@code json} (a JSON value), or removes the field when {@code json} is null,
+     * without replacing the rest of the data: only the patch is parsed. Scripts' {@code vellum.on('patch', fn)}
+     * listeners get {@code {key, value}}, then their 'data' listeners get {@code (vellum.data, key)}. Not a
+     * {@code message} event.
+     */
+    public void patch(String key, String json) {
+        run(() -> {
+            if (scripts != null) scripts.patch(key, json);
+        });
+    }
+
     // ---- Errors and lifecycle ----
 
     /**

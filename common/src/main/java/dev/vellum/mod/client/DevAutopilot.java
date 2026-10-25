@@ -1,7 +1,9 @@
 package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.Window;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.VellumConfig;
@@ -205,6 +207,7 @@ public final class DevAutopilot {
         leave(); // or the next pages open hovered
         firstHover(mc);
         folderPages(mc);
+        dataPatches();
         tooltips(mc);
         chronicle(mc);
         modKeys();
@@ -559,6 +562,34 @@ public final class DevAutopilot {
 
     private static final String FOLDER = "vellum_autopilot";
 
+    /**
+     * {@link DocumentDriver#patch}: one field of a page's data changes in place, its binding and 'patch' listener see
+     * it, and the page has it again after {@link DocumentDriver#reloadAll}, as {@code /vellum reload} and hot reload do.
+     */
+    private static void dataPatches() {
+        String html = "<p id=hp>{{ hp }} {{ name }}</p><script>var seen = []; vellum.on('patch', p => seen.push(p.key));"
+                + " vellum.on('data', (d, key) => seen.push('data ' + key))</script>";
+        open("the page to patch", () -> VellumScreens.openInline(html, JsonParser.parseString("{\"hp\": 20, \"name\": \"Steve\"}")));
+        steps.add(() -> {
+            if (McClient.screen() instanceof VellumScreen v) v.driver().patch("hp", new JsonPrimitive(7));
+            wait = 2;
+        });
+        onPage("the patched page", p -> {
+            String text = patchedText(p), seen = p.eval("seen.join()").map(JsonElement::getAsString).orElse("");
+            check(text.equals("7 Steve") && seen.equals("hp,data hp"), "a patch updated its binding and told the page ('{}', {})",
+                    "a patch didn't reach the page as it should: text '{}', listeners saw {}", text, seen);
+        });
+        steps.add(DocumentDriver::reloadAll);
+        settle("the reloaded patched page", 0);
+        onPage("the reloaded patched page", p -> check(patchedText(p).equals("7 Steve"), "a patch was kept across a reload",
+                "after a reload the patched page says '{}'", patchedText(p)));
+        steps.add(() -> McClient.setScreen(null));
+    }
+
+    private static String patchedText(VellumAutomation page) {
+        return page.eval("document.getElementById('hp').textContent").map(JsonElement::getAsString).orElse("");
+    }
+
     private static String folderPage(String text) {
         return "<!doctype html><link rel=\"stylesheet\" href=\"style.css\"><link rel=\"stylesheet\" href=\"escape.css\">"
                 + "<body class=\"mc-center\"><p>" + text + "</p><img src=\"pic.png\" style=\"height: 32px\"></body>";
@@ -776,6 +807,25 @@ public final class DevAutopilot {
         steps.add(() -> wait = 5);
         steps.add(() -> check(McClient.screen() instanceof VellumScreen v && v.driver().data() instanceof com.google.gson.JsonObject o && o.has("ok"),
                 "deeply nested data was dropped", "deeply nested data reached the page"));
+        // Patches from the server set one field, and count toward client.maxDataChars with the rest of the data.
+        steps.add(() -> serverRun(mc, player -> {
+            JsonPrimitive half = new JsonPrimitive("z".repeat(VellumConfig.CLIENT_MAX_DATA.get() / 2));
+            VellumServer.openInline(player, "<p>{{ hp }}</p>", JsonParser.parseString("{\"hp\": 20}"))
+                    .patch("hp", new JsonPrimitive(7)).patch("a", half).patch("b", half);
+        }));
+        until("the patched server page is shown", ticks -> serverData().has("a"));
+        steps.add(() -> wait = 5);
+        steps.add(() -> {
+            JsonObject data = serverData();
+            check(data.has("hp") && data.get("hp").getAsInt() == 7 && !data.has("b"), "a server's patches applied, up to client.maxDataChars",
+                    "a server's patches gave {}", data.keySet());
+            if (McClient.screen() instanceof VellumScreen v) v.driver().reload();
+        });
+        settle("the reloaded server page", 0);
+        onPage("the reloaded server page", p -> {
+            String hp = p.eval("vellum.data.hp + ' ' + ('b' in vellum.data)").map(JsonElement::getAsString).orElse("");
+            check(hp.equals("7 false"), "a server's patch was kept across a reload", "after a reload the server page's data is '{}'", hp);
+        });
         // vellum.send is capped per screen (client.messageBurst), and reloading the page doesn't reset the count.
         steps.add(() -> {
             serverLog.clear();
@@ -816,6 +866,12 @@ public final class DevAutopilot {
             check(McClient.screen() == null && ServerPages.blocked(), "the reopen loop was stopped after {} opens",
                     "the reopen loop went on: {} opens", serverLog.stream().filter("opened"::equals).count());
         });
+    }
+
+    /** The open server page's data, or an empty object. */
+    private static JsonObject serverData() {
+        return McClient.screen() instanceof VellumScreen v && v.driver().session() >= 0 && v.driver().data() instanceof JsonObject o
+                ? o : new JsonObject();
     }
 
     private static void serverOpen(Minecraft mc, String html) {

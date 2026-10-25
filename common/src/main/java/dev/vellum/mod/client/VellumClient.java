@@ -8,6 +8,7 @@ import dev.vellum.mod.client.render.McImages;
 import dev.vellum.mod.client.showcase.Mobdex;
 import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.DataPayload;
+import dev.vellum.mod.net.PatchPayload;
 import dev.vellum.mod.net.OpenPayload;
 import dev.vellum.mod.server.VellumDemos;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -47,6 +48,7 @@ public final class VellumClient {
         switch (payload) {
             case OpenPayload p -> ServerPages.open(p);
             case DataPayload p -> ServerPages.data(p);
+            case PatchPayload p -> ServerPages.patch(p);
             case ClosePayload p -> ServerPages.close(p);
             default -> Constants.LOG.warn("Vellum: unhandled payload {}", payload.type().id());
         }

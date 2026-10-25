@@ -250,7 +250,7 @@ anim.finished.then(() => console.log('shown'));
 | Member | |
 |---|---|
 | `vellum.data` | The latest data from the server or the mod that opened the page (a parsed JSON value; `{}` until data arrives). Templates read from it. |
-| `vellum.on(channel, fn)` | Calls `fn(value)` for messages on `channel`; `'data'` fires whenever `vellum.data` is replaced. Returns a function that removes the listener. |
+| `vellum.on(channel, fn)` | Calls `fn(value)` for messages on `channel`; `'data'` fires whenever `vellum.data` is replaced or patched, and `'patch'` when one field of it is ([below](#patches)). Returns a function that removes the listener. |
 | `vellum.off(channel, fn)` | Removes a listener. |
 | `vellum.send(channel, value)` | Sends `JSON.stringify(value)` to the server or mod. A burst of 20 messages, then 20 per second, so up to 40 in the first second. Extra messages are dropped with a warning, and `send` returns false. |
 | `vellum.state(object)` | Makes the object's properties visible to [templates](#templates) and returns it. |
@@ -261,6 +261,29 @@ anim.finished.then(() => console.log('shown'));
 | `vellum.nextTick(fn)` | Calls `fn` once [templates](#updates) have rendered the current state (at the next frame). |
 
 A message also reaches the page as a `message` event on the document whose `detail` is `[channel, json]`.
+
+### Patches
+
+The mod or server can change one top-level field of `vellum.data` instead of sending all of it
+(`driver.patch(key, value)`, `session.patch(key, value)`). The page parses only the new value and sets
+`vellum.data[key]` in place, or deletes it when the value is null, so every other object in `vellum.data` stays the
+same object and a `v-for` over them keeps its rows. Then:
+
+1. `'patch'` listeners get `{key, value}` (`value` is `undefined` when the field was removed);
+2. `'data'` listeners get `(vellum.data, key)`, so a page that only listens to `'data'` still sees every change.
+   After a full update the second argument is `undefined`;
+3. templates update at the next frame, as after any entry.
+
+```js
+vellum.on('patch', ({key, value}) => {
+  if (key === 'gold') animateCoins(value);
+});
+vellum.on('data', (data, key) => {
+  if (key === undefined || key === 'items') rebuildIndex(data.items);   // skip work a patch didn't touch
+});
+```
+
+A patch isn't a message, so it fires no `message` event.
 
 ## Templates
 

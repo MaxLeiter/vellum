@@ -47,6 +47,42 @@ class TemplatesTest {
     }
 
     @Test
+    void aPatchUpdatesBindings() {
+        Page page = new TestHost().recordErrors().load("<p id=p>Hello {{ name }}, {{ stats.hp }} HP</p>");
+        page.doc.receive("data", "{\"name\": \"Steve\", \"stats\": {\"hp\": 20}}");
+        page.frame();
+        page.doc.patch("stats", "{\"hp\": 7}");
+        page.frame();
+        assertEquals("Hello Steve, 7 HP", page.byId("p").textContent());
+        page.doc.patch("name", "\"Alex\"");
+        page.frame();
+        assertEquals("Hello Alex, 7 HP", page.byId("p").textContent());
+    }
+
+    @Test
+    void patchingOneRowsKeyLeavesTheOtherRowsAlone() {
+        Page page = new TestHost().load("""
+                <ul id=list><li v-for="(mob, id) in vellum.data" :key="id">{{ id }} {{ mob.seen }}</li></ul>""");
+        page.doc.receive("data", "{\"zombie\": {\"seen\": 1}, \"skeleton\": {\"seen\": 2}}");
+        page.frame();
+        Element list = page.byId("list");
+        List<Element> before = list.children();
+        assertEquals(List.of("zombie 1", "skeleton 2"), texts(list));
+        page.run("var skeleton = vellum.data.skeleton");
+        page.doc.patch("zombie", "{\"seen\": 5}");
+        page.frame();
+        assertEquals(List.of("zombie 5", "skeleton 2"), texts(list));
+        assertEquals("true", page.eval("vellum.data.skeleton === skeleton"), "the row not patched keeps its object");
+        assertSame(before.get(0), list.children().get(0), "the patched row keeps its element");
+        assertSame(before.get(1), list.children().get(1), "and so does the other");
+        page.doc.patch("creeper", "{\"seen\": 0}");
+        page.doc.patch("zombie", null);
+        page.frame();
+        assertEquals(List.of("skeleton 2", "creeper 0"), texts(list));
+        assertSame(before.get(1), list.children().get(0), "removing a key removes only its row");
+    }
+
+    @Test
     void stateAndHandlers() {
         Page page = new TestHost().load("""
                 <button id=b @click="count++">{{ count }} / {{ doubled() }}</button>
