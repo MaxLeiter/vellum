@@ -1,5 +1,6 @@
 // Pure-Java web engine: DOM, HTML/CSS parsing, cascade, layout, animation, events, scripting and the display list.
-// MUST NOT depend on Minecraft or any loader. Compiled straight into each loader jar (like Chronicle's sim-core).
+// MUST NOT depend on Minecraft or any loader. Compiled once, here; the loaders copy its classes into their own output
+// (see multiloader-loader.gradle), as they do Rhino's.
 plugins {
     id 'java-library'
     id 'vellum-java'
@@ -19,15 +20,21 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
     options.release = engine_java_release as int
     options.compilerArgs += ['-Xlint:all,-serial,-processing,-options', '-Werror']
+    // Line numbers for stack traces, no local variable tables, as for the loaders (multiloader-common.gradle): these
+    // classes ship in every loader jar.
+    options.debugOptions.debugLevel = 'source,lines'
 }
 
 configurations {
+    // The sources, for the loaders' javadoc.
     engineJava { canBeResolved = false; canBeConsumed = true }
-    engineResources { canBeResolved = false; canBeConsumed = true }
+    // The compiled classes and resources, which the loaders copy into their own output, for dev runs and the jar.
+    engineClasses { canBeResolved = false; canBeConsumed = true }
 }
 artifacts {
     engineJava sourceSets.main.java.sourceDirectories.singleFile
-    engineResources sourceSets.main.resources.sourceDirectories.singleFile
+    engineClasses(tasks.named('compileJava').flatMap { it.destinationDirectory })
+    engineClasses(sourceSets.main.output.resourcesDir) { builtBy(tasks.named('processResources')) }
 }
 
 java {
