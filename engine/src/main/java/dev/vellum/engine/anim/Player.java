@@ -4,8 +4,10 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.PseudoElement;
 import dev.vellum.engine.event.TransitionEvent;
 import dev.vellum.engine.style.ComputedStyle;
+import dev.vellum.engine.style.Prop;
 
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Plays a {@link KeyframeEffect} on an element over time: the playback half of a Web Animations animation (start
@@ -168,6 +170,11 @@ abstract class Player {
     /** Applies the effect onto {@code target} if it currently has one. */
     final void apply(ComputedStyle target) {
         if (hasEffect()) effect.apply(target, sample.progress());
+    }
+
+    /** Applies the effect's values for {@code props} onto {@code target} if it currently has one. */
+    final void apply(ComputedStyle target, Set<Prop> props) {
+        if (hasEffect()) effect.apply(target, sample.progress(), props);
     }
 
     /** Called once per tick: starts pending playback, stops at the end, samples and reports timing events. */

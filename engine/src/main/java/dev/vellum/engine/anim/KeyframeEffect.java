@@ -59,6 +59,11 @@ final class KeyframeEffect {
         for (Track track : tracks) track.apply(target, progress);
     }
 
+    /** {@link #apply} for the properties in {@code props} only. */
+    void apply(ComputedStyle target, double progress, Set<Prop> props) {
+        for (Track track : tracks) if (props.contains(track.prop)) track.apply(target, progress);
+    }
+
     /** One property's keyframes; {@code easings[i]} eases the segment from keyframe i to i + 1. */
     private record Track(Prop prop, float[] offsets, Object[] values, TimingFunction[] easings) {
         static Track of(Prop prop, List<ResolvedKeyframe> keyframes, TimingFunction defaultEasing) {

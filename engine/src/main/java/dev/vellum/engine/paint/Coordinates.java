@@ -36,10 +36,17 @@ public final class Coordinates {
 
     /** Sets {@code out} to the matrix from {@code box}'s border-box coordinates to viewport coordinates. */
     public static Affine toViewport(Box box, Affine out) {
-        Affine own = new Affine();
+        return toViewport(box, out, new Affine());
+    }
+
+    /**
+     * {@link #toViewport(Box, Affine)} with {@code scratch} (overwritten) for each box's own transform, so callers
+     * that map on every pointer move allocate nothing.
+     */
+    public static Affine toViewport(Box box, Affine out, Affine scratch) {
         out.identity();
         for (Box b = box; b != null; b = hop(b, out)) {
-            if (transform(b, StackingOrder.styleOf(b), own)) out.preMultiply(own);
+            if (transform(b, StackingOrder.styleOf(b), scratch)) out.preMultiply(scratch);
         }
         return out;
     }
@@ -67,11 +74,12 @@ public final class Coordinates {
         float[] r = boundingRect(box);
         float x0 = Math.max(r[0], 0), y0 = Math.max(r[1], 0);
         float x1 = Math.min(r[0] + r[2], viewportWidth), y1 = Math.min(r[1] + r[3], viewportHeight);
-        Affine m = new Affine();
+        Affine m = new Affine(), scratch = new Affine();
         float[] clip = new float[4];
         for (Box c = box.contentParent(); c != null && x0 < x1 && y0 < y1; c = c.contentParent()) {
             if (!StackingOrder.clips(c, StackingOrder.styleOf(c))) continue;
-            toViewport(c, m).mapBounds(c.borderLeft, c.borderTop, c.paddingBoxWidth(), c.paddingBoxHeight(), clip);
+            toViewport(c, m, scratch)
+                    .mapBounds(c.borderLeft, c.borderTop, c.paddingBoxWidth(), c.paddingBoxHeight(), clip);
             x0 = Math.max(x0, clip[0]);
             y0 = Math.max(y0, clip[1]);
             x1 = Math.min(x1, clip[0] + clip[2]);

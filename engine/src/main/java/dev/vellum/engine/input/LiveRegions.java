@@ -25,13 +25,11 @@ import java.util.function.Predicate;
 final class LiveRegions {
     private enum Politeness { OFF, POLITE, ASSERTIVE }
 
-    /** What a region said at the last poll: its lines, or for a log its entries. */
-    private record Said(List<String> parts) {}
-
     private final Document document;
     /** {@link Document#domVersion} at the last poll; regions only change with the document. */
     private int version = -1;
-    private Map<Element, Said> regions = new HashMap<>();
+    /** What each region said at the last poll: its lines, or for a log its entries. */
+    private Map<Element, List<String>> regions = new HashMap<>();
 
     LiveRegions(Document document) {
         this.document = document;
@@ -41,7 +39,7 @@ final class LiveRegions {
     List<Announcement> poll() {
         if (document.domVersion() == version) return List.of();
         version = document.domVersion();
-        Map<Element, Said> now = new HashMap<>();
+        Map<Element, List<String>> now = new HashMap<>();
         List<Announcement> out = new ArrayList<>();
         Element root = document.documentElement();
         if (root != null) visit(root, now, out);
@@ -49,15 +47,15 @@ final class LiveRegions {
         return out;
     }
 
-    private void visit(Element e, Map<Element, Said> now, List<Announcement> out) {
-        if ("true".equalsIgnoreCase(e.getAttribute("aria-hidden")) || e.hasInertContent()) return;
+    private void visit(Element e, Map<Element, List<String>> now, List<Announcement> out) {
+        if (Accessibility.ariaHidden(e) || e.hasInertContent()) return;
         Politeness politeness = politeness(e);
         if (politeness != Politeness.OFF) {
             boolean log = "log".equals(Accessibility.firstToken(e.getAttribute("role")));
             Predicate<Element> nested = n -> n != e && politeness(n) != Politeness.OFF;
-            Said said = new Said(log ? entries(e, nested) : Accessibility.lines(e, nested));
-            Said before = regions.get(e);
-            String text = Accessibility.join(log ? added(before, said.parts) : changed(before, said.parts));
+            List<String> said = log ? entries(e, nested) : Accessibility.lines(e, nested);
+            List<String> before = regions.get(e);
+            String text = Accessibility.join(log ? added(before, said) : changed(before, said));
             if (!text.isEmpty()) out.add(new Announcement(e, text, politeness == Politeness.ASSERTIVE));
             now.put(e, said);
         }
@@ -67,8 +65,8 @@ final class LiveRegions {
     }
 
     /** A region's text when it changed (all of it, as a new region's), else nothing. */
-    private static List<String> changed(Said before, List<String> lines) {
-        return before != null && before.parts.equals(lines) ? List.of() : lines;
+    private static List<String> changed(List<String> before, List<String> lines) {
+        return before != null && before.equals(lines) ? List.of() : lines;
     }
 
     /**
@@ -76,9 +74,9 @@ final class LiveRegions {
      * top, those after the overlap of its old end with its new start; else those after the entries it kept. A new log,
      * or one with nothing in common with its last entries, announces its last entry.
      */
-    private static List<String> added(Said before, List<String> entries) {
+    private static List<String> added(List<String> before, List<String> entries) {
         if (entries.isEmpty()) return List.of();
-        List<String> old = before == null ? List.of() : before.parts;
+        List<String> old = before == null ? List.of() : before;
         int kept = 0;
         while (kept < old.size() && kept < entries.size() && old.get(kept).equals(entries.get(kept))) kept++;
         if (kept == old.size() && before != null) return entries.subList(kept, entries.size());

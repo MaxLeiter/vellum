@@ -157,7 +157,11 @@ public final class Controls {
         canvas.drawSprite(sprite, RangeControl.thumbX(box, range.fraction()), box.contentY(),
                 RangeControl.THUMB_WIDTH, box.contentHeight(), s.tint);
         String label = el.getAttribute("label");
-        if (label != null) drawCentred(canvas, box, s, range.label.set(range.caption(label), FontSpec.of(s), s, measure(el)));
+        if (label != null) {
+            FontSpec font = FontSpec.of(s);
+            TextMeasure measure = measure(el);
+            drawCentred(canvas, box, s, range.label.set(range.caption(label), font, s, measure), font, measure);
+        }
     }
 
     /** The selected option's label, and a down arrow at the right. */
@@ -166,7 +170,7 @@ public final class Controls {
         el.controlState = state;
         FontSpec font = FontSpec.of(s);
         TextMeasure measure = measure(el);
-        float y = textTop(box, measure.glyphHeight(font));
+        float glyphHeight = measure.glyphHeight(font), y = textTop(box, glyphHeight);
         Label arrow = state.arrow.set(ARROW, font, s, measure);
         float arrowX = box.contentX() + box.contentWidth() - arrow.width();
         arrow.draw(canvas, arrowX, y, s, s.color);
@@ -174,11 +178,8 @@ public final class Controls {
         if (option == null) return;
         Label label = state.label.set(option, font, s, measure);
         float space = Math.max(0, arrowX - 2 - box.contentX());
-        boolean clip = label.width() > space || measure.glyphHeight(font) > box.paddingBoxHeight();
-        if (clip) {
-            canvas.save();
-            canvas.clipRect(box.contentX(), box.borderTop, space, box.paddingBoxHeight());
-        }
+        boolean clip = clipIf(canvas, label.width() > space || glyphHeight > box.paddingBoxHeight(),
+                box.contentX(), box.borderTop, space, box.paddingBoxHeight());
         label.draw(canvas, box.contentX(), y, s, s.color);
         if (clip) canvas.restore();
     }
@@ -197,9 +198,10 @@ public final class Controls {
 
     /** Submit, reset and button inputs: their value (or default label), centred. */
     private static void paintButton(Canvas canvas, Box box, ComputedStyle s, Element el) {
-        Label label = el.controlState instanceof Label l ? l : new Label();
-        el.controlState = label;
-        drawCentred(canvas, box, s, label.set(buttonLabel(el), FontSpec.of(s), s, measure(el)));
+        Label label = Dom.controlState(el, Label.class, e -> new Label());
+        FontSpec font = FontSpec.of(s);
+        TextMeasure measure = measure(el);
+        drawCentred(canvas, box, s, label.set(buttonLabel(el), font, s, measure), font, measure);
     }
 
     private static String buttonLabel(Element input) {
@@ -212,9 +214,10 @@ public final class Controls {
         };
     }
 
-    /** A label centred in the content box, clipped to the padding box only when it does not fit. */
-    private static void drawCentred(Canvas canvas, Box box, ComputedStyle s, Label label) {
-        float glyph = measure(box.element).glyphHeight(FontSpec.of(s));
+    /** A label in {@code font}, centred in the content box, clipped to the padding box only when it does not fit. */
+    private static void drawCentred(Canvas canvas, Box box, ComputedStyle s, Label label, FontSpec font,
+                                    TextMeasure measure) {
+        float glyph = measure.glyphHeight(font);
         boolean clip = clipIf(canvas, box, label.width() > box.contentWidth() || glyph > box.contentHeight());
         label.draw(canvas, box.contentX() + (box.contentWidth() - label.width()) / 2, textTop(box, glyph), s, s.color);
         if (clip) canvas.restore();
@@ -227,9 +230,14 @@ public final class Controls {
 
     /** Clips to the padding box when content overflows it (a clip costs the backend a draw call). */
     private static boolean clipIf(Canvas canvas, Box box, boolean overflows) {
+        return clipIf(canvas, overflows, box.borderLeft, box.borderTop, box.paddingBoxWidth(), box.paddingBoxHeight());
+    }
+
+    /** Clips to the rectangle (x, y, w, h) when {@code overflows}, saving the canvas first. Returns overflows. */
+    private static boolean clipIf(Canvas canvas, boolean overflows, float x, float y, float w, float h) {
         if (!overflows) return false;
         canvas.save();
-        canvas.clipRect(box.borderLeft, box.borderTop, box.paddingBoxWidth(), box.paddingBoxHeight());
+        canvas.clipRect(x, y, w, h);
         return true;
     }
 

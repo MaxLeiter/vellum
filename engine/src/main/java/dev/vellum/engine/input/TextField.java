@@ -7,6 +7,7 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.layout.Box;
 import dev.vellum.engine.layout.TextMeasure;
+import dev.vellum.engine.paint.Affine;
 import dev.vellum.engine.style.ComputedStyle;
 
 import java.util.Locale;
@@ -50,12 +51,16 @@ final class TextField {
      * when they may have changed: after a DOM change or a new value.
      */
     static TextField of(Element element) {
-        TextField field = element.controlState instanceof TextField f ? f : new TextField(element);
-        element.controlState = field;
+        TextField field = Dom.controlState(element, TextField.class, TextField::new);
         if (field.domVersion != element.ownerDocument().domVersion() || field.valueVersion != element.valueVersion()) {
             field.sync();
         }
         return field;
+    }
+
+    /** {@link #of} for a text control; null for anything else, null included. */
+    static TextField ifText(Element element) {
+        return element != null && element.isTextControl() ? of(element) : null;
     }
 
     private void sync() {
@@ -296,9 +301,11 @@ final class TextField {
         } else editor.moveTo(offset, extend);
         caretMoved();
         boolean[] moved = {false};
+        float[] local = new float[2];
+        Affine m = new Affine(), scratch = new Affine();
         return (px, py) -> {
             if (element.box == null) return;
-            float[] local = Dom.local(element.box, px, py);
+            Dom.local(element.box, px, py, local, m, scratch);
             int o = offsetAt(local[0], local[1]);
             // Ignore the pointer resting where it was pressed, so a double-click's word selection survives.
             if (!moved[0] && o == offset) return;

@@ -75,7 +75,7 @@ public final class Scrollbars {
     private static boolean hasBar(Box box, ComputedStyle s, boolean vertical) {
         if (!box.isScrollContainer() || s.scrollbarWidth == 0) return false;
         Overflow overflow = vertical ? s.overflowY : s.overflowX;
-        return (overflow == Overflow.SCROLL || overflow == Overflow.AUTO) && maxScroll(box, vertical) > 0.5f;
+        return overflow.userScrollable() && maxScroll(box, vertical) > 0.5f;
     }
 
     private static float barWidth(ComputedStyle s, boolean hovered) {

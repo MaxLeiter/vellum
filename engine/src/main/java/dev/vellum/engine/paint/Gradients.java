@@ -112,11 +112,14 @@ final class Gradients {
         int last = stopCount - 1;
         // The last ring reaches the farthest corner, so the last colour covers the rest of the tile.
         float outer = Math.max((float) Math.hypot(fx, fy / yScale), stopPos[last]) + 1;
-        ringSegments = Math.clamp(4L * Shapes.segments(Math.max(outer, outer * yScale), dp), 8, 64);
-        for (int j = 0; j <= ringSegments; j++) {
-            double a = 2 * Math.PI * j / ringSegments;
-            ringCos[j] = (float) Math.cos(a);
-            ringSin[j] = (float) Math.sin(a);
+        int segments = Math.clamp(4L * Shapes.segments(Math.max(outer, outer * yScale), dp), 8, 64);
+        if (segments != ringSegments) { // the table depends on the count alone
+            ringSegments = segments;
+            for (int j = 0; j <= segments; j++) {
+                double a = 2 * Math.PI * j / segments;
+                ringCos[j] = (float) Math.cos(a);
+                ringSin[j] = (float) Math.sin(a);
+            }
         }
         ring(batch, 0, stopPos[0], stopColor[0], stopColor[0]);
         for (int i = 0; i < last; i++) ring(batch, stopPos[i], stopPos[i + 1], stopColor[i], stopColor[i + 1]);

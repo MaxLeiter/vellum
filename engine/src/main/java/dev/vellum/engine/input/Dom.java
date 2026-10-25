@@ -8,6 +8,7 @@ import dev.vellum.engine.paint.HitResult;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /** Tree and geometry queries used across the input package. */
@@ -27,6 +28,14 @@ final class Dom {
         return null;
     }
 
+    /** {@code e}'s control state if it is a {@code type}; otherwise {@code make}'s, which replaces it. */
+    static <T> T controlState(Element e, Class<T> type, Function<Element, T> make) {
+        if (type.isInstance(e.controlState)) return type.cast(e.controlState);
+        T state = make.apply(e);
+        e.controlState = state;
+        return state;
+    }
+
     /** True when (x, y) lies in the rectangle {x, y, width, height}; false for a null rectangle. */
     static boolean inside(float[] rect, float x, float y) {
         return rect != null && x >= rect[0] && x < rect[0] + rect[2] && y >= rect[1] && y < rect[1] + rect[3];
@@ -37,9 +46,18 @@ final class Dom {
      * Drags use it for every pointer position after the press.
      */
     static float[] local(Box box, float x, float y) {
-        Affine m = new Affine();
-        if (!Coordinates.fromViewport(box, m)) return new float[] {Float.NaN, Float.NaN};
-        return new float[] {m.mapX(x, y), m.mapY(x, y)};
+        return local(box, x, y, new float[2], new Affine(), new Affine());
+    }
+
+    /** {@link #local} into {@code out}, working in {@code m} and {@code scratch} (both overwritten). Returns out. */
+    static float[] local(Box box, float x, float y, float[] out, Affine m, Affine scratch) {
+        if (Coordinates.toViewport(box, m, scratch).invert()) {
+            out[0] = m.mapX(x, y);
+            out[1] = m.mapY(x, y);
+        } else {
+            out[0] = out[1] = Float.NaN;
+        }
+        return out;
     }
 
     /** Like {@link #local}, but taken from the hit test when it was a hit in {@code box}. */

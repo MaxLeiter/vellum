@@ -97,8 +97,9 @@ public final class InputHandler {
                 if (!popup.contains(x, y)) popup = null;
                 return true;
             }
-            HitResult hit = hitTest(x, y);
-            Element target = target(hit, x, y);
+            boolean overPopup = overPopup(x, y);
+            HitResult hit = hitTest(x, y, overPopup);
+            Element target = target(hit, overPopup);
             if (target == null) return false;
             if (button == 0 && hit != null && hit.scrollbar() != null) {
                 pointer.capture(target, scroller.press(hit));
@@ -138,12 +139,13 @@ public final class InputHandler {
             pointer.moveTo(x, y, mods);
             Drag drag = pointer.releaseCapture();
             if (drag != null) drag.end();
-            if (popup != null && popup.contains(x, y)) {
+            boolean overPopup = overPopup(x, y);
+            if (overPopup) {
                 pointer.release(null, button);
                 if (popup.release(x, y)) popup = null;
                 return true;
             }
-            Element target = target(hitTest(x, y), x, y);
+            Element target = target(hitTest(x, y, overPopup), overPopup);
             Element clickTarget = pointer.release(target, button);
             if (target != null) pointer.fire("mouseup", target, button, pointer.clicks(), null);
             if (clickTarget != null && !clickTarget.isDisabled()) {
@@ -172,7 +174,8 @@ public final class InputHandler {
                 if (popup.contains(x, y)) popup.wheel(dy);
                 return true;
             }
-            Element target = target(hitTest(x, y), x, y);
+            boolean overPopup = overPopup(x, y);
+            Element target = target(hitTest(x, y, overPopup), overPopup);
             if (target == null) return false;
             if (pointer.dispatch(new WheelEvent(x, y, pointer.buttons(), mods, dx, dy), target).defaultPrevented()) return true;
             boolean scrolled = scroller.wheel(target, dx, dy);
@@ -184,8 +187,9 @@ public final class InputHandler {
     /** Re-targets hover at the pointer position (after moves, scrolls and relayouts). Returns the hovered element. */
     private Element trackHover() {
         if (!pointer.known()) return null;
-        HitResult hit = hitTest(pointer.x, pointer.y);
-        Element target = target(hit, pointer.x, pointer.y);
+        boolean overPopup = overPopup(pointer.x, pointer.y);
+        HitResult hit = hitTest(pointer.x, pointer.y, overPopup);
+        Element target = target(hit, overPopup);
         boolean overScrollbar = pointer.captured() == null && scroller.hover(hit);
         pointer.hover(target);
         pointer.updateCursor(target, overScrollbar);
@@ -193,16 +197,24 @@ public final class InputHandler {
         return target;
     }
 
+    /** Whether the open dropdown covers a point. */
+    private boolean overPopup(float x, float y) {
+        return popup != null && popup.contains(x, y);
+    }
+
     /** Hit tests a point, except while a drag holds the pointer or the open dropdown covers it (null then). */
-    private HitResult hitTest(float x, float y) {
-        if (pointer.captured() != null || popup != null && popup.contains(x, y)) return null;
+    private HitResult hitTest(float x, float y, boolean overPopup) {
+        if (pointer.captured() != null || overPopup) return null;
         return document.painter().hitTest(x, y);
     }
 
-    /** Where pointer events at a point go: the capturing element during drags, the select under its open list, else the hit. */
-    private Element target(HitResult hit, float x, float y) {
+    /**
+     * Where pointer events at a point go: the capturing element during drags, the select under its open list
+     * ({@code overPopup}), else the hit.
+     */
+    private Element target(HitResult hit, boolean overPopup) {
         if (pointer.captured() != null) return pointer.captured();
-        if (popup != null && popup.contains(x, y)) return popup.select();
+        if (overPopup) return popup.select();
         return hit == null ? null : hit.element();
     }
 
@@ -250,9 +262,9 @@ public final class InputHandler {
                 suppressChar = false;
                 return true;
             }
-            Element focused = document.focusedElement();
-            if (focused == null || !focused.isTextControl()) return false;
-            TextField.of(focused).type(text);
+            TextField field = focusedField();
+            if (field == null) return false;
+            field.type(text);
             return true;
         });
     }
@@ -313,6 +325,11 @@ public final class InputHandler {
         return true;
     }
 
+    /** The focused element's text field, or null when no text control has focus. */
+    private TextField focusedField() {
+        return TextField.ifText(document.focusedElement());
+    }
+
     private Element keyTarget() {
         Element focused = document.focusedElement();
         if (focused != null) return focused;
@@ -346,8 +363,8 @@ public final class InputHandler {
         if (document.scrolling().tick(nowMs)) trackHover();
         if (pointer.drag() != null) pointer.drag().move(pointer.x, pointer.y);
         turntables.removeIf(t -> !t.moving());
-        Element focused = document.focusedElement();
-        if (focused != null && focused.isTextControl()) TextField.of(focused).blink(nowMs);
+        TextField field = focusedField();
+        if (field != null) field.blink(nowMs);
     }
 
     /** Whether {@link #tick} has work every frame: a drag, a spinning turntable, or a focused text field's caret. */
@@ -371,8 +388,8 @@ public final class InputHandler {
 
     /** Called after each relayout: keeps the caret in view, autofocus, re-hit-tests hover. */
     public void afterLayout() {
-        Element focused = document.focusedElement();
-        if (focused != null && focused.isTextControl()) TextField.of(focused).scrollToCaret();
+        TextField field = focusedField();
+        if (field != null) field.scrollToCaret();
         if (popup != null && popup.select().box == null) popup = null;
         focus.autofocus();
         trackHover();
@@ -392,9 +409,11 @@ public final class InputHandler {
      * newly focused element scrolls into view.
      */
     public void focusChanged(Element old, Element now) {
-        if (old != null && old.isTextControl()) TextField.of(old).blurred();
+        TextField from = TextField.ifText(old);
+        if (from != null) from.blurred();
         if (popup != null && popup.select() == old) popup = null;
-        if (now != null && now.isTextControl()) TextField.of(now).focused();
+        TextField to = TextField.ifText(now);
+        if (to != null) to.focused();
         focus.focusChanged(now);
     }
 

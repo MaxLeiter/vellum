@@ -3,6 +3,7 @@ package dev.vellum.engine.input;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.event.InputEvent;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.paint.Affine;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,8 +36,7 @@ final class RangeControl {
 
     /** The control of a range input, created on first use; it re-reads min, max and step when the DOM changed. */
     static RangeControl of(Element element) {
-        RangeControl range = element.controlState instanceof RangeControl r ? r : new RangeControl(element);
-        element.controlState = range;
+        RangeControl range = Dom.controlState(element, RangeControl.class, RangeControl::new);
         int version = element.ownerDocument().domVersion();
         if (range.domVersion != version) {
             range.domVersion = version;
@@ -107,9 +107,12 @@ final class RangeControl {
         String start = text();
         moveThumb(localX);
         return new Drag() {
+            private final float[] local = new float[2];
+            private final Affine m = new Affine(), scratch = new Affine();
+
             @Override
             public void move(float px, float py) {
-                if (element.box != null) moveThumb(Dom.local(element.box, px, py)[0]);
+                if (element.box != null) moveThumb(Dom.local(element.box, px, py, local, m, scratch)[0]);
             }
 
             @Override

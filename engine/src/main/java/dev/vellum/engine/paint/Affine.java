@@ -183,9 +183,9 @@ public final class Affine {
 
     /** Sets this matrix from a decomposition written by {@link #decompose}. */
     public Affine recompose(float[] p) {
+        float cos = (float) Math.cos(p[ROTATE]), sin = (float) Math.sin(p[ROTATE]);
         return identity().translate(p[TX], p[TY])
-                .multiply((float) Math.cos(p[ROTATE]), (float) Math.sin(p[ROTATE]),
-                        -(float) Math.sin(p[ROTATE]), (float) Math.cos(p[ROTATE]), 0, 0)
+                .multiply(cos, sin, -sin, cos, 0, 0)
                 .multiply(1, 0, (float) Math.tan(p[SKEW]), 1, 0, 0)
                 .scale(p[SCALE_X], p[SCALE_Y]);
     }

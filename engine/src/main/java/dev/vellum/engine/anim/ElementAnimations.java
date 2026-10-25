@@ -37,6 +37,10 @@ final class ElementAnimations {
     private boolean advancing;
     /** The composed style handed out last ({@code element.style}) and the one the next compose writes. */
     private Composed front = new Composed(), back = new Composed();
+    /** What {@link #applied} returns, reused from call to call. */
+    private final Composed scratch = new Composed();
+    /** The properties other values are computed from (currentColor, em): all {@link #applied} needs. */
+    private static final EnumSet<Prop> COMPUTED_FROM = EnumSet.of(Prop.COLOR, Prop.FONT_SIZE);
 
     ElementAnimations(AnimationEngine engine, Element element, PseudoElement which) {
         this.engine = engine;
@@ -120,11 +124,15 @@ final class ElementAnimations {
         return false;
     }
 
-    /** A copy of {@code base} with every current effect applied (outside {@link #compose}'s alternating styles). */
+    /**
+     * {@code base} with the color and font-size of every current effect applied, outside {@link #compose}'s
+     * alternating styles. Its other properties are left as in {@code base}. Reused by the next call.
+     */
     ComputedStyle applied(ComputedStyle base) {
-        ComputedStyle s = base.copy();
-        for (Player p : players) p.apply(s);
-        return s;
+        Composed target = scratch.reset(base);
+        target.written.addAll(COMPUTED_FROM);
+        for (Player p : players) p.apply(target.style, COMPUTED_FROM);
+        return target.style;
     }
 
     /** Adds a scripted animation that is (again) playing and marks the element for the next tick. */

@@ -79,9 +79,14 @@ final class Tooltips {
     /** The element whose title applies to {@code e}: the nearest one with either attribute, from it up, or null. */
     static Element owner(Element e) {
         for (; e != null; e = e.parentElement()) {
-            if (e.hasAttribute("title") || e.hasAttribute("title-json")) return e;
+            if (hasTitleAttr(e)) return e;
         }
         return null;
+    }
+
+    /** Whether {@code e} has a {@code title} or {@code title-json} attribute, empty or not. */
+    static boolean hasTitleAttr(Element e) {
+        return e.hasAttribute("title") || e.hasAttribute("title-json");
     }
 
     private static String nonBlank(String s) {

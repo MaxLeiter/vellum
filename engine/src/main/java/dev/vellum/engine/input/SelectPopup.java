@@ -29,7 +29,8 @@ final class SelectPopup {
 
     private final Element select;
     private final List<Row> rows = new ArrayList<>();
-    private final float labelWidth;
+    /** The widest row's label and indent, measured on first use (a closed select stepping never needs it). */
+    private float labelWidth = Float.NaN;
     private int highlighted = -1;
     /** Index of the first visible row. */
     private int top;
@@ -47,9 +48,6 @@ final class SelectPopup {
                 rows.add(new Row(child, child.label(), child.isDisabled(), 0));
             }
         }
-        float w = 0;
-        for (Row r : rows) w = Math.max(w, r.indent + Controls.measure(select).width(r.label, font()));
-        labelWidth = w;
         Element current = select.selectedOption();
         for (int i = 0; i < rows.size(); i++) if (current != null && rows.get(i).option == current) highlighted = i;
         reveal();
@@ -165,6 +163,15 @@ final class SelectPopup {
         return Controls.measure(select).glyphHeight(font()) + 3;
     }
 
+    private float labelWidth() {
+        if (Float.isNaN(labelWidth)) {
+            float w = 0;
+            for (Row r : rows) w = Math.max(w, r.indent + Controls.measure(select).width(r.label, font()));
+            labelWidth = w;
+        }
+        return labelWidth;
+    }
+
     /**
      * {x, y, width, height} in viewport px: under the select as painted (its bounding box, transforms included), or
      * above it when only that fits.
@@ -174,7 +181,7 @@ final class SelectPopup {
         // As painted: paint and the pointer read it, and must agree without laying out.
         float[] r = select.box == null ? new float[4] : Coordinates.boundingRect(select.box);
         float sx = r[0], sy = r[1], sh = r[3];
-        float width = Math.max(r[2], labelWidth + 2 * PAD + 2);
+        float width = Math.max(r[2], labelWidth() + 2 * PAD + 2);
         float height = Math.min(rows.size(), MAX_ROWS) * rowHeight() + 2;
         float y = sy + sh;
         if (y + height > doc.viewportHeight() && sy - height >= 0) y = sy - height;

@@ -4,9 +4,9 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Element.ScrollBehavior;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.layout.Box;
+import dev.vellum.engine.paint.Affine;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.paint.Scrollbars;
-import dev.vellum.engine.style.Overflow;
 
 /**
  * User scrolling of scroll containers: the wheel with scroll chaining, and the overlay scrollbars (hover, thumb
@@ -28,7 +28,7 @@ final class Scroller {
         Element e = Dom.closest(start, p -> p.box != null);
         for (Box c = e == null ? null : e.box; c != null; c = c.contentParent()) {
             if (!c.isScrollContainer()) continue;
-            float mx = userScrollable(c.style.overflowX) ? dx : 0, my = userScrollable(c.style.overflowY) ? dy : 0;
+            float mx = c.style.overflowX.userScrollable() ? dx : 0, my = c.style.overflowY.userScrollable() ? dy : 0;
             if (c.element.canScrollBy(mx, my)) {
                 c.element.scrollBy(mx, my, ScrollBehavior.AUTO);
                 return true;
@@ -68,9 +68,11 @@ final class Scroller {
         if (Dom.inside(thumb, hit.localX(), hit.localY())) {
             // Thumb movement along the axis, in the container's own (untransformed) space.
             float startPointer = v ? hit.localY() : hit.localX(), startScroll = v ? e.scrollTop() : e.scrollLeft();
+            float[] local = new float[2];
+            Affine m = new Affine(), scratch = new Affine();
             return (px, py) -> {
                 if (e.box == null) return;
-                float[] local = Dom.local(e.box, px, py);
+                Dom.local(e.box, px, py, local, m, scratch);
                 float s = startScroll + ((v ? local[1] : local[0]) - startPointer) * Scrollbars.scrollPerThumbPixel(e.box, v);
                 e.scrollTo(v ? e.scrollLeft() : s, v ? s : e.scrollTop());
             };
@@ -79,9 +81,5 @@ final class Scroller {
         float page = PAGE * (v ? e.clientHeight() : e.clientWidth()) * (before ? -1 : 1);
         e.scrollBy(v ? 0 : page, v ? page : 0, ScrollBehavior.AUTO);
         return Drag.HOLD;
-    }
-
-    private static boolean userScrollable(Overflow o) {
-        return o == Overflow.SCROLL || o == Overflow.AUTO;
     }
 }

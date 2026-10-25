@@ -54,9 +54,7 @@ public final class Turntable {
 
     /** The turntable of a rotatable element, created on first use. */
     static Turntable of(Element element) {
-        Turntable turntable = element.controlState instanceof Turntable t ? t : new Turntable(element);
-        element.controlState = turntable;
-        return turntable;
+        return Dom.controlState(element, Turntable.class, Turntable::new);
     }
 
     Element element() {

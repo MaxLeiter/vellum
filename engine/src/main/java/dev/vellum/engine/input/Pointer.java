@@ -35,7 +35,8 @@ final class Pointer {
     private Element captured;
     private Drag drag;
     private Cursor cursor;
-    private final Affine toBox = new Affine();
+    /** Working matrices for {@link #dispatch}, which runs on every pointer move. */
+    private final Affine toBox = new Affine(), scratch = new Affine();
 
     Pointer(Document document) {
         this.document = document;
@@ -175,7 +176,7 @@ final class Pointer {
     /** Fills in offsetX/Y (relative to the target's padding box, as painted) and dispatches. */
     <E extends MouseEvent> E dispatch(E event, Element target) {
         Box box = target.box;
-        if (box != null && Coordinates.fromViewport(box, toBox)) {
+        if (box != null && Coordinates.toViewport(box, toBox, scratch).invert()) {
             event.offsetX = toBox.mapX(event.clientX, event.clientY) - box.borderLeft;
             event.offsetY = toBox.mapY(event.clientX, event.clientY) - box.borderTop;
         }

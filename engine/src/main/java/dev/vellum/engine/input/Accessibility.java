@@ -59,7 +59,7 @@ final class Accessibility {
         for (Element e = target; e != null; e = e.parentElement()) {
             if (e.tagName().equals("body") || e.tagName().equals("html")) return null;
             if (interactive(e, role(e)) || labelled(e) || Tooltips.titled(e)) return e;
-            if (e.hasAttribute("title") || e.hasAttribute("title-json")) return null;
+            if (Tooltips.hasTitleAttr(e)) return null;
         }
         return null;
     }
@@ -70,7 +70,8 @@ final class Accessibility {
         return false;
     }
 
-    private static boolean ariaHidden(Element e) {
+    /** Whether {@code e} itself has {@code aria-hidden="true"}. */
+    static boolean ariaHidden(Element e) {
         return "true".equalsIgnoreCase(attr(e, "aria-hidden"));
     }
 
@@ -138,7 +139,7 @@ final class Accessibility {
      */
     static String name(Element e, Role role) {
         String name = collapse(attr(e, "aria-label"));
-        if (name.isEmpty()) name = labelledBy(e);
+        if (name.isEmpty()) name = idrefText(e, "aria-labelledby");
         if (name.isEmpty()) name = nativeName(e);
         if (name.isEmpty() && namedByContent(e, role)) name = truncate(text(e));
         if (name.isEmpty()) name = titleText(e);
@@ -146,11 +147,12 @@ final class Accessibility {
         return name;
     }
 
-    private static String labelledBy(Element e) {
+    /** The text of the elements an id list attribute ({@code aria-labelledby}...) names, space-separated. */
+    private static String idrefText(Element e, String attr) {
         List<String> parts = new ArrayList<>(2);
-        for (String id : collapse(attr(e, "aria-labelledby")).split(" ")) {
-            Element label = id.isEmpty() ? null : e.ownerDocument().getElementById(id);
-            String text = label == null ? "" : text(label);
+        for (String id : collapse(attr(e, attr)).split(" ")) {
+            Element ref = id.isEmpty() ? null : e.ownerDocument().getElementById(id);
+            String text = ref == null ? "" : text(ref);
             if (!text.isEmpty()) parts.add(text);
         }
         return String.join(" ", parts);
@@ -210,13 +212,8 @@ final class Accessibility {
      * applies to the element ({@link Tooltips#owner}, its own or an ancestor's) unless that is the name; null for none.
      */
     private static String hint(Element e, String name) {
-        List<String> parts = new ArrayList<>(1);
-        for (String id : collapse(attr(e, "aria-describedby")).split(" ")) {
-            Element d = id.isEmpty() ? null : e.ownerDocument().getElementById(id);
-            String text = d == null ? "" : text(d);
-            if (!text.isEmpty()) parts.add(text);
-        }
-        if (!parts.isEmpty()) return String.join(" ", parts);
+        String described = idrefText(e, "aria-describedby");
+        if (!described.isEmpty()) return described;
         Element owner = Tooltips.owner(e);
         String title = owner == null ? "" : titleText(owner);
         return title.isEmpty() || title.equals(name) ? null : title;
