@@ -49,7 +49,10 @@ final class ElementState {
 
     // ---- Matching ----
 
-    /** Whether the last matches still hold when only hover, active and focus state changed since. */
+    /**
+     * Whether the last matches still hold when, of what selectors read, only hover, active and focus state changed
+     * since. Never for a fresh state, as a changed style attribute gets.
+     */
     boolean matchesSurviveInteraction() {
         return matched != null && !matchReadInteraction;
     }

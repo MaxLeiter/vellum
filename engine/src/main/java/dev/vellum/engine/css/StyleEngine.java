@@ -39,8 +39,10 @@ import java.util.function.Consumer;
  * <p>Restyles are full-document but incremental in effect: an element whose matched rules, parent
  * style and container style are unchanged keeps its previous style objects, so identity comparison is enough
  * downstream, and a changed style is compared property by property to decide whether layout must run again. When
- * only hover, active or focus state changed since the last restyle ({@link Document#domVersion} is unchanged),
- * elements whose matching did not read that state keep their matched rules without matching again.
+ * nothing selectors or stylesheet collection read changed since the last restyle besides hover, active and focus
+ * state ({@link Document#selectorVersion} is unchanged), the stylesheets are not collected again, and elements whose
+ * matching did not read that state (and whose inline style is unchanged) keep their matched rules without matching
+ * again.
  */
 public final class StyleEngine {
     private static final Stylesheet USER_AGENT = loadUserAgentSheet();
@@ -56,10 +58,12 @@ public final class StyleEngine {
     private final List<Entry> usedMatches = new ArrayList<>();
     private RuleIndex index;
     private List<Source> sources;
-    /** The {@link Document#domVersion} the last restyle ran at (and {@link #sources} were collected at). */
+    /** The {@link Document#selectorVersion} the last restyle ran at (and {@link #sources} were collected at). */
     private int styledVersion;
-    /** This pass only follows hover, active and focus changes: the DOM and the rules are as last time. */
-    private boolean interactionOnly;
+    /** Every element matches again this pass: something selectors read, or the rules, changed. */
+    private boolean rematchAll;
+    /** Elements matched against the rules in the last restyle, for tests. */
+    int rematched;
     private MediaQuery.Environment environment;
     /** Bumped whenever something every element depends on changes: sheets, media, viewport, root font size. */
     private int generation;
@@ -85,24 +89,25 @@ public final class StyleEngine {
         if (root == null) return;
         MediaQuery.Environment env = new MediaQuery.Environment(document.viewportWidth(), document.viewportHeight(),
                 document.devicePixelRatio(), host.prefersReducedMotion());
-        boolean domChanged = sources == null || document.domVersion() != styledVersion;
-        styledVersion = document.domVersion();
+        boolean selectorsChanged = sources == null || document.selectorVersion() != styledVersion;
+        styledVersion = document.selectorVersion();
         List<Source> found = sources;
-        if (domChanged) {
+        if (selectorsChanged) {
             found = new ArrayList<>();
             Map<String, Stylesheet> usedStyles = new HashMap<>();
             collectSheets(document, found, usedStyles);
             styleSheets = usedStyles;
         }
-        interactionOnly = !domChanged;
+        rematchAll = selectorsChanged;
         if (index == null || !env.equals(environment) || !found.equals(sources)) {
             index = RuleIndex.build(USER_AGENT, found, env, this::loadSheet);
             environment = env;
             generation++;
-            interactionOnly = false;
+            rematchAll = true;
             cascade.environment(host, env.width(), env.height(), env.guiScale());
         }
         sources = found;
+        rematched = 0;
         cascade.newPass();
         restyle(root, null, null, new MatchContext(root));
     }
@@ -110,9 +115,10 @@ public final class StyleEngine {
     private void restyle(Element el, ComputedStyle parent, ComputedStyle container, MatchContext mc) {
         ElementState state = ElementState.of(el);
         matched.clear();
-        boolean rematch = !interactionOnly || !state.matchesSurviveInteraction();
+        boolean rematch = rematchAll || !state.matchesSurviveInteraction();
         boolean sameMatches = true;
         if (rematch) {
+            rematched++;
             mc.interactionRead = false;
             index.match(el, mc, matched);
             sameMatches = state.updateMatches(matched, mc.interactionRead);
@@ -187,6 +193,21 @@ public final class StyleEngine {
      */
     public boolean readsAttribute(String name) {
         return index == null || name.equals("style") || index.attributes.contains(name) || cascade.hasReadAttribute(name);
+    }
+
+    /**
+     * Whether a change to attribute {@code name} (lower case) of {@code element} can change which rules match or
+     * which stylesheets apply: {@code id} and {@code class}, the attributes the current rules' selectors read, and
+     * those finding the stylesheets reads (a {@code <link>}'s {@code rel}, {@code href} and {@code media}, a
+     * {@code <style>}'s {@code media}). Every attribute can until the first restyle.
+     */
+    public boolean matchingReads(Element element, String name) {
+        if (index == null || name.equals("id") || name.equals("class") || index.attributes.contains(name)) return true;
+        return switch (element.tagName()) {
+            case "link" -> name.equals("rel") || name.equals("href") || name.equals("media");
+            case "style" -> name.equals("media");
+            default -> false;
+        };
     }
 
     // ---- Used styles ----
