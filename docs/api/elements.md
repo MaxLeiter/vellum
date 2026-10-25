@@ -68,6 +68,19 @@ without a class.
 
 A vanilla chest is a few lines with these. See [demo/chest.html](../../common/src/main/resources/assets/vellum/vellum/demo/chest.html).
 
+## Text in the Minecraft font
+
+Vellum measures text exactly as vanilla does, so two of the font's habits show up around small boxes of text:
+
+- Every glyph's advance includes the 1 px gap that follows it, the last one too. A one-letter badge with
+  `padding: 0 2px` has 2 px of background left of the glyph and 3 px right of it, and centred text sits half a pixel
+  left of centre, as it does on vanilla buttons. For an exactly centred badge, pad one pixel less on the right:
+  `padding: 0 1px 0 2px`.
+- A line is 9 px tall at the default size, with the glyphs at its top: capitals fill the first 7 px, and the last
+  2 px are for descenders and the gap between lines. One line of capitals in a box therefore has no space above it and
+  2 px below. `padding-top: 1px` with `padding-bottom: 0`, or a 10 px `line-height`, balances it; text with
+  descenders already fills the lower rows.
+
 ## Smooth or pixel-sharp shapes
 
 On Minecraft 26.2 and 26.3, rounded corners, rounded borders and box-shadows are drawn by a shader, so curves have
