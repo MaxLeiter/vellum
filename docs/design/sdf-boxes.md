@@ -168,7 +168,7 @@ not worth the code until someone asks.
 ## As built (26.2)
 
 - 26.2's `BufferBuilder` writes seven attribute names (`Position`, `Color`, `UV0`, `UV1`, `UV2`, `Normal`,
-  `LineWidth`) and has no `UV3`. 26.2's `SdfRenderState` makes the quad the box grown by one margin on every side
+  `LineWidth`) and has no `UV3`. On 26.2, `SdfRenderState` (its `<26.3` blocks) makes the quad the box grown by one margin on every side
   (the largest the call asked for on any side) and sends the margin in `Position.z`, so the shader gets the half size
   as `|UV0|` minus the margin. A shadow has one radius, which fits in `UV1`, and its spread travels as the bits of a
   float split over `UV2`'s two shorts.
