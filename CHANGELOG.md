@@ -1,10 +1,13 @@
 # Changelog
 
-## 0.6.0
+## Unreleased
 
 - On Minecraft 26.2 and 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 1.21.1 is unchanged.
 - The previewer draws rounded boxes, borders and shadows the way the shader does, so pages look the same there as in game.
 - `Canvas.fillBoxShadow`: a canvas backend can draw box-shadows itself.
+
+## 0.6.0
+
 - Timers a page sets while it loads wait their full delay. In game, the first frame jumped the clock from 0 to the game's own time, so a load-time `setTimeout` fired at once and `performance.now()` jumped. `performance.now()` and `requestAnimationFrame` now count from the page's first frame, as in browsers.
 - The jar is about 150 KB smaller: Rhino's bytecode compiler, serialization and CommonJS loader, which Vellum never runs, are left out.
 - Showing a HUD overlay again from its own `onClose` handler works (it was undone right after), so a queue of toasts is a few lines; `docs/api/hud.md` has the recipe.
