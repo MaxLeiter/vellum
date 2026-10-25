@@ -8,8 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.client.server.IntegratedServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.stats.Stats;
@@ -24,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.function.Function;
 
 /**
@@ -476,13 +473,7 @@ final class DevTour {
 
     /** A polar bear seen (it defeated the player once), for the Mobdex: logged, but not caught, so no stamp. */
     private void seePolarBear() {
-        IntegratedServer server = mc.getSingleplayerServer();
-        if (server == null || mc.player == null) return;
-        UUID id = mc.player.getUUID();
-        server.execute(() -> {
-            ServerPlayer player = server.getPlayerList().getPlayer(id);
-            if (player != null) player.awardStat(Stats.ENTITY_KILLED_BY.get(EntityTypes.POLAR_BEAR), 1);
-        });
+        DevAutopilot.serverRun(mc, player -> player.awardStat(Stats.ENTITY_KILLED_BY.get(EntityTypes.POLAR_BEAR), 1));
     }
 
     /** The music under the tour: a music disc at {@link #MUSIC_VOLUME}, which can fade out at the end. */

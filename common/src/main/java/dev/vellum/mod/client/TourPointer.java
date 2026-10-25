@@ -1,11 +1,8 @@
 //? if >=26.3 {
 package dev.vellum.mod.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
-import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.util.Util;
 import org.jspecify.annotations.Nullable;
 
@@ -45,7 +42,6 @@ final class TourPointer {
         abstract double at(double t);
     }
 
-    private static final MouseButtonInfo LEFT = new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0);
     /** Arcs bow out by this fraction of their length unless a motion asks for another. */
     static final double BEND = 0.14;
 
@@ -99,11 +95,6 @@ final class TourPointer {
         motion = new Motion(x, y, cx, cy, toX, toY, Util.getNanos(), Math.max(1, (long) (seconds * 1e9)), ease, done);
     }
 
-    /** Whether a motion is under way. */
-    static boolean moving() {
-        return motion != null;
-    }
-
     /** Every frame: moves the pointer along the motion under way, and keeps it where the tour put it. */
     static void update() {
         Motion m = motion;
@@ -139,10 +130,9 @@ final class TourPointer {
     static void apply() {
         Minecraft mc = Minecraft.getInstance();
         if (Double.isNaN(x) || mc.mouseHandler.isMouseGrabbed()) return;
-        Window w = mc.getWindow();
-        double sx = x * w.getScreenWidth() / w.getGuiScaledWidth(), sy = y * w.getScreenHeight() / w.getGuiScaledHeight();
+        double sx = McClient.screenX(x), sy = McClient.screenY(y);
         MouseHandler mouse = mc.mouseHandler;
-        if (mouse.xpos() != sx || mouse.ypos() != sy) mouse.onMove(w.handle(), sx, sy, 0, 0);
+        if (mouse.xpos() != sx || mouse.ypos() != sy) mouse.onMove(mc.getWindow().handle(), sx, sy, 0, 0);
         // Keeps the frame rate up: with no input for a minute, the game would drop to 30 fps.
         mc.getFramerateLimitTracker().onInputReceived();
     }
@@ -151,12 +141,12 @@ final class TourPointer {
 
     /** Presses the left button where the pointer is. */
     static void press() {
-        button(InputConstants.PRESS);
+        button(true);
     }
 
     /** Releases the left button where the pointer is. */
     static void release() {
-        button(InputConstants.RELEASE);
+        button(false);
     }
 
     /**
@@ -167,20 +157,18 @@ final class TourPointer {
         return pressed;
     }
 
-    private static void button(int action) {
+    private static void button(boolean press) {
         finish();
-        pressed = action == InputConstants.PRESS;
+        pressed = press;
         apply();
-        Minecraft mc = Minecraft.getInstance();
-        mc.mouseHandler.onButton(mc.getWindow().handle(), LEFT, action);
+        McClient.mouseButton(0, press);
     }
 
     /** Turns the wheel where the pointer is; positive notches scroll down. */
     static void wheel(double notches) {
         finish();
         apply();
-        Minecraft mc = Minecraft.getInstance();
-        mc.mouseHandler.onScroll(mc.getWindow().handle(), 0, -notches);
+        McClient.scroll(notches);
     }
 }
 //?}

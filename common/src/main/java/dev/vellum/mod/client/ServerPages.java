@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.RecentEvents;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.net.ClosePayload;
@@ -14,9 +15,9 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Util;
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -54,7 +55,7 @@ final class ServerPages {
     private static boolean asking, replacing;
     private static TokenBucket opens = newOpenBucket();
     private static long lastPlayerClose = Long.MIN_VALUE / 2, blockedUntil;
-    private static final ArrayDeque<Long> strikes = new ArrayDeque<>();
+    private static final RecentEvents strikes = new RecentEvents(STRIKE_WINDOW_MS);
     private static final Set<String> refusalsLogged = new HashSet<>();
 
     private ServerPages() {}
@@ -63,7 +64,7 @@ final class ServerPages {
 
     static void open(OpenPayload p) {
         sameConnection();
-        long now = now();
+        long now = Util.getMillis();
         String refused = refusal(p, now);
         if (refused != null) {
             // Once per reason and visit: a hostile server answering each refusal with a new page would flood the log.
@@ -109,12 +110,12 @@ final class ServerPages {
 
     /** A server page closed without the server asking; {@code byEscape} when the player pressed Escape to close it. */
     static void closed(boolean byEscape) {
-        if (byEscape && !replacing) lastPlayerClose = now();
+        if (byEscape && !replacing) lastPlayerClose = Util.getMillis();
     }
 
     /** Whether this server is stopped from opening pages for reopening them (for the dev autopilot). */
     static boolean blocked() {
-        return now() < blockedUntil;
+        return Util.getMillis() < blockedUntil;
     }
 
     /** Every client tick: shows a waiting page once the player's screen and the rate limit allow it. */
@@ -140,16 +141,10 @@ final class ServerPages {
 
     /** Counts a reopen; true (and the server is blocked for a while) when there were too many lately. */
     private static boolean strike(long now) {
-        while (!strikes.isEmpty() && now - strikes.peekFirst() > STRIKE_WINDOW_MS) strikes.pollFirst();
-        strikes.addLast(now);
-        if (strikes.size() < VellumConfig.CLIENT_REOPEN_STRIKES.get()) return false;
-        strikes.clear();
+        if (!strikes.record(now, VellumConfig.CLIENT_REOPEN_STRIKES.get())) return false;
         int seconds = VellumConfig.CLIENT_REOPEN_BLOCK_SECONDS.get();
         blockedUntil = now + seconds * 1000L;
-        if (pending != null) {
-            refuse(pending.session());
-            pending = null;
-        }
+        refusePending();
         Constants.LOG.warn("Vellum: the server reopened pages as they were closed; blocking its pages for {} s", seconds);
         McClient.systemMessage(Component.translatable("vellum.serverPages.blocked", seconds));
         return true;
@@ -158,15 +153,13 @@ final class ServerPages {
     private static void tryShow() {
         OpenPayload p = pending;
         if (p == null || asking) return;
-        Minecraft mc = Minecraft.getInstance();
         if (!replaceable(McClient.screen())) return;
         if (VellumConfig.CLIENT_SERVER_PAGES.get() == VellumConfig.ServerPages.ASK && allowed == null) {
-            ask(mc);
+            ask();
             return;
         }
         if (Boolean.FALSE.equals(allowed) || VellumConfig.CLIENT_SERVER_PAGES.get() == VellumConfig.ServerPages.BLOCK) {
-            refuse(p.session());
-            pending = null;
+            refusePending();
             return;
         }
         if (!opens.tryTake()) return;
@@ -189,16 +182,13 @@ final class ServerPages {
     }
 
     /** Asks once per server visit; the question replaces the screen, as the page would have. */
-    private static void ask(Minecraft mc) {
+    private static void ask() {
         asking = true;
         McClient.setScreen(new ConfirmScreen(yes -> {
             asking = false;
             allowed = yes;
             McClient.setScreen(null);
-            if (!yes && pending != null) {
-                refuse(pending.session());
-                pending = null;
-            }
+            if (!yes) refusePending();
             tryShow();
         }, Component.translatable("vellum.serverPages.ask.title"), Component.translatable("vellum.serverPages.ask.message"),
                 Component.translatable("vellum.serverPages.ask.allow"), Component.translatable("vellum.serverPages.ask.deny")));
@@ -206,6 +196,13 @@ final class ServerPages {
 
     private static void refuse(int session) {
         VellumClient.sendToServer(new ClosedPayload(session));
+    }
+
+    /** Refuses the waiting page, if there is one. */
+    private static void refusePending() {
+        if (pending == null) return;
+        refuse(pending.session());
+        pending = null;
     }
 
     /** Starts over when the client joined another server (or the same one again). */
@@ -230,9 +227,5 @@ final class ServerPages {
 
     private static @Nullable VellumScreen sessionScreen(int session) {
         return McClient.screen() instanceof VellumScreen s && s.driver().session() == session ? s : null;
-    }
-
-    private static long now() {
-        return System.nanoTime() / 1_000_000;
     }
 }

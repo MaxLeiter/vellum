@@ -11,10 +11,8 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.SequencedMap;
 import java.util.function.Predicate;
 
 /**
@@ -58,7 +56,7 @@ public final class VellumHud {
         }
     }
 
-    private static final Map<Identifier, Overlay> OVERLAYS = new LinkedHashMap<>();
+    private static final SequencedMap<Identifier, Overlay> OVERLAYS = new LinkedHashMap<>();
 
     private VellumHud() {}
 
@@ -118,8 +116,7 @@ public final class VellumHud {
      * screen with the pointer last frame), so real pointer input reaches the page; null otherwise.
      */
     static @Nullable Screen pointerScreen(DocumentDriver driver) {
-        for (Overlay o : pointerOverlays()) if (o.driver == driver) return openScreen();
-        return null;
+        return pointerOverlay(o -> o.driver == driver) == null ? null : openScreen();
     }
 
     /** The driver of the overlay a click at a GUI point over the open screen goes to, or null when none takes it. */
@@ -173,23 +170,19 @@ public final class VellumHud {
 
     /** A button released over the open screen. True when its press went to an overlay, which gets the release too. */
     public static boolean mouseReleased(MouseButtonEvent e) {
-        for (Overlay o : pointerOverlays()) {
-            if ((o.buttons & 1 << e.button()) == 0) continue;
-            o.buttons &= ~(1 << e.button());
-            o.driver.mouseReleased(e);
-            return true;
-        }
-        return false;
+        Overlay o = pointerOverlay(over -> (over.buttons & 1 << e.button()) != 0);
+        if (o == null) return false;
+        o.buttons &= ~(1 << e.button());
+        o.driver.mouseReleased(e);
+        return true;
     }
 
     /** A drag over the open screen. True while an overlay holds a press (its page follows the pointer, the screen must not drag). */
     public static boolean mouseDragged(MouseButtonEvent e) {
-        for (Overlay o : pointerOverlays()) {
-            if (o.buttons == 0) continue;
-            o.driver.mouseMoved(e.x(), e.y());
-            return true;
-        }
-        return false;
+        Overlay o = pointerOverlay(over -> over.buttons != 0);
+        if (o == null) return false;
+        o.driver.mouseMoved(e.x(), e.y());
+        return true;
     }
 
     /** The wheel over the open screen. True when the overlay under the pointer used it (scrolled, or its page cancelled it). */
@@ -205,25 +198,23 @@ public final class VellumHud {
     }
 
     /** The open screen while it is drawn (no loading overlay hides it): the one interactive overlays may be over. */
-    private static @Nullable Screen openScreen() {
+    static @Nullable Screen openScreen() {
         return McClient.loadingOverlay() ? null : McClient.screen();
     }
 
-    /** The overlays that have the pointer now (above the open screen), topmost (last drawn) first. */
-    private static List<Overlay> pointerOverlays() {
-        List<Overlay> list = new ArrayList<>();
-        if (!hudVisible()) return list;
+    /** The topmost (last drawn) overlay that has the pointer now (above the open screen) and {@code match} accepts, or null. */
+    private static @Nullable Overlay pointerOverlay(Predicate<Overlay> match) {
+        if (!hudVisible()) return null;
         Screen screen = openScreen();
-        for (Overlay o : OVERLAYS.values()) {
-            if (o.shown && o.tracking && o.driver != null && o.aboveScreen(screen)) list.addFirst(o);
+        for (Overlay o : OVERLAYS.sequencedValues().reversed()) {
+            if (o.shown && o.tracking && o.driver != null && o.aboveScreen(screen) && match.test(o)) return o;
         }
-        return list;
+        return null;
     }
 
     /** The topmost interactive overlay with content (not just its page background) at a GUI point, or null. */
     private static @Nullable Overlay overlayAt(double x, double y) {
-        for (Overlay o : pointerOverlays()) if (o.driver.contentAt(x, y) != null) return o;
-        return null;
+        return pointerOverlay(o -> o.driver.contentAt(x, y) != null);
     }
 
     private static final class Overlay implements DocumentDriver.Owner {

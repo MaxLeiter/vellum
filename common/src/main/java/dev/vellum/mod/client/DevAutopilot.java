@@ -202,7 +202,7 @@ public final class DevAutopilot {
         firstHover(mc);
         tooltips(mc);
         chronicle(mc);
-        modKeys(mc);
+        modKeys();
         for (String demo : VellumClientCommands.DEMOS) {
             if (!demo.equals("hud")) shoot(mc, demo, () -> VellumClientCommands.demo(demo));
         }
@@ -378,7 +378,7 @@ public final class DevAutopilot {
      * closes the page on J. Typed into a focused field, J is text and the handler is not asked; neither is it for a
      * key the page cancels. With nothing focused, J reaches it and the page closes.
      */
-    private static void modKeys(Minecraft mc) {
+    private static void modKeys() {
         VellumScreen[] book = new VellumScreen[1];
         List<String> asked = new ArrayList<>();
         open("the mod keys page", () -> {
@@ -564,9 +564,7 @@ public final class DevAutopilot {
 
     /** Hovers the first element of the open Vellum screen matching {@code selector} and lets hover effects settle. */
     private static void hover(String selector) {
-        steps.add(() -> {
-            if (!VellumAutomation.screen().map(page -> page.hover(selector)).orElse(false)) fail("nothing to hover at {}", selector);
-        });
+        moveOnto(selector);
         settle("the hover over " + selector, 0);
     }
 
@@ -752,7 +750,8 @@ public final class DevAutopilot {
                 });
     }
 
-    private static void serverRun(Minecraft mc, Consumer<ServerPlayer> action) {
+    /** Runs {@code action} on the integrated server with the local player's server player, if there are both. */
+    static void serverRun(Minecraft mc, Consumer<ServerPlayer> action) {
         IntegratedServer server = mc.getSingleplayerServer();
         if (server == null || mc.player == null) return;
         UUID id = mc.player.getUUID();
@@ -773,12 +772,7 @@ public final class DevAutopilot {
 
     /** Kill statistics for the Mobdex: some mobs caught (defeated), some only seen (defeated by). */
     private static void awardKills(Minecraft mc) {
-        IntegratedServer server = mc.getSingleplayerServer();
-        if (server == null || mc.player == null) return;
-        UUID id = mc.player.getUUID();
-        server.execute(() -> {
-            ServerPlayer player = server.getPlayerList().getPlayer(id);
-            if (player == null) return;
+        serverRun(mc, player -> {
             for (EntityType<?> type : List.of(EntityTypes.ZOMBIE, EntityTypes.SKELETON, EntityTypes.CREEPER, EntityTypes.SPIDER,
                     EntityTypes.PIG, EntityTypes.COW, EntityTypes.SHEEP, EntityTypes.CHICKEN, EntityTypes.SLIME, EntityTypes.SQUID)) {
                 player.awardStat(Stats.ENTITY_KILLED.get(type), 3);

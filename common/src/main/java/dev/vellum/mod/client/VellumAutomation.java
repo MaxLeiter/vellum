@@ -2,11 +2,9 @@ package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.mojang.blaze3d.platform.Window;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.script.ScriptRuntime;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -269,8 +267,7 @@ public final class VellumAutomation {
      * vanilla's slot highlight, read it there), then a move event to the screen, as the handler sends one.
      */
     private static void moveTo(Screen screen, float x, float y) {
-        Window w = Minecraft.getInstance().getWindow();
-        McClient.moveMouse(x * w.getScreenWidth() / w.getGuiScaledWidth(), y * w.getScreenHeight() / w.getGuiScaledHeight());
+        McClient.moveMouse(McClient.screenX(x), McClient.screenY(y));
         screen.mouseMoved(x, y);
         screen.afterMouseMove();
     }
@@ -325,7 +322,7 @@ public final class VellumAutomation {
      */
     private @Nullable Screen inputScreen() {
         if (hud) return VellumHud.pointerScreen(driver);
-        Screen open = McClient.loadingOverlay() ? null : McClient.screen(); // a loading overlay takes no input
+        Screen open = VellumHud.openScreen(); // a loading overlay takes no input
         return open != null && DocumentDriver.of(open) == driver ? open : null;
     }
 

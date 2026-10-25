@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
 import dev.vellum.mod.client.input.KeyEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.ChatComponent;
@@ -66,6 +67,17 @@ public final class McClient {
     static void textInput(Screen owner, boolean on) {}
 
     // ---- Input through Minecraft's own handlers, as a real mouse and keyboard send it (VellumAutomation) ----
+
+    /** A GUI px x coordinate in screen px (window pixels, as the mouse handler has the pointer). */
+    static double screenX(double guiX) {
+        Window w = Minecraft.getInstance().getWindow();
+        return guiX * w.getScreenWidth() / w.getGuiScaledWidth();
+    }
+
+    static double screenY(double guiY) {
+        Window w = Minecraft.getInstance().getWindow();
+        return guiY * w.getScreenHeight() / w.getGuiScaledHeight();
+    }
 
     /** Moves the pointer to a window point in screen px, as the mouse handler takes a move. */
     static void moveMouse(double x, double y) {

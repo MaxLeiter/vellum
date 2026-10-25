@@ -14,6 +14,7 @@ import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.RecentEvents;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.client.render.McCanvas;
@@ -36,7 +37,6 @@ import org.jspecify.annotations.Nullable;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -119,8 +119,8 @@ public final class DocumentDriver {
     private @Nullable String pendingNavigation;
     /** When the player last clicked or pressed a key in the page, and pressed Escape (Util.getMillis). */
     private long lastUserInput = Long.MIN_VALUE / 2, lastEscape = Long.MIN_VALUE / 2;
-    /** Times of recent Escape presses the page kept (consumed), newest last. */
-    private final ArrayDeque<Long> keptEscapes = new ArrayDeque<>();
+    /** Recent Escape presses the page kept (consumed). */
+    private final RecentEvents keptEscapes = new RecentEvents(FORCE_CLOSE_WINDOW_MS);
     /** The page's messages ({@link #send}), limited per driver so reloading the page doesn't reset the limit. */
     private final TokenBucket sendRate = new TokenBucket(VellumConfig.CLIENT_MESSAGE_BURST.get(), VellumConfig.CLIENT_MESSAGES_PER_SECOND.get());
     private boolean warnedSendRate, warnedLink;
@@ -523,12 +523,7 @@ public final class DocumentDriver {
      * {@link #FORCE_CLOSE_WINDOW_MS}, so a page that swallows Escape can still be left by pressing it repeatedly.
      */
     private boolean keptTooManyEscapes(long now) {
-        if (owner.screen() == null) return false;
-        while (!keptEscapes.isEmpty() && now - keptEscapes.peekFirst() > FORCE_CLOSE_WINDOW_MS) keptEscapes.pollFirst();
-        keptEscapes.addLast(now);
-        if (keptEscapes.size() < VellumConfig.CLIENT_FORCE_CLOSE_PRESSES.get()) return false;
-        keptEscapes.clear();
-        return true;
+        return owner.screen() != null && keptEscapes.record(now, VellumConfig.CLIENT_FORCE_CLOSE_PRESSES.get());
     }
 
     /**
@@ -616,7 +611,6 @@ public final class DocumentDriver {
         return this;
     }
 
-    /** From the page: client listeners first, then the server session if there is one. */
     /**
      * {@code vellum.send}: to this driver's {@link #onMessage} handlers, then to the server if a server opened the
      * page. At most {@code client.messageBurst} at once and {@code client.messagesPerSecond} after, counted per driver

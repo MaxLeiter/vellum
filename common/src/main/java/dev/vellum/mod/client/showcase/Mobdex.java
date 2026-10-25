@@ -54,14 +54,17 @@ public final class Mobdex {
 
     /** The statistics the open pages show ({@link #stats}). */
     private static int[] shown = new int[0];
+    /** {@link #types}, listed on first use: the registry and the default attributes are complete by then. */
+    private static @Nullable List<EntityType<?>> living;
 
     private Mobdex() {}
 
     /** The page is loading in {@code driver} ({@code VellumScreens.onPageLoad}): give it data, ask for statistics. */
     public static void load(DocumentDriver driver) {
         List<EntityType<?>> types = types();
-        driver.merge(data(types));
-        shown = stats(types);
+        int[] stats = stats(types);
+        driver.merge(data(types, stats));
+        shown = stats;
         ClientPacketListener connection = Minecraft.getInstance().getConnection();
         if (connection != null) connection.send(new ServerboundClientCommandPacket(ServerboundClientCommandPacket.Action.REQUEST_STATS));
     }
@@ -74,20 +77,26 @@ public final class Mobdex {
         int[] stats = stats(types);
         if (Arrays.equals(stats, shown)) return;
         shown = stats;
-        JsonObject data = data(types);
+        JsonObject data = data(types, stats);
         for (DocumentDriver page : pages) page.merge(data);
     }
 
     /** Living entity types: those with default attributes (both loaders add modded ones there), except the player. */
     private static List<EntityType<?>> types() {
-        List<EntityType<?>> types = new ArrayList<>();
-        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
-            if (type != EntityTypes.PLAYER && DefaultAttributes.hasSupplier(type)) types.add(type);
+        if (living == null) {
+            List<EntityType<?>> types = new ArrayList<>();
+            for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+                if (type != EntityTypes.PLAYER && DefaultAttributes.hasSupplier(type)) types.add(type);
+            }
+            living = List.copyOf(types);
         }
-        return types;
+        return living;
     }
 
-    /** Kills and deaths for each type, from the client's copy of the player's statistics. */
+    /**
+     * Kills and deaths for each type ({@code killed, killedBy} in turn; empty without a player), from the client's
+     * copy of the player's statistics.
+     */
     private static int[] stats(List<EntityType<?>> types) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return new int[0];
@@ -100,13 +109,16 @@ public final class Mobdex {
         return values;
     }
 
-    /** The page's fields, from the registries and the client's copy of the player's statistics. */
-    private static JsonObject data(List<EntityType<?>> types) {
+    /** The page's fields, from the registries and {@code stats} ({@link #stats} of {@code types}). */
+    private static JsonObject data(List<EntityType<?>> types, int[] stats) {
         Minecraft mc = Minecraft.getInstance();
-        StatsCounter stats = mc.player == null ? null : mc.player.getStats();
         Map<EntityType<?>, String> eggs = eggs();
         JsonArray mobs = new JsonArray();
-        for (EntityType<?> type : types) mobs.add(mob(type, eggs.get(type), stats));
+        boolean counted = stats.length > 0;
+        for (int i = 0; i < types.size(); i++) {
+            EntityType<?> type = types.get(i);
+            mobs.add(mob(type, eggs.get(type), counted ? stats[2 * i] : 0, counted ? stats[2 * i + 1] : 0));
+        }
         JsonObject data = new JsonObject();
         data.addProperty("player", mc.getUser().getName());
         data.add("mobs", mobs);
@@ -130,7 +142,7 @@ public final class Mobdex {
     }
 
     @SuppressWarnings("unchecked")
-    private static JsonObject mob(EntityType<?> type, @Nullable String egg, @Nullable StatsCounter stats) {
+    private static JsonObject mob(EntityType<?> type, @Nullable String egg, int killed, int killedBy) {
         AttributeSupplier attributes = DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type);
         EntityDimensions size = type.getDimensions();
         JsonObject mob = new JsonObject();
@@ -144,8 +156,8 @@ public final class Mobdex {
         mob.addProperty("width", size.width());
         mob.addProperty("height", size.height());
         mob.addProperty("egg", egg);
-        mob.addProperty("killed", stats == null ? 0 : stats.getValue(Stats.ENTITY_KILLED, type));
-        mob.addProperty("killedBy", stats == null ? 0 : stats.getValue(Stats.ENTITY_KILLED_BY, type));
+        mob.addProperty("killed", killed);
+        mob.addProperty("killedBy", killedBy);
         return mob;
     }
 

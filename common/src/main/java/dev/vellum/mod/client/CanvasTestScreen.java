@@ -175,7 +175,6 @@ final class CanvasTestScreen extends Screen {
     }
 
     private void face(McCanvas c) {
-        Minecraft mc = Minecraft.getInstance();
         Identifier skin = McClient.localSkin();
         float px = 1 / 64f;
         c.blit(skin, 0, 0, 32, 32, 8 * px, 8 * px, 16 * px, 16 * px, -1, false);
@@ -197,8 +196,7 @@ final class CanvasTestScreen extends Screen {
         if (mc.level == null || mc.player == null) return;
         if (pig == null) pig = EntityPortrait.create(EntityTypes.PIG, mc.level);
         if (pig == null) return;
-        // Standing on the bottom edge, looking ahead: the player's reach is measured from the first pose drawn
-        // (EntityReach), and the autopilot draws it here first, so its later portraits don't depend on the pointer.
+        // Standing on the bottom edge: a pig looking ahead, the same pig turned, and the player.
         ComputedStyle style = ComputedStyle.INITIAL;
         EntityPortrait.draw(c, pig, EntityPortrait.Pose.FRONT, style, -1, 0, 0, 30, 40);
         EntityPortrait.draw(c, pig, new EntityPortrait.Pose(60, 0, false, 1, 0), style, -1, 30, 0, 30, 40);
