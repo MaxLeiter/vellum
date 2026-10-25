@@ -1,6 +1,7 @@
 package dev.vellum.mod.client;
 
 import com.google.gson.JsonElement;
+import dev.vellum.mod.PageData;
 import dev.vellum.mod.client.render.McGui;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -22,6 +23,7 @@ import java.util.function.Predicate;
  * VellumHud.register(id("quest_tracker"), "mymod:vellum/tracker.html");   // client setup
  * VellumHud.show(id("quest_tracker"));
  * VellumHud.push(id("quest_tracker"), questJson);                          // vellum.data on the page
+ * VellumHud.patch(id("quest_tracker"), "progress", new JsonPrimitive(3));  // one field of it
  *
  * // A toast with buttons the player can click while chat is open:
  * VellumHud.register(id("ask"), "mymod:vellum/ask.html", VellumHud.Input.WHEN_CHAT_OPEN);
@@ -101,8 +103,18 @@ public final class VellumHud {
     /** Replaces the overlay's {@code vellum.data}; it is kept while the overlay is hidden. */
     public static void push(Identifier id, JsonElement data) {
         Overlay o = overlay(id);
-        o.data = data.toString();
+        o.data.set(data);
         if (o.driver != null) o.driver.pushData(o.data);
+    }
+
+    /**
+     * Sets one top-level field of the overlay's {@code vellum.data}, or removes it when {@code value} is null or JSON
+     * null, as {@link DocumentDriver#patch} does; it is kept while the overlay is hidden.
+     */
+    public static void patch(Identifier id, String key, @Nullable JsonElement value) {
+        Overlay o = overlay(id);
+        String json = o.data.put(key, value);
+        if (o.driver != null) o.driver.patchJson(key, json);
     }
 
     /** The driver of a shown overlay once it has drawn, or null. */
@@ -221,7 +233,7 @@ public final class VellumHud {
         private final String url;
         private final Predicate<Screen> interactiveOver;
         private @Nullable DocumentDriver driver;
-        private @Nullable String data;
+        private final PageData data = new PageData();
         private boolean shown;
         private int width, height;
         /** Drawn with the pointer last frame (above a screen), so it is hovered and takes clicks. */
@@ -243,7 +255,7 @@ public final class VellumHud {
             shown = true;
             if (driver == null) {
                 driver = new DocumentDriver(this, url, null, -1);
-                if (data != null) driver.pushData(data);
+                driver.pushData(data);
                 width = -1; // loads on the first draw
             }
             return driver;

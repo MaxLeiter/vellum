@@ -1,6 +1,9 @@
 package dev.vellum.mod.client;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.PageData;
 import dev.vellum.mod.RecentEvents;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
@@ -9,6 +12,7 @@ import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.DataPayload;
 import dev.vellum.mod.net.JsonLimits;
 import dev.vellum.mod.net.OpenPayload;
+import dev.vellum.mod.net.PatchPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -26,7 +30,7 @@ import java.util.Set;
  * <ul>
  *   <li>{@code client.serverPages}: allow, ask once per server visit, or block;</li>
  *   <li>size and nesting caps on the page and its data ({@code client.maxInlineHtmlChars}, {@code client.maxDataChars},
- *       {@code client.maxDataDepth});</li>
+ *       {@code client.maxDataDepth}), counting what patches add to the data;</li>
  *   <li>a page waits while the player is in another kind of screen (chat, the pause menu, options, a sign, a
  *       confirmation), so a server cannot take keystrokes meant for chat or keep the player out of the pause menu;
  *       container screens and other Vellum screens are replaced, as vanilla replaces them with a container;</li>
@@ -49,7 +53,8 @@ final class ServerPages {
 
     private static @Nullable ClientPacketListener connection;
     private static @Nullable OpenPayload pending;
-    private static @Nullable String pendingData;
+    /** The waiting page's data, with the server's later pushes and patches. */
+    private static final PageData pendingData = new PageData();
     /** Whether the player allowed pages from this server (ask mode), or null until asked. */
     private static @Nullable Boolean allowed;
     private static boolean asking, replacing;
@@ -79,7 +84,7 @@ final class ServerPages {
         }
         if (pending != null) refuse(pending.session());
         pending = p;
-        pendingData = p.data();
+        pendingData.set(p.data());
         tryShow();
     }
 
@@ -89,11 +94,35 @@ final class ServerPages {
             return;
         }
         if (pending != null && pending.session() == p.session()) {
-            pendingData = p.data();
+            pendingData.set(p.data());
             return;
         }
         VellumScreen screen = sessionScreen(p.session());
         if (screen != null) screen.driver().pushData(p.data());
+    }
+
+    /**
+     * A patch is checked as data is: the value must be well-formed JSON within {@code client.maxDataDepth} (counting
+     * the object it goes in) and the data it makes within {@code client.maxDataChars}.
+     */
+    static void patch(PatchPayload p) {
+        boolean waiting = pending != null && pending.session() == p.session();
+        VellumScreen screen = waiting ? null : sessionScreen(p.session());
+        if (!waiting && screen == null) return;
+        PageData data = waiting ? pendingData : screen.driver().pageData();
+        JsonElement value;
+        try {
+            value = JsonLimits.parse(p.value(), VellumConfig.CLIENT_MAX_DATA_DEPTH.get() - 1);
+        } catch (JsonParseException e) {
+            value = null;
+        }
+        String json = value == null || value.isJsonNull() ? null : p.value();
+        if (value == null || json != null && data.charsWith(p.key(), json.length()) > VellumConfig.CLIENT_MAX_DATA.get()) {
+            Constants.LOG.warn("Vellum: dropped a patch for session {}: malformed, or over client.maxDataChars or client.maxDataDepth", p.session());
+            return;
+        }
+        if (waiting) data.put(p.key(), json);
+        else screen.driver().patchJson(p.key(), json);
     }
 
     static void close(ClosePayload p) {
@@ -167,7 +196,7 @@ final class ServerPages {
         pending = null;
         VellumScreen screen = new VellumScreen(p.html().isEmpty() ? p.url() : "", p.html().isEmpty() ? null : p.html(), p.session());
         screen.driver().pushData(pendingData);
-        pendingData = null;
+        pendingData.clear();
         // The screen this replaces reports its session closed; that is not the player closing it.
         replacing = true;
         try {
@@ -212,7 +241,7 @@ final class ServerPages {
         if (now == connection) return;
         connection = now;
         pending = null;
-        pendingData = null;
+        pendingData.clear();
         allowed = null;
         asking = false;
         opens = newOpenBucket();

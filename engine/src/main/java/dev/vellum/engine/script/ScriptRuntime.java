@@ -31,6 +31,13 @@ public interface ScriptRuntime {
      */
     default void receive(String channel, String json) {}
 
+    /**
+     * Sets one top-level field of {@code vellum.data} from the host, {@code json} (a JSON value) parsed, or removes it
+     * when {@code json} is null, keeping the rest of the data as it is. {@code vellum.on('patch', fn)} listeners get
+     * {@code {key, value}}, then {@code 'data'} listeners get {@code (vellum.data, key)}.
+     */
+    default void patch(String key, String json) {}
+
     /** Called once the document's scripts have run, before {@code DOMContentLoaded} is dispatched. */
     default void documentLoaded() {}
 

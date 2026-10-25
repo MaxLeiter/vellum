@@ -30,6 +30,7 @@ public final class VellumNetwork {
     public static final List<Clientbound<?>> CLIENTBOUND = List.of(
             new Clientbound<>(OpenPayload.TYPE, OpenPayload.STREAM_CODEC),
             new Clientbound<>(DataPayload.TYPE, DataPayload.STREAM_CODEC),
+            new Clientbound<>(PatchPayload.TYPE, PatchPayload.STREAM_CODEC),
             new Clientbound<>(ClosePayload.TYPE, ClosePayload.STREAM_CODEC));
 
     public static final List<Serverbound<?>> SERVERBOUND = List.of(

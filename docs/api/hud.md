@@ -9,12 +9,13 @@ VellumHud.register(id("tracker"), "mymod:vellum/tracker.html");
 
 VellumHud.show(id("tracker"));
 VellumHud.push(id("tracker"), questJson);   // vellum.data
+VellumHud.patch(id("tracker"), "progress", new JsonPrimitive(3));   // one field of it
 VellumHud.hide(id("tracker"));
 ```
 
 Overlays are pages sized to the GUI-scaled window, drawn above the title layer and hidden with the HUD (F1). A page
-can hide itself with `vellum.close()`, for example when its animation ends. Data pushed while the overlay is hidden
-is kept for the next `show`. `show` returns the page's driver, for `onMessage` and `onClose` handlers; they last
+can hide itself with `vellum.close()`, for example when its animation ends. Data pushed or patched while the overlay is
+hidden is kept for the next `show`. `patch` works as `DocumentDriver.patch` does ([Opening pages](pages.md)). `show` returns the page's driver, for `onMessage` and `onClose` handlers; they last
 until the overlay is hidden (showing it again makes a new driver).
 
 A queue of toasts or announcements is a page that closes itself when it's done, and an `onClose` handler that shows

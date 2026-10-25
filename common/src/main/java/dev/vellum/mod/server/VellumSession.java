@@ -1,13 +1,16 @@
 package dev.vellum.mod.server;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.DataPayload;
+import dev.vellum.mod.net.PatchPayload;
 import dev.vellum.mod.net.VellumNetwork;
 import net.minecraft.server.level.ServerPlayer;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +30,7 @@ public final class VellumSession {
     private boolean open = true;
     /** Messages the page may send: {@code server.messageBurst}, then {@code server.messagesPerSecond}. */
     private final TokenBucket rate = new TokenBucket(VellumConfig.SERVER_MESSAGE_BURST.get(), VellumConfig.SERVER_MESSAGES_PER_SECOND.get());
-    private boolean warnedRate;
+    private boolean warnedRate, warnedPatch;
 
     VellumSession(int id, ServerPlayer player) {
         this.id = id;
@@ -50,6 +53,28 @@ public final class VellumSession {
     /** Replaces {@code vellum.data} on the client; the page's {@code vellum.on('data', fn)} listeners run. */
     public VellumSession push(JsonElement data) {
         if (open) VellumNetwork.sendToPlayer(player, new DataPayload(id, VellumServer.json(data)));
+        return this;
+    }
+
+    /**
+     * Sets one top-level field of the client's {@code vellum.data}, or removes it when {@code value} is null or JSON
+     * null, and keeps the rest: only {@code value} is sent. The page's {@code vellum.on('patch', fn)} listeners get
+     * {@code {key, value}}, then its 'data' listeners get {@code (vellum.data, key)}. The value counts against the
+     * same limits as {@link #push}, and the client drops a patch that would take its data over
+     * {@code client.maxDataChars}.
+     *
+     * @throws IllegalArgumentException when the value is over {@code server.maxDataChars} or the key is over
+     *                                  {@link PatchPayload#MAX_KEY} characters
+     */
+    public VellumSession patch(String key, @Nullable JsonElement value) {
+        if (key.length() > PatchPayload.MAX_KEY) {
+            throw new IllegalArgumentException("Vellum data key is " + key.length() + " chars; the limit is " + PatchPayload.MAX_KEY);
+        }
+        String json = VellumServer.json(value == null ? JsonNull.INSTANCE : value);
+        if (open && !VellumNetwork.sendToPlayer(player, new PatchPayload(id, key, json)) && !warnedPatch) {
+            warnedPatch = true;
+            Constants.LOG.warn("Vellum session {}: {}'s client can't take patches (an older Vellum); use push", id, player.getGameProfile().name());
+        }
         return this;
     }
 

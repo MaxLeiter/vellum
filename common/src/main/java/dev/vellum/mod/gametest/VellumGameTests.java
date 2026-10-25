@@ -1,12 +1,17 @@
 package dev.vellum.mod.gametest;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
+import dev.vellum.mod.PageData;
 import dev.vellum.mod.net.ClosePayload;
 import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.DataPayload;
 import dev.vellum.mod.net.MessagePayload;
 import dev.vellum.mod.net.OpenPayload;
+import dev.vellum.mod.net.PatchPayload;
 import dev.vellum.mod.net.VellumNetwork;
 import dev.vellum.mod.server.VellumDemos;
 import dev.vellum.mod.server.VellumServer;
@@ -28,8 +33,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * GameTests for the server side: payload codecs and their size limits, the session lifecycle (open, data,
- * messages, rate limiting, closing from either side, players leaving) against mock players, and the demo chest.
+ * GameTests for the server side: payload codecs and their size limits, the session lifecycle (open, data, patches,
+ * messages, rate limiting, closing from either side, players leaving) against mock players, the demo chest, and
+ * {@link PageData}, which keeps a page's data on the client.
  */
 public final class VellumGameTests {
     private VellumGameTests() {}
@@ -41,6 +47,7 @@ public final class VellumGameTests {
         GameTests.add("session_lifecycle", VellumGameTests::sessions);
         GameTests.add("session_rate_limit", VellumGameTests::rateLimit);
         GameTests.add("demo_chest_menu", VellumGameTests::chest);
+        GameTests.add("page_data", VellumGameTests::pageData);
         SecurityGameTests.init();
     }
 
@@ -50,6 +57,7 @@ public final class VellumGameTests {
         roundTrip(h, OpenPayload.STREAM_CODEC, new OpenPayload(7, "vellum:vellum/demo/index.html", "", "{\"a\":[1,2]}"));
         roundTrip(h, OpenPayload.STREAM_CODEC, new OpenPayload(8, "", "<p>héllo ✓</p>", "null"));
         roundTrip(h, DataPayload.STREAM_CODEC, new DataPayload(7, "{\"n\":3}"));
+        roundTrip(h, PatchPayload.STREAM_CODEC, new PatchPayload(7, "hp", "{\"n\":3}"));
         roundTrip(h, ClosePayload.STREAM_CODEC, new ClosePayload(Integer.MAX_VALUE));
         roundTrip(h, MessagePayload.STREAM_CODEC, new MessagePayload(7, "buy", "\"diamond\""));
         roundTrip(h, ClosedPayload.STREAM_CODEC, new ClosedPayload(0));
@@ -99,6 +107,54 @@ public final class VellumGameTests {
         }
     }
 
+    // ---- Page data ----
+
+    private static void pageData(GameTestHelper h) {
+        PageData data = new PageData();
+        h.assertValueEqual(data.json(), null, "no data at first");
+        JsonObject fields = new JsonObject();
+        fields.addProperty("name", "Steve");
+        JsonArray mobs = new JsonArray();
+        mobs.add("zombie");
+        fields.add("mobs", mobs);
+        data.set(fields);
+        mobs.add("changed later");
+        h.assertValueEqual(data.json(), "{\"name\":\"Steve\",\"mobs\":[\"zombie\"]}", "kept as pushed, not as changed after");
+        h.assertValueEqual(data.put("hp", new JsonPrimitive(20)), "20", "put returns the value's JSON");
+        data.put("name", "\"Alex\"");
+        h.assertValueEqual(data.json(), "{\"name\":\"Alex\",\"mobs\":[\"zombie\"],\"hp\":20}", "a field set again keeps its place");
+        h.assertValueEqual(data.put("mobs", JsonNull.INSTANCE), null, "JSON null removes");
+        data.put("hp", (String) null);
+        h.assertValueEqual(data.json(), "{\"name\":\"Alex\"}", "removed fields are gone");
+        JsonObject merged = new JsonObject();
+        merged.addProperty("a\"b", 1);
+        data.merge(merged);
+        String json = data.json();
+        h.assertValueEqual(JsonParser.parseString(json).getAsJsonObject().get("a\"b").getAsInt(), 1, "keys are quoted");
+        h.assertValueEqual(data.charsWith("name", 3), json.length() - "\"Alex\"".length() + 3, "the size with a field replaced");
+        h.assertValueEqual(data.charsWith("new", 1), json.length() + ",\"new\":1".length(), "the size with a field added");
+
+        // Data kept as one text (a server's) is split when a field is set; anything but an object becomes one.
+        data.set("{\"x\": [1, 2], \"y\": true}");
+        h.assertValueEqual(data.charsWith("z", 1), "{\"x\":[1,2],\"y\":true,\"z\":1}".length(), "server data is split to measure");
+        data.put("z", "1");
+        h.assertValueEqual(data.json(), "{\"x\":[1,2],\"y\":true,\"z\":1}", "and patched");
+        data.set("[1, 2]");
+        data.put("a", "1");
+        h.assertValueEqual(data.json(), "{\"a\":1}", "an array becomes an object");
+        data.set("{nope");
+        data.put("a", "1");
+        h.assertValueEqual(data.json(), "{\"a\":1}", "so does malformed data");
+        data.set(new JsonObject());
+        h.assertValueEqual(data.json(), "{}", "an empty object");
+        h.assertValueEqual(data.charsWith("a", 1), "{\"a\":1}".length(), "the size of the first field");
+        PageData copy = new PageData();
+        copy.set(data);
+        copy.put("a", "1");
+        h.assertValueEqual(data.json(), "{}", "a copy changes on its own");
+        h.succeed();
+    }
+
     // ---- Sessions ----
 
     private static void sessions(GameTestHelper h) {
@@ -125,6 +181,14 @@ public final class VellumGameTests {
 
             session.push(new JsonPrimitive(42));
             h.assertValueEqual(sent.getLast(), new DataPayload(session.id(), "42"), "push sends data");
+            session.patch("hp", new JsonPrimitive(7));
+            h.assertValueEqual(sent.getLast(), new PatchPayload(session.id(), "hp", "7"), "patch sends only the field");
+            session.patch("hp", null);
+            h.assertValueEqual(sent.getLast(), new PatchPayload(session.id(), "hp", "null"), "a null patch removes the field");
+            JsonPrimitive huge = new JsonPrimitive("z".repeat(OpenPayload.MAX_DATA));
+            h.assertTrue(throwsOn(() -> session.patch("s", huge), IllegalArgumentException.class), "patch checks the value's size");
+            h.assertTrue(throwsOn(() -> session.patch("k".repeat(PatchPayload.MAX_KEY + 1), null), IllegalArgumentException.class),
+                    "patch checks the key's size");
 
             VellumServer.handleClosed(player, new ClosedPayload(session.id()));
             h.assertFalse(session.isOpen(), "client close ends the session");

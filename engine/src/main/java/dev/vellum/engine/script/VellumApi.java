@@ -3,6 +3,9 @@ package dev.vellum.engine.script;
 import dev.vellum.engine.host.Host;
 import dev.vellum.shadow.rhino.Callable;
 import dev.vellum.shadow.rhino.LambdaFunction;
+import dev.vellum.shadow.rhino.NativeArray;
+import dev.vellum.shadow.rhino.ScriptRuntime;
+import dev.vellum.shadow.rhino.Scriptable;
 import dev.vellum.shadow.rhino.ScriptableObject;
 import dev.vellum.shadow.rhino.Undefined;
 
@@ -13,7 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The {@code vellum} object: data and messages from the host or server ({@code data}, {@code on}, {@code off}),
+ * The {@code vellum} object: data, patches to it and messages from the host or server ({@code data}, {@code on},
+ * {@code off}),
  * messages back ({@code send}, which the host may refuse), {@code close}, {@code playSound}, {@code t} (translations),
  * {@code open} (navigation), {@code state} (reactive state for templates) and {@code nextTick} (a callback after
  * templates next render).
@@ -59,6 +63,33 @@ final class VellumApi {
             if (channel.equals("data")) data = value;
             for (Callable fn : List.copyOf(listeners.getOrDefault(channel, List.of()))) {
                 rt.call(() -> "Error in vellum.on('" + channel + "') listener", fn, rt.global, value);
+            }
+            return null;
+        });
+    }
+
+    /**
+     * A patch from the host: sets {@code vellum.data[key]} to the parsed {@code json}, or deletes it when {@code json}
+     * is null, in place, so the rest of the data keeps its objects. When {@code vellum.data} is not an object (an
+     * array, a bare value) it is replaced by a new one. Then {@code 'patch'} listeners get {@code {key, value}} (value
+     * undefined after a delete) and {@code 'data'} listeners get {@code (vellum.data, key)}, so a page that only
+     * listens to 'data' still sees every change. Templates re-render afterwards, like after any entry.
+     */
+    void patch(String key, String json) {
+        rt.enter(() -> "Error in patch '" + key + "'", cx -> {
+            Object value = json == null ? Undefined.instance : rt.js.parseJson(json);
+            if (!(data instanceof Scriptable) || data instanceof NativeArray) data = rt.js.newObject();
+            Scriptable target = (Scriptable) data;
+            if (json == null) ScriptRuntime.deleteObjectElem(target, key, cx);
+            else ScriptRuntime.setObjectElem(target, key, value, cx);
+            Scriptable change = rt.js.newObject();
+            change.put("key", change, key);
+            change.put("value", change, value);
+            for (Callable fn : List.copyOf(listeners.getOrDefault("patch", List.of()))) {
+                rt.call(() -> "Error in vellum.on('patch') listener", fn, rt.global, change);
+            }
+            for (Callable fn : List.copyOf(listeners.getOrDefault("data", List.of()))) {
+                rt.call(() -> "Error in vellum.on('data') listener", fn, rt.global, data, key);
             }
             return null;
         });

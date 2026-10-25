@@ -14,6 +14,7 @@ import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
+import dev.vellum.mod.PageData;
 import dev.vellum.mod.RecentEvents;
 import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
@@ -108,7 +109,8 @@ public final class DocumentDriver {
     private final List<Predicate<KeyEvent>> keyHandlers = new ArrayList<>();
     private String url;
     private @Nullable String html;
-    private @Nullable String data;
+    /** {@code vellum.data} as last pushed, merged and patched, for the next load. */
+    private final PageData data = new PageData();
     private @Nullable Document document;
     private @Nullable ErrorPanel error;
     private int width, height;
@@ -238,7 +240,7 @@ public final class DocumentDriver {
             fail("Page not found: " + url, null);
             return;
         }
-        document = Document.parse(host, url, source, data, viewport());
+        document = Document.parse(host, url, source, data.json(), viewport());
     }
 
     private void applyViewport(@Nullable Document doc) {
@@ -574,29 +576,69 @@ public final class DocumentDriver {
         return url;
     }
 
-    /** The page's {@code vellum.data} as last pushed, or null. */
+    /** The page's {@code vellum.data} as last pushed, merged and patched, parsed afresh on each call, or null. */
     public @Nullable JsonElement data() {
-        return data == null ? null : JsonParser.parseString(data);
+        String json = data.json();
+        return json == null ? null : JsonParser.parseString(json);
     }
 
     /** Replaces {@code vellum.data}; the page's {@code vellum.on('data', fn)} listeners run. Kept across reloads. */
     public void push(JsonElement data) {
-        pushData(data.toString());
+        this.data.set(data);
+        pushToPage();
     }
 
     /**
      * Sets the top-level fields of {@code vellum.data} that {@code fields} has and keeps the others (what the opener
-     * passed); as {@link #push}, the page's listeners run.
+     * passed); as {@link #push}, the page gets the whole data again and its 'data' listeners run. Only the fields are
+     * serialised, but the page parses all of it, so for one field that changes often use {@link #patch}.
      */
     public void merge(JsonObject fields) {
-        JsonObject merged = data() instanceof JsonObject current ? current : new JsonObject();
-        for (var field : fields.entrySet()) merged.add(field.getKey(), field.getValue());
-        push(merged);
+        data.merge(fields);
+        pushToPage();
     }
 
-    void pushData(String json) {
-        data = json;
-        receive("data", json);
+    /**
+     * Sets one top-level field, {@code vellum.data[key] = value}, or removes it when {@code value} is null or JSON
+     * null; the rest of the data stays as it is, on the page too. Only {@code value} is serialised and parsed. The
+     * page's {@code vellum.on('patch', fn)} listeners get {@code {key, value}}, then its 'data' listeners get
+     * {@code (vellum.data, key)}; template bindings update. Kept across reloads. If {@code vellum.data} is not an
+     * object, it becomes one with just this field.
+     */
+    public void patch(String key, @Nullable JsonElement value) {
+        patchPage(key, data.put(key, value));
+    }
+
+    /** {@link #patch} with the value as JSON text (well-formed), or null to remove the field. */
+    void patchJson(String key, @Nullable String valueJson) {
+        data.put(key, valueJson);
+        patchPage(key, valueJson);
+    }
+
+    void pushData(@Nullable String json) {
+        data.set(json);
+        pushToPage();
+    }
+
+    void pushData(PageData data) {
+        this.data.set(data);
+        pushToPage();
+    }
+
+    /** The data stored for the page, for checks on what a server may add to it. */
+    PageData pageData() {
+        return data;
+    }
+
+    private void pushToPage() {
+        Document doc = document();
+        String json = doc == null ? null : data.json();
+        if (json != null) doc.receive("data", json);
+    }
+
+    private void patchPage(String key, @Nullable String valueJson) {
+        Document doc = document();
+        if (doc != null) doc.patch(key, valueJson);
     }
 
     /** Delivers a message to the page's {@code vellum.on(channel, fn)} listeners. */

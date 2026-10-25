@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `DocumentDriver.patch(key, value)` sets one top-level field of `vellum.data` without sending the rest. Only the value is serialised and parsed, the page's other objects stay as they are, and the page gets `vellum.on('patch', ({key, value}) => ...)`, then its `'data'` listeners with the key as a second argument. A null value removes the field. Patches are kept across reloads, as pushes are. `VellumSession.patch` and `VellumHud.patch` do the same from a server and for HUD overlays; a server's patches count toward `client.maxDataChars` and `client.maxDataDepth`.
+- `merge` no longer parses and re-serialises the whole data: the driver keeps each top-level field's JSON and only serialises the fields you pass. The page still gets the whole data.
+
 ## 0.7.0
 
 - `VellumPages.folder(namespace, dir)` serves a namespace from a folder players can edit, such as one in `config/`. Relative stylesheets, scripts and images resolve inside it, saving any of them reloads the page, and nothing outside the folder can be read. See "Pages players edit" in `docs/api/pages.md`.

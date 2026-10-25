@@ -22,6 +22,11 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   `client.messagesPerSecond`), so up to 40 arrive in the first second.
 - `screen.driver().push(json)` replaces `vellum.data`; template bindings update and `vellum.on('data', fn)`
   listeners run.
+- `screen.driver().patch(key, json)` sets one top-level field, `vellum.data[key]`, and leaves the rest alone, so
+  small updates to a big page stay cheap: only that value is serialised and parsed, and the page's other objects
+  stay the same objects. A null value (or `JsonNull`) removes the field. Bindings update, `vellum.on('patch', fn)`
+  listeners get `{key, value}`, then `'data'` listeners get `(vellum.data, key)`. If `vellum.data` isn't an object,
+  it becomes one with just that field.
 - `screen.driver().onClose(() -> ...)` runs once when the page closes for good: the screen is closed or replaced by
   another screen. Not when the page navigates or reloads, or while a link confirmation is open over it. The page's
   own `pagehide` and `unload` listeners run just before, with scripts still alive, so a last `vellum.send` from
@@ -41,6 +46,12 @@ VellumScreens.openInline("<h1>Hello</h1><p>{{ name }}</p>", data);
   mouse handler, so code that sends a screen `mouseMoved` must move the mouse handler there as well, or the next
   frame moves the page's pointer back. `VellumAutomation` does both.
 - `screen.driver().merge(jsonObject)` sets only the top-level fields it has and keeps the rest of `vellum.data`.
+  Only those fields are serialised, but the page gets the whole data again, as with `push`, and parses all of it. For
+  a field that changes often, `patch` it instead.
+- What you push, merge or patch is kept for the page's next load: a reload (`/vellum reload`, a resource reload, a
+  saved file in dev) shows the data as it is now. `driver.receive(channel, json)` only delivers a message, so the
+  page loses whatever it built from one when it reloads. Vellum keeps its own copy as JSON text, so changing a
+  `JsonObject` after passing it changes nothing.
 - `VellumScreens.onPageLoad(url, driver -> ...)` runs whenever that page loads, however it was reached (opened, a link,
   a reload), before its scripts run: give it live data with `driver.push(json)`, or `driver.merge(fields)` to keep
   what the opener passed, and `onMessage` to handle its messages. `VellumScreens.pages(url)` returns the drivers
@@ -100,6 +111,7 @@ VellumSession session = VellumServer.open(player, "mymod:vellum/shop.html", stoc
         .onClose(() -> Shop.forget(player));
 
 session.push(updatedStockJson);   // the page's vellum.data changes; bindings re-render
+session.patch("gold", new JsonPrimitive(12));   // one field of it; only the value is sent
 session.close();                  // closes the player's screen
 ```
 
@@ -110,8 +122,13 @@ session.close();                  // closes the player's screen
   players are dropped. Treat every message as hostile input: see [Security](security.md).
 - `onClose` runs once, when the player closes the screen, opens another session, leaves, or you call `close()`. A
   player has at most 8 open sessions; opening another ends the oldest.
-- Limits: inline pages 200,000 characters, data 100,000 characters (as JSON), messages 8,192 characters. `open` and
-  `push` throw `IllegalArgumentException` above them. Servers can lower these in `config/vellum.properties`.
+- Limits: inline pages 200,000 characters, data 100,000 characters (as JSON), messages 8,192 characters. `open`,
+  `push` and `patch` (for the value) throw `IllegalArgumentException` above them, and so does a `patch` key over 256
+  characters. Servers can lower these in `config/vellum.properties`.
+- `session.patch(key, value)` works as `driver.patch` does on the client. The client checks the value as it checks
+  data (`client.maxDataDepth` counts the object it goes in) and drops a patch that would take the page's data over
+  `client.maxDataChars`. A client with Vellum 0.7 or older can't take patches: they are dropped there, with a
+  warning in the server log.
 - Pages sent by servers run sandboxed: no Java access, no network, no files, and a CPU and memory budget. See
   [Security](security.md) for what they can and can't do.
 - The player decides whether server pages show at all (`client.serverPages`), and a page waits while the player is

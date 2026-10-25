@@ -125,6 +125,11 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         vellum.receive(channel, json);
     }
 
+    @Override
+    public void patch(String key, String json) {
+        vellum.patch(key, json);
+    }
+
     /** Templates bind once scripts have run (so their {@code vellum.state()} calls are in). */
     @Override
     public void documentLoaded() {

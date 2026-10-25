@@ -43,6 +43,49 @@ class VellumApiTest {
     }
 
     @Test
+    void aPatchSetsOneFieldInPlaceThenTellsPatchAndDataListeners() {
+        Page page = new TestHost().recordErrors().load("""
+                <script>
+                const log = [];
+                vellum.on('patch', p => log.push('patch ' + p.key + '=' + JSON.stringify(p.value)));
+                vellum.on('data', (d, key) => log.push('data ' + key + ' ' + JSON.stringify(d)));
+                </script>""");
+        page.doc.receive("data", "{\"hp\": 20, \"name\": \"Steve\", \"stats\": {\"kills\": 3}}");
+        page.run("var before = vellum.data, stats = vellum.data.stats; log.length = 0");
+        page.doc.patch("hp", "7");
+        page.doc.patch("name", null);
+        page.doc.patch("pos", "[1, 2]");
+        assertEquals(List.of(
+                "patch hp=7", "data hp {\"hp\":7,\"name\":\"Steve\",\"stats\":{\"kills\":3}}",
+                "patch name=undefined", "data name {\"hp\":7,\"stats\":{\"kills\":3}}",
+                "patch pos=[1,2]", "data pos {\"hp\":7,\"stats\":{\"kills\":3},\"pos\":[1,2]}"),
+                List.of(page.eval("log.join('|')").split("\\|")));
+        assertEquals("true true false", page.eval("[vellum.data === before, vellum.data.stats === stats, 'name' in vellum.data].join(' ')"),
+                "the data object and the fields not patched are the same objects");
+        assertEquals("", page.errors());
+    }
+
+    @Test
+    void aPatchOnDataThatIsNotAnObjectStartsANewOne() {
+        Page page = new TestHost().load("");
+        page.doc.receive("data", "[1, 2]");
+        page.doc.patch("a", "1");
+        assertEquals("{\"a\":1}", page.eval("JSON.stringify(vellum.data)"));
+        page.doc.receive("data", "42");
+        page.doc.patch("gone", null);
+        assertEquals("{}", page.eval("JSON.stringify(vellum.data)"));
+    }
+
+    @Test
+    void aMalformedPatchIsReportedAndChangesNothing() {
+        Page page = new TestHost().recordErrors().load("<script>let calls = 0; vellum.on('patch', () => calls++)</script>");
+        page.doc.receive("data", "{\"hp\": 20}");
+        page.doc.patch("hp", "{nope");
+        assertTrue(page.errors().contains("Error in patch 'hp': SyntaxError"), page.errors());
+        assertEquals("20 0", page.eval("vellum.data.hp + ' ' + calls"));
+    }
+
+    @Test
     void badJsonIsReported() {
         Page page = new TestHost().recordErrors().load("");
         page.doc.receive("data", "{nope");
