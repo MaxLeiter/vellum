@@ -128,9 +128,7 @@ final class ReplacedElements {
             canvas.clipRect(x, y, width, height);
         } else {
             float fitted = Math.min(width, height / 2) * s.modelScale;
-            frame = s.entityFocus == EntityFocus.CENTER
-                    ? EntityFraming.center(s, x, y, width, height, fitted, s.modelScale, 1, 2, 0)
-                    : EntityFraming.body(s, x, y, width, height, fitted, 1, 2, 0);
+            frame = EntityFraming.fit(s, x, y, width, height, fitted, s.modelScale, 1, 2, 0);
         }
         float u = frame.pixelsPerBlock() / 16, ox = frame.originX() - 8 * u, oy = frame.originY() - 32 * u;
         float[][] parts = {{4, 0, 8, 8}, {4, 8, 8, 12}, {0, 8, 4, 12}, {12, 8, 4, 12}, {4, 20, 4, 12}, {8, 20, 4, 12}};

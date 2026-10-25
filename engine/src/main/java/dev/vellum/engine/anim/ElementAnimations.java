@@ -53,6 +53,11 @@ final class ElementAnimations {
         return dirty || advancing;
     }
 
+    /** Whether a change since the last tick waits for the next one. */
+    boolean isDirty() {
+        return dirty;
+    }
+
     /** Whether a change waits for the next tick or a player is heading for an end it will reach. */
     boolean isSettling() {
         if (dirty) return true;

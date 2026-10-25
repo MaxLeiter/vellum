@@ -6,7 +6,6 @@ import dev.vellum.shadow.rhino.Context;
 import dev.vellum.shadow.rhino.Scriptable;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * A {@code v-if} / {@code v-else-if} / {@code v-else} chain: the first branch whose condition holds is in the
@@ -18,19 +17,16 @@ final class IfBinding implements Binding {
     static final class Branch {
         /** Null for v-else. */
         final Expr condition;
-        /** The branch's :key, or null. */
-        final Expr key;
-        /** With a key: the element as written, which each key gets a clone of. */
-        final Element template;
+        /** With a :key: the element as written and the last key; null without one. */
+        final KeyBinding.Keyed keyed;
+        /** The element shown; with a key, a new copy for each key. */
         Element element;
         Block block;
-        Object lastKey;
 
         Branch(Expr condition, Element element, Expr key) {
             this.condition = condition;
             this.element = element;
-            this.key = key;
-            this.template = key == null ? null : (Element) element.cloneNode(true);
+            this.keyed = key == null ? null : new KeyBinding.Keyed((Element) element.cloneNode(true), key);
         }
     }
 
@@ -57,18 +53,14 @@ final class IfBinding implements Binding {
                 break;
             }
         }
-        if (chosen != null && chosen.key != null) {
-            Object k = ForBinding.normalize(chosen.key.eval(cx, scope));
-            if (chosen.block != null && !Objects.equals(k, chosen.lastKey)) {
-                // A new key: drop the compiled copy, and show a fresh one below.
-                if (active == chosen) {
-                    chosen.element.remove();
-                    active = null;
-                }
-                chosen.element = (Element) chosen.template.cloneNode(true);
-                chosen.block = null;
+        if (chosen != null && chosen.keyed != null && chosen.keyed.changed(cx, scope) && chosen.block != null) {
+            // A new key: drop the compiled copy, and show a fresh one below.
+            if (active == chosen) {
+                chosen.element.remove();
+                active = null;
             }
-            chosen.lastKey = k;
+            chosen.element = chosen.keyed.fresh();
+            chosen.block = null;
         }
         boolean changed = chosen != active;
         if (changed) {

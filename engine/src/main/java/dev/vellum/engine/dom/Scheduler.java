@@ -127,14 +127,11 @@ public final class Scheduler {
     public void run(double nowMs) {
         if (Double.isNaN(origin)) {
             // Timers set while the page loaded counted from 0: move them onto the host's clock, so a load script's
-            // setTimeout(f, 1000) runs a second after the first frame, not at once.
+            // setTimeout(f, 1000) runs a second after the first frame, not at once. Shifting all of them alike keeps
+            // the queue in order.
             origin = nowMs;
-            List<Timer> pending = new ArrayList<>(timers);
-            timers.clear();
-            for (Timer t : pending) {
-                t.due += nowMs - now;
-                timers.add(t);
-            }
+            double delta = nowMs - now;
+            for (Timer t : timers) t.due += delta;
         }
         now = nowMs;
         long deadline = Document.clock.getAsLong() + document.limits().frameScriptTimeMs() * 1_000_000L;

@@ -65,7 +65,7 @@ public class TestHost implements Host {
     }
 
     public Page load(String html, float width, float height) {
-        return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(width, height, 2))).frame(0);
+        return load(html, width, height, 0);
     }
 
     /**
@@ -73,7 +73,11 @@ public class TestHost implements Host {
      * not 0 when a page opens (Minecraft's counts from the game's start).
      */
     public Page loadAt(String html, double firstFrameMs) {
-        return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(320, 240, 2))).frame(firstFrameMs);
+        return load(html, 320, 240, firstFrameMs);
+    }
+
+    private Page load(String html, float width, float height, double firstFrameMs) {
+        return new Page(this, Document.parse(this, "test:page.html", html, null, new Viewport(width, height, 2))).frame(firstFrameMs);
     }
 
     /** Loads pages with {@code limits} instead of the defaults. */

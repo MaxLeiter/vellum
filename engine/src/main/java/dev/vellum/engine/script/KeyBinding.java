@@ -13,38 +13,58 @@ import java.util.Objects;
  * {@code <div class="name" :key="selected">} replays its entrance each time the selection changes.
  */
 final class KeyBinding implements Binding {
+    /** A keyed element as written and its last key: what tells when to start over, and the copy to start from. */
+    static final class Keyed {
+        /** Never in the document; each key gets a clone of it. */
+        private final Element template;
+        private final Expr key;
+        private Object lastKey;
+
+        Keyed(Element template, Expr key) {
+            this.template = template;
+            this.key = key;
+        }
+
+        /** Evaluates the key and keeps it: whether it differs from the last one. */
+        boolean changed(Context cx, Scriptable scope) {
+            Object k = ForBinding.normalize(key.eval(cx, scope));
+            boolean changed = !Objects.equals(k, lastKey);
+            lastKey = k;
+            return changed;
+        }
+
+        /** A new copy of the element as written, not yet compiled. */
+        Element fresh() {
+            return (Element) template.cloneNode(true);
+        }
+    }
+
     private final TemplateCompiler compiler;
-    /** The element as written, never in the document; each key gets a clone of it. */
-    private final Element template;
+    private final Keyed keyed;
     private final Text anchor;
     private final Scriptable scope;
-    private final Expr key;
     private Element current;
     private Block block;
-    private Object lastKey;
 
     KeyBinding(TemplateCompiler compiler, Element template, Text anchor, Scriptable scope, Expr key) {
         this.compiler = compiler;
-        this.template = template;
+        this.keyed = new Keyed(template, key);
         this.anchor = anchor;
         this.scope = scope;
-        this.key = key;
     }
 
     @Override
     public boolean update(Context cx) {
         if (anchor.parentNode() == null) return false; // removed by a script
-        Object k = ForBinding.normalize(key.eval(cx, scope));
-        boolean changed = current == null || !Objects.equals(k, lastKey);
+        boolean changed = keyed.changed(cx, scope) || current == null;
         if (changed) {
-            Element fresh = (Element) template.cloneNode(true);
+            Element fresh = keyed.fresh();
             Block freshBlock = new Block();
             compiler.compileElement(fresh, scope, freshBlock);
             if (current != null) current.remove();
             anchor.parentNode().insertBefore(fresh, anchor);
             current = fresh;
             block = freshBlock;
-            lastKey = k;
         }
         return block.update(cx) || changed;
     }

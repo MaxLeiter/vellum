@@ -215,8 +215,7 @@ final class TemplateCompiler {
     // ---- Structure ----
 
     private void compileIf(Element first, Scriptable scope, Binding.Block block) {
-        Text anchor = rt.document.createTextNode("");
-        first.parentNode().insertBefore(anchor, first);
+        Text anchor = anchorFor(first);
         List<IfBinding.Branch> branches = new ArrayList<>();
         Element el = first;
         String directive = "v-if";
@@ -225,10 +224,8 @@ final class TemplateCompiler {
             el.removeAttribute(directive);
             el.remove();
             boolean last = directive.equals("v-else");
-            String keyAttribute = keyAttribute(el), key = keyAttribute == null ? null : el.getAttribute(keyAttribute);
-            if (keyAttribute != null) el.removeAttribute(keyAttribute);
             branches.add(new IfBinding.Branch(last ? null : value(condition, where(el, directive, condition)), el,
-                    key == null ? null : value(key, where(el, keyAttribute, key))));
+                    take(el, keyAttribute(el))));
             if (last) break;
             // The next branch is the next element, past whitespace (which goes, as in Vue).
             List<Node> gap = new ArrayList<>();
@@ -254,14 +251,26 @@ final class TemplateCompiler {
         return null;
     }
 
-    /** An element with a :key outside a v-for: re-created whenever the key changes (see {@link KeyBinding}). */
-    private void compileKeyed(Element el, Scriptable scope, Binding.Block block) {
-        String attribute = keyAttribute(el), value = el.getAttribute(attribute);
+    /** Removes {@code attribute} from {@code el} and compiles its value; null when either is missing. */
+    private Expr take(Element el, String attribute) {
+        String value = attribute == null ? null : el.getAttribute(attribute);
+        if (value == null) return null;
         el.removeAttribute(attribute);
+        return value(value, where(el, attribute, value));
+    }
+
+    /** Takes {@code el} out of the document, leaving an empty text node where it was to anchor what replaces it. */
+    private Text anchorFor(Element el) {
         Text anchor = rt.document.createTextNode("");
         el.parentNode().insertBefore(anchor, el);
         el.remove();
-        block.add(new KeyBinding(this, el, anchor, scope, value(value, where(el, attribute, value))));
+        return anchor;
+    }
+
+    /** An element with a :key outside a v-for: re-created whenever the key changes (see {@link KeyBinding}). */
+    private void compileKeyed(Element el, Scriptable scope, Binding.Block block) {
+        Expr key = take(el, keyAttribute(el));
+        block.add(new KeyBinding(this, el, anchorFor(el), scope, key));
     }
 
     private void compileFor(Element template, Scriptable scope, Binding.Block block) {
@@ -276,19 +285,8 @@ final class TemplateCompiler {
         List<String> aliases = m.group(1) != null
                 ? Arrays.stream(m.group(1).split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
                 : List.of(m.group(2));
-        Expr key = null, filter = null;
-        for (String attribute : List.of(":key", "v-bind:key", "v-key", "v-if")) {
-            String value = template.getAttribute(attribute);
-            if (value == null) continue;
-            template.removeAttribute(attribute);
-            Expr expr = value(value, where(template, attribute, value));
-            if (attribute.equals("v-if")) filter = expr;
-            else key = expr;
-        }
-        Text anchor = rt.document.createTextNode("");
-        template.parentNode().insertBefore(anchor, template);
-        template.remove();
-        block.add(new ForBinding(rt, this, template, anchor, scope, aliases, value(m.group(3), where), key, filter));
+        Expr key = take(template, keyAttribute(template)), filter = take(template, "v-if");
+        block.add(new ForBinding(rt, this, template, anchorFor(template), scope, aliases, value(m.group(3), where), key, filter));
     }
 
     // ---- Events ----

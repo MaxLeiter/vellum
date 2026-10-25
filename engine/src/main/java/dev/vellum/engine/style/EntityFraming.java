@@ -51,6 +51,17 @@ public record EntityFraming(float originX, float originY, float pixelsPerBlock) 
     }
 
     /**
+     * The body or center focus, by {@code -mc-entity-focus}: {@link #center} for the center focus, else {@link #body}
+     * ({@code scale} unused).
+     */
+    public static EntityFraming fit(ComputedStyle s, float x, float y, float width, float height, float pixelsPerBlock,
+                                    float scale, float roomWidth, float roomHeight, float lift) {
+        return s.entityFocus == EntityFocus.CENTER
+                ? center(s, x, y, width, height, pixelsPerBlock, scale, roomWidth, roomHeight, lift)
+                : body(s, x, y, width, height, pixelsPerBlock, roomWidth, roomHeight, lift);
+    }
+
+    /**
      * The body focus for an entity fitted at {@code pixelsPerBlock} into the box {@code (x, y, width, height)}, where
      * it takes {@code roomWidth} × {@code roomHeight} blocks with its origin centred and {@code lift} blocks above
      * the room's bottom edge. {@code object-position} places the room; unset, on the bottom edge, centred.

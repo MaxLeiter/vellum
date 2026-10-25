@@ -45,6 +45,8 @@ public final class AnimationEngine {
     private List<Runnable> queued = new ArrayList<>();
     /** The {@link Document#domVersion} at the last check that every animated element is still in the document. */
     private int connectedVersion;
+    /** Some target got a change to apply since the last {@link #advance}: a restyle or a script call. */
+    private boolean changedSinceAdvance;
 
     public AnimationEngine(Document document) {
         this.document = document;
@@ -66,6 +68,7 @@ public final class AnimationEngine {
             if (state == null && mayAnimate) state = new ElementAnimations(this, element, which);
             if (state != null) {
                 state.styleChanged(oldBase, newBase, now());
+                changedSinceAdvance = true;
                 if (state.isEmpty()) release(state);
                 else register(state);
             }
@@ -79,20 +82,24 @@ public final class AnimationEngine {
      * layout-affecting property moved. Elements that left the document lose their animations.
      */
     public void tick(double nowMs) {
-        advance(nowMs);
+        advance(nowMs, ElementAnimations::needsTick);
         // Callbacks may change animations, as a finished promise that cancels another does. Apply that now, before
-        // the frame is drawn, as browsers do, so no frame shows the state in between. What these second updates
-        // queue waits for the next tick.
-        if (dispatchQueued()) advance(nowMs);
+        // the frame is drawn, as browsers do, so no frame shows the state in between: the targets they changed, and
+        // those they took out of the document. What these second updates queue waits for the next tick.
+        if (dispatchQueued() && (changedSinceAdvance || document.domVersion() != connectedVersion)) {
+            advance(nowMs, ElementAnimations::isDirty);
+        }
     }
 
-    private void advance(double nowMs) {
+    /** Advances the targets {@code due} holds for, and cancels the animations of those that left the document. */
+    private void advance(double nowMs, Predicate<ElementAnimations> due) {
+        changedSinceAdvance = false;
         boolean treeChanged = document.domVersion() != connectedVersion;
         connectedVersion = document.domVersion();
         for (Iterator<ElementAnimations> it = animated.iterator(); it.hasNext(); ) {
             ElementAnimations state = it.next();
             if (treeChanged && !state.element.isConnected()) state.cancelAll();
-            else if (state.needsTick()) state.tick(nowMs);
+            else if (due.test(state)) state.tick(nowMs);
             else continue;
             if (state.isEmpty()) {
                 it.remove();
@@ -171,6 +178,7 @@ public final class AnimationEngine {
             register(state = new ElementAnimations(this, animation.element, PseudoElement.NONE));
         }
         state.attach(animation);
+        changedSinceAdvance = true;
     }
 
     // ---- Internals ----
