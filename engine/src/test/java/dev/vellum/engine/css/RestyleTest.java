@@ -101,12 +101,11 @@ class RestyleTest {
         page.frame();
         assertEquals(BLUE, page.style("#a").color);
 
-        // Text below an element in a <style> is the sheet's too; it restyles with the next change that restyles.
+        // Text below an element in a <style> is the sheet's too.
         Element span = s.appendChild(page.doc.createElement("span"));
         Text nested = span.appendChild(page.doc.createTextNode("/* */"));
         page.frame();
         nested.setData("#a { color: green }");
-        page.doc.setHovered(page.query("b"), true);
         page.frame();
         assertEquals(GREEN, page.style("#a").color);
     }
@@ -116,27 +115,23 @@ class RestyleTest {
         TestHost host = new TestHost()
                 .resource("test:a.css", "#a { color: red }")
                 .resource("test:b.css", "#a { color: blue }");
-        Page page = host.load("<link id=l rel=stylesheet href=a.css><div id=a></div><b>b</b>");
-        Element link = page.query("#l"), b = page.query("b");
+        Page page = host.load("<link id=l rel=stylesheet href=a.css><div id=a></div>");
+        Element link = page.query("#l");
         assertEquals(RED, page.style("#a").color);
         link.setAttribute("href", "b.css");
-        page.doc.setHovered(b, true); // these attributes need not restyle by themselves
         page.frame();
         assertEquals(BLUE, page.style("#a").color);
 
         link.setAttribute("media", "(min-width: 10000px)");
-        page.doc.setHovered(b, false);
         page.frame();
         assertEquals(WHITE, page.style("#a").color);
 
         link.removeAttribute("media");
         link.setAttribute("rel", "preload");
-        page.doc.setHovered(b, true);
         page.frame();
         assertEquals(WHITE, page.style("#a").color);
 
         link.setAttribute("rel", "stylesheet");
-        page.doc.setHovered(b, false);
         page.frame();
         assertEquals(BLUE, page.style("#a").color);
     }

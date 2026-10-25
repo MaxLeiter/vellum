@@ -668,8 +668,10 @@ public final class Document extends Node {
             case "open" -> element.tagName().equals("details");
             default -> false;
         };
-        // Restyle only for attributes a style can read; repaint for any (replaced content and controls draw them).
-        invalidate(styleEngine.matchingReads(element, name), styleEngine.readsAttribute(name), layout);
+        // Restyle only for attributes a style or sheet collection can read; repaint for any (replaced content and
+        // controls draw them).
+        boolean selectors = styleEngine.matchingReads(element, name);
+        invalidate(selectors, selectors || styleEngine.readsAttribute(name), layout);
         repaint = true;
         if (MinecraftText.expandsOn(element, name) && !readyState.equals("loading")) MinecraftText.expand(this, element);
     }
@@ -680,9 +682,8 @@ public final class Document extends Node {
      */
     void textChanged(Text text, boolean emptinessFlipped) {
         if (!text.isConnected()) return;
-        Element parent = text.parentElement();
-        boolean sheet = parent != null && parent.tagName().equals("style");
-        invalidate(emptinessFlipped || inStyle(parent), emptinessFlipped || sheet, true);
+        boolean selectors = emptinessFlipped || inStyle(text.parentElement());
+        invalidate(selectors, selectors, true);
     }
 
     /** Whether {@code element} is or is in a {@code <style>}, whose text is the sheet's. */
