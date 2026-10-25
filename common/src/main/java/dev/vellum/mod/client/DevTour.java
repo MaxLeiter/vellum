@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +47,8 @@ final class DevTour {
     static final boolean ENABLED = Boolean.getBoolean("vellum.tour");
     private static final String GO = System.getProperty("vellum.tour.go");
     private static final boolean SHOTS = Boolean.getBoolean("vellum.tour.shots");
+    /** With {@code vellum.tour.only}: the beats to play, by name; all of them without it. */
+    private static final @Nullable String ONLY = System.getProperty("vellum.tour.only");
     /** The music's volume; the pages' sounds play over it at their own. */
     private static final float MUSIC_VOLUME = 0.35f;
     /** How long a click holds the button down, so the cursor's dip and the page's {@code :active} style show. */
@@ -112,11 +115,12 @@ final class DevTour {
             mc.getSoundManager().play(music);
         });
         pause(0.3);
-        title();
-        mobdex();
-        turntable();
-        shop();
-        endCard();
+        if (plays("title")) title();
+        if (plays("mobdex")) mobdex();
+        if (plays("turntable")) turntable();
+        if (plays("shop")) shop();
+        if (plays("scene")) scene();
+        if (plays("end")) endCard();
         at(() -> {
             Constants.LOG.info("Vellum tour finished after {} s", seconds());
             TourCursor.stop();
@@ -188,6 +192,7 @@ final class DevTour {
      */
     private void mobdex() {
         beat("mobdex");
+        if (!plays("title")) open(VellumClientCommands.showcaseUrl("mobdex")); // the title's Singleplayer opens it
         settle(0.5);
         glide(".search input", 0.8);
         pause(0.15);
@@ -292,6 +297,35 @@ final class DevTour {
         pause(0.5);
         shot("shop_purchase");
         pause(1.6);
+    }
+
+    /**
+     * The scene: the cottage builds itself step by step, captions following the builder; then the cursor drags it
+     * round, lets it settle, and rests on a block for its name.
+     */
+    private void scene() {
+        beat("scene");
+        open(VellumClientCommands.showcaseUrl("scene"));
+        place(0.9, 0.85); // off the build while it goes up, so no block's name covers it
+        settle(0.5);
+        at(() -> TourCursor.fade(1, 0.5));
+        pause(20.5);
+        shot("scene_built");
+        glide("scene", 0.9);
+        pause(0.3);
+        drag(-70, 6, 1.4, TourPointer.Ease.IN_OUT);
+        pause(0.8);
+        drag(45, -4, 1.1, TourPointer.Ease.IN_OUT);
+        pause(0.6);
+        glideTo(page -> rectPoint(page, "scene", 0.47, 0.42), 0.8, TourPointer.Ease.IN_OUT);
+        pause(1.6);
+        shot("scene_hover");
+        pause(0.6);
+    }
+
+    /** Whether the plan plays the beat {@code name} ({@code vellum.tour.only}). */
+    private static boolean plays(String name) {
+        return ONLY == null || Arrays.asList(ONLY.split(",")).contains(name);
     }
 
     /** The end card: the cursor slips away to the corner and fades while the logo and lines rise in. */

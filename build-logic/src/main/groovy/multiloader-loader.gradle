@@ -79,7 +79,8 @@ tasks.named('sourcesJar', Jar) {
 // The client run's system properties and program arguments, which each loader's build script sets with its own run DSL.
 // `./gradlew :neoforge:26.3:runClient -Pautopilot` (or :fabric:1.21.1...) opens the Vellum demo screens, screenshots
 // them and quits; `-Pautopilot=scene` runs only the scene showcase's steps. `-Ptour [-PtourGo=<file>] [-PtourShots]`: the scripted showcase tour for demo videos, in a 1280x720
-// window (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each beat.
+// window (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each beat, and
+// `-Ptour=scene,shop` plays only those beats (title, mobdex, turntable, shop, scene, end).
 def clientRunProperties = [:]
 def clientRunArgs = []
 if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
@@ -89,6 +90,8 @@ if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
 }
 if (project.hasProperty('tour')) {
     clientRunProperties['vellum.tour'] = 'true'
+    String beats = project.findProperty('tour')?.toString()
+    if (beats && beats != 'true') clientRunProperties['vellum.tour.only'] = beats
     if (project.hasProperty('tourGo')) clientRunProperties['vellum.tour.go'] = project.property('tourGo').toString()
     if (project.hasProperty('tourShots')) clientRunProperties['vellum.tour.shots'] = 'true'
     clientRunArgs.addAll('--width', '1280', '--height', '720')
