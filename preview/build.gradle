@@ -3,12 +3,7 @@
 // A development tool: never shipped in the mod, so it may use the full toolchain release.
 plugins {
     id 'application'
-}
-
-repositories { mavenCentral() }
-
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+    id 'vellum-java'
 }
 
 dependencies {
@@ -16,9 +11,6 @@ dependencies {
     implementation(project(path: ':rhino', configuration: 'relocated'))
     // The engine only compiles against Gson (Minecraft provides it in game).
     implementation("com.google.code.gson:gson:${gson_version}")
-    testImplementation(platform("org.junit:junit-bom:${junit_version}"))
-    testImplementation('org.junit.jupiter:junit-jupiter')
-    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
 }
 
 application {
@@ -31,12 +23,9 @@ tasks.named('run', JavaExec) {
 }
 
 tasks.named('test', Test) {
-    useJUnitPlatform()
-    testLogging { events 'failed', 'skipped'; exceptionFormat 'full' }
     systemProperty('java.awt.headless', 'true')
-    systemProperty('vellum.goldens', file('src/test/snapshots').absolutePath)
+    // The goldens, read from the project directory (Snapshots.java); the diffs go to build/snapshots.
     inputs.dir('src/test/snapshots').withPathSensitivity(PathSensitivity.RELATIVE)
-    systemProperty('vellum.snapshots', layout.buildDirectory.dir('snapshots').get().asFile.absolutePath)
     // -Dvellum.updateSnapshots=true rewrites goldens; -Dvellum.mcJar=... picks the Minecraft jar.
     ['vellum.updateSnapshots', 'vellum.mcJar'].each { key ->
         String value = System.getProperty(key)
@@ -46,6 +35,5 @@ tasks.named('test', Test) {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
     options.compilerArgs += ['-Xlint:all,-serial,-processing,-options', '-Werror']
 }

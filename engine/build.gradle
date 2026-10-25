@@ -2,13 +2,8 @@
 // MUST NOT depend on Minecraft or any loader. Compiled straight into each loader jar (like Chronicle's sim-core).
 plugins {
     id 'java-library'
+    id 'vellum-java'
     id 'maven-publish'
-}
-
-repositories { mavenCentral() }
-
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
 }
 
 dependencies {
@@ -19,19 +14,9 @@ dependencies {
     compileOnly(project(path: ':rhino', configuration: 'relocated'))
     testImplementation(project(path: ':rhino', configuration: 'relocated'))
     testImplementation("com.google.code.gson:gson:${gson_version}")
-    testImplementation(platform("org.junit:junit-bom:${junit_version}"))
-    testImplementation('org.junit.jupiter:junit-jupiter')
-    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
-}
-
-tasks.named('test', Test) {
-    useJUnitPlatform()
-    testLogging { events 'failed'; exceptionFormat 'full' }
-    systemProperty('vellum.snapshots', project.file('build/snapshots').absolutePath)
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
     options.release = engine_java_release as int
     options.compilerArgs += ['-Xlint:all,-serial,-processing,-options', '-Werror']
 }

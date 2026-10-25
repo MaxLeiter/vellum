@@ -6,9 +6,9 @@ plugins {
 }
 
 // Uploads this loader and Minecraft version's jar to Modrinth and CurseForge: `./gradlew publishMods` from the root
-// makes four uploads to each site, one per jar. The release workflow (.github/workflows/release.yml) runs it for a
-// v* tag. `-PpublishDryRun` (or PUBLISH_DRY_RUN=true) does everything but upload: the files and what would be sent
-// go to build/publishMods/ and the log.
+// makes six uploads to each site, one per jar (two loaders, three Minecraft versions). The release workflow
+// (.github/workflows/release.yml) runs it for a v* tag. `-PpublishDryRun` (or PUBLISH_DRY_RUN=true) does everything
+// but upload: the files and what would be sent go to build/publishMods/ and the log.
 //
 // Project ids are modrinth_id and curseforge_id in gradle.properties. The tokens are only ever read from the
 // environment: MODRINTH_TOKEN and CURSEFORGE_TOKEN.
@@ -20,8 +20,8 @@ def modVersion = project.version.toString()
 def isDryRun = providers.gradleProperty('publishDryRun').isPresent() ||
         providers.environmentVariable('PUBLISH_DRY_RUN').getOrElse('false') == 'true'
 
-// The game version each site is told. Both sites list 26.3 and 1.21.1 under those names; if one ever names a version
-// differently, set publish_minecraft_versions (comma-separated) for that version in stonecutter.properties.toml.
+// The game version each site is told. Both sites list 26.3, 26.2 and 1.21.1 under those names; if one ever names a
+// version differently, set publish_minecraft_versions (comma-separated) for that version in stonecutter.properties.toml.
 def gameVersions = (findProperty('publish_minecraft_versions') ?: minecraft_version).toString()
         .split(',').collect { it.trim() }.findAll { it }
 

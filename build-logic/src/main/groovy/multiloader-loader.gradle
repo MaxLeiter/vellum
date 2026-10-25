@@ -45,9 +45,7 @@ dependencies {
 }
 
 tasks.named('compileJava', JavaCompile) {
-    dependsOn(configurations.commonJava)
     source(configurations.commonJava)
-    dependsOn(configurations.engineJava)
     source(configurations.engineJava)
 }
 
@@ -57,25 +55,37 @@ processResources {
     from({ configurations.rhinoRelocated.collect { zipTree(it) } }) {
         exclude('META-INF/MANIFEST.MF')
     }
-    dependsOn(configurations.commonResources)
     from(configurations.commonResources)
-    dependsOn(configurations.engineResources)
     from(configurations.engineResources)
     // Test instances are data from 26.x on; before, GameTests are code (common's GameTests).
     if (stonecutter.current.parsed < '26') exclude('data/*/test_instance/**')
 }
 
 tasks.named('javadoc', Javadoc).configure {
-    dependsOn(configurations.commonJava)
     source(configurations.commonJava)
-    dependsOn(configurations.engineJava)
     source(configurations.engineJava)
     failOnError = false
 }
 
 tasks.named('sourcesJar', Jar) {
-    dependsOn(configurations.commonJava)
     from(configurations.commonJava)
-    dependsOn(configurations.commonResources)
     from(configurations.commonResources)
 }
+
+// The client run's system properties and program arguments, which each loader's build script sets with its own run DSL.
+// `./gradlew :neoforge:26.3:runClient -Pautopilot` (or :fabric:1.21.1...) opens the Vellum demo screens, screenshots
+// them and quits. `-Ptour [-PtourGo=<file>] [-PtourShots]`: the scripted showcase tour for demo videos, in a 1280x720
+// window (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each beat.
+def clientRunProperties = [:]
+def clientRunArgs = []
+if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
+    clientRunProperties['vellum.autopilot'] = 'true'
+}
+if (project.hasProperty('tour')) {
+    clientRunProperties['vellum.tour'] = 'true'
+    if (project.hasProperty('tourGo')) clientRunProperties['vellum.tour.go'] = project.property('tourGo').toString()
+    if (project.hasProperty('tourShots')) clientRunProperties['vellum.tour.shots'] = 'true'
+    clientRunArgs.addAll('--width', '1280', '--height', '720')
+}
+ext.clientRunProperties = clientRunProperties
+ext.clientRunArgs = clientRunArgs

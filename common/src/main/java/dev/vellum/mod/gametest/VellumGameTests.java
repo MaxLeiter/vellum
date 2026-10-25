@@ -24,6 +24,7 @@ import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -89,7 +90,7 @@ public final class VellumGameTests {
         h.succeed();
     }
 
-    private static boolean throwsOn(Runnable action, Class<? extends Throwable> type) {
+    static boolean throwsOn(Runnable action, Class<? extends Throwable> type) {
         try {
             action.run();
             return false;
@@ -102,9 +103,7 @@ public final class VellumGameTests {
 
     private static void sessions(GameTestHelper h) {
         List<CustomPacketPayload> sent = new ArrayList<>();
-        ServerPlayer player = player(h), other = player(h);
-        VellumNetwork.intercept((p, payload) -> sent.add(payload));
-        try {
+        withPlayers(h, (p, payload) -> sent.add(payload), (player, other) -> {
             JsonObject data = new JsonObject();
             data.addProperty("coins", 3);
             VellumSession session = VellumServer.open(player, "vellum:vellum/demo/templates.html", data);
@@ -145,28 +144,19 @@ public final class VellumGameTests {
             VellumServer.onPlayerLeft(player);
             h.assertFalse(third.isOpen(), "leaving ends the player's sessions");
             h.assertTrue(VellumServer.session(player, third.id()) == null, "ended sessions are forgotten");
-        } finally {
-            VellumNetwork.intercept(null);
-            leave(h, player);
-            leave(h, other);
-        }
+        });
         h.succeed();
     }
 
     private static void rateLimit(GameTestHelper h) {
-        ServerPlayer player = player(h);
-        VellumNetwork.intercept((p, payload) -> {});
-        try {
+        withPlayer(h, (p, payload) -> {}, player -> {
             VellumSession session = VellumServer.open(player, "vellum:a.html", null);
             int[] count = {0};
             session.onMessage("spam", (p, value) -> count[0]++);
             for (int i = 0; i < 500; i++) VellumServer.handleMessage(player, new MessagePayload(session.id(), "spam", "1"));
             h.assertTrue(count[0] >= 40 && count[0] < 100, "a burst of 500 messages is cut to about 40, got " + count[0]);
             session.close();
-        } finally {
-            VellumNetwork.intercept(null);
-            leave(h, player);
-        }
+        });
         h.succeed();
     }
 
@@ -194,5 +184,28 @@ public final class VellumGameTests {
 
     static void leave(GameTestHelper h, ServerPlayer player) {
         h.getLevel().getServer().getPlayerList().remove(player);
+    }
+
+    /** Runs {@code body} with a mock player while the server's payloads go to {@code sent}; removes the player after. */
+    static void withPlayer(GameTestHelper h, BiConsumer<ServerPlayer, CustomPacketPayload> sent, Consumer<ServerPlayer> body) {
+        ServerPlayer player = player(h);
+        VellumNetwork.intercept(sent);
+        try {
+            body.accept(player);
+        } finally {
+            VellumNetwork.intercept(null);
+            leave(h, player);
+        }
+    }
+
+    /** {@link #withPlayer} with another player beside the first, for what one player must not do to the other's sessions. */
+    static void withPlayers(GameTestHelper h, BiConsumer<ServerPlayer, CustomPacketPayload> sent,
+                            BiConsumer<ServerPlayer, ServerPlayer> body) {
+        ServerPlayer other = player(h);
+        try {
+            withPlayer(h, sent, player -> body.accept(player, other));
+        } finally {
+            leave(h, other);
+        }
     }
 }

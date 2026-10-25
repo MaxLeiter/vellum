@@ -16,26 +16,9 @@ neoForge {
         client {
             client()
             gameDirectory = this.mkdir(this.file('runs/client'))
-            // `./gradlew :neoforge:26.3:runClient -Pautopilot` (or :neoforge:1.21.1) opens the Vellum demo screens,
-            // screenshots them and quits.
-            if (project.hasProperty('autopilot') || project.hasProperty('tour')) {
-                systemProperty('vellum.autopilot', 'true')
-            }
-            // `-Ptour [-PtourGo=<file>] [-PtourShots]`: the scripted showcase tour for demo videos, in a 1280x720 window
-            // (tools/record creates the go-file once it is recording); tourShots saves a screenshot at each beat.
-            if (project.hasProperty('tour')) {
-                systemProperty('vellum.tour', 'true')
-                if (project.hasProperty('tourGo')) systemProperty('vellum.tour.go', project.property('tourGo').toString())
-                if (project.hasProperty('tourShots')) systemProperty('vellum.tour.shots', 'true')
-                programArguments.addAll('--width', '1280', '--height', '720')
-            }
-        }
-        data {
-            clientData()
-            gameDirectory = this.mkdir(this.file('runs/data'))
-            // DataGen can be run by - "./gradlew :neoforge:26.3:runData" in Terminal.
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+            // -Pautopilot and -Ptour (multiloader-loader.gradle).
+            clientRunProperties.each { key, value -> systemProperty(key, value) }
+            programArguments.addAll(clientRunArgs)
         }
         gameTestServer {
             type = 'gameTestServer'
@@ -43,7 +26,6 @@ neoForge {
         }
         server {
             server()
-            this.file('runs/server').createParentDirectories()
             gameDirectory = this.mkdir(this.file('runs/server'))
         }
     }
@@ -54,25 +36,9 @@ neoForge {
     }
 }
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-// Implement mcgradleconventions loader attribute
-def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
-['apiElements', 'runtimeElements', 'sourcesElements'].each { variant ->
-    configurations.named(variant) {
-        attributes {
-            attribute(loaderAttribute, 'neoforge')
-        }
-    }
-}
+// The mcgradleconventions loader attribute (multiloader-common.gradle) on the jar-in-jar configurations too.
 sourceSets.configureEach {
-    [it.compileClasspathConfigurationName, it.runtimeClasspathConfigurationName, it.getTaskName(null, 'jarJar')].each { variant ->
-        configurations.named(variant) {
-            attributes {
-                attribute(loaderAttribute, 'neoforge')
-            }
-        }
-    }
+    loaderAttributeOn(it.getTaskName(null, 'jarJar'))
 }
 
 // For versions other than the active one, Minecraft's artifacts read the access transformer from the resources

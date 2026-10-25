@@ -1,0 +1,25 @@
+// The version-independent modules (rhino, engine, preview): Maven Central, the Java toolchain, UTF-8 sources and JUnit.
+plugins {
+    id 'java'
+}
+
+repositories { mavenCentral() }
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+}
+
+dependencies {
+    testImplementation(platform("org.junit:junit-bom:${junit_version}"))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    testLogging { events 'failed', 'skipped'; exceptionFormat 'full' }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

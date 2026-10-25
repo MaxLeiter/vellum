@@ -46,11 +46,8 @@ jar {
 processResources {
     var expandProps = [
             'version'                      : version,
-            'group'                        : mavenGroup, //Else we target the task's group.
-            'minecraft_version'            : minecraft_version,
             'minecraft_version_range'      : minecraft_version_range,
             'fabric_minecraft_version'     : fabric_minecraft_version,
-            'fabric_version'               : fabric_version,
             'fabric_loader_version'        : fabric_loader_version,
             'mod_name'                     : mod_name,
             'mod_author'                   : mod_author,
@@ -68,11 +65,11 @@ processResources {
         key, value -> [(key): value instanceof String ? value.replace('\n', '\\\\n') : value]
     }
 
-    filesMatching(['META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+    filesMatching('META-INF/neoforge.mods.toml') {
         expand expandProps
     }
 
-    filesMatching(['pack.mcmeta', 'fabric.mod.json', '*.mixins.json']) {
+    filesMatching(['pack.mcmeta', 'fabric.mod.json']) {
         expand jsonExpandProps
     }
 
@@ -83,6 +80,24 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     // Line numbers for stack traces, no local variable tables: about 5% of the jar.
     options.debugOptions.debugLevel = 'source,lines'
+}
+
+// The mcgradleconventions loader attribute (common, neoforge or fabric) on the published variants and the classpaths.
+// A loader's build script adds its own configurations with loaderAttributeOn(...).
+def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
+def loaderAttributeOn = { String... names ->
+    names.each { name ->
+        configurations.named(name) {
+            attributes {
+                attribute(loaderAttribute, platform)
+            }
+        }
+    }
+}
+ext.loaderAttributeOn = loaderAttributeOn
+loaderAttributeOn('apiElements', 'runtimeElements', 'sourcesElements')
+sourceSets.configureEach {
+    loaderAttributeOn(it.compileClasspathConfigurationName, it.runtimeClasspathConfigurationName)
 }
 
 dependencies {

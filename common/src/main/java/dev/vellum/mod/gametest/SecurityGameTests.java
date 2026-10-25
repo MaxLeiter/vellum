@@ -8,19 +8,16 @@ import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.net.JsonLimits;
 import dev.vellum.mod.net.MessagePayload;
 import dev.vellum.mod.net.OpenPayload;
-import dev.vellum.mod.net.VellumNetwork;
 import dev.vellum.mod.server.VellumServer;
 import dev.vellum.mod.server.VellumSession;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Consumer;
 
 /**
  * GameTests for what a hostile client or server can send: JSON nesting and strictness, oversized and malformed
@@ -58,19 +55,12 @@ public final class SecurityGameTests {
     }
 
     private static boolean rejects(String json, int depth) {
-        try {
-            JsonLimits.parse(json, depth);
-            return false;
-        } catch (JsonParseException e) {
-            return true;
-        }
+        return VellumGameTests.throwsOn(() -> JsonLimits.parse(json, depth), JsonParseException.class);
     }
 
     /** Messages a modified client can send: none of these reach a handler. */
     private static void messages(GameTestHelper h) {
-        ServerPlayer player = VellumGameTests.player(h), other = VellumGameTests.player(h);
-        VellumNetwork.intercept((p, payload) -> {});
-        try {
+        VellumGameTests.withPlayers(h, (p, payload) -> {}, (player, other) -> {
             VellumSession session = VellumServer.open(player, "vellum:a.html", null);
             List<String> got = new ArrayList<>();
             session.onMessage("buy", (p, v) -> got.add(v.toString()));
@@ -88,11 +78,7 @@ public final class SecurityGameTests {
             session.close();
             VellumServer.handleMessage(player, new MessagePayload(session.id(), "buy", "1"));
             h.assertValueEqual(got.size(), 1, "messages after close are dropped");
-        } finally {
-            VellumNetwork.intercept(null);
-            VellumGameTests.leave(h, player);
-            VellumGameTests.leave(h, other);
-        }
+        });
         h.succeed();
     }
 
@@ -122,19 +108,13 @@ public final class SecurityGameTests {
     }
 
     private static boolean failsToDecode(Runnable decode) {
-        try {
-            decode.run();
-            return false;
-        } catch (RuntimeException e) { // DecoderException and others: the connection drops the peer, nothing else breaks
-            return true;
-        }
+        // DecoderException and others: the connection drops the peer, nothing else breaks.
+        return VellumGameTests.throwsOn(decode, RuntimeException.class);
     }
 
     /** A client that never reports closed screens can't make the server keep sessions without bound. */
     private static void sessionCap(GameTestHelper h) {
-        ServerPlayer player = VellumGameTests.player(h), other = VellumGameTests.player(h);
-        VellumNetwork.intercept((p, payload) -> {});
-        try {
+        VellumGameTests.withPlayers(h, (p, payload) -> {}, (player, other) -> {
             int max = VellumConfig.SERVER_MAX_SESSIONS.get();
             VellumSession theirs = VellumServer.open(other, "vellum:a.html", null);
             List<VellumSession> sessions = new ArrayList<>();
@@ -144,11 +124,7 @@ public final class SecurityGameTests {
             h.assertValueEqual(ended[0], 5, "the oldest sessions were ended");
             h.assertTrue(sessions.getLast().isOpen() && !sessions.getFirst().isOpen(), "the newest stay open");
             h.assertTrue(theirs.isOpen(), "another player's sessions are untouched");
-        } finally {
-            VellumNetwork.intercept(null);
-            VellumGameTests.leave(h, player);
-            VellumGameTests.leave(h, other);
-        }
+        });
         h.succeed();
     }
 
