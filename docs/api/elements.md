@@ -156,7 +156,7 @@ change costs a blit a frame.
 <scene structure="mymod:structures/hut.nbt" rotatable style="-mc-yaw: -90deg; -mc-pitch: 10deg">
   <block at="1 1 1" state="minecraft:furnace[lit=true]"></block>   <!-- add or replace a block -->
   <block at="2 0 0" state="minecraft:air"></block>                  <!-- erase one -->
-  <block-group id="roof" select="0 3 0 4 4 4" class="hidden"></block-group>
+  <block-group id="roof" x="0..4" y="3..4" z="0..4" class="hidden"></block-group>
   <entity type="minecraft:villager" at="2.5 1 2.5"></entity>
   <scene-anchor at="1.5 2 0.5" class="caption">Put the furnace here</scene-anchor>
 </scene>
@@ -168,7 +168,7 @@ What it shows:
 |---|---|
 | `structure` | A structure file, as a structure block saves one (`ns:path/file.nbt` is `assets/ns/path/file.nbt`, or a file in a [page folder](pages.md)). Its blocks keep the states and block entity data they were saved with. Its entities are left out. |
 | `<block at="x y z" state="...">` | Adds or replaces a block, on top of the structure, in document order. `state` is a block state as in `/setblock` (`minecraft:oak_stairs[facing=east]`), and `minecraft:air` erases. `nbt` gives a block entity's data as SNBT. |
-| `<block-group select="x1 y1 z1 x2 y2 z2">` | Claims the blocks in that box (both corners included), and its own `<block>` children. Each block belongs to the first group in document order that claims it; the rest are the scene's base. |
+| `<block-group x="3..7" y="2" z="3..6">` | Claims the blocks in that box, and its own `<block>` children. Each axis is a whole number (one layer) or an inclusive range like `2..5`; an axis left out is all of it, so `<block-group y="2">` is a whole layer. Each block belongs to the first group in document order that claims it; the rest are the scene's base. |
 | `<entity at="x y z">` | An `<entity>` standing at that point, with its usual attributes. `-mc-yaw` faces it as Minecraft yaws go (0 south, 90 west), and `walk` swings its legs. |
 | `<scene-anchor at="x y z">` | Ordinary HTML, laid out as an absolutely positioned box and moved every frame so its top-left corner is where the point is seen. `transform: translate(-50%, -100%)` puts its bottom middle there instead. |
 | `rotatable` | Dragging turns and tilts it, as `<model rotatable>`, adding to the CSS. |
@@ -214,9 +214,9 @@ Vellum has no timeline. A build that assembles itself is groups, CSS and a timer
   .caption { transform: translate(-50%, -100%); transition: -mc-translate 1200ms ease-in-out; }
 </style>
 <scene structure="mymod:structures/hut.nbt">
-  <block-group class="pending" select="0 0 0 6 0 6"></block-group>
-  <block-group class="pending" select="0 1 0 6 3 6"></block-group>
-  <block-group class="pending" select="0 4 0 6 6 6"></block-group>
+  <block-group class="pending" x="0..6" y="0" z="0..6"></block-group>
+  <block-group class="pending" x="0..6" y="1..3" z="0..6"></block-group>
+  <block-group class="pending" x="0..6" y="4..6" z="0..6"></block-group>
   <scene-anchor class="caption" at="0 0 0"></scene-anchor>
 </scene>
 <script>

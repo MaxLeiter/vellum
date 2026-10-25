@@ -36,8 +36,9 @@ import java.util.Set;
  *   <li>{@code structure="ns:path/file.nbt"} loads a structure file ({@link Host#loadBytes}).</li>
  *   <li>{@code <block at="x y z" state="...">} adds or replaces a block, in document order; {@code minecraft:air}
  *       erases one. {@code nbt} gives its block entity data as SNBT.</li>
- *   <li>{@code <block-group select="x1 y1 z1 x2 y2 z2">} claims the blocks in that box (inclusive) that no earlier
- *       group claimed, and its own {@code <block>} children. The rest are the base. A group shows, fades and moves
+ *   <li>{@code <block-group x="3..7" y="2" z="3..6">} claims the blocks in that box that no earlier group claimed,
+ *       and its own {@code <block>} children. Each range is inclusive, a single number is one layer, and an axis left
+ *       out is all of it ({@code <block-group y="2">} is a layer). The rest are the base. A group shows, fades and moves
  *       by its style ({@code display}, {@code opacity}, {@code -mc-translate}, {@code -mc-rotate}).</li>
  *   <li>{@code <entity at="x y z">} children stand at that point, moved by their {@code -mc-translate}.</li>
  *   <li>{@code <scene-anchor at="x y z">} children are laid out as HTML and moved every frame so their top-left
@@ -142,7 +143,7 @@ public final class SceneModel {
 
     private record BlockSpec(int x, int y, int z, String state, String nbt, Element group) {}
 
-    private record GroupSpec(Element element, List<Integer> select) {}
+    private record GroupSpec(Element element, List<Integer> box) {}
 
     /** Reads the children again after the document changed; returns whether the blocks or groups changed. */
     private boolean sync() {
@@ -157,9 +158,9 @@ public final class SceneModel {
             switch (child.tagName()) {
                 case BLOCK -> readBlock(child, null, next);
                 case GROUP -> {
-                    int[] select = select(child);
-                    next.add(new GroupSpec(child, select == null ? null : List.of(select[0], select[1], select[2],
-                            select[3], select[4], select[5])));
+                    int[] box = box(child);
+                    next.add(new GroupSpec(child, box == null ? null : List.of(box[0], box[1], box[2],
+                            box[3], box[4], box[5])));
                     for (Element block : child.children()) {
                         if (block.tagName().equals(BLOCK)) readBlock(block, child, next);
                     }
@@ -188,16 +189,44 @@ public final class SceneModel {
         out.add(new BlockSpec(at[0], at[1], at[2], state.strip(), nbt == null || nbt.isBlank() ? null : nbt.strip(), group));
     }
 
-    private int[] select(Element group) {
-        String attr = group.getAttribute("select");
-        if (attr == null) return null;
-        int[] s = wholeNumbers(attr, 6);
-        if (s == null) {
-            warn("<block-group select> needs six whole numbers, two corners: " + attr);
+    /**
+     * The box a group's {@code x}, {@code y} and {@code z} ranges claim ({x1, y1, z1, x2, y2, z2}, inclusive), an axis
+     * left out spanning everything; null when it has none of them (or one doesn't parse), so it claims only its own
+     * {@code <block>} children.
+     */
+    private int[] box(Element group) {
+        int[] box = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
+        boolean any = false;
+        String[] axes = {"x", "y", "z"};
+        for (int a = 0; a < 3; a++) {
+            String attr = group.getAttribute(axes[a]);
+            if (attr == null) continue;
+            int[] r = range(attr);
+            if (r == null) {
+                warn("<block-group " + axes[a] + "> needs a whole number or a range like 2..5: " + attr);
+                return null;
+            }
+            box[a] = r[0];
+            box[a + 3] = r[1];
+            any = true;
+        }
+        return any ? box : null;
+    }
+
+    /** {@code "3"} or {@code "2..5"} (either order, negatives allowed) as {low, high}; null when it isn't one. */
+    static int[] range(String text) {
+        String s = text.strip();
+        int dots = s.indexOf("..");
+        try {
+            if (dots < 0) {
+                int v = Integer.parseInt(s);
+                return new int[] {v, v};
+            }
+            int a = Integer.parseInt(s.substring(0, dots).strip()), b = Integer.parseInt(s.substring(dots + 2).strip());
+            return new int[] {Math.min(a, b), Math.max(a, b)};
+        } catch (NumberFormatException e) {
             return null;
         }
-        return new int[] {Math.min(s[0], s[3]), Math.min(s[1], s[4]), Math.min(s[2], s[5]),
-                Math.max(s[0], s[3]), Math.max(s[1], s[4]), Math.max(s[2], s[5])};
     }
 
     /** Loads the structure when its URL changed; returns whether the blocks it gives changed. */
@@ -237,7 +266,7 @@ public final class SceneModel {
         for (Object o : next) {
             if (o instanceof GroupSpec gs) {
                 SceneGroup g = previous.getOrDefault(gs.element(), new SceneGroup(gs.element()));
-                g.select = gs.select() == null ? null : gs.select().stream().mapToInt(Integer::intValue).toArray();
+                g.box = gs.box() == null ? null : gs.box().stream().mapToInt(Integer::intValue).toArray();
                 nextGroups.add(g);
             } else if (o instanceof BlockSpec b) {
                 long k = key(b.x(), b.y(), b.z());

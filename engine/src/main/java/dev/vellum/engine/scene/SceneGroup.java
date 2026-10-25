@@ -17,8 +17,8 @@ import java.util.Map;
  */
 public final class SceneGroup {
     private final Element element;
-    /** The box it claims ({x1, y1, z1, x2, y2, z2}, inclusive, ordered), or null. */
-    int[] select;
+    /** The box it claims ({x1, y1, z1, x2, y2, z2}, inclusive, ordered; an open axis is the int range), or null. */
+    int[] box;
     private List<SceneBlock> blocks = List.of();
     private Map<Long, SceneBlock> byPosition = Map.of();
     private int version;
@@ -114,15 +114,16 @@ public final class SceneGroup {
     float[] centre() {
         int[] b = bounds;
         if (b != null) return new float[] {(b[0] + b[3]) / 2f, (b[1] + b[4]) / 2f, (b[2] + b[5]) / 2f};
-        if (select != null) {
-            return new float[] {(select[0] + select[3] + 1) / 2f, (select[1] + select[4] + 1) / 2f,
-                    (select[2] + select[5] + 1) / 2f};
+        int[] s = box;
+        if (s != null && s[0] != Integer.MIN_VALUE && s[1] != Integer.MIN_VALUE && s[2] != Integer.MIN_VALUE
+                && s[3] != Integer.MAX_VALUE && s[4] != Integer.MAX_VALUE && s[5] != Integer.MAX_VALUE) {
+            return new float[] {(s[0] + s[3] + 1) / 2f, (s[1] + s[4] + 1) / 2f, (s[2] + s[5] + 1) / 2f};
         }
         return new float[3];
     }
 
     boolean claims(int x, int y, int z) {
-        int[] s = select;
+        int[] s = box;
         return s != null && x >= s[0] && x <= s[3] && y >= s[1] && y <= s[4] && z >= s[2] && z <= s[5];
     }
 

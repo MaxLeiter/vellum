@@ -4,13 +4,6 @@
   <title>Cottage</title>
   <link rel="stylesheet" href="showcase.css">
   <style>
-    /*
-     * COTTAGE: a <scene> that builds itself. The cottage is a structure file; each step of the build is a
-     * <block-group> that claims a box of it, and the steps are plain JS adding classes on a timer. CSS animations
-     * drop each group in, the camera glides between steps on transitions of -mc-yaw, -mc-pitch, -mc-model-scale and
-     * -mc-scene-center, and the builder (you) walks from spot to spot on a -mc-translate transition. Captions are
-     * <scene-anchor>s: ordinary HTML that follows a point in the scene.
-     */
     :root {
       --ink: #fff7e6;
       --muted: #b9c4d9;
@@ -284,16 +277,14 @@
 </head>
 <body class="fullscreen">
   <scene structure="vellum:structures/cottage.nbt" rotatable class="cam-start">
-    <!-- Each step claims a box of the cottage; a block goes to the first group whose box holds it. The furniture
-         comes before the walls, whose box surrounds it, and the chimney before the roof. -->
-    <block-group id="g-foundation" class="pending" select="2 1 2 8 1 8"></block-group>
-    <block-group id="g-inside" class="pending" select="3 2 3 7 3 6"></block-group>
-    <block-group id="g-walls" class="pending" select="2 2 2 8 4 8"></block-group>
-    <block-group id="g-chimney" class="pending" select="7 5 3 7 10 3"></block-group>
-    <block-group id="g-roof-n" class="pending" select="1 5 1 9 9 4"></block-group>
-    <block-group id="g-roof-s" class="pending" select="1 5 5 9 9 8"></block-group>
-    <block-group id="g-garden" class="pending" select="0 1 8 13 1 10"></block-group>
-    <block-group id="g-tree" class="pending" select="10 1 0 13 9 7"></block-group>
+    <block-group id="g-foundation" class="pending" x="2..8" y="1" z="2..8"></block-group>
+    <block-group id="g-inside" class="pending" x="3..7" y="2..3" z="3..6"></block-group>
+    <block-group id="g-walls" class="pending" x="2..8" y="2..4" z="2..8"></block-group>
+    <block-group id="g-chimney" class="pending" x="7" y="5..10" z="3"></block-group>
+    <block-group id="g-roof-n" class="pending" x="1..9" y="5..9" z="1..4"></block-group>
+    <block-group id="g-roof-s" class="pending" x="1..9" y="5..9" z="5..8"></block-group>
+    <block-group id="g-garden" class="pending" x="0..13" y="1" z="8..10"></block-group>
+    <block-group id="g-tree" class="pending" x="10..13" y="1..9" z="0..7"></block-group>
 
     <entity player class="builder" at="0 0 0"></entity>
     <scene-anchor class="nameplate" at="0 2.15 0"></scene-anchor>
@@ -454,16 +445,20 @@
 
     // ---- Slicing: one group per layer, made when first asked for ----
 
+    let stepGroups = [];
+
     function enterLayers() {
       if (scene.querySelector('.layer')) return;
       clearTimeout(timer);
       step = STEPS.length;
       built(STEPS.length);
-      for (let i = 0; i < STEPS.length; i++) document.getElementById(STEPS[i].group).remove();
+      // The step groups step aside (kept for leaveLayers) for one group per layer.
+      stepGroups = STEPS.map(st => document.getElementById(st.group));
+      for (const g of stepGroups) g.remove();
       for (let y = 1; y <= TOP_LAYER; y++) {
         const g = document.createElement('block-group');
         g.className = 'layer';
-        g.setAttribute('select', '0 ' + y + ' 0 13 ' + y + ' 10');
+        g.setAttribute('y', y);
         g.dataset.y = y;
         scene.insertBefore(g, scene.firstChild);
       }
@@ -475,16 +470,7 @@
       const layers = scene.querySelectorAll('.layer');
       if (layers.length === 0) return;
       for (let i = 0; i < layers.length; i++) layers[i].remove();
-      for (let i = STEPS.length - 1; i >= 0; i--) {
-        const g = document.createElement('block-group');
-        g.id = STEPS[i].group;
-        scene.insertBefore(g, scene.firstChild);
-      }
-      // The boxes, as in the markup.
-      const boxes = ['2 1 2 8 1 8', '3 2 3 7 3 6', '2 2 2 8 4 8', '7 5 3 7 10 3', '1 5 1 9 9 4', '1 5 5 9 9 8',
-        '0 1 8 13 1 10', '10 1 0 13 9 7'];
-      const order = ['g-foundation', 'g-inside', 'g-walls', 'g-chimney', 'g-roof-n', 'g-roof-s', 'g-garden', 'g-tree'];
-      for (let i = 0; i < order.length; i++) document.getElementById(order[i]).setAttribute('select', boxes[i]);
+      for (let i = stepGroups.length - 1; i >= 0; i--) scene.insertBefore(stepGroups[i], scene.firstChild);
       layer = TOP_LAYER;
       layerLabel.textContent = 'All';
     }
@@ -523,7 +509,9 @@
       const d = e.detail;
       const g = document.createElement('block-group');
       g.className = 'hop';
-      g.setAttribute('select', [d.x, d.y, d.z, d.x, d.y, d.z].join(' '));
+      g.setAttribute('x', d.x);
+      g.setAttribute('y', d.y);
+      g.setAttribute('z', d.z);
       g.addEventListener('animationend', () => g.remove());
       scene.insertBefore(g, scene.firstChild);
     });

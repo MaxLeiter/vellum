@@ -148,11 +148,11 @@ class SceneModelTest {
                   <block at="0 0 0" state="stone"></block>
                   <block at="0 1 0" state="dirt"></block>
                   <block at="0 2 0" state="sand"></block>
-                  <block-group id=a select="0 1 0 0 2 0"></block-group>
-                  <block-group id=b select="0 0 0 0 9 0">
+                  <block-group id=a x="0" y="1..2" z="0"></block-group>
+                  <block-group id=b x="0" y="0..9" z="0">
                     <block at="5 5 5" state="gold_block"></block>
                   </block-group>
-                  <block-group id=c select="0 2 0 0 2 0"></block-group>
+                  <block-group id=c x="0" y="2" z="0"></block-group>
                 </scene>""");
         List<SceneGroup> groups = model(page).groups();
         assertEquals(4, groups.size());
@@ -164,11 +164,33 @@ class SceneModelTest {
     }
 
     @Test
+    void groupRangesAreNumbersOrRangesAndALeftOutAxisIsAllOfIt() {
+        assertArrayEquals(new int[] {3, 3}, SceneModel.range(" 3 "));
+        assertArrayEquals(new int[] {2, 5}, SceneModel.range("2..5"));
+        assertArrayEquals(new int[] {2, 5}, SceneModel.range("5..2"), "either order");
+        assertArrayEquals(new int[] {-3, 1}, SceneModel.range("-3 .. 1"));
+        assertNull(SceneModel.range("2-5"));
+        assertNull(SceneModel.range("a..b"));
+        Page page = page("""
+                <scene id=s>
+                  <block at="0 0 0" state="stone"></block>
+                  <block at="9 1 -4" state="dirt"></block>
+                  <block at="3 1 2" state="sand"></block>
+                  <block-group id=layer y="1"></block-group>
+                  <block-group id=bad y="up"></block-group>
+                </scene>""");
+        List<SceneGroup> groups = model(page).groups();
+        assertEquals(List.of("0,0,0=stone"), blocks(groups.get(0)));
+        assertEquals(List.of("9,1,-4=dirt", "3,1,2=sand"), blocks(groups.get(1)), "a whole layer, wherever it reaches");
+        assertEquals(List.of(), blocks(groups.get(2)), "a range that doesn't parse claims nothing");
+    }
+
+    @Test
     void scriptsChangeTheBlocksAndOnlyTheGroupsTheyTouchChange() {
         Page page = page("""
                 <scene id=s>
                   <block at="0 0 0" state="stone"></block>
-                  <block-group id=roof select="0 3 0 4 4 4"><block at="1 3 1" state="oak_slab"></block></block-group>
+                  <block-group id=roof x="0..4" y="3..4" z="0..4"><block at="1 3 1" state="oak_slab"></block></block-group>
                 </scene>""");
         SceneModel m = model(page);
         SceneGroup base = m.groups().get(0), roof = m.groups().get(1);
@@ -234,7 +256,7 @@ class SceneModelTest {
         Page page = page("""
                 <style>#g { transition: opacity 100ms linear, -mc-translate 100ms linear }
                   #g.away { opacity: 0.2; -mc-translate: 0 -1 0 } .hidden { display: none }</style>
-                <scene id=s><block-group id=g select="0 0 0 1 1 1"><block at="0 0 0" state="stone"></block></block-group></scene>""");
+                <scene id=s><block-group id=g x="0..1" y="0..1" z="0..1"><block at="0 0 0" state="stone"></block></block-group></scene>""");
         SceneGroup g = model(page).groups().get(1);
         assertTrue(g.visible());
         assertFalse(g.moved());
