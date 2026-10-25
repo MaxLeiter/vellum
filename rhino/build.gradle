@@ -138,7 +138,7 @@ sourceSets {
                 'org/mozilla/javascript/commonjs/**')
         resources.srcDir(prepareRhinoSources.map { sourceDir.get().dir('rhino/src/main/resources') })
         // Script errors are for page authors, so they stay in English.
-        resources.exclude('**/Messages_fr.properties', '**/Messages_zh_CN.properties')
+        resources.exclude { it.name.startsWith('Messages_') && it.name != 'Messages_en.properties' }
     }
 }
 
