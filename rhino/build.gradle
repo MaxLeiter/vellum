@@ -137,6 +137,8 @@ sourceSets {
         java.exclude('org/mozilla/javascript/optimizer/**', 'org/mozilla/javascript/serialize/**',
                 'org/mozilla/javascript/commonjs/**')
         resources.srcDir(prepareRhinoSources.map { sourceDir.get().dir('rhino/src/main/resources') })
+        // Script errors are for page authors, so they stay in English.
+        resources.exclude('**/Messages_fr.properties', '**/Messages_zh_CN.properties')
     }
 }
 
@@ -145,6 +147,8 @@ tasks.withType(JavaCompile).configureEach {
     // Rhino ships with the engine, which also runs on Java 21 (Minecraft 1.21.1).
     options.release = engine_java_release as int
     options.compilerArgs += ['-nowarn', '-Xlint:none']
+    // Line numbers for stack traces, no local variable tables.
+    options.debugOptions.debugLevel = 'source,lines'
 }
 
 tasks.named('shadowJar') {

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The jar is about 12% smaller (2.8 MB to 2.5 MB): classes keep line numbers for stack traces but not local variable tables, and Rhino's French and Chinese error messages are left out.
+
 ## 0.6.1
 
 - On Minecraft 26.2 and 26.3, rounded boxes, rounded borders and box-shadows are drawn by a shader: smooth antialiased edges at any GUI scale or rotation, and a real Gaussian blur. `shape-rendering: crispEdges` keeps a page or element pixel-sharp, and `client.shapeShader=false` in `vellum.properties` turns the shader off for everything. 1.21.1 is unchanged.

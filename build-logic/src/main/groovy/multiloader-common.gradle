@@ -81,6 +81,8 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Line numbers for stack traces, no local variable tables: about 5% of the jar.
+    options.debugOptions.debugLevel = 'source,lines'
 }
 
 dependencies {
