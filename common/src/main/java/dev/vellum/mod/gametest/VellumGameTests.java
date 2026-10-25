@@ -111,7 +111,7 @@ public final class VellumGameTests {
 
     private static void pageData(GameTestHelper h) {
         PageData data = new PageData();
-        h.assertValueEqual(data.json(), null, "no data at first");
+        h.assertTrue(data.json() == null, "no data at first");
         JsonObject fields = new JsonObject();
         fields.addProperty("name", "Steve");
         JsonArray mobs = new JsonArray();
@@ -123,7 +123,7 @@ public final class VellumGameTests {
         h.assertValueEqual(data.put("hp", new JsonPrimitive(20)), "20", "put returns the value's JSON");
         data.put("name", "\"Alex\"");
         h.assertValueEqual(data.json(), "{\"name\":\"Alex\",\"mobs\":[\"zombie\"],\"hp\":20}", "a field set again keeps its place");
-        h.assertValueEqual(data.put("mobs", JsonNull.INSTANCE), null, "JSON null removes");
+        h.assertTrue(data.put("mobs", JsonNull.INSTANCE) == null, "JSON null removes");
         data.put("hp", (String) null);
         h.assertValueEqual(data.json(), "{\"name\":\"Alex\"}", "removed fields are gone");
         JsonObject merged = new JsonObject();
