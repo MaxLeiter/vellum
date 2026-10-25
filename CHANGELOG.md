@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 - `VellumPages.folder(namespace, dir)` serves a namespace from a folder players can edit, such as one in `config/`. Relative stylesheets, scripts and images resolve inside it, saving any of them reloads the page, and nothing outside the folder can be read. See "Pages players edit" in `docs/api/pages.md`.
 - If the shape shader fails to compile, Vellum draws shapes the old way until the next resource reload, instead of retrying the compile every 5 seconds (a hitch each time).
