@@ -127,16 +127,16 @@ final class PositionedLayout {
      * The containing block of an out-of-flow box: the box of the nearest ancestor element that is transformed, or
      * positioned when the box is absolute; null for the viewport. Inline elements are never transformed (CSS
      * transforms do not apply to them) but can be positioned. A pseudo-element's search starts at its host element.
-     * A scene anchor's is its scene.
+     * A {@link Box#hosted} box counts as transformed, and its own is the replaced box it is laid out for.
      */
     private static Box containingBlock(LayoutBox box) {
-        if (box.anchored) return box.parent;
+        if (box.hosted()) return box.parent;
         boolean fixed = box.style.position == Position.FIXED;
         Element e = box.kind == Box.Kind.PSEUDO ? box.element : box.element.parentElement();
         for (; e != null; e = e.parentElement()) {
             Box cb = e.box;
             if (cb == null || e.style == null) continue;
-            boolean transformed = cb.kind != Box.Kind.INLINE && e.style.hasTransform();
+            boolean transformed = cb.kind != Box.Kind.INLINE && e.style.hasTransform() || cb.hosted();
             if (transformed || (!fixed && e.style.position.isPositioned())) return cb;
         }
         return null;

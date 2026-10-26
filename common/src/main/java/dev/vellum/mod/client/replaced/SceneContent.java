@@ -4,6 +4,7 @@ package dev.vellum.mod.client.replaced;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.scene.SceneBlock;
 import dev.vellum.engine.scene.SceneCamera;
 import dev.vellum.engine.scene.SceneEntity;
@@ -46,11 +47,11 @@ import java.util.Set;
  * entities that did not change since the last frame keeps its picture and costs a blit. The hovered block's name is
  * its tooltip.
  */
-public final class SceneContent extends McReplaced implements dev.vellum.engine.scene.SceneContent {
+public final class SceneContent extends dev.vellum.engine.scene.SceneContent implements OwnTooltip {
     /** How deep the picture's depth range may be used, in device px either way (vanilla's is ±1000). */
     private static final float DEPTH = 900;
 
-    private final SceneModel model;
+    private final SceneModel model = scene();
     /** Block states by their text; empty for text that names no block. */
     private final Map<String, Optional<BlockState>> states = new HashMap<>();
     private final Map<SceneGroup, Built> meshes = new IdentityHashMap<>();
@@ -67,32 +68,11 @@ public final class SceneContent extends McReplaced implements dev.vellum.engine.
 
     SceneContent(Element element) {
         super(element);
-        model = new SceneModel(element);
-    }
-
-    @Override
-    public SceneModel scene() {
-        return model;
     }
 
     /** How many block quads the last frame drew (for the dev autopilot's checks). */
     public int drawnQuads() {
         return drawnQuads;
-    }
-
-    @Override
-    public float intrinsicWidth() {
-        return SceneModel.WIDTH;
-    }
-
-    @Override
-    public float intrinsicHeight() {
-        return SceneModel.HEIGHT;
-    }
-
-    @Override
-    public boolean showsTooltip() {
-        return model.tooltipBlock() != null;
     }
 
     @Override
@@ -113,9 +93,10 @@ public final class SceneContent extends McReplaced implements dev.vellum.engine.
     }
 
     @Override
-    protected void draw(McCanvas canvas, float x, float y, float width, float height) {
+    public void paint(Canvas c, float x, float y, float width, float height) {
+        if (!(c instanceof McCanvas canvas)) return;
         SceneCamera camera = model.camera();
-        int tint = element.computedStyle().tint;
+        int tint = model.element().computedStyle().tint;
         if (camera == null || camera.pixelsPerBlock() <= 0 || !canvas.sceneVisible(tint, x, y, width, height)) return;
         updateMeshes();
         float[] m = camera.matrix();
@@ -222,11 +203,6 @@ public final class SceneContent extends McReplaced implements dev.vellum.engine.
                 return Optional.empty();
             }
         }).orElse(null);
-    }
-
-    @Override
-    public @Nullable String accessibleName() {
-        return null;
     }
 
     @Override

@@ -50,7 +50,7 @@ final class ReplacedElements {
     }
 
     /** {@code <item id count tooltip>}: the flat texture, and the stack size like vanilla's {@code itemCount}. */
-    private static final class Item implements ReplacedContent {
+    private static final class Item implements ReplacedContent, NamedContent {
         private final Element element;
         private final MinecraftAssets assets;
         private final FontMetrics fonts;
@@ -71,6 +71,11 @@ final class ReplacedElements {
         public boolean showsTooltip() {
             String id = element.getAttribute("id");
             return element.hasAttribute("tooltip") && id != null && !id.isBlank();
+        }
+
+        @Override
+        public String nameId() {
+            return element.getAttribute("id");
         }
 
         /** Fills the box, which {@code object-fit: contain} makes a square placed by object-position, as in game. */

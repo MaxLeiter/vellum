@@ -29,8 +29,8 @@ import java.util.Set;
 /**
  * What a {@code <scene>} shows, read from its element: a small world of blocks from a structure file and the
  * {@code <block>} children applied on top, split into {@link SceneGroup}s, plus entities and anchors, seen through a
- * {@link SceneCamera}. Its host's content creates one; the engine calls {@link #update} every frame after layout,
- * and the host draws from {@link #groups()}, {@link #entities()} and {@link #camera()}.
+ * {@link SceneCamera}. Its {@link SceneContent} owns it and updates it every frame after layout, and the host draws
+ * from {@link #groups()}, {@link #entities()} and {@link #camera()}.
  *
  * <ul>
  *   <li>{@code structure="ns:path/file.nbt"} loads a structure file ({@link Host#loadBytes}).</li>
@@ -56,10 +56,7 @@ import java.util.Set;
  * show its name as a tooltip unless the scene has {@code notooltips} ({@link #tooltipBlock()}).
  */
 public final class SceneModel {
-    public static final String TAG = "scene", BLOCK = "block", GROUP = "block-group", ENTITY = "entity",
-            ANCHOR = "scene-anchor";
-    /** The default size of a scene's box, in px. */
-    public static final float WIDTH = 160, HEIGHT = 120;
+    public static final String BLOCK = "block", GROUP = "block-group", ENTITY = "entity", ANCHOR = "scene-anchor";
     /** The most blocks a scene holds, from its structure and children together. */
     public static final int MAX_BLOCKS = 65536;
     /** How far from the origin a block may be, in each axis. */
@@ -87,7 +84,7 @@ public final class SceneModel {
     /** Problems already logged, so an edit loop does not repeat them. */
     private final Set<String> warned = new HashSet<>();
 
-    public SceneModel(Element element) {
+    SceneModel(Element element) {
         this.element = element;
         element.addEventListener("mousedown", this::pressed);
         element.addEventListener("click", this::clicked);
@@ -119,7 +116,7 @@ public final class SceneModel {
      * Brings the model up to date with the document, the styles and the layout, places the anchors and picks the
      * hovered block. Returns whether anything the scene paints changed.
      */
-    public boolean update() {
+    boolean update() {
         boolean changed = sync();
         for (SceneGroup g : groups) changed |= g.readStyle();
         changed |= placeEntities();
@@ -350,7 +347,7 @@ public final class SceneModel {
         float[] p = new float[3];
         for (Element a : anchors) {
             Box box = a.box;
-            if (box == null || !box.anchored || box.parent != element.box) continue;
+            if (box == null || box.parent != element.box) continue;
             float[] at = point(a);
             ComputedStyle s = a.computedStyle();
             float x = 0, y = 0;
@@ -359,9 +356,9 @@ public final class SceneModel {
                 x = camera.x() + p[0] - box.x;
                 y = camera.y() + p[1] - box.y;
             }
-            if (x != box.anchorX || y != box.anchorY) {
-                box.anchorX = x;
-                box.anchorY = y;
+            if (x != box.hostOffsetX || y != box.hostOffsetY) {
+                box.hostOffsetX = x;
+                box.hostOffsetY = y;
                 changed = true;
             }
         }

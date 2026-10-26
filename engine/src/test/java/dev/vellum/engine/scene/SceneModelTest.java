@@ -24,16 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** {@code <scene>}: the blocks, groups, entities and anchors a page describes, its camera and picking. */
 class SceneModelTest {
     /** A host's scene content, drawing nothing. */
-    private static final class TestScene implements SceneContent {
-        private final SceneModel model;
-
+    private static final class TestScene extends SceneContent {
         TestScene(Element element) {
-            model = new SceneModel(element);
+            super(element);
         }
 
-        @Override public SceneModel scene() { return model; }
-        @Override public float intrinsicWidth() { return SceneModel.WIDTH; }
-        @Override public float intrinsicHeight() { return SceneModel.HEIGHT; }
         @Override public void paint(Canvas canvas, float x, float y, float width, float height) {}
     }
 
@@ -233,7 +228,7 @@ class SceneModelTest {
         assertNull(page.byId("g").box);
         assertNull(page.byId("e").box);
         assertNotNull(page.byId("a").box);
-        assertTrue(page.byId("a").box.anchored);
+        assertTrue(page.byId("a").box.hosted());
         assertEquals(160, page.byId("s").box.width);
         assertEquals(120, page.byId("s").box.height);
     }

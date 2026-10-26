@@ -21,41 +21,42 @@ import java.util.List;
  * their group covers them or when they face away, and painted far to near. Groups show, fade and move as in game.
  * Entities are silhouettes; block entities (chests, beds, signs) are not drawn.
  */
-final class PreviewScene implements SceneContent {
+final class PreviewScene extends SceneContent implements NamedContent {
     /** The world's face shading: down, up, north, south, west, east. */
     private static final float[] SHADE = {0.5f, 1, 0.8f, 0.8f, 0.6f, 0.6f};
 
-    private final SceneModel model;
     private final BlockModels models;
 
     /** Something to paint, at its depth (larger is further). */
     private record Item(float depth, Runnable paint) {}
 
     PreviewScene(Element element, MinecraftAssets assets) {
-        this.model = new SceneModel(element);
+        super(element);
         this.models = new BlockModels(assets);
     }
 
-    @Override public SceneModel scene() { return model; }
-    @Override public float intrinsicWidth() { return SceneModel.WIDTH; }
-    @Override public float intrinsicHeight() { return SceneModel.HEIGHT; }
-
-    /** The hovered block's name shows, as in game ({@code TooltipPainter} names it). */
+    /** The hovered block, as in game. */
     @Override
-    public boolean showsTooltip() {
-        return model.tooltipBlock() != null;
+    public String nameId() {
+        SceneBlock block = scene().tooltipBlock();
+        return block == null ? null : block.id();
+    }
+
+    @Override
+    public boolean namesBlock() {
+        return true;
     }
 
     @Override
     public void paint(Canvas canvas, float x, float y, float width, float height) {
-        SceneCamera camera = model.camera();
+        SceneCamera camera = scene().camera();
         if (camera == null) return;
         float[] view = camera.matrix();
         List<Item> items = new ArrayList<>();
-        for (SceneGroup group : model.groups()) {
+        for (SceneGroup group : scene().groups()) {
             if (group.visible()) addGroup(group, multiply(view, group.matrix()), group.opacity(), canvas, x, y, items);
         }
-        for (SceneEntity entity : model.entities()) addEntity(entity, view, camera.pixelsPerBlock(), canvas, x, y, items);
+        for (SceneEntity entity : scene().entities()) addEntity(entity, view, camera.pixelsPerBlock(), canvas, x, y, items);
         items.sort(Comparator.comparingDouble(Item::depth).reversed());
         canvas.save();
         canvas.clipRect(x, y, width, height);
