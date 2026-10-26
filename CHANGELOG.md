@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 - `<scene>`: a small 3D world in a box. Blocks come from a structure file (`structure="ns:path/file.nbt"`) and `<block x y z state>` children; `<block-group x y z>` claims a box of them (`x="3..7" y="2"`, an axis left out being all of it) to show, fade (`opacity`), move (`-mc-translate`) and turn (`-mc-yaw`, `-mc-pitch` and the new `-mc-roll`) with ordinary CSS transitions and animations; `<entity x y z>` children stand in it; and `<scene-anchor x y z>` pins HTML captions to points in it. The camera is `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` and the new `-mc-scene-center`, plus dragging with `rotatable`. Hovering a block shows its name and fires `blockhover`, clicking fires `blockclick`. Each group is meshed once, with neighbors culled, fluids, connected blocks and block entities, and a scene that doesn't change is one blit a frame. Scripts change scenes by changing their children. 26.x only: on 1.21.1 a scene lays out and fires its events but draws nothing. The previewer draws scenes from the blocks' models. See "Scenes" in `docs/api/elements.md`, and the Cottage showcase (`/vellum showcase scene`), which builds itself step by step.
 - `Host.loadBytes`: hosts give the engine binary resources (structure files). In game it reads resources, dev source trees and page folders as `loadText` does.
