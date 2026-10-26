@@ -13,9 +13,9 @@ import java.util.function.Function;
 
 /**
  * The Minecraft elements, drawn by Minecraft: {@code <item>}, {@code <slot>}, {@code <entity>}, {@code <model>} and
- * {@code <player-head>}, and {@code <scene>} ({@link SceneContent}, which is the engine's kind of content;
- * {@code img}, {@code sprite} and {@code canvas} are the engine's). Layout sizes them like images (intrinsic size,
- * CSS size, object-fit).
+ * {@code <player-head>} ({@code img}, {@code sprite} and {@code canvas} are the engine's). Layout sizes them like
+ * images (intrinsic size, CSS size, object-fit). {@link #ELEMENTS} also has {@code <scene>}, whose
+ * {@link SceneContent} builds on the engine's scene content instead.
  */
 public abstract class McReplaced implements ReplacedContent, OwnTooltip {
     /** The host's replaced elements, by tag ({@code Host.replacedElements}). */
