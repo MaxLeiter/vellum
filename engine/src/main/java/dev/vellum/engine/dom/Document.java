@@ -504,7 +504,7 @@ public final class Document extends Node {
     public boolean needsLayout() { return layoutDirty; }
 
     /** A tree change: marks style dirty, and layout too when {@code layout}. */
-    void invalidate(boolean layout) {
+    private void invalidate(boolean layout) {
         invalidate(true, true, layout);
     }
 
@@ -591,6 +591,7 @@ public final class Document extends Node {
     /** {@code child} was inserted into this connected document; {@code arrived} unless it only moved within it. */
     void inserted(Node child, boolean arrived) {
         invalidate(true);
+        if (child.parent instanceof Element parent) subtreeChanged(parent, parent, null);
         if (!arrived || child.isInert()) return;
         boolean loaded = !readyState.equals("loading");
         connect(child, loaded);
@@ -633,6 +634,23 @@ public final class Document extends Node {
         return Collections.unmodifiableList(replaced);
     }
 
+    /** A child of {@code parent} was taken out, to leave the document or to move within it. */
+    void removed(Node parent) {
+        invalidate(true);
+        if (parent instanceof Element p) subtreeChanged(p, p, null);
+    }
+
+    /**
+     * Tells the replaced content of {@code from} and its ancestors that {@code attribute} of {@code changed} (or with
+     * null, its children) changed ({@link ReplacedContent#subtreeChanged}).
+     */
+    private void subtreeChanged(Node from, Element changed, String attribute) {
+        if (replaced.isEmpty()) return;
+        for (Node n = from; n != null; n = n.parent) {
+            if (n instanceof Element e && e.replaced != null) e.replaced.subtreeChanged(changed, attribute);
+        }
+    }
+
     /** {@code node} is about to leave the document (not just move within it). */
     void nodeRemoving(Node node) {
         if (focused != null && node.contains(focused)) setFocus(null);
@@ -673,6 +691,7 @@ public final class Document extends Node {
     void attributeChanged(Element element, String name) {
         if (element.replaced != null) element.replaced.attributeChanged(name); // also a canvas outside the document
         if (!element.isConnected()) return;
+        subtreeChanged(element.parent, element, name);
         boolean layout = switch (name) {
             case "width", "height", "src" -> element.replaced != null;
             case "type" -> element.tagName().equals("input");

@@ -77,13 +77,15 @@ class SceneModelTest {
     // ---- Parsing ----
 
     @Test
-    void coordinatesAreThreeNumbersSeparatedBySpacesOrCommas() {
-        assertArrayEquals(new float[] {1, -2.5f, 3}, SceneModel.numbers(" 1 -2.5\t3 ", 3));
-        assertArrayEquals(new float[] {1, 2, 3}, SceneModel.numbers("1,2, 3", 3));
-        assertNull(SceneModel.numbers("1 2", 3));
-        assertNull(SceneModel.numbers("1 2 x", 3));
-        assertNull(SceneModel.numbers("1 2 NaN", 3));
-        assertNull(SceneModel.numbers("1 2 1e9", 3), "too far out");
+    void coordinatesAreFiniteNumbersNearTheOrigin() {
+        assertEquals(-2.5f, SceneModel.coordinate(" -2.5\t"));
+        assertEquals(65536, SceneModel.coordinate("65536"));
+        assertTrue(Float.isNaN(SceneModel.coordinate(null)));
+        assertTrue(Float.isNaN(SceneModel.coordinate("1 2")), "one number");
+        assertTrue(Float.isNaN(SceneModel.coordinate("x")));
+        assertTrue(Float.isNaN(SceneModel.coordinate("NaN")));
+        assertTrue(Float.isNaN(SceneModel.coordinate("Infinity")));
+        assertTrue(Float.isNaN(SceneModel.coordinate("1e9")), "too far out");
     }
 
     @Test
@@ -217,6 +219,28 @@ class SceneModelTest {
         page.frame();
         assertEquals(List.of("0,0,0=cobblestone", "2,4,2=glass"), blocks(m.groups().get(0)), "unclaimed again");
         assertEquals(1, m.groups().size());
+    }
+
+    @Test
+    void scriptsChangeTheBlocksInGroupsToo() {
+        Page page = page("""
+                <scene id=s><block-group id=g><block id=b x="0" y="0" z="0" state="stone"></block></block-group></scene>
+                <div id=elsewhere></div>""");
+        SceneGroup g = model(page).groups().get(1);
+        page.run("let b = document.createElement('block'); b.setAttribute('x', 1); b.setAttribute('y', 0); b.setAttribute('z', 0);"
+                + "b.setAttribute('state', 'dirt'); document.getElementById('g').appendChild(b)");
+        page.frame();
+        assertEquals(List.of("0,0,0=stone", "1,0,0=dirt"), blocks(g));
+        page.run("document.getElementById('b').setAttribute('z', '2')");
+        page.frame();
+        assertEquals(List.of("1,0,0=dirt", "0,0,2=stone"), blocks(g));
+        page.run("document.getElementById('b').setAttribute('style', 'color: red'); document.getElementById('g').className = 'x'");
+        page.frame();
+        int version = g.version();
+        page.run("document.getElementById('elsewhere').appendChild(document.getElementById('b'))");
+        page.frame();
+        assertEquals(List.of("1,0,0=dirt"), blocks(g), "moved out of the scene");
+        assertNotEquals(version, g.version());
     }
 
     @Test
@@ -368,6 +392,10 @@ class SceneModelTest {
                 + "<scene-anchor id=a x='0' y='0' z='0' style='-mc-translate: 0 1 0'>x</scene-anchor></scene>");
         float[] p = model(page).camera().project(0, 1, 0);
         assertEquals(p[1], page.byId("a").getBoundingClientRect()[1], 1e-3);
+        page.byId("a").setAttribute("y", "2");
+        page.frame();
+        assertEquals(model(page).camera().project(0, 3, 0)[1], page.byId("a").getBoundingClientRect()[1], 1e-3,
+                "and their point");
     }
 
     @Test

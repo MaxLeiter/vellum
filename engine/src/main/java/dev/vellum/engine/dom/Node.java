@@ -220,7 +220,7 @@ public abstract class Node {
         renumber(at);
         if (connected) {
             if (leaving) doc.countNodes(-size(child));
-            doc.invalidate(true);
+            doc.removed(this);
         }
     }
 

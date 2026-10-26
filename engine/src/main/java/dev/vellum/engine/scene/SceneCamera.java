@@ -13,7 +13,7 @@ package dev.vellum.engine.scene;
 public record SceneCamera(float yaw, float tilt, float pixelsPerBlock, float centerX, float centerY, float centerZ,
                           float x, float y, float width, float height) {
     /** The inventory's view of blocks: 30° from above, turned 225°. */
-    static final float BASE_TILT = 30, BASE_YAW = 225;
+    public static final float BASE_TILT = 30, BASE_YAW = 225;
     /** Room left around the scene's bounds, as a fraction of the box. */
     static final float MARGIN = 0.06f;
 

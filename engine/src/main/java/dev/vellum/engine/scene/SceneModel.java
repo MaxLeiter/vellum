@@ -38,15 +38,17 @@ import java.util.Set;
  *       erases one. {@code nbt} gives its block entity data as SNBT.</li>
  *   <li>{@code <block-group x="3..7" y="2" z="3..6">} claims the blocks in that box that no earlier group claimed,
  *       and its own {@code <block>} children. Each range is inclusive, a single number is one layer, and an axis left
- *       out is all of it ({@code <block-group y="2">} is a layer). The rest are the base. A group shows, fades and moves
- *       by its style ({@code display}, {@code opacity}, {@code -mc-translate}, {@code -mc-yaw}, {@code -mc-pitch}, {@code -mc-roll}).</li>
+ *       out is all of it ({@code <block-group y="2">} is a layer). The rest are the base. A group shows, fades, moves
+ *       and turns by its style ({@code display}, {@code opacity}, {@code -mc-translate}, {@code -mc-yaw},
+ *       {@code -mc-pitch}, {@code -mc-roll}).</li>
  *   <li>{@code <entity x y z>} children stand at that point, moved by their {@code -mc-translate}.</li>
  *   <li>{@code <scene-anchor x y z>} children are laid out as HTML and moved every frame so their top-left
  *       corner is where that point is seen.</li>
  * </ul>
  *
- * <p>Changing any of these from a script updates the scene on the next frame: the blocks are read again only after
- * the document changed, and a group's version (so its mesh) only changes when its blocks do. The camera follows
+ * <p>Changing any of these from a script updates the scene on the next frame: the children are read again only after
+ * they, their groups' children or the attributes it reads of them changed (never for their styles, which it follows
+ * every frame), and a group's version (so its mesh) only changes when its blocks do. The camera follows
  * {@code -mc-yaw}, {@code -mc-pitch}, {@code -mc-model-scale}, {@code -mc-scene-center} and, with
  * {@code rotatable}, dragging.
  *
@@ -64,25 +66,48 @@ public final class SceneModel {
     /** How far the pointer may move between press and release for a click to pick a block, in px. */
     private static final float CLICK_SLOP = 3;
     private static final Set<String> AIR = Set.of("minecraft:air", "minecraft:cave_air", "minecraft:void_air");
+    /** The attributes of its children, and of its groups' children, that it reads. */
+    private static final Set<String> READ = Set.of("x", "y", "z", "state", "nbt");
+    private static final Comparator<SceneBlock> ORDER = Comparator.comparingInt(SceneBlock::y)
+            .thenComparingInt(SceneBlock::z).thenComparingInt(SceneBlock::x);
 
     private final Element element;
     private final SceneGroup base = new SceneGroup(null);
     /** The base, then the groups in document order. */
     private List<SceneGroup> groups = List.of(base);
+    private int groupsVersion;
     private List<SceneEntity> entities = List.of();
-    private List<Element> entityElements = List.of(), anchors = List.of();
-    /** What the blocks were last built from, and the document version they were read at. */
-    private List<Object> spec;
-    private int syncedVersion = Integer.MIN_VALUE;
+    /** The entities and anchors, with the points their x, y and z give. */
+    private List<Placed> entityPoints = List.of(), anchorPoints = List.of();
+    /** What the blocks were last built from, and whether the children changed since. */
+    private Spec spec;
+    private boolean dirty = true;
     private String structureUrl;
     private Structure structure;
+    /** The structure's blocks by position ({@link #key}). */
+    private Map<Long, SceneBlock> structureBlocks = Map.of();
     private float[] bounds = {0, 0, 0, 1, 1, 1};
     private SceneCamera camera;
     private float[] matrix, inverse;
     private SceneBlock hovered;
+    /** Where the last pick looked (NaN for nowhere), and whether what it sees changed since. */
+    private float pickedX = Float.NaN, pickedY;
+    private boolean pickStale = true;
     private float pressX = Float.NaN, pressY;
     /** Problems already logged, so an edit loop does not repeat them. */
     private final Set<String> warned = new HashSet<>();
+
+    /** A {@code <block>} child, in its group (null for the scene's own). */
+    private record BlockSpec(int x, int y, int z, String state, String nbt, Element group) {}
+
+    /** A {@code <block-group>} and the box it claims, or null. */
+    private record GroupSpec(Element element, SceneGroup.Box box) {}
+
+    /** What the blocks are built from, in document order. */
+    private record Spec(List<BlockSpec> blocks, List<GroupSpec> groups) {}
+
+    /** An entity or anchor, and its point (null when its x, y and z don't give one). */
+    private record Placed(Element element, float[] at) {}
 
     SceneModel(Element element) {
         this.element = element;
@@ -95,11 +120,17 @@ public final class SceneModel {
     /** The base first, then the {@code <block-group>}s in document order. */
     public List<SceneGroup> groups() { return groups; }
 
+    /** Changes whenever how the groups show does: their blocks, visibility, opacity or matrix, or which there are. */
+    public int groupsVersion() { return groupsVersion; }
+
     /** The entities that show, where they stand this frame. */
     public List<SceneEntity> entities() { return entities; }
 
     /** This frame's camera, or null when the scene has no box. */
     public SceneCamera camera() { return camera; }
+
+    /** This frame's {@link SceneCamera#matrix()}, computed once a camera change (shared: don't change it), or null. */
+    public float[] cameraMatrix() { return matrix; }
 
     /** The bounds every block lies in (and the structure's size), {minX, minY, minZ, maxX, maxY, maxZ}. */
     public float[] bounds() { return bounds.clone(); }
@@ -117,16 +148,44 @@ public final class SceneModel {
      * hovered block. Returns whether anything the scene paints changed.
      */
     boolean update() {
-        boolean changed = sync();
-        for (SceneGroup g : groups) changed |= g.readStyle();
-        changed |= placeEntities();
-        changed |= updateCamera();
-        changed |= placeAnchors();
+        boolean blocks = sync(), shows = blocks, moved = blocks;
+        for (SceneGroup g : groups) {
+            int placement = g.placement;
+            if (g.readStyle()) {
+                shows = true;
+                moved |= g.placement != placement;
+            }
+        }
+        if (shows) groupsVersion++;
+        boolean changed = placeEntities() | shows;
+        boolean turned = updateCamera();
+        changed |= placeAnchors() | turned;
+        if (moved || turned) pickStale = true;
         updateHover();
         return changed;
     }
 
     // ---- Reading the document ----
+
+    /** The scene's own attribute changed. */
+    void attributeChanged(String name) {
+        if (name.equals("structure")) dirty = true;
+    }
+
+    /**
+     * Something below the scene changed ({@code ReplacedContent.subtreeChanged}): the children are read again when
+     * its children or a group's changed, or an attribute it reads of one of them.
+     */
+    void subtreeChanged(Element changed, String attribute) {
+        if (attribute == null ? holdsBlocks(changed) : READ.contains(attribute) && holdsBlocks(changed.parentElement())) {
+            dirty = true;
+        }
+    }
+
+    /** Whether the scene reads {@code e}'s children: it is the scene, or one of its groups. */
+    private boolean holdsBlocks(Element e) {
+        return e == element || e != null && e.parentElement() == element && e.tagName().equals(GROUP);
+    }
 
     /** Position key: each coordinate in 21 bits. */
     static long key(int x, int y, int z) {
@@ -134,64 +193,59 @@ public final class SceneModel {
     }
 
     static boolean isAir(String state) {
-        String id = state.indexOf('[') < 0 ? state : state.substring(0, state.indexOf('['));
-        return AIR.contains(id.contains(":") ? id : "minecraft:" + id);
+        return AIR.contains(SceneBlock.id(state));
     }
 
-    private record BlockSpec(int x, int y, int z, String state, String nbt, Element group) {}
-
-    private record GroupSpec(Element element, List<Integer> box) {}
-
-    /** Reads the children again after the document changed; returns whether the blocks or groups changed. */
+    /** Reads the children again after they changed; returns whether the blocks or groups changed. */
     private boolean sync() {
-        Document doc = element.ownerDocument();
-        if (doc.domVersion() == syncedVersion) return false;
-        syncedVersion = doc.domVersion();
+        if (!dirty) return false;
+        dirty = false;
         boolean structureChanged = loadStructure();
-        List<Object> next = new ArrayList<>();
-        List<Element> entityEls = new ArrayList<>(), anchorEls = new ArrayList<>();
+        List<BlockSpec> blocks = new ArrayList<>();
+        List<GroupSpec> groupSpecs = new ArrayList<>();
+        List<Placed> entityEls = new ArrayList<>(), anchorEls = new ArrayList<>();
         for (Node n : element.childNodes()) {
             if (!(n instanceof Element child)) continue;
             switch (child.tagName()) {
-                case BLOCK -> readBlock(child, null, next);
+                case BLOCK -> readBlock(child, null, blocks);
                 case GROUP -> {
-                    int[] box = box(child);
-                    next.add(new GroupSpec(child, box == null ? null : List.of(box[0], box[1], box[2],
-                            box[3], box[4], box[5])));
+                    groupSpecs.add(new GroupSpec(child, box(child)));
                     for (Element block : child.children()) {
-                        if (block.tagName().equals(BLOCK)) readBlock(block, child, next);
+                        if (block.tagName().equals(BLOCK)) readBlock(block, child, blocks);
                     }
                 }
-                case ENTITY -> entityEls.add(child);
-                case ANCHOR -> anchorEls.add(child);
+                case ENTITY -> entityEls.add(new Placed(child, point(child)));
+                case ANCHOR -> anchorEls.add(new Placed(child, point(child)));
                 default -> { }
             }
         }
-        entityElements = entityEls;
-        anchors = anchorEls;
+        entityPoints = entityEls;
+        anchorPoints = anchorEls;
+        Spec next = new Spec(blocks, groupSpecs);
         if (!structureChanged && next.equals(spec)) return false;
         spec = next;
         compose(next);
         return true;
     }
 
-    private void readBlock(Element e, Element group, List<Object> out) {
-        int[] at = wholePoint(e);
+    private void readBlock(Element e, Element group, List<BlockSpec> out) {
+        float[] at = point(e);
         String state = e.getAttribute("state");
-        if (at == null || state == null || state.isBlank()) {
+        if (at == null || at[0] != (int) at[0] || at[1] != (int) at[1] || at[2] != (int) at[2] || state == null
+                || state.isBlank()) {
             warn("<block> needs whole numbers x, y and z and a state: " + e.outerHTML());
             return;
         }
         String nbt = e.getAttribute("nbt");
-        out.add(new BlockSpec(at[0], at[1], at[2], state.strip(), nbt == null || nbt.isBlank() ? null : nbt.strip(), group));
+        out.add(new BlockSpec((int) at[0], (int) at[1], (int) at[2], state.strip(),
+                nbt == null || nbt.isBlank() ? null : nbt.strip(), group));
     }
 
     /**
-     * The box a group's {@code x}, {@code y} and {@code z} ranges claim ({x1, y1, z1, x2, y2, z2}, inclusive), an axis
-     * left out spanning everything; null when it has none of them (or one doesn't parse), so it claims only its own
-     * {@code <block>} children.
+     * The box a group's {@code x}, {@code y} and {@code z} ranges claim, an axis left out spanning everything; null
+     * when it has none of them (or one doesn't parse), so it claims only its own {@code <block>} children.
      */
-    private int[] box(Element group) {
+    private SceneGroup.Box box(Element group) {
         int[] box = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
         boolean any = false;
         String[] axes = {"x", "y", "z"};
@@ -207,7 +261,7 @@ public final class SceneModel {
             box[a + 3] = r[1];
             any = true;
         }
-        return any ? box : null;
+        return any ? new SceneGroup.Box(box[0], box[1], box[2], box[3], box[4], box[5]) : null;
     }
 
     /** {@code "3"} or {@code "2..5"} (either order, negatives allowed) as {low, high}; null when it isn't one. */
@@ -246,63 +300,68 @@ public final class SceneModel {
                 }
             }
         }
-        boolean changed = !Objects.equals(loaded, structure);
+        if (Objects.equals(loaded, structure)) return false;
         structure = loaded;
-        return changed;
+        Map<Long, SceneBlock> byKey = new HashMap<>();
+        if (loaded != null) for (SceneBlock b : loaded.blocks()) byKey.put(key(b.x(), b.y(), b.z()), b);
+        structureBlocks = byKey;
+        return true;
     }
 
     /** Builds the world from the structure and the block specs, and splits it among the groups. */
-    private void compose(List<Object> next) {
-        record Placed(SceneBlock block, Element group) {}
-        Map<Long, Placed> world = new HashMap<>();
-        if (structure != null) for (SceneBlock b : structure.blocks()) world.put(key(b.x(), b.y(), b.z()), new Placed(b, null));
-        Map<Element, SceneGroup> previous = new IdentityHashMap<>();
-        for (SceneGroup g : groups) if (g.element() != null) previous.put(g.element(), g);
-        List<SceneGroup> nextGroups = new ArrayList<>();
-        nextGroups.add(base);
-        for (Object o : next) {
-            if (o instanceof GroupSpec gs) {
-                SceneGroup g = previous.getOrDefault(gs.element(), new SceneGroup(gs.element()));
-                g.box = gs.box() == null ? null : gs.box().stream().mapToInt(Integer::intValue).toArray();
-                nextGroups.add(g);
-            } else if (o instanceof BlockSpec b) {
-                long k = key(b.x(), b.y(), b.z());
-                if (isAir(b.state())) world.remove(k);
-                else world.put(k, new Placed(new SceneBlock(b.x(), b.y(), b.z(), b.state(), b.nbt()), b.group()));
+    private void compose(Spec next) {
+        Map<Long, SceneBlock> world = new HashMap<>(structureBlocks);
+        Map<Long, Element> placedIn = new HashMap<>();
+        for (BlockSpec b : next.blocks()) {
+            long k = key(b.x(), b.y(), b.z());
+            if (isAir(b.state())) {
+                world.remove(k);
+                placedIn.remove(k);
+                continue;
             }
+            world.put(k, new SceneBlock(b.x(), b.y(), b.z(), b.state(), b.nbt()));
+            if (b.group() == null) placedIn.remove(k); else placedIn.put(k, b.group());
         }
         if (world.size() > MAX_BLOCKS) warn("A scene shows at most " + MAX_BLOCKS + " blocks; some are left out");
-        Map<Element, SceneGroup> byElement = new IdentityHashMap<>();
-        for (SceneGroup g : nextGroups) if (g.element() != null) byElement.put(g.element(), g);
+        Map<Element, SceneGroup> kept = new IdentityHashMap<>(), byElement = new IdentityHashMap<>();
+        for (SceneGroup g : groups) if (g.element() != null) kept.put(g.element(), g);
+        List<SceneGroup> nextGroups = new ArrayList<>();
+        nextGroups.add(base);
+        for (GroupSpec gs : next.groups()) {
+            SceneGroup g = kept.get(gs.element());
+            if (g == null) g = new SceneGroup(gs.element());
+            g.box = gs.box();
+            nextGroups.add(g);
+            byElement.put(gs.element(), g);
+        }
         Map<SceneGroup, List<SceneBlock>> split = new LinkedHashMap<>();
         for (SceneGroup g : nextGroups) split.put(g, new ArrayList<>());
-        float[] b = structure == null ? null : new float[] {0, 0, 0, structure.sizeX(), structure.sizeY(), structure.sizeZ()};
         int count = 0;
-        for (Placed p : world.values()) {
+        for (Map.Entry<Long, SceneBlock> e : world.entrySet()) {
             if (++count > MAX_BLOCKS) break;
-            SceneBlock block = p.block();
-            SceneGroup owner = p.group() == null ? null : byElement.get(p.group());
+            SceneBlock block = e.getValue();
+            Element in = placedIn.get(e.getKey());
+            SceneGroup owner = in == null ? null : byElement.get(in);
             for (int i = 1; owner == null && i < nextGroups.size(); i++) {
                 if (nextGroups.get(i).claims(block.x(), block.y(), block.z())) owner = nextGroups.get(i);
             }
             split.get(owner == null ? base : owner).add(block);
-            if (b == null) b = new float[] {block.x(), block.y(), block.z(), block.x() + 1, block.y() + 1, block.z() + 1};
-            b[0] = Math.min(b[0], block.x());
-            b[1] = Math.min(b[1], block.y());
-            b[2] = Math.min(b[2], block.z());
-            b[3] = Math.max(b[3], block.x() + 1);
-            b[4] = Math.max(b[4], block.y() + 1);
-            b[5] = Math.max(b[5], block.z() + 1);
         }
-        Comparator<SceneBlock> order = Comparator.comparingInt(SceneBlock::y).thenComparingInt(SceneBlock::z)
-                .thenComparingInt(SceneBlock::x);
         split.forEach((g, blocks) -> {
-            blocks.sort(order);
-            Map<Long, SceneBlock> positions = new HashMap<>();
-            for (SceneBlock s : blocks) positions.put(key(s.x(), s.y(), s.z()), s);
-            g.setBlocks(blocks, positions);
+            blocks.sort(ORDER);
+            g.setBlocks(blocks);
         });
-        groups = List.copyOf(nextGroups);
+        if (!nextGroups.equals(groups)) groups = List.copyOf(nextGroups);
+        float[] b = structure == null ? null : new float[] {0, 0, 0, structure.sizeX(), structure.sizeY(), structure.sizeZ()};
+        for (SceneGroup g : groups) {
+            int[] gb = g.bounds;
+            if (gb == null) continue;
+            if (b == null) b = new float[] {gb[0], gb[1], gb[2], gb[3], gb[4], gb[5]};
+            for (int a = 0; a < 3; a++) {
+                b[a] = Math.min(b[a], gb[a]);
+                b[a + 3] = Math.max(b[a + 3], gb[a + 3]);
+            }
+        }
         bounds = b == null ? new float[] {0, 0, 0, 1, 1, 1} : b;
     }
 
@@ -310,12 +369,12 @@ public final class SceneModel {
 
     /** Where the entities stand; returns whether that changed. */
     private boolean placeEntities() {
-        List<SceneEntity> next = new ArrayList<>(entityElements.size());
-        for (Element e : entityElements) {
-            ComputedStyle s = e.style;
-            float[] at = point(e);
+        List<SceneEntity> next = new ArrayList<>(entityPoints.size());
+        for (Placed p : entityPoints) {
+            ComputedStyle s = p.element().style;
+            float[] at = p.at();
             if (s == null || s.display == Display.NONE || at == null) continue;
-            next.add(new SceneEntity(e, at[0] + s.translateX, at[1] + s.translateY, at[2] + s.translateZ));
+            next.add(new SceneEntity(p.element(), at[0] + s.translateX, at[1] + s.translateY, at[2] + s.translateZ));
         }
         boolean changed = !next.equals(entities);
         entities = next;
@@ -327,6 +386,7 @@ public final class SceneModel {
         if (box == null || element.replaced == null) {
             boolean had = camera != null;
             camera = null;
+            matrix = inverse = null;
             return had;
         }
         ComputedStyle s = element.computedStyle();
@@ -345,11 +405,11 @@ public final class SceneModel {
     private boolean placeAnchors() {
         boolean changed = false;
         float[] p = new float[3];
-        for (Element a : anchors) {
-            Box box = a.box;
+        for (Placed a : anchorPoints) {
+            Box box = a.element().box;
             if (box == null || box.parent != element.box) continue;
-            float[] at = point(a);
-            ComputedStyle s = a.computedStyle();
+            float[] at = a.at();
+            ComputedStyle s = a.element().computedStyle();
             float x = 0, y = 0;
             if (at != null && matrix != null) {
                 Mat.apply(matrix, at[0] + s.translateX, at[1] + s.translateY, at[2] + s.translateZ, p);
@@ -367,10 +427,21 @@ public final class SceneModel {
 
     // ---- Pointer ----
 
+    /** Picks the hovered block again when the pointer, the camera or a group moved since the last pick. */
     private void updateHover() {
         Document doc = element.ownerDocument();
         float[] pointer = doc.input().pointer();
-        SceneBlock now = doc.input().hoverTarget() == element && pointer != null ? pickAt(pointer[0], pointer[1]) : null;
+        float[] at = doc.input().hoverTarget() == element && pointer != null ? local(pointer[0], pointer[1]) : null;
+        SceneBlock now = hovered;
+        if (at == null) {
+            now = null;
+            pickedX = Float.NaN;
+        } else if (pickStale || at[0] != pickedX || at[1] != pickedY) {
+            now = pick(at[0], at[1]);
+            pickedX = at[0];
+            pickedY = at[1];
+            pickStale = false;
+        }
         if (Objects.equals(now, hovered)) return;
         hovered = now;
         element.dispatchEvent(new CustomEvent("blockhover", true, false, now == null ? null : detail(now)));
@@ -378,12 +449,17 @@ public final class SceneModel {
 
     /** The block seen at a viewport point, or null. */
     public SceneBlock pickAt(float viewportX, float viewportY) {
+        float[] at = local(viewportX, viewportY);
+        return at == null ? null : pick(at[0], at[1]);
+    }
+
+    /** A viewport point in the painted box, or null when it is outside it. */
+    private float[] local(float viewportX, float viewportY) {
         Box box = element.box;
         Affine toLocal = new Affine();
         if (box == null || camera == null || !Coordinates.fromViewport(box, toLocal)) return null;
         float x = toLocal.mapX(viewportX, viewportY) - camera.x(), y = toLocal.mapY(viewportX, viewportY) - camera.y();
-        if (x < 0 || y < 0 || x > camera.width() || y > camera.height()) return null;
-        return pick(x, y);
+        return x < 0 || y < 0 || x > camera.width() || y > camera.height() ? null : new float[] {x, y};
     }
 
     /** The nearest block seen at a point of the painted box, or null. */
@@ -428,52 +504,28 @@ public final class SceneModel {
         d.put("z", b.z());
         d.put("state", b.state());
         Element group = null;
-        for (SceneGroup g : groups) if (g.element() != null && g.byPosition().get(key(b.x(), b.y(), b.z())) == b) group = g.element();
+        for (SceneGroup g : groups) if (g.element() != null && g.at(b.x(), b.y(), b.z()) == b) group = g.element();
         d.put("group", group);
         return d;
     }
 
     // ---- Parsing ----
 
-    /** {@code count} numbers separated by spaces or commas, or null. */
-    static float[] numbers(String text, int count) {
-        if (text == null) return null;
-        String[] parts = text.strip().split("[\\s,]+");
-        if (parts.length != count) return null;
-        float[] out = new float[count];
-        for (int i = 0; i < count; i++) {
-            try {
-                out[i] = Float.parseFloat(parts[i]);
-            } catch (NumberFormatException e) {
-                return null;
-            }
-            if (!Float.isFinite(out[i]) || Math.abs(out[i]) > MAX_COORD) return null;
+    /** A coordinate: a finite number at most {@link #MAX_COORD} from 0, or NaN when {@code text} isn't one. */
+    static float coordinate(String text) {
+        if (text == null) return Float.NaN;
+        try {
+            float v = Float.parseFloat(text.strip());
+            return Math.abs(v) <= MAX_COORD ? v : Float.NaN;
+        } catch (NumberFormatException e) {
+            return Float.NaN;
         }
-        return out;
     }
 
-    /** A child's point in the scene, from its {@code x}, {@code y} and {@code z}; null unless all three are numbers. */
+    /** A child's point in the scene, from its {@code x}, {@code y} and {@code z}; null unless all three are coordinates. */
     static float[] point(Element e) {
-        float[] out = new float[3];
-        String[] axes = {"x", "y", "z"};
-        for (int a = 0; a < 3; a++) {
-            float[] v = numbers(e.getAttribute(axes[a]), 1);
-            if (v == null) return null;
-            out[a] = v[0];
-        }
-        return out;
-    }
-
-    /** {@link #point} for a block: whole numbers, or null. */
-    static int[] wholePoint(Element e) {
-        float[] f = point(e);
-        if (f == null) return null;
-        int[] out = new int[3];
-        for (int a = 0; a < 3; a++) {
-            if (f[a] != (int) f[a]) return null;
-            out[a] = (int) f[a];
-        }
-        return out;
+        float x = coordinate(e.getAttribute("x")), y = coordinate(e.getAttribute("y")), z = coordinate(e.getAttribute("z"));
+        return Float.isNaN(x) || Float.isNaN(y) || Float.isNaN(z) ? null : new float[] {x, y, z};
     }
 
     private void warn(String message) {

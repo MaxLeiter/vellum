@@ -28,6 +28,13 @@ public interface ReplacedContent {
     default void attributeChanged(String name) {}
 
     /**
+     * Called when something below the element changes, for content that shows its descendants (a scene's blocks):
+     * {@code attribute} of {@code element}, a descendant, or with a null {@code attribute} the children of
+     * {@code element}, the element itself or a descendant.
+     */
+    default void subtreeChanged(Element element, String attribute) {}
+
+    /**
      * Whether the content shows a tooltip of its own while the pointer is on it, at once and with no delay (an
      * {@code <item tooltip>} shows the item's). The engine then reports it as the tooltip's
      * {@link dev.vellum.engine.input.Tooltip#content() content}, and the host draws it with the lines of the

@@ -6,6 +6,7 @@ import dev.vellum.engine.style.Display;
 import dev.vellum.engine.style.Visibility;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,17 +17,30 @@ import java.util.Map;
  * ({@link #visible()}, {@link #opacity()}, {@link #matrix()}) follows the group's style every frame.
  */
 public final class SceneGroup {
+    /** The blocks a group's x, y and z ranges claim: inclusive and ordered, an axis left out spanning the int range. */
+    record Box(int x1, int y1, int z1, int x2, int y2, int z2) {
+        boolean claims(int x, int y, int z) {
+            return x >= x1 && x <= x2 && y >= y1 && y <= y2 && z >= z1 && z <= z2;
+        }
+    }
+
     private final Element element;
-    /** The box it claims ({x1, y1, z1, x2, y2, z2}, inclusive, ordered; an open axis is the int range), or null. */
-    int[] box;
+    /** The box it claims, or null. */
+    Box box;
     private List<SceneBlock> blocks = List.of();
     private Map<Long, SceneBlock> byPosition = Map.of();
     private int version;
     private boolean visible = true;
     private float opacity = 1;
     private float[] matrix = Mat.IDENTITY, inverse = Mat.IDENTITY;
+    /** Changes whenever it shows or hides or its matrix changes: with its version, what picking sees of it. */
+    int placement;
     /** Its blocks' bounds, {minX, minY, minZ, maxX, maxY, maxZ} (max exclusive), or null when it has none. */
     int[] bounds;
+    /** The last transform built, and what from: translate x, y and z, yaw, pitch and roll, and the bounds. */
+    private float[] built = Mat.IDENTITY;
+    private final float[] builtFrom = new float[6];
+    private int[] builtAbout;
 
     SceneGroup(Element element) {
         this.element = element;
@@ -55,18 +69,15 @@ public final class SceneGroup {
     /** Whether it is moved or turned. */
     public boolean moved() { return matrix != Mat.IDENTITY; }
 
-    float[] inverse() { return inverse; }
-
-    Map<Long, SceneBlock> byPosition() { return byPosition; }
-
     /** Takes these blocks (sorted, positions unique); the version changes when they differ from the last ones. */
-    void setBlocks(List<SceneBlock> sorted, Map<Long, SceneBlock> positions) {
+    void setBlocks(List<SceneBlock> sorted) {
         if (sorted.equals(blocks)) return;
         blocks = List.copyOf(sorted);
-        byPosition = positions;
         version++;
+        Map<Long, SceneBlock> positions = new HashMap<>();
         int[] b = null;
         for (SceneBlock s : blocks) {
+            positions.put(SceneModel.key(s.x(), s.y(), s.z()), s);
             if (b == null) b = new int[] {s.x(), s.y(), s.z(), s.x() + 1, s.y() + 1, s.z() + 1};
             b[0] = Math.min(b[0], s.x());
             b[1] = Math.min(b[1], s.y());
@@ -75,6 +86,7 @@ public final class SceneGroup {
             b[4] = Math.max(b[4], s.y() + 1);
             b[5] = Math.max(b[5], s.z() + 1);
         }
+        byPosition = positions;
         bounds = b;
     }
 
@@ -85,51 +97,55 @@ public final class SceneGroup {
         boolean shows = s != null && s.display != Display.NONE && s.visibility == Visibility.VISIBLE && s.opacity > 0;
         float alpha = s == null ? 1 : Math.max(0, Math.min(1, s.opacity));
         float[] m = s == null ? Mat.IDENTITY : transform(s);
-        boolean changed = shows != visible || alpha != opacity || !Arrays.equals(m, matrix);
+        boolean moved = m != matrix && !Arrays.equals(m, matrix);
+        boolean changed = shows != visible || alpha != opacity || moved;
+        if (shows != visible || moved) placement++;
         visible = shows;
         opacity = alpha;
-        if (!Arrays.equals(m, matrix)) {
+        if (moved) {
             matrix = m;
-            float[] inv = Mat.invert(m);
-            inverse = inv;
+            inverse = Mat.invert(m);
         }
         return changed;
     }
 
     /**
-     * {@code translate(centre + t) · yaw · pitch · roll · translate(-centre)}, or the identity. Each turn is clockwise
-     * seen from the positive end of its axis, so a positive {@code -mc-yaw} turns the group as it turns a model and as
-     * Minecraft's yaw turns an entity (south to west), and at the default view (from the north-east, above) a positive
-     * {@code -mc-pitch} (about x) or {@code -mc-roll} (about z) tips its top toward the viewer.
+     * {@code translate(centre + t) · yaw · pitch · roll · translate(-centre)}, or the identity; built again only when
+     * those or its bounds change. Each turn is clockwise seen from the positive end of its axis, so a positive
+     * {@code -mc-yaw} turns the group as it turns a model and as Minecraft's yaw turns an entity (south to west), and
+     * at the default view (from the north-east, above) a positive {@code -mc-pitch} (about x) or {@code -mc-roll}
+     * (about z) tips its top toward the viewer.
      */
     private float[] transform(ComputedStyle s) {
-        if (s.translateX == 0 && s.translateY == 0 && s.translateZ == 0 && s.modelYaw == 0 && s.modelPitch == 0
-                && s.modelRoll == 0) {
-            return Mat.IDENTITY;
+        float[] f = builtFrom;
+        if (builtAbout == bounds && f[0] == s.translateX && f[1] == s.translateY && f[2] == s.translateZ
+                && f[3] == s.modelYaw && f[4] == s.modelPitch && f[5] == s.modelRoll) {
+            return built;
         }
+        f[0] = s.translateX;
+        f[1] = s.translateY;
+        f[2] = s.translateZ;
+        f[3] = s.modelYaw;
+        f[4] = s.modelPitch;
+        f[5] = s.modelRoll;
+        builtAbout = bounds;
+        if (f[0] == 0 && f[1] == 0 && f[2] == 0 && f[3] == 0 && f[4] == 0 && f[5] == 0) return built = Mat.IDENTITY;
         float[] c = centre();
         float[] m = Mat.translation(-c[0], -c[1], -c[2]);
-        if (s.modelRoll != 0) m = Mat.multiply(Mat.rotation(2, -s.modelRoll), m);
-        if (s.modelPitch != 0) m = Mat.multiply(Mat.rotation(0, -s.modelPitch), m);
-        if (s.modelYaw != 0) m = Mat.multiply(Mat.rotation(1, -s.modelYaw), m);
-        return Mat.multiply(Mat.translation(c[0] + s.translateX, c[1] + s.translateY, c[2] + s.translateZ), m);
+        if (f[5] != 0) m = Mat.multiply(Mat.rotation(2, -f[5]), m);
+        if (f[4] != 0) m = Mat.multiply(Mat.rotation(0, -f[4]), m);
+        if (f[3] != 0) m = Mat.multiply(Mat.rotation(1, -f[3]), m);
+        return built = Mat.multiply(Mat.translation(c[0] + f[0], c[1] + f[1], c[2] + f[2]), m);
     }
 
-    /** What it turns about: the middle of its blocks, else of the box it claims, else the origin. */
+    /** What it turns about: the middle of its blocks, or the origin when it has none (and so draws nothing). */
     float[] centre() {
         int[] b = bounds;
-        if (b != null) return new float[] {(b[0] + b[3]) / 2f, (b[1] + b[4]) / 2f, (b[2] + b[5]) / 2f};
-        int[] s = box;
-        if (s != null && s[0] != Integer.MIN_VALUE && s[1] != Integer.MIN_VALUE && s[2] != Integer.MIN_VALUE
-                && s[3] != Integer.MAX_VALUE && s[4] != Integer.MAX_VALUE && s[5] != Integer.MAX_VALUE) {
-            return new float[] {(s[0] + s[3] + 1) / 2f, (s[1] + s[4] + 1) / 2f, (s[2] + s[5] + 1) / 2f};
-        }
-        return new float[3];
+        return b == null ? new float[3] : new float[] {(b[0] + b[3]) / 2f, (b[1] + b[4]) / 2f, (b[2] + b[5]) / 2f};
     }
 
     boolean claims(int x, int y, int z) {
-        int[] s = box;
-        return s != null && x >= s[0] && x <= s[3] && y >= s[1] && y <= s[4] && z >= s[2] && z <= s[5];
+        return box != null && box.claims(x, y, z);
     }
 
     /**
@@ -138,7 +154,7 @@ public final class SceneGroup {
      * blocks count as whole cubes.
      */
     float cast(float[] origin, float[] direction, SceneBlock[] hit) {
-        if (bounds == null || inverse == null) return Float.NaN;
+        if (bounds == null) return Float.NaN;
         float[] o = Mat.apply(inverse, origin[0], origin[1], origin[2], new float[3]);
         float[] d = Mat.applyDirection(inverse, direction[0], direction[1], direction[2], new float[3]);
         double enter = 0, exit = Double.POSITIVE_INFINITY;

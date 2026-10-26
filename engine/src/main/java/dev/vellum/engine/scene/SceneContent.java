@@ -37,4 +37,14 @@ public abstract class SceneContent implements ReplacedContent {
     public final boolean afterLayout() {
         return model.update();
     }
+
+    @Override
+    public final void attributeChanged(String name) {
+        model.attributeChanged(name);
+    }
+
+    @Override
+    public final void subtreeChanged(Element element, String attribute) {
+        model.subtreeChanged(element, attribute);
+    }
 }
