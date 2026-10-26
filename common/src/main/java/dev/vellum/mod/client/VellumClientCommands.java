@@ -17,7 +17,7 @@ import java.util.List;
  */
 public final class VellumClientCommands {
     /** The client-side demo pages, under {@code assets/vellum/vellum/demo/} (the gallery is {@code index.html}). */
-    public static final List<String> DEMOS = List.of("gallery", "settings", "layout", "animation", "templates", "map", "hud");
+    public static final List<String> DEMOS = List.of("gallery", "settings", "layout", "animation", "templates", "hud");
     /**
      * Demos run by the server ({@code VellumCommand}). The client forwards them itself: Fabric's client dispatcher
      * claims every {@code /vellum ...} command once a client {@code vellum} node exists.
