@@ -1,5 +1,5 @@
 // Records one window, with the system's audio, to a .mov file:
-//   record <out.mov> <seconds> <title substring> [go-file]
+//   record <out.mov> <seconds> <title substring | pid:N> [go-file]
 // The go-file is created once capture has started, so a scripted client (the dev tour) can wait for it.
 // Frames and audio come from ScreenCaptureKit and are written with AVAssetWriter (H.264 and AAC).
 import AVFoundation
@@ -10,7 +10,7 @@ _ = NSApplication.shared // ScreenCaptureKit needs a connection to the window se
 
 let args = CommandLine.arguments
 guard args.count >= 4, let seconds = Double(args[2]) else {
-    print("usage: record <out.mov> <seconds> <title substring> [go-file]")
+    print("usage: record <out.mov> <seconds> <title substring | pid:N> [go-file]")
     exit(2)
 }
 let out = URL(fileURLWithPath: args[1])
@@ -18,10 +18,16 @@ let match = args[3]
 try? FileManager.default.removeItem(at: out)
 
 let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
-guard let window = content.windows.first(where: { ($0.title ?? "").contains(match) }) else {
+// pid:N picks the window of one process, for when two windows share a title (two dev clients).
+let pid = match.hasPrefix("pid:") ? Int32(match.dropFirst(4)) : nil
+guard let window = content.windows.first(where: { w in
+    let title = w.title ?? ""
+    if let pid { return w.owningApplication?.processID == pid && title != "" }
+    return title.contains(match)
+}) else {
     print("no window titled *\(match)*; on-screen windows:")
     for w in content.windows where (w.title ?? "") != "" {
-        print("  \(w.owningApplication?.applicationName ?? "?"): \(w.title ?? "")")
+        print("  \(w.owningApplication?.applicationName ?? "?") (pid \(w.owningApplication?.processID ?? 0)): \(w.title ?? "")")
     }
     exit(1)
 }

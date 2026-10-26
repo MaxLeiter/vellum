@@ -111,7 +111,7 @@ Upload in this order. The first image is the featured one on Modrinth. 06 and 07
 
 ## Video
 
-`vellum-tour.mp4` (48 s, 1080p60, with sound). Modrinth takes video links in the description rather than uploads, so put it on YouTube and embed or link it at the top of the description. CurseForge can link a YouTube video in the project's media.
+`vellum-tour.mp4` (77 s, 1080p60, with sound). Modrinth takes video links in the description rather than uploads, so put it on YouTube and embed or link it at the top of the description. CurseForge can link a YouTube video in the project's media.
 
 ## Versions and changelogs
 
