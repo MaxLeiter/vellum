@@ -11,24 +11,20 @@
       transition: -mc-yaw 1200ms ease-in-out, -mc-pitch 1200ms ease-in-out, -mc-model-scale 1200ms ease-in-out;
     }
 
-    /* STEP 1: the camera. Angles and zoom are CSS, so they animate.
     scene { -mc-yaw: -110deg; -mc-pitch: 25deg; -mc-model-scale: 1.3; }
-    */
 
-    /* STEP 3: hide the top of the house to see inside.
     .cut { display: none; }
-    */
 
-    /* STEP 4: or animate it: the top lifts off and settles back.
+    /* 
     .cut { animation: lift 2.4s ease-in-out infinite alternate; }
     @keyframes lift { to { -mc-translate: 0 4 0; opacity: 0.35; } }
     */
 
-    /* STEP 6: a label pinned to a point in the scene.
+    /* 
     .tag { transform: translate(-50%, -100%); padding: 3px 7px; background: rgba(14, 18, 30, 0.85); border: 1px solid #ffd36b; }
     */
 
-    /* STEP 8: the camera orbits forever.
+    /* 
     scene { animation: orbit 20s linear infinite; }
     @keyframes orbit { from { -mc-yaw: 0deg; } to { -mc-yaw: 360deg; } }
     */
@@ -37,32 +33,22 @@
   </style>
 </head>
 <body>
-  <!-- STEP 0: a scene is a block in a box. This one is a structure file. -->
-  <!-- STEP 2: add the word rotatable after structure="..." to drag it round with the mouse. -->
-  <scene structure="vellum:structures/cottage.nbt">
+  <scene structure="vellum:structures/cottage.nbt" rotatable>
 
-    <!-- STEP 3: a block-group claims a box of the scene's blocks: here everything from layer 4 up.
     <block-group class="cut" y="4..12"></block-group>
-    -->
 
-    <!-- STEP 5: entities stand in the scene too.
     <entity type="minecraft:villager" x="6.5" y="1" z="9.3"></entity>
     <entity type="minecraft:cat" x="4.5" y="1" z="9.6" style="-mc-yaw: 40deg"></entity>
-    -->
 
-    <!-- STEP 6: HTML pinned to a 3D point. It follows the camera when you drag.
     <scene-anchor x="5.5" y="6" z="8.5"><div class="tag">Home</div></scene-anchor>
-    -->
 
   </scene>
 
-  <!-- STEP 7: scenes fire events. Hover a block to see what it is.
   <div id="hovered"></div>
   <script>
     document.querySelector('scene').addEventListener('blockhover', e => {
       document.getElementById('hovered').textContent = e.detail ? e.detail.state : '';
     });
   </script>
-  -->
 </body>
 </html>
