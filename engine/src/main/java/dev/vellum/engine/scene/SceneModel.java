@@ -34,14 +34,14 @@ import java.util.Set;
  *
  * <ul>
  *   <li>{@code structure="ns:path/file.nbt"} loads a structure file ({@link Host#loadBytes}).</li>
- *   <li>{@code <block at="x y z" state="...">} adds or replaces a block, in document order; {@code minecraft:air}
+ *   <li>{@code <block x="1" y="2" z="3" state="...">} adds or replaces a block, in document order; {@code minecraft:air}
  *       erases one. {@code nbt} gives its block entity data as SNBT.</li>
  *   <li>{@code <block-group x="3..7" y="2" z="3..6">} claims the blocks in that box that no earlier group claimed,
  *       and its own {@code <block>} children. Each range is inclusive, a single number is one layer, and an axis left
  *       out is all of it ({@code <block-group y="2">} is a layer). The rest are the base. A group shows, fades and moves
  *       by its style ({@code display}, {@code opacity}, {@code -mc-translate}, {@code -mc-rotate}).</li>
- *   <li>{@code <entity at="x y z">} children stand at that point, moved by their {@code -mc-translate}.</li>
- *   <li>{@code <scene-anchor at="x y z">} children are laid out as HTML and moved every frame so their top-left
+ *   <li>{@code <entity x y z>} children stand at that point, moved by their {@code -mc-translate}.</li>
+ *   <li>{@code <scene-anchor x y z>} children are laid out as HTML and moved every frame so their top-left
  *       corner is where that point is seen.</li>
  * </ul>
  *
@@ -179,10 +179,10 @@ public final class SceneModel {
     }
 
     private void readBlock(Element e, Element group, List<Object> out) {
-        int[] at = wholeNumbers(e.getAttribute("at"), 3);
+        int[] at = wholePoint(e);
         String state = e.getAttribute("state");
         if (at == null || state == null || state.isBlank()) {
-            warn("<block> needs at=\"x y z\" (whole numbers) and a state: " + e.outerHTML());
+            warn("<block> needs whole numbers x, y and z and a state: " + e.outerHTML());
             return;
         }
         String nbt = e.getAttribute("nbt");
@@ -316,7 +316,7 @@ public final class SceneModel {
         List<SceneEntity> next = new ArrayList<>(entityElements.size());
         for (Element e : entityElements) {
             ComputedStyle s = e.style;
-            float[] at = numbers(e.getAttribute("at"), 3);
+            float[] at = point(e);
             if (s == null || s.display == Display.NONE || at == null) continue;
             next.add(new SceneEntity(e, at[0] + s.translateX, at[1] + s.translateY, at[2] + s.translateZ));
         }
@@ -351,7 +351,7 @@ public final class SceneModel {
         for (Element a : anchors) {
             Box box = a.box;
             if (box == null || !box.anchored || box.parent != element.box) continue;
-            float[] at = numbers(a.getAttribute("at"), 3);
+            float[] at = point(a);
             ComputedStyle s = a.computedStyle();
             float x = 0, y = 0;
             if (at != null && matrix != null) {
@@ -455,14 +455,26 @@ public final class SceneModel {
         return out;
     }
 
-    /** {@code count} whole numbers separated by spaces or commas, or null. */
-    static int[] wholeNumbers(String text, int count) {
-        float[] f = numbers(text, count);
+    /** A child's point in the scene, from its {@code x}, {@code y} and {@code z}; null unless all three are numbers. */
+    static float[] point(Element e) {
+        float[] out = new float[3];
+        String[] axes = {"x", "y", "z"};
+        for (int a = 0; a < 3; a++) {
+            float[] v = numbers(e.getAttribute(axes[a]), 1);
+            if (v == null) return null;
+            out[a] = v[0];
+        }
+        return out;
+    }
+
+    /** {@link #point} for a block: whole numbers, or null. */
+    static int[] wholePoint(Element e) {
+        float[] f = point(e);
         if (f == null) return null;
-        int[] out = new int[count];
-        for (int i = 0; i < count; i++) {
-            if (f[i] != (int) f[i]) return null;
-            out[i] = (int) f[i];
+        int[] out = new int[3];
+        for (int a = 0; a < 3; a++) {
+            if (f[a] != (int) f[a]) return null;
+            out[a] = (int) f[a];
         }
         return out;
     }

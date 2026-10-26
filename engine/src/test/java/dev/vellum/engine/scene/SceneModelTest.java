@@ -89,8 +89,6 @@ class SceneModelTest {
         assertNull(SceneModel.numbers("1 2 x", 3));
         assertNull(SceneModel.numbers("1 2 NaN", 3));
         assertNull(SceneModel.numbers("1 2 1e9", 3), "too far out");
-        assertArrayEquals(new int[] {0, 3, 0, 4, 4, 4}, SceneModel.wholeNumbers("0 3 0 4 4 4", 6));
-        assertNull(SceneModel.wholeNumbers("0.5 0 0", 3), "blocks are on whole positions");
     }
 
     @Test
@@ -130,10 +128,10 @@ class SceneModelTest {
         host.binaries.put("test:hut.nbt", structure());
         Page page = host.load("""
                 <scene id=s structure="hut.nbt">
-                  <block at="1 1 1" state="minecraft:furnace[lit=true]"></block>
-                  <block at="1 0 0" state="minecraft:air"></block>
-                  <block at="0 0 0" state="minecraft:oak_planks"></block>
-                  <block at="1 1 1" state="minecraft:glass"></block>
+                  <block x="1" y="1" z="1" state="minecraft:furnace[lit=true]"></block>
+                  <block x="1" y="0" z="0" state="minecraft:air"></block>
+                  <block x="0" y="0" z="0" state="minecraft:oak_planks"></block>
+                  <block x="1" y="1" z="1" state="minecraft:glass"></block>
                 </scene>""");
         SceneModel m = model(page);
         assertEquals(List.of("0,0,0=minecraft:oak_planks", "2,0,0=minecraft:furnace[facing=north,lit=false]",
@@ -145,12 +143,12 @@ class SceneModelTest {
     void eachBlockBelongsToTheFirstGroupThatClaimsIt() {
         Page page = page("""
                 <scene id=s>
-                  <block at="0 0 0" state="stone"></block>
-                  <block at="0 1 0" state="dirt"></block>
-                  <block at="0 2 0" state="sand"></block>
+                  <block x="0" y="0" z="0" state="stone"></block>
+                  <block x="0" y="1" z="0" state="dirt"></block>
+                  <block x="0" y="2" z="0" state="sand"></block>
                   <block-group id=a x="0" y="1..2" z="0"></block-group>
                   <block-group id=b x="0" y="0..9" z="0">
-                    <block at="5 5 5" state="gold_block"></block>
+                    <block x="5" y="5" z="5" state="gold_block"></block>
                   </block-group>
                   <block-group id=c x="0" y="2" z="0"></block-group>
                 </scene>""");
@@ -164,6 +162,17 @@ class SceneModelTest {
     }
 
     @Test
+    void pointsNeedAllThreeOfXYAndZ() {
+        Page page = page("""
+                <scene id=s>
+                  <block x="1" y="2" z="3" state="stone"></block>
+                  <block x="4" y="2" state="dirt"></block>
+                  <block x="1.5" y="2" z="3" state="sand"></block>
+                </scene>""");
+        assertEquals(List.of("1,2,3=stone"), blocks(model(page).groups().get(0)), "z missing, or not whole: left out");
+    }
+
+    @Test
     void groupRangesAreNumbersOrRangesAndALeftOutAxisIsAllOfIt() {
         assertArrayEquals(new int[] {3, 3}, SceneModel.range(" 3 "));
         assertArrayEquals(new int[] {2, 5}, SceneModel.range("2..5"));
@@ -173,9 +182,9 @@ class SceneModelTest {
         assertNull(SceneModel.range("a..b"));
         Page page = page("""
                 <scene id=s>
-                  <block at="0 0 0" state="stone"></block>
-                  <block at="9 1 -4" state="dirt"></block>
-                  <block at="3 1 2" state="sand"></block>
+                  <block x="0" y="0" z="0" state="stone"></block>
+                  <block x="9" y="1" z="-4" state="dirt"></block>
+                  <block x="3" y="1" z="2" state="sand"></block>
                   <block-group id=layer y="1"></block-group>
                   <block-group id=bad y="up"></block-group>
                 </scene>""");
@@ -189,13 +198,13 @@ class SceneModelTest {
     void scriptsChangeTheBlocksAndOnlyTheGroupsTheyTouchChange() {
         Page page = page("""
                 <scene id=s>
-                  <block at="0 0 0" state="stone"></block>
-                  <block-group id=roof x="0..4" y="3..4" z="0..4"><block at="1 3 1" state="oak_slab"></block></block-group>
+                  <block x="0" y="0" z="0" state="stone"></block>
+                  <block-group id=roof x="0..4" y="3..4" z="0..4"><block x="1" y="3" z="1" state="oak_slab"></block></block-group>
                 </scene>""");
         SceneModel m = model(page);
         SceneGroup base = m.groups().get(0), roof = m.groups().get(1);
         int baseVersion = base.version(), roofVersion = roof.version();
-        page.run("let b = document.createElement('block'); b.setAttribute('at', '2 4 2'); b.setAttribute('state', 'glass');"
+        page.run("let b = document.createElement('block'); b.setAttribute('x', 2); b.setAttribute('y', 4); b.setAttribute('z', 2); b.setAttribute('state', 'glass');"
                 + "document.getElementById('s').appendChild(b)");
         page.frame();
         assertEquals(baseVersion, base.version(), "the base kept its blocks");
@@ -218,8 +227,8 @@ class SceneModelTest {
     @Test
     void sceneChildrenAreNotLaidOutButAnchorsAre() {
         Page page = page("""
-                <scene id=s><block id=b at="0 0 0" state="stone"></block><block-group id=g></block-group>
-                <entity id=e at="0 1 0"></entity><scene-anchor id=a at="0 1 0">Hi</scene-anchor></scene>""");
+                <scene id=s><block id=b x="0" y="0" z="0" state="stone"></block><block-group id=g></block-group>
+                <entity id=e x="0" y="1" z="0"></entity><scene-anchor id=a x="0" y="1" z="0">Hi</scene-anchor></scene>""");
         assertNull(page.byId("b").box);
         assertNull(page.byId("g").box);
         assertNull(page.byId("e").box);
@@ -256,7 +265,7 @@ class SceneModelTest {
         Page page = page("""
                 <style>#g { transition: opacity 100ms linear, -mc-translate 100ms linear }
                   #g.away { opacity: 0.2; -mc-translate: 0 -1 0 } .hidden { display: none }</style>
-                <scene id=s><block-group id=g x="0..1" y="0..1" z="0..1"><block at="0 0 0" state="stone"></block></block-group></scene>""");
+                <scene id=s><block-group id=g x="0..1" y="0..1" z="0..1"><block x="0" y="0" z="0" state="stone"></block></block-group></scene>""");
         SceneGroup g = model(page).groups().get(1);
         assertTrue(g.visible());
         assertFalse(g.moved());
@@ -277,7 +286,7 @@ class SceneModelTest {
     void rotationTurnsAGroupAboutItsMiddle() {
         Page page = page("""
                 <scene id=s><block-group id=g style="-mc-rotate: 90deg">
-                  <block at="0 0 0" state="stone"></block><block at="1 0 0" state="stone"></block></block-group></scene>""");
+                  <block x="0" y="0" z="0" state="stone"></block><block x="1" y="0" z="0" state="stone"></block></block-group></scene>""");
         float[] m = model(page).groups().get(1).matrix();
         float[] p = Mat.apply(m, 0, 0, 0, new float[3]);
         // The middle is (1, 0.5, 0.5); a quarter turn about y takes (-1, 0, -0.5) from it to (-0.5, 0, 1).
@@ -288,7 +297,7 @@ class SceneModelTest {
 
     @Test
     void theCameraFitsTheBlocksAndCentresThem() {
-        Page page = page("<scene id=s><block at='0 0 0' state='stone'></block><block at='3 2 3' state='stone'></block></scene>");
+        Page page = page("<scene id=s><block x='0' y='0' z='0' state='stone'></block><block x='3' y='2' z='3' state='stone'></block></scene>");
         SceneCamera c = model(page).camera();
         assertNotNull(c);
         assertEquals(30, c.tilt());
@@ -312,7 +321,7 @@ class SceneModelTest {
     @Test
     void cssAndDraggingTurnTheCamera() {
         Page page = page("<scene id=s rotatable style='-mc-yaw: 20deg; -mc-pitch: 10deg; -mc-scene-center: 0 0 0'>"
-                + "<block at='0 0 0' state='stone'></block></scene>");
+                + "<block x='0' y='0' z='0' state='stone'></block></scene>");
         SceneCamera c = model(page).camera();
         assertEquals(20, c.yaw());
         assertEquals(40, c.tilt());
@@ -329,9 +338,9 @@ class SceneModelTest {
     void anchorsSitAtTheirProjectedPoint() {
         Page page = page("""
                 <div style='padding: 30px 0 0 40px'><scene id=s style='padding: 5px; border: 2px solid'>
-                  <block at='0 0 0' state='stone'></block><block at='2 1 2' state='stone'></block>
-                  <scene-anchor id=a at='1 2 1'>Here</scene-anchor>
-                  <scene-anchor id=b at='0 0 0' style='transform: translate(-50%, -100%)'>Below</scene-anchor>
+                  <block x='0' y='0' z='0' state='stone'></block><block x='2' y='1' z='2' state='stone'></block>
+                  <scene-anchor id=a x='1' y='2' z='1'>Here</scene-anchor>
+                  <scene-anchor id=b x='0' y='0' z='0' style='transform: translate(-50%, -100%)'>Below</scene-anchor>
                 </scene></div>""");
         SceneCamera c = model(page).camera();
         float[] p = c.project(1, 2, 1);
@@ -355,16 +364,16 @@ class SceneModelTest {
 
     @Test
     void anchorsFollowTheirTranslate() {
-        Page page = page("<scene id=s><block at='0 0 0' state='stone'></block>"
-                + "<scene-anchor id=a at='0 0 0' style='-mc-translate: 0 1 0'>x</scene-anchor></scene>");
+        Page page = page("<scene id=s><block x='0' y='0' z='0' state='stone'></block>"
+                + "<scene-anchor id=a x='0' y='0' z='0' style='-mc-translate: 0 1 0'>x</scene-anchor></scene>");
         float[] p = model(page).camera().project(0, 1, 0);
         assertEquals(p[1], page.byId("a").getBoundingClientRect()[1], 1e-3);
     }
 
     @Test
     void entitiesStandAtTheirPointPlusTranslate() {
-        Page page = page("<scene id=s><entity id=e at='1.5 1 2.5' style='-mc-translate: 1 0 0'></entity>"
-                + "<entity at='0 0 0' style='display: none'></entity></scene>");
+        Page page = page("<scene id=s><entity id=e x='1.5' y='1' z='2.5' style='-mc-translate: 1 0 0'></entity>"
+                + "<entity x='0' y='0' z='0' style='display: none'></entity></scene>");
         List<SceneEntity> entities = model(page).entities();
         assertEquals(1, entities.size());
         assertEquals(new SceneEntity(page.byId("e"), 2.5f, 1, 2.5f), entities.get(0));
@@ -374,8 +383,8 @@ class SceneModelTest {
     void theNearestShownBlockIsPicked() {
         Page page = page("""
                 <scene id=s style='-mc-pitch: 60deg'>
-                  <block at='0 0 0' state='stone'></block>
-                  <block-group id=top><block at='0 1 0' state='glass'></block></block-group>
+                  <block x='0' y='0' z='0' state='stone'></block>
+                  <block-group id=top><block x='0' y='1' z='0' state='glass'></block></block-group>
                 </scene>""");
         SceneModel m = model(page);
         float[] middle = m.camera().project(0.5f, 2, 0.5f);
@@ -389,7 +398,7 @@ class SceneModelTest {
     @Test
     void hoveringAndClickingBlocksFireEvents() {
         Page page = page("""
-                <scene id=s><block-group id=g><block at='0 0 0' state='stone'></block></block-group></scene>
+                <scene id=s><block-group id=g><block x='0' y='0' z='0' state='stone'></block></block-group></scene>
                 <script>
                   window.seen = [];
                   const s = document.getElementById('s');
@@ -421,7 +430,7 @@ class SceneModelTest {
 
     @Test
     void scenesWithoutABoxHaveNoCamera() {
-        Page page = page("<scene id=s style='display: none'><block at='0 0 0' state='stone'></block></scene>");
+        Page page = page("<scene id=s style='display: none'><block x='0' y='0' z='0' state='stone'></block></scene>");
         assertNull(model(page).camera());
         assertEquals(1, model(page).groups().get(0).blocks().size());
     }

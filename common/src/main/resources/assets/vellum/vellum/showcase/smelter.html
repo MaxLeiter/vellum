@@ -362,8 +362,8 @@
     <block-group class="part" id="p-signal" x="8..10" y="2" z="5"></block-group>
     <block-group class="part" id="p-scenery" x="0..11" y="2..6" z="0..8"></block-group>
 
-    <scene-anchor class="caption hidden" at="0 0 0"><div class="bubble"><b></b><span></span></div><div class="dot"></div></scene-anchor>
-    <scene-anchor class="tag hidden" at="0 0 0"><b></b><span></span></scene-anchor>
+    <scene-anchor class="caption hidden" x="0" y="0" z="0"><div class="bubble"><b></b><span></span></div><div class="dot"></div></scene-anchor>
+    <scene-anchor class="tag hidden" x="0" y="0" z="0"><b></b><span></span></scene-anchor>
   </scene>
 
   <div class="wires"></div>
@@ -402,6 +402,13 @@
   </nav>
 
   <script>
+    // Places a scene child at a point: x, y and z are its attributes.
+    function place(el, x, y, z) {
+      el.setAttribute('x', x);
+      el.setAttribute('y', y);
+      el.setAttribute('z', z);
+    }
+
     // ---- The machine's parts: where they are, and what the card says about them ----
 
     const PARTS = {
@@ -468,7 +475,7 @@
         this.box = null;
         for (let i = 0; i < 8; i++) {
           const a = document.createElement('scene-anchor');
-          a.setAttribute('at', '0 0 0');
+          place(a, 0, 0, 0);
           scene.appendChild(a);
           this.corners.push(a);
         }
@@ -489,8 +496,8 @@
         }
         // A hair outside the blocks, so the lines sit on their faces rather than in them.
         const lo = [box[0] - 0.02, box[1] - 0.02, box[2] - 0.02], hi = [box[3] + 1.02, box[4] + 1.02, box[5] + 1.02];
-        this.corners.forEach((a, i) => a.setAttribute('at',
-          [(i & 1 ? hi : lo)[0], (i & 2 ? hi : lo)[1], (i & 4 ? hi : lo)[2]].map(v => v.toFixed(2)).join(' ')));
+        this.corners.forEach((a, i) => place(a, (i & 1 ? hi : lo)[0].toFixed(2), (i & 2 ? hi : lo)[1].toFixed(2),
+          (i & 4 ? hi : lo)[2].toFixed(2)));
         this.dirty = 2;
       }
 
@@ -666,7 +673,7 @@
     function rider(id, path, delay, period) {
       const a = document.createElement('scene-anchor');
       a.className = 'flow';
-      a.setAttribute('at', '0 0 0');
+      place(a, 0, 0, 0);
       a.innerHTML = '<item id="minecraft:' + id + '"></item>';
       scene.appendChild(a);
       const lengths = [0];
@@ -709,7 +716,7 @@
       const part = partAt(d.x, d.y, d.z);
       tag.querySelector('b').textContent = blockName(d.state);
       tag.querySelector('span').textContent = part ? PARTS[part].name : '';
-      tag.setAttribute('at', (d.x + 0.5) + ' ' + (d.y + 1.05) + ' ' + (d.z + 0.5));
+      place(tag, d.x + 0.5, d.y + 1.05, d.z + 0.5);
       tag.classList.remove('hidden');
       hoverLine.show([d.x, d.y, d.z, d.x, d.y, d.z]);
     });

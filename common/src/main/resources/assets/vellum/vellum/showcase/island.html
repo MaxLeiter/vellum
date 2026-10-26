@@ -398,25 +398,25 @@
   <div class="clouds far"></div>
 
   <scene structure="vellum:structures/sky_island.nbt" rotatable notooltips>
-    <entity class="walker" type="minecraft:villager" data-route="elder" at="0 0 0"></entity>
-    <entity class="walker" type="minecraft:villager" variant="minecraft:savanna" data-route="farmer" at="0 0 0"></entity>
-    <entity class="walker" type="minecraft:sheep" data-route="sheep" at="0 0 0"></entity>
-    <entity class="walker" type="minecraft:sheep" color="pink" data-route="lamb" baby at="0 0 0"></entity>
-    <entity class="walker" type="minecraft:cow" data-route="cow" at="0 0 0"></entity>
-    <entity class="walker" type="minecraft:chicken" data-route="hen" at="0 0 0"></entity>
-    <entity class="walker" type="minecraft:chicken" data-route="chick" baby at="0 0 0"></entity>
-    <entity type="minecraft:cat" variant="minecraft:calico" at="5.3 7 9.5" style="-mc-yaw: -35deg"></entity>
-    <entity class="boat" type="minecraft:oak_boat" at="16.6 6.43 15.4" style="-mc-yaw: 30deg"></entity>
-    <entity class="boat b" type="minecraft:cherry_boat" at="14.6 6.43 16.6" style="-mc-yaw: -70deg"></entity>
+    <entity class="walker" type="minecraft:villager" data-route="elder" x="0" y="0" z="0"></entity>
+    <entity class="walker" type="minecraft:villager" variant="minecraft:savanna" data-route="farmer" x="0" y="0" z="0"></entity>
+    <entity class="walker" type="minecraft:sheep" data-route="sheep" x="0" y="0" z="0"></entity>
+    <entity class="walker" type="minecraft:sheep" color="pink" data-route="lamb" baby x="0" y="0" z="0"></entity>
+    <entity class="walker" type="minecraft:cow" data-route="cow" x="0" y="0" z="0"></entity>
+    <entity class="walker" type="minecraft:chicken" data-route="hen" x="0" y="0" z="0"></entity>
+    <entity class="walker" type="minecraft:chicken" data-route="chick" baby x="0" y="0" z="0"></entity>
+    <entity type="minecraft:cat" variant="minecraft:calico" x="5.3" y="7" z="9.5" style="-mc-yaw: -35deg"></entity>
+    <entity class="boat" type="minecraft:oak_boat" x="16.6" y="6.43" z="15.4" style="-mc-yaw: 30deg"></entity>
+    <entity class="boat b" type="minecraft:cherry_boat" x="14.6" y="6.43" z="16.6" style="-mc-yaw: -70deg"></entity>
 
-    <scene-anchor class="light" at="10.5 8.4 9.5"></scene-anchor>
-    <scene-anchor class="light" at="10.5 8.4 11.5"></scene-anchor>
-    <scene-anchor class="light" at="13.5 8.4 12.5"></scene-anchor>
-    <scene-anchor class="light" at="6.5 9.3 9.5"></scene-anchor>
-    <scene-anchor class="light window" at="5.5 8.5 9.05"></scene-anchor>
-    <scene-anchor class="light window" at="7.5 8.5 9.05"></scene-anchor>
-    <scene-anchor class="light window" at="8.95 8.5 5.5"></scene-anchor>
-    <scene-anchor class="light window" at="8.95 8.5 7.5"></scene-anchor>
+    <scene-anchor class="light" x="10.5" y="8.4" z="9.5"></scene-anchor>
+    <scene-anchor class="light" x="10.5" y="8.4" z="11.5"></scene-anchor>
+    <scene-anchor class="light" x="13.5" y="8.4" z="12.5"></scene-anchor>
+    <scene-anchor class="light" x="6.5" y="9.3" z="9.5"></scene-anchor>
+    <scene-anchor class="light window" x="5.5" y="8.5" z="9.05"></scene-anchor>
+    <scene-anchor class="light window" x="7.5" y="8.5" z="9.05"></scene-anchor>
+    <scene-anchor class="light window" x="8.95" y="8.5" z="5.5"></scene-anchor>
+    <scene-anchor class="light window" x="8.95" y="8.5" z="7.5"></scene-anchor>
   </scene>
 
   <div class="clouds near"></div>
@@ -450,6 +450,13 @@
   <div class="fade"></div>
 
   <script>
+    // Places a scene child at a point: x, y and z are its attributes.
+    function place(el, x, y, z) {
+      el.setAttribute('x', x);
+      el.setAttribute('y', y);
+      el.setAttribute('z', z);
+    }
+
     function seeded(seed) {
       return () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
     }
@@ -491,7 +498,7 @@
     for (let i = 0; i < 5; i++) {
       const a = document.createElement('scene-anchor');
       a.className = 'smoke';
-      a.setAttribute('at', '7.5 13.5 4.5');
+      place(a, 7.5, 13.5, 4.5);
       a.style.animationDelay = (-i * 0.9) + 's';
       scene.appendChild(a);
     }
@@ -500,7 +507,7 @@
     FIREFLIES.forEach((p, i) => {
       const a = document.createElement('scene-anchor');
       a.className = 'firefly';
-      a.setAttribute('at', p.join(' '));
+      place(a, ...p);
       a.style.animationDelay = '0s, ' + (-random() * 5).toFixed(2) + 's';
       scene.appendChild(a);
     });

@@ -548,22 +548,22 @@
 
   <scene structure="vellum:structures/ruined_portal.nbt" rotatable>
     <!-- The frame's missing blocks and the portal itself, shown when the quest is accepted. -->
-    <block-group class="repair"><block at="9 11 8" state="minecraft:obsidian"></block></block-group>
-    <block-group class="repair"><block at="9 12 8" state="minecraft:crying_obsidian"></block></block-group>
-    <block-group class="repair"><block at="8 12 8" state="minecraft:obsidian"></block></block-group>
+    <block-group class="repair"><block x="9" y="11" z="8" state="minecraft:obsidian"></block></block-group>
+    <block-group class="repair"><block x="9" y="12" z="8" state="minecraft:crying_obsidian"></block></block-group>
+    <block-group class="repair"><block x="8" y="12" z="8" state="minecraft:obsidian"></block></block-group>
     <block-group class="gate">
-      <block at="7 9 8" state="minecraft:nether_portal[axis=x]"></block>
-      <block at="8 9 8" state="minecraft:nether_portal[axis=x]"></block>
-      <block at="7 10 8" state="minecraft:nether_portal[axis=x]"></block>
-      <block at="8 10 8" state="minecraft:nether_portal[axis=x]"></block>
-      <block at="7 11 8" state="minecraft:nether_portal[axis=x]"></block>
-      <block at="8 11 8" state="minecraft:nether_portal[axis=x]"></block>
+      <block x="7" y="9" z="8" state="minecraft:nether_portal[axis=x]"></block>
+      <block x="8" y="9" z="8" state="minecraft:nether_portal[axis=x]"></block>
+      <block x="7" y="10" z="8" state="minecraft:nether_portal[axis=x]"></block>
+      <block x="8" y="10" z="8" state="minecraft:nether_portal[axis=x]"></block>
+      <block x="7" y="11" z="8" state="minecraft:nether_portal[axis=x]"></block>
+      <block x="8" y="11" z="8" state="minecraft:nether_portal[axis=x]"></block>
     </block-group>
     <!-- The blocks that fell off the frame go when they are put back. -->
     <block-group class="fallen"></block-group>
 
-    <scene-anchor class="glow" at="8 10.5 8.5"></scene-anchor>
-    <scene-anchor class="marker" at="8 13.6 8.5"><div class="gem"></div><span>1,240 m</span></scene-anchor>
+    <scene-anchor class="glow" x="8" y="10.5" z="8.5"></scene-anchor>
+    <scene-anchor class="marker" x="8" y="13.6" z="8.5"><div class="gem"></div><span>1,240 m</span></scene-anchor>
   </scene>
 
   <section class="quest">
@@ -634,6 +634,13 @@
   </div>
 
   <script>
+    // Places a scene child at a point: x, y and z are its attributes.
+    function place(el, x, y, z) {
+      el.setAttribute('x', x);
+      el.setAttribute('y', y);
+      el.setAttribute('z', z);
+    }
+
     // A seeded random generator, so the sky is the same every time the page opens.
     function seeded(seed) {
       return () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
@@ -741,7 +748,7 @@
         g.classList.add('in');
         setTimeout(() => {
           const b = document.createElement('block');
-          b.setAttribute('at', FALLEN[i].join(' '));
+          place(b, ...FALLEN[i]);
           b.setAttribute('state', 'minecraft:air');
           fallen.appendChild(b);
         }, 500 + i * 380);
