@@ -4,13 +4,13 @@ package dev.vellum.engine.scene;
  * 3D affine transforms as 3×4 row-major arrays ({@code [m00 m01 m02 m03, m10 ... m13, m20 ... m23]}): a point
  * {@code p} maps to {@code M · (p, 1)}.
  */
-final class Mat {
+public final class Mat {
     static final float[] IDENTITY = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
 
     private Mat() {}
 
     /** {@code a · b}: b applies first. */
-    static float[] multiply(float[] a, float[] b) {
+    public static float[] multiply(float[] a, float[] b) {
         float[] out = new float[12];
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 4; c++) {
@@ -21,12 +21,12 @@ final class Mat {
         return out;
     }
 
-    static float[] translation(float x, float y, float z) {
+    public static float[] translation(float x, float y, float z) {
         return new float[] {1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z};
     }
 
     /** A turn of {@code degrees} about axis 0 (x), 1 (y) or 2 (z), right-handed. */
-    static float[] rotation(int axis, float degrees) {
+    public static float[] rotation(int axis, float degrees) {
         double r = Math.toRadians(degrees);
         float c = (float) Math.cos(r), s = (float) Math.sin(r);
         return switch (axis) {
@@ -37,7 +37,7 @@ final class Mat {
     }
 
     /** {@code m · p} into {@code out} (x, y, z). */
-    static float[] apply(float[] m, float x, float y, float z, float[] out) {
+    public static float[] apply(float[] m, float x, float y, float z, float[] out) {
         out[0] = m[0] * x + m[1] * y + m[2] * z + m[3];
         out[1] = m[4] * x + m[5] * y + m[6] * z + m[7];
         out[2] = m[8] * x + m[9] * y + m[10] * z + m[11];
@@ -45,7 +45,7 @@ final class Mat {
     }
 
     /** {@code m}'s linear part times the direction {@code d}. */
-    static float[] applyDirection(float[] m, float x, float y, float z, float[] out) {
+    public static float[] applyDirection(float[] m, float x, float y, float z, float[] out) {
         out[0] = m[0] * x + m[1] * y + m[2] * z;
         out[1] = m[4] * x + m[5] * y + m[6] * z;
         out[2] = m[8] * x + m[9] * y + m[10] * z;
@@ -53,7 +53,7 @@ final class Mat {
     }
 
     /** The inverse, or null when {@code m} collapses space (a zero scale). */
-    static float[] invert(float[] m) {
+    public static float[] invert(float[] m) {
         double a = m[0], b = m[1], c = m[2], d = m[4], e = m[5], f = m[6], g = m[8], h = m[9], i = m[10];
         double ca = e * i - f * h, cb = -(d * i - f * g), cc = d * h - e * g;
         double det = a * ca + b * cb + c * cc;

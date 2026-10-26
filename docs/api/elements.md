@@ -181,8 +181,11 @@ A group is what shows, fades and moves. Groups follow their style every frame, s
 - `display: none`, `visibility: hidden` and `opacity: 0` hide it, and hidden groups can't be hovered.
 - `opacity` fades it. A faded group draws see-through; its block entities show only while it is at least half opaque.
 - `-mc-translate: x y z` moves it, in blocks. Values left out are 0: `-mc-translate: 0 -0.5`.
-- `-mc-rotate` turns it about the middle of its blocks: one angle turns it about the vertical axis, three
-  (`10deg 90deg 0deg`) about x, then y, then z.
+- `-mc-yaw` turns it about the vertical axis through the middle of its blocks, the same way it turns a `<model>`:
+  positive is clockwise seen from above, as Minecraft turns entities (south to west).
+- `-mc-pitch` tips it about the x axis (east to west) and `-mc-roll` about the z axis (north to south), also through
+  its middle. Positive tips its top north and east, toward the viewer at the default view.
+- Together, it is rolled first, then pitched, then turned by its yaw, as Minecraft poses entities.
 
 `-mc-translate` moves entities and anchors too. Each group is meshed once and again only when its blocks change, so
 moving and fading groups is cheap; adding, removing or changing `<block>` and `<block-group>` children from a script

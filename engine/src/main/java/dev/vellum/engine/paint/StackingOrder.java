@@ -110,9 +110,9 @@ final class StackingOrder {
         return s.position.isPositioned() || s.createsStackingContext();
     }
 
-    /** Whether a box is a stacking context: by its style, or as a scene anchor (which moves like a transform). */
+    /** Whether a box is a stacking context: by its style, or as a {@link Box#hosted} box (which moves like a transform). */
     static boolean isContext(Box box, ComputedStyle s) {
-        return s.createsStackingContext() || box.anchored;
+        return s.createsStackingContext() || box.hosted();
     }
 
     static int zIndex(Box box) {

@@ -69,7 +69,7 @@ class PreviewHostTest {
         assertEquals(List.of(48f, 48f), size(document, document.createElement("entity")));
         assertEquals(List.of(32f, 32f), size(document, document.createElement("model")));
         assertEquals(List.of(16f, 16f), size(document, document.createElement("player-head")));
-        assertEquals(List.of(160f, 120f), size(document, document.createElement("scene")));
+        assertEquals(List.of(Float.NaN, Float.NaN), size(document, document.createElement("scene")), "sized by CSS");
         Element canvas = document.createElement("canvas");
         canvas.setAttribute("width", "64");
         assertEquals(List.of(64f, 150f), size(document, canvas));

@@ -20,7 +20,7 @@ import dev.vellum.mod.TokenBucket;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.client.render.McCanvas;
 import dev.vellum.mod.client.render.McGui;
-import dev.vellum.mod.client.replaced.McReplaced;
+import dev.vellum.mod.client.replaced.OwnTooltip;
 import dev.vellum.mod.net.ClosedPayload;
 import dev.vellum.mod.net.MessagePayload;
 import net.minecraft.client.Minecraft;
@@ -325,7 +325,7 @@ public final class DocumentDriver {
         int x = (int) tooltip.x(), y = (int) tooltip.y();
         if (tooltip.content() != null) {
             List<Component> extra = tooltip.element() == null ? List.of() : titleLines(tooltip);
-            if (tooltip.content().replaced instanceof McReplaced content && content.showTooltip(g, extra, x, y)) {
+            if (tooltip.content().replaced instanceof OwnTooltip content && content.showTooltip(g, extra, x, y)) {
                 tooltipRequested = true;
             }
             return;

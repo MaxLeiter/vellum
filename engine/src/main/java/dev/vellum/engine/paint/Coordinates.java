@@ -25,14 +25,13 @@ public final class Coordinates {
     /**
      * Sets {@code out} to a box's CSS transform, {@code translate(origin) · transform · translate(-origin)} with
      * percentages against its border box, mapping its border-box space into the space it is placed in (origin at
-     * its border-box origin), after a scene anchor's offset ({@link Box#anchored}). Returns false, leaving
-     * {@code out} alone, when it has none: no transform and no anchor, or an inline box, which CSS transforms do not
-     * apply to. {@code s} is the style it is painted with.
+     * its border-box origin), after its {@link Box#hostOffsetX host offset}. Returns false, leaving {@code out}
+     * alone, when it has none: no transform on a box that is not {@link Box#hosted}, or an inline box, which CSS
+     * transforms do not apply to. {@code s} is the style it is painted with.
      */
     static boolean transform(Box box, ComputedStyle s, Affine out) {
-        if (box.kind == Box.Kind.INLINE || !s.hasTransform() && !box.anchored) return false;
-        out.identity();
-        if (box.anchored) out.translate(box.anchorX, box.anchorY);
+        if (box.kind == Box.Kind.INLINE || !s.hasTransform() && !box.hosted()) return false;
+        out.identity().translate(box.hostOffsetX, box.hostOffsetY);
         if (!s.hasTransform()) return true;
         float ox = s.transformOriginX.resolve(box.width), oy = s.transformOriginY.resolve(box.height);
         out.translate(ox, oy).concat(s.transform, box.width, box.height).translate(-ox, -oy);

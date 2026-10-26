@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import dev.vellum.engine.scene.SceneCamera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -37,8 +38,11 @@ public final class Scene {
     /** The lighting vanilla sets for each kind of GUI model. */
     enum Light { ENTITY, ITEMS_3D, ITEMS_FLAT }
 
-    /** The inventory's view of blocks: 30° from above, turned 225°, 0.625 of a slot. */
-    private static final float BLOCK_TILT = 30, BLOCK_YAW = 225, BLOCK_SCALE = 0.625F;
+    /**
+     * A block's size in the inventory, 0.625 of a slot; it is seen as a scene's camera sees blocks
+     * ({@link SceneCamera#BASE_TILT}, {@link SceneCamera#BASE_YAW}).
+     */
+    private static final float BLOCK_SCALE = 0.625F;
 
     private final Light light;
     private final Drawer drawer;
@@ -74,8 +78,8 @@ public final class Scene {
     public static Scene block(BlockState state, float yaw, float pitch, float dx, float dy) {
         return new Scene(Light.ITEMS_3D, (pose, buffers, box) -> {
             pose.translate(dx, dy, 0);
-            turn(pose, BLOCK_TILT, yaw, pitch);
-            pose.mulPose(Axis.YP.rotationDegrees(BLOCK_YAW));
+            turn(pose, SceneCamera.BASE_TILT, yaw, pitch);
+            pose.mulPose(Axis.YP.rotationDegrees(SceneCamera.BASE_YAW));
             pose.scale(BLOCK_SCALE, BLOCK_SCALE, BLOCK_SCALE);
             pose.translate(-0.5F, -0.5F, -0.5F);
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(state, pose, buffers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
@@ -92,7 +96,7 @@ public final class Scene {
         Minecraft mc = Minecraft.getInstance();
         BakedModel model = mc.getItemRenderer().getModel(stack, mc.level, null, 0);
         boolean blockLike = model.usesBlockLight();
-        float tilt = blockLike ? BLOCK_TILT : 0;
+        float tilt = blockLike ? SceneCamera.BASE_TILT : 0;
         return new Scene(blockLike ? Light.ITEMS_3D : Light.ITEMS_FLAT, (pose, buffers, box) -> {
             pose.translate(dx, dy, 0);
             turn(pose, tilt, yaw, pitch);

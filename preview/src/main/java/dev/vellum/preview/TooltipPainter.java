@@ -12,8 +12,7 @@ import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.input.Tooltip;
 import dev.vellum.engine.paint.Canvas;
-import dev.vellum.engine.scene.SceneBlock;
-import dev.vellum.engine.scene.SceneContent;
+import dev.vellum.preview.host.NamedContent;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
 
@@ -75,15 +74,16 @@ final class TooltipPainter {
     }
 
     /**
-     * An item's name, as its tooltip's first line: the translation of its item key, else of its block key (as the
-     * stand-in's texture falls back from item to block), else its id. A scene's is its hovered block's.
+     * The name content shows as its tooltip's first line ({@link NamedContent}): the translation of its item key,
+     * else of its block key (as the stand-in's texture falls back from item to block), else its id; a block's
+     * translation comes first for a block (a scene's hovered one).
      */
     private static String itemName(Host host, Element item) {
-        SceneBlock block = item.replaced instanceof SceneContent scene ? scene.scene().tooltipBlock() : null;
-        String id = block != null ? block.id() : item.getAttribute("id");
+        NamedContent named = item.replaced instanceof NamedContent n ? n : null;
+        String id = named == null ? null : named.nameId();
         if (id == null || id.isBlank()) return "";
         id = id.strip();
-        for (String kind : block != null ? new String[] {"block", "item"} : new String[] {"item", "block"}) {
+        for (String kind : named.namesBlock() ? new String[] {"block", "item"} : new String[] {"item", "block"}) {
             String key = MinecraftAssets.descriptionId(kind, id), text = host.translate(key);
             if (!text.equals(key)) return text;
         }

@@ -17,6 +17,7 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -98,15 +99,8 @@ public final class PreviewHost implements Host {
 
     @Override
     public String loadText(String url) {
-        return assets.locate(url).map(file -> {
-            if (file.getFileSystem() == FileSystems.getDefault()) loadedFiles.add(file);
-            try {
-                return Files.readString(file);
-            } catch (IOException e) {
-                log(LogLevel.WARN, "Cannot read " + file + ": " + e);
-                return null; // unreadable is missing, as Host.loadText promises
-            }
-        }).orElse(null);
+        byte[] bytes = loadBytes(url);
+        return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
     }
 
     @Override
@@ -117,7 +111,7 @@ public final class PreviewHost implements Host {
                 return Files.readAllBytes(file);
             } catch (IOException e) {
                 log(LogLevel.WARN, "Cannot read " + file + ": " + e);
-                return null;
+                return null; // unreadable is missing, as Host.loadText promises
             }
         }).orElse(null);
     }

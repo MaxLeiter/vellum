@@ -16,7 +16,6 @@ import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.paint.Painter;
 import dev.vellum.engine.replaced.ReplacedElements;
-import dev.vellum.engine.scene.SceneContent;
 import dev.vellum.engine.script.ScriptRuntime;
 
 import java.util.ArrayList;
@@ -322,7 +321,7 @@ public final class Document extends Node {
                 laidOut = false;
                 input.afterLayout();
             }
-            if (updateScenes()) repaint = true;
+            if (afterLayoutReplaced()) repaint = true;
         });
         frameNanos += clock.getAsLong() - start;
     }
@@ -374,14 +373,12 @@ public final class Document extends Node {
     }
 
     /**
-     * Brings scenes up to date with the tree, styles and layout: their blocks, camera and anchors, and the block
-     * under the pointer (which may fire events). True if anything they paint changed.
+     * Lets replaced content follow the layout, styles and pointer ({@link ReplacedContent#afterLayout}), which may
+     * fire events. True if anything it paints changed.
      */
-    private boolean updateScenes() {
+    private boolean afterLayoutReplaced() {
         boolean changed = false;
-        for (int i = 0; i < replaced.size(); i++) {
-            if (replaced.get(i) instanceof SceneContent scene && scene.scene() != null) changed |= scene.scene().update();
-        }
+        for (int i = 0; i < replaced.size(); i++) changed |= replaced.get(i).afterLayout();
         return changed;
     }
 
@@ -507,7 +504,7 @@ public final class Document extends Node {
     public boolean needsLayout() { return layoutDirty; }
 
     /** A tree change: marks style dirty, and layout too when {@code layout}. */
-    void invalidate(boolean layout) {
+    private void invalidate(boolean layout) {
         invalidate(true, true, layout);
     }
 
@@ -594,6 +591,7 @@ public final class Document extends Node {
     /** {@code child} was inserted into this connected document; {@code arrived} unless it only moved within it. */
     void inserted(Node child, boolean arrived) {
         invalidate(true);
+        if (child.parent instanceof Element parent) subtreeChanged(parent, parent, null);
         if (!arrived || child.isInert()) return;
         boolean loaded = !readyState.equals("loading");
         connect(child, loaded);
@@ -636,6 +634,23 @@ public final class Document extends Node {
         return Collections.unmodifiableList(replaced);
     }
 
+    /** A child of {@code parent} was taken out, to leave the document or to move within it. */
+    void removed(Node parent) {
+        invalidate(true);
+        if (parent instanceof Element p) subtreeChanged(p, p, null);
+    }
+
+    /**
+     * Tells the replaced content of {@code from} and its ancestors that {@code attribute} of {@code changed} (or with
+     * null, its children) changed ({@link ReplacedContent#subtreeChanged}).
+     */
+    private void subtreeChanged(Node from, Element changed, String attribute) {
+        if (replaced.isEmpty()) return;
+        for (Node n = from; n != null; n = n.parent) {
+            if (n instanceof Element e && e.replaced != null) e.replaced.subtreeChanged(changed, attribute);
+        }
+    }
+
     /** {@code node} is about to leave the document (not just move within it). */
     void nodeRemoving(Node node) {
         if (focused != null && node.contains(focused)) setFocus(null);
@@ -676,6 +691,7 @@ public final class Document extends Node {
     void attributeChanged(Element element, String name) {
         if (element.replaced != null) element.replaced.attributeChanged(name); // also a canvas outside the document
         if (!element.isConnected()) return;
+        subtreeChanged(element.parent, element, name);
         boolean layout = switch (name) {
             case "width", "height", "src" -> element.replaced != null;
             case "type" -> element.tagName().equals("input");
