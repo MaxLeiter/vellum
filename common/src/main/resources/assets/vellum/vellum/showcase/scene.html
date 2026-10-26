@@ -80,7 +80,7 @@
     block-group.hop { animation: hop 450ms ease-out; }
 
     @keyframes hop {
-      40% { -mc-translate: 0 0.6 0; -mc-rotate: 12deg; }
+      40% { -mc-translate: 0 0.6 0; -mc-yaw: 12deg; }
     }
 
     /* Slicing: the layers above the one shown lift away. */
@@ -276,7 +276,7 @@
   </style>
 </head>
 <body class="fullscreen">
-  <scene structure="vellum:structures/cottage.nbt" rotatable class="cam-start">
+  <scene structure="vellum:structures/cottage.nbt" rotatable>
     <block-group id="g-foundation" class="pending" x="2..8" y="1" z="2..8"></block-group>
     <block-group id="g-inside" class="pending" x="3..7" y="2..3" z="3..6"></block-group>
     <block-group id="g-walls" class="pending" x="2..8" y="2..4" z="2..8"></block-group>
@@ -323,7 +323,7 @@
         at: [7.5, 11, 3.5], walk: [9.6, 1, 1.4]},
       {group: 'g-roof-n', anim: 'drop', cam: 'roof-n', title: 'Roof', text: 'Spruce stairs, north side',
         at: [5.5, 9, 3], walk: [9.4, 1, 0.6]},
-      {group: 'g-roof-s', anim: 'drop', cam: 'roof-s', title: 'Roof', text: 'And the south side',
+      {group: 'g-roof-s', anim: 'drop', cam: 'roof-s', title: 'Roof', label: 'Roof (south)', text: 'And the south side',
         at: [5.5, 9, 6], walk: [10.2, 1, 8.6]},
       {group: 'g-garden', anim: 'rise', cam: 'garden', title: 'Garden', text: 'A fence, flowers, a pond',
         at: [8.5, 1.4, 8.5], walk: [3.6, 1, 8.6]},
@@ -352,7 +352,7 @@
 
     for (let i = 0; i < STEPS.length; i++) {
       const b = document.createElement('button');
-      b.innerHTML = '<i></i>' + STEPS[i].title + (STEPS[i].group === 'g-roof-s' ? ' (south)' : '');
+      b.innerHTML = '<i></i>' + (STEPS[i].label || STEPS[i].title);
       b.addEventListener('click', () => jump(i + 1));
       stepList.appendChild(b);
     }
@@ -406,12 +406,15 @@
 
     /** Shows the steps before {@code n} as built, at once. */
     function built(n) {
-      for (let i = 0; i < STEPS.length; i++) {
-        const g = document.getElementById(STEPS[i].group);
-        g.className = i < n ? '' : 'pending';
-      }
+      for (let i = 0; i < STEPS.length; i++) document.getElementById(STEPS[i].group).className = i < n ? '' : 'pending';
+    }
+
+    /** Marks the list after step {@code n}: the ones before it built, it current (built once all are). */
+    function mark(n) {
       const rows = stepList.children;
-      for (let i = 0; i < rows.length; i++) rows[i].className = i < n ? 'built' : '';
+      for (let i = 0; i < rows.length; i++) {
+        rows[i].className = i < n - 1 || n === STEPS.length ? 'built' : i === n - 1 ? 'current' : '';
+      }
       bar.style.width = (100 * n / STEPS.length) + '%';
     }
 
@@ -424,10 +427,7 @@
       const g = document.getElementById(s.group);
       g.className = s.anim;
       stage(s, false);
-      stepList.children[step].className = 'current';
-      if (step > 0) stepList.children[step - 1].className = 'built';
-      step++;
-      bar.style.width = (100 * step / STEPS.length) + '%';
+      mark(++step);
       timer = setTimeout(play, STEP_MS);
     }
 
@@ -437,29 +437,26 @@
       leaveLayers();
       step = n;
       built(n);
+      mark(n);
       const s = n === 0 ? null : n >= STEPS.length ? DONE : STEPS[n - 1];
       if (s) stage(s, true);
-      if (n > 0 && n < STEPS.length) stepList.children[n - 1].className = 'current';
       if (n < STEPS.length) timer = setTimeout(play, n === 0 ? 600 : STEP_MS);
     }
 
     // ---- Slicing: one group per layer, made when first asked for ----
 
-    let stepGroups = [];
-
+    // A block belongs to the first group that claims it, so layer groups put first take the blocks from the step
+    // groups, and give them back when they go.
     function enterLayers() {
       if (scene.querySelector('.layer')) return;
       clearTimeout(timer);
       step = STEPS.length;
       built(STEPS.length);
-      // The step groups step aside (kept for leaveLayers) for one group per layer.
-      stepGroups = STEPS.map(st => document.getElementById(st.group));
-      for (const g of stepGroups) g.remove();
-      for (let y = 1; y <= TOP_LAYER; y++) {
+      mark(STEPS.length);
+      for (let y = TOP_LAYER; y >= 1; y--) {
         const g = document.createElement('block-group');
         g.className = 'layer';
         g.setAttribute('y', y);
-        g.dataset.y = y;
         scene.insertBefore(g, scene.firstChild);
       }
       scene.className = 'cam-layers';
@@ -470,7 +467,6 @@
       const layers = scene.querySelectorAll('.layer');
       if (layers.length === 0) return;
       for (let i = 0; i < layers.length; i++) layers[i].remove();
-      for (let i = stepGroups.length - 1; i >= 0; i--) scene.insertBefore(stepGroups[i], scene.firstChild);
       layer = TOP_LAYER;
       layerLabel.textContent = 'All';
     }
@@ -479,7 +475,7 @@
       enterLayers();
       layer = Math.max(0, Math.min(TOP_LAYER, top));
       const groups = scene.querySelectorAll('.layer');
-      for (let i = 0; i < groups.length; i++) groups[i].classList.toggle('peeled', Number(groups[i].dataset.y) > layer);
+      for (let i = 0; i < groups.length; i++) groups[i].classList.toggle('peeled', Number(groups[i].getAttribute('y')) > layer);
       layerLabel.textContent = layer === TOP_LAYER ? 'All' : 'Layer ' + layer;
     }
 
