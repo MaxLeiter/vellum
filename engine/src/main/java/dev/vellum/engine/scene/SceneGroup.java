@@ -96,17 +96,22 @@ public final class SceneGroup {
         return changed;
     }
 
-    /** {@code translate(centre + t) · rotate z · rotate y · rotate x · translate(-centre)}, or the identity. */
+    /**
+     * {@code translate(centre + t) · yaw · pitch · roll · translate(-centre)}, or the identity. Each turn is clockwise
+     * seen from the positive end of its axis, so a positive {@code -mc-yaw} turns the group as it turns a model and as
+     * Minecraft's yaw turns an entity (south to west), and at the default view (from the north-east, above) a positive
+     * {@code -mc-pitch} (about x) or {@code -mc-roll} (about z) tips its top toward the viewer.
+     */
     private float[] transform(ComputedStyle s) {
-        if (s.translateX == 0 && s.translateY == 0 && s.translateZ == 0 && s.rotateX == 0 && s.rotateY == 0
-                && s.rotateZ == 0) {
+        if (s.translateX == 0 && s.translateY == 0 && s.translateZ == 0 && s.modelYaw == 0 && s.modelPitch == 0
+                && s.modelRoll == 0) {
             return Mat.IDENTITY;
         }
         float[] c = centre();
         float[] m = Mat.translation(-c[0], -c[1], -c[2]);
-        if (s.rotateX != 0) m = Mat.multiply(Mat.rotation(0, s.rotateX), m);
-        if (s.rotateY != 0) m = Mat.multiply(Mat.rotation(1, s.rotateY), m);
-        if (s.rotateZ != 0) m = Mat.multiply(Mat.rotation(2, s.rotateZ), m);
+        if (s.modelRoll != 0) m = Mat.multiply(Mat.rotation(2, -s.modelRoll), m);
+        if (s.modelPitch != 0) m = Mat.multiply(Mat.rotation(0, -s.modelPitch), m);
+        if (s.modelYaw != 0) m = Mat.multiply(Mat.rotation(1, -s.modelYaw), m);
         return Mat.multiply(Mat.translation(c[0] + s.translateX, c[1] + s.translateY, c[2] + s.translateZ), m);
     }
 

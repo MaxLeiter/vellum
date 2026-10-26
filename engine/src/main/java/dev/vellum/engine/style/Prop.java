@@ -129,6 +129,8 @@ public enum Prop {
     TINT("-mc-tint", true, false, Interp.COLOR, s -> s.tint, (s, v) -> s.tint = (Integer) v),
     MODEL_YAW("-mc-yaw", false, false, Interp.FLOAT, s -> s.modelYaw, (s, v) -> s.modelYaw = (Float) v),
     MODEL_PITCH("-mc-pitch", false, false, Interp.FLOAT, s -> s.modelPitch, (s, v) -> s.modelPitch = (Float) v),
+    /** {@code -mc-roll}: tips a block group in a {@code <scene>} about the z axis. */
+    MODEL_ROLL("-mc-roll", false, false, Interp.FLOAT, s -> s.modelRoll, (s, v) -> s.modelRoll = (Float) v),
     MODEL_SCALE("-mc-model-scale", false, false, Interp.FLOAT, s -> s.modelScale, (s, v) -> s.modelScale = (Float) v),
     ENTITY_FOCUS("-mc-entity-focus", false, false, Interp.DISCRETE, s -> s.entityFocus, (s, v) -> s.entityFocus = (EntityFocus) v),
     GAZE_REACH("-mc-gaze-reach", false, false, Interp.FLOAT, s -> s.gazeReach, (s, v) -> s.gazeReach = (Float) v),
@@ -140,10 +142,6 @@ public enum Prop {
     TRANSLATE_X("-vellum-translate-x", false, false, Interp.FLOAT, s -> s.translateX, (s, v) -> s.translateX = (Float) v),
     TRANSLATE_Y("-vellum-translate-y", false, false, Interp.FLOAT, s -> s.translateY, (s, v) -> s.translateY = (Float) v),
     TRANSLATE_Z("-vellum-translate-z", false, false, Interp.FLOAT, s -> s.translateZ, (s, v) -> s.translateZ = (Float) v),
-    /** {@code -mc-rotate}'s parts, in degrees about x, y and z: turns a block group in a {@code <scene>}. */
-    ROTATE_X("-vellum-rotate-x", false, false, Interp.FLOAT, s -> s.rotateX, (s, v) -> s.rotateX = (Float) v),
-    ROTATE_Y("-vellum-rotate-y", false, false, Interp.FLOAT, s -> s.rotateY, (s, v) -> s.rotateY = (Float) v),
-    ROTATE_Z("-vellum-rotate-z", false, false, Interp.FLOAT, s -> s.rotateZ, (s, v) -> s.rotateZ = (Float) v),
     /** {@code -mc-scene-center}'s parts, in blocks (NaN for auto): the point a {@code <scene>} turns about. */
     SCENE_CENTER_X("-vellum-scene-center-x", false, false, Interp.FLOAT, s -> s.sceneCenterX, (s, v) -> s.sceneCenterX = (Float) v),
     SCENE_CENTER_Y("-vellum-scene-center-y", false, false, Interp.FLOAT, s -> s.sceneCenterY, (s, v) -> s.sceneCenterY = (Float) v),

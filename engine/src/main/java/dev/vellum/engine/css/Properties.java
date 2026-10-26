@@ -306,7 +306,7 @@ final class Properties {
         add(Prop.TRANSFORM_ORIGIN_X, (r, ctx) -> Images.axis(r, ctx, "left", "right"), TEXT);
         add(Prop.TRANSFORM_ORIGIN_Y, (r, ctx) -> Images.axis(r, ctx, "top", "bottom"), TEXT);
         add(Prop.TINT, CssColors::read, COLOR);
-        add(List.of(Prop.MODEL_YAW, Prop.MODEL_PITCH), Numeric::angle, v -> CssText.deg((Float) v));
+        add(List.of(Prop.MODEL_YAW, Prop.MODEL_PITCH, Prop.MODEL_ROLL), Numeric::angle, v -> CssText.deg((Float) v));
         add(Prop.MODEL_SCALE, nonNegative(Numeric::number), NUMBER);
         add(Prop.ENTITY_FOCUS, Keywords.parser(EntityFocus.class), KEYWORD);
         add(Prop.GAZE_REACH, (r, ctx) -> Numeric.px(r, ctx, false), PX);
@@ -315,7 +315,6 @@ final class Properties {
                 or(Map.of("none", Float.NaN), nonNegative(Numeric::angle)),
                 v -> Float.isNaN((Float) v) ? "none" : CssText.deg((Float) v));
         add(List.of(Prop.TRANSLATE_X, Prop.TRANSLATE_Y, Prop.TRANSLATE_Z), Numeric::number, NUMBER);
-        add(List.of(Prop.ROTATE_X, Prop.ROTATE_Y, Prop.ROTATE_Z), Numeric::angle, v -> CssText.deg((Float) v));
         // -mc-scene-center's parts: block coordinates, or auto (NaN, so it flips rather than interpolates).
         add(List.of(Prop.SCENE_CENTER_X, Prop.SCENE_CENTER_Y, Prop.SCENE_CENTER_Z),
                 or(Map.of("auto", Float.NaN), Numeric::number),

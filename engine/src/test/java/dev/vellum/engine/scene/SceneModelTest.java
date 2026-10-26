@@ -241,17 +241,15 @@ class SceneModelTest {
     // ---- Styles ----
 
     @Test
-    void translateRotateAndCentreParseAndSerialise() {
+    void translateRollAndCentreParseAndSerialise() {
         ComputedStyle t = styleOf("-mc-translate: 1 -0.5");
         assertArrayEquals(new float[] {1, -0.5f, 0}, new float[] {t.translateX, t.translateY, t.translateZ});
         assertEquals("1 -0.5", computedValue(t, "-mc-translate"));
         assertEquals("0", computedValue(styleOf("color: red"), "-mc-translate"));
-        assertEquals(90, styleOf("-mc-rotate: 90deg").rotateY, "one angle turns about y");
-        assertEquals("90deg", computedValue(styleOf("-mc-rotate: 90deg"), "-mc-rotate"));
-        ComputedStyle r = styleOf("-mc-rotate: 10deg 20deg 0.25turn");
-        assertArrayEquals(new float[] {10, 20, 90}, new float[] {r.rotateX, r.rotateY, r.rotateZ});
-        assertEquals("10deg 20deg 90deg", computedValue(r, "-mc-rotate"));
-        assertEquals(0, styleOf("-mc-rotate: 10deg 20deg").rotateX, "two angles are invalid");
+        assertEquals("0 0 2", computedValue(styleOf("-mc-translate: 0 0 2"), "-mc-translate"));
+        assertEquals(0, styleOf("-mc-translate: 1 2 3 4").translateX, "four numbers are invalid");
+        assertEquals(90, styleOf("-mc-roll: 0.25turn").modelRoll);
+        assertEquals("90deg", computedValue(styleOf("-mc-roll: 90deg"), "-mc-roll"));
         ComputedStyle c = styleOf("-mc-scene-center: 1 2.5 3");
         assertArrayEquals(new float[] {1, 2.5f, 3}, new float[] {c.sceneCenterX, c.sceneCenterY, c.sceneCenterZ});
         assertEquals("1 2.5 3", computedValue(c, "-mc-scene-center"));
@@ -283,14 +281,21 @@ class SceneModelTest {
     }
 
     @Test
-    void rotationTurnsAGroupAboutItsMiddle() {
+    void yawPitchAndRollTurnAGroupAboutItsMiddle() {
         Page page = page("""
-                <scene id=s><block-group id=g style="-mc-rotate: 90deg">
+                <scene id=s><block-group id=g style="-mc-yaw: 90deg">
                   <block x="0" y="0" z="0" state="stone"></block><block x="1" y="0" z="0" state="stone"></block></block-group></scene>""");
-        float[] m = model(page).groups().get(1).matrix();
-        float[] p = Mat.apply(m, 0, 0, 0, new float[3]);
-        // The middle is (1, 0.5, 0.5); a quarter turn about y takes (-1, 0, -0.5) from it to (-0.5, 0, 1).
-        assertArrayEquals(new float[] {0.5f, 0, 1.5f}, p, 1e-5f);
+        SceneGroup g = model(page).groups().get(1);
+        // The middle is (1, 0.5, 0.5). A quarter yaw is clockwise seen from above, as entities turn: the west end
+        // (-1, -0.5, -0.5 from the middle) goes north, to (0.5, -0.5, -1).
+        assertArrayEquals(new float[] {1.5f, 0, -0.5f}, Mat.apply(g.matrix(), 0, 0, 0, new float[3]), 1e-5f);
+        // Pitch tips the top north and roll tips it east: toward the default view, from the north-east.
+        page.byId("g").setAttribute("style", "-mc-pitch: 90deg");
+        page.frame();
+        assertArrayEquals(new float[] {0, 0.5f, -0.5f}, Mat.apply(g.matrix(), 0, 1.5f, 0.5f, new float[3]), 1e-5f);
+        page.byId("g").setAttribute("style", "-mc-roll: 90deg");
+        page.frame();
+        assertArrayEquals(new float[] {2, 0.5f, 0.5f}, Mat.apply(g.matrix(), 1, 1.5f, 0.5f, new float[3]), 1e-5f);
     }
 
     // ---- Camera, anchors and picking ----

@@ -39,7 +39,7 @@ import java.util.Set;
  *   <li>{@code <block-group x="3..7" y="2" z="3..6">} claims the blocks in that box that no earlier group claimed,
  *       and its own {@code <block>} children. Each range is inclusive, a single number is one layer, and an axis left
  *       out is all of it ({@code <block-group y="2">} is a layer). The rest are the base. A group shows, fades and moves
- *       by its style ({@code display}, {@code opacity}, {@code -mc-translate}, {@code -mc-rotate}).</li>
+ *       by its style ({@code display}, {@code opacity}, {@code -mc-translate}, {@code -mc-yaw}, {@code -mc-pitch}, {@code -mc-roll}).</li>
  *   <li>{@code <entity x y z>} children stand at that point, moved by their {@code -mc-translate}.</li>
  *   <li>{@code <scene-anchor x y z>} children are laid out as HTML and moved every frame so their top-left
  *       corner is where that point is seen.</li>
