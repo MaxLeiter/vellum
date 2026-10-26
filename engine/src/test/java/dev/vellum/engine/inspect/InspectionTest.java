@@ -107,5 +107,13 @@ class InspectionTest {
         assertTrue(panel.query("#details").textContent().contains("Attributes"));
         panel.click(panel.query("#pick")).frame(600);
         assertTrue(host.inspection.picking());
+
+        float[] bar = panel.centre(panel.query("#split"));
+        float before = panel.query("#tree").box.height;
+        panel.down(bar[0], bar[1]);
+        panel.move(bar[0], bar[1] - 40);
+        panel.up(bar[0], bar[1] - 40);
+        panel.frame(700);
+        assertEquals(before - 40, panel.query("#tree").box.height, 0.5f, "dragging the bar up shrinks the tree");
     }
 }

@@ -36,6 +36,8 @@ while you inspect it.
   text, and its computed values that differ from the initial ones, with a filter. Edit a field and press Enter, or
   click away, to change the page. A new attribute takes a name and a value. Delete element removes it.
 - Edits change the live page only, not your files, and a reload (or saving a file it was read from) starts over.
+- Drag the panel's left edge to make it wider or narrower (the width sticks until the game closes), and the bar
+  between the tree and the details to share the height between them.
 - Escape or F12 closes the inspector. While one of its fields has focus, keys type into the field instead.
 
 The panel is a Vellum page itself (`vellum:vellum/dev/inspector.html`), which reads and edits the inspected page

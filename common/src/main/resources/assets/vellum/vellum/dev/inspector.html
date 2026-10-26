@@ -30,7 +30,10 @@
     .dot { color: var(--class); }
     .text { color: var(--dim); }
 
-    #details { flex: 1 1 45%; overflow: auto; border-top: 1px solid var(--line); padding: 3px 4px; }
+    /* Drag it to share the height between the tree and the details. */
+    #split { flex: none; height: 3px; background: var(--line); cursor: ns-resize; }
+    #split:hover, #split.drag { background: var(--pick); }
+    #details { flex: 1 1 45%; overflow: auto; padding: 3px 4px; }
     #details:empty::before { content: "Pick or click an element"; color: var(--dim); }
     h3 { margin: 5px 0 2px; color: var(--dim); font-weight: 400; }
     #path a { color: var(--dim); text-decoration: none; }
@@ -61,6 +64,7 @@
   </header>
   <div id="url"></div>
   <div id="tree"></div>
+  <div id="split"></div>
   <div id="details"></div>
 
   <script>
@@ -234,6 +238,23 @@
       else return;
       stamp = null;
       refresh();
+    });
+
+    const split = document.getElementById('split');
+    let drag = null;
+    split.addEventListener('mousedown', e => {
+      drag = { y: e.clientY, height: tree.offsetHeight };
+      split.classList.add('drag');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!drag) return;
+      const most = document.body.clientHeight - 60;
+      tree.style.flex = '0 0 ' + Math.max(30, Math.min(most, drag.height + e.clientY - drag.y)) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      drag = null;
+      split.classList.remove('drag');
     });
 
     document.getElementById('pick').addEventListener('click', () => inspector.pick(!inspector.state().picking));

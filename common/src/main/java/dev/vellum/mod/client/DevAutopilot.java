@@ -21,6 +21,8 @@ import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.MouseButtonInfo;
 //? if >=26
 import net.minecraft.client.renderer.entity.state.ArmorStandRenderState;
 import net.minecraft.client.server.IntegratedServer;
@@ -303,7 +305,8 @@ public final class DevAutopilot {
 
     /**
      * The element inspector (F12) over the shop: it opens docked on the right and lists the page, picking highlights
-     * what is under the pointer, a click on a card selects it or what is in it (and ends picking), and F12 closes it again.
+     * what is under the pointer, a click on a card selects it or what is in it (and ends picking), dragging the panel's
+     * edge widens it, and F12 closes it again.
      */
     private static void inspector(Minecraft mc) {
         leave();
@@ -323,6 +326,22 @@ public final class DevAutopilot {
         });
         leave();
         grab(mc, "inspector_selected", 10);
+        steps.add(() -> {
+            Screen screen = McClient.screen();
+            DocumentDriver driver = screen == null ? null : DocumentDriver.of(screen);
+            DevInspector inspector = driver == null ? null : driver.inspector();
+            if (inspector == null) {
+                fail("no inspector to resize");
+                return;
+            }
+            int edge = inspector.split(), to = edge - 60, y = 100;
+            driver.mouseClicked(new MouseButtonEvent(edge, y, new MouseButtonInfo(0, 0)));
+            driver.mouseMoved(to, y);
+            driver.mouseReleased(new MouseButtonEvent(to, y, new MouseButtonInfo(0, 0)));
+            check(inspector.split() == to, "dragging the panel's edge moved it to {}",
+                    "dragging the panel's edge left it at {}", inspector.split());
+        });
+        grab(mc, "inspector_wider", 5);
         onPage("closing the inspector", page -> page.key("F12"));
         steps.add(() -> check(inspection().isEmpty(), "F12 closed the inspector", "the inspector is still open"));
     }
