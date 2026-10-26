@@ -143,9 +143,10 @@ public final class ComputedStyle implements Cloneable {
     /**
      * How 3D content is turned ({@code -mc-yaw}) and viewed ({@code -mc-pitch}), in degrees: positive yaw turns its
      * front to the right, positive pitch looks at it from above. Unbounded, so {@code 0} to {@code 360deg} animates a
-     * full turn.
+     * full turn. A {@code <scene>}'s block group turns by its yaw the same way, and tips by its pitch about x and its
+     * {@code -mc-roll} about z ({@code SceneGroup}).
      */
-    public float modelYaw, modelPitch;
+    public float modelYaw, modelPitch, modelRoll;
     /** {@code -mc-model-scale}: multiplies the size that fits 3D content into its box. */
     public float modelScale = 1f;
     /** {@code -mc-entity-focus}: an entity's whole body fits its box, or its head and shoulders fill it. */
@@ -157,12 +158,8 @@ public final class ComputedStyle implements Cloneable {
      */
     public float gazeReach = 40f;
     public float gazeLimitYaw = Float.NaN, gazeLimitUp = Float.NaN, gazeLimitDown = Float.NaN;
-    /**
-     * Inside a {@code <scene>}, in blocks: {@code -mc-translate} moves a block group, entity or anchor, and
-     * {@code -mc-rotate} turns a block group about its centre (degrees about x, then y, then z).
-     */
+    /** {@code -mc-translate}, in blocks: moves a block group, entity or anchor inside a {@code <scene>}. */
     public float translateX, translateY, translateZ;
-    public float rotateX, rotateY, rotateZ;
     /** {@code -mc-scene-center}, in blocks: the point a scene turns about and centres; NaN for auto (its middle). */
     public float sceneCenterX = Float.NaN, sceneCenterY = Float.NaN, sceneCenterZ = Float.NaN;
 
@@ -340,11 +337,10 @@ public final class ComputedStyle implements Cloneable {
                 && same(outlineOffset, o.outlineOffset) && transform.equals(o.transform)
                 && transformOriginX.equals(o.transformOriginX) && transformOriginY.equals(o.transformOriginY)
                 && tint == o.tint && same(modelYaw, o.modelYaw) && same(modelPitch, o.modelPitch)
-                && same(modelScale, o.modelScale) && entityFocus == o.entityFocus && same(gazeReach, o.gazeReach)
-                && same(gazeLimitYaw, o.gazeLimitYaw) && same(gazeLimitUp, o.gazeLimitUp)
+                && same(modelRoll, o.modelRoll) && same(modelScale, o.modelScale) && entityFocus == o.entityFocus
+                && same(gazeReach, o.gazeReach) && same(gazeLimitYaw, o.gazeLimitYaw) && same(gazeLimitUp, o.gazeLimitUp)
                 && same(gazeLimitDown, o.gazeLimitDown) && same(translateX, o.translateX)
-                && same(translateY, o.translateY) && same(translateZ, o.translateZ) && same(rotateX, o.rotateX)
-                && same(rotateY, o.rotateY) && same(rotateZ, o.rotateZ) && same(sceneCenterX, o.sceneCenterX)
+                && same(translateY, o.translateY) && same(translateZ, o.translateZ) && same(sceneCenterX, o.sceneCenterX)
                 && same(sceneCenterY, o.sceneCenterY) && same(sceneCenterZ, o.sceneCenterZ)
                 && scrollSmooth == o.scrollSmooth
                 && scrollbarThumbColor == o.scrollbarThumbColor

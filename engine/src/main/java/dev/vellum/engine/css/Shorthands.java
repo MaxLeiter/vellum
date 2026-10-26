@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * The shorthand registry and expanders. Expanders only route component values to longhands (see {@link Shorthand});
@@ -23,6 +24,8 @@ final class Shorthands {
     static final List<ComponentValue> INITIAL = values("initial");
     private static final List<ComponentValue> AUTO = values("auto"), ZERO = values("0"), ONE = values("1"),
             ZERO_PERCENT = values("0%"), COMMA = values(",");
+    /** What {@link #sequence} gives a longhand left out: the value before it, or nothing (the value is invalid). */
+    private static final UnaryOperator<List<ComponentValue>> REPEAT = last -> last, REQUIRED = last -> null;
     private static final Set<String> POSITION_KEYWORDS = Set.of("left", "right", "top", "bottom", "center");
     private static final Set<String> LIST_STYLE_TYPES = Set.of("disc", "circle", "square", "none");
     private static final Set<String> DECORATION_STYLES = Set.of("solid", "double", "dotted", "dashed", "wavy",
@@ -91,19 +94,16 @@ final class Shorthands {
         register("object-position", longhands("-vellum-object-position-x", "-vellum-object-position-y"),
                 (l, v) -> pairOf(l, Images.splitPosition(v)));
         register("-mc-gaze-limit", longhands("-vellum-gaze-limit-yaw", "-vellum-gaze-limit-up",
-                "-vellum-gaze-limit-down"), Shorthands::dropRepeats, (l, v) -> sequence(l, v, true));
-        // Inside a <scene>: x [y [z]] in blocks, the ones left out 0; one angle turns about y, three about x, y and z;
-        // the centre is auto or all three coordinates.
+                "-vellum-gaze-limit-down"), values -> shortest(values, last -> last), (l, v) -> sequence(l, v, REPEAT));
+        // Inside a <scene>: x [y [z]] in blocks, the ones left out 0; the centre is auto or all three coordinates.
         register("-mc-translate", longhands("-vellum-translate-x", "-vellum-translate-y", "-vellum-translate-z"),
-                Shorthands::dropTrailingZeros, Shorthands::upToThree);
-        register("-mc-rotate", longhands("-vellum-rotate-x", "-vellum-rotate-y", "-vellum-rotate-z"),
-                Shorthands::rotation, Shorthands::rotate);
+                values -> shortest(values, last -> "0"), (l, v) -> sequence(l, v, last -> INITIAL));
         register("-mc-scene-center", longhands("-vellum-scene-center-x", "-vellum-scene-center-y",
                 "-vellum-scene-center-z"), values -> values.contains("auto") ? "auto" : String.join(" ", values),
                 (l, v) -> isIdent(v, "auto")
-                ? Map.of(l.get(0), v, l.get(1), v, l.get(2), v) : sequence(l, v, false));
+                ? Map.of(l.get(0), v, l.get(1), v, l.get(2), v) : sequence(l, v, REQUIRED));
         register("scrollbar-color", longhands("-vellum-scrollbar-thumb-color", "-vellum-scrollbar-track-color"),
-                (l, v) -> isIdent(v, "auto") ? Map.of() : sequence(l, v, false));
+                (l, v) -> isIdent(v, "auto") ? Map.of() : sequence(l, v, REQUIRED));
         register("background-position", List.of(BG_X, BG_Y), Shorthands::backgroundPosition);
         List<Longhand> background = new ArrayList<>(List.of(BG_COLOR));
         background.addAll(Properties.components(ListGroup.BACKGROUND));
@@ -173,64 +173,35 @@ final class Shorthands {
 
     /** Two longhands in order; the second defaults to the first ({@code overflow: hidden}). */
     private static void pair(String name, String first, String second) {
-        register(name, longhands(first, second), CssText::collapse, (l, v) -> sequence(l, v, true));
+        register(name, longhands(first, second), CssText::collapse, (l, v) -> sequence(l, v, REPEAT));
     }
 
     /**
-     * Values for {@code longhands} in order, each parsed greedily. With {@code repeat}, each omitted one repeats the
-     * one before it ({@code -mc-gaze-limit: 30deg 9deg}); without, every one must be given.
+     * Values for {@code longhands} in order, each parsed greedily. The first must be given; each one left out after
+     * it is {@code omitted} applied to the one before ({@link #REPEAT}: {@code -mc-gaze-limit: 30deg 9deg}), and the
+     * value is invalid where that is null ({@link #REQUIRED}).
      */
     private static Map<Longhand, List<ComponentValue>> sequence(List<Longhand> longhands, List<ComponentValue> v,
-                                                               boolean repeat) {
+                                                               UnaryOperator<List<ComponentValue>> omitted) {
         ValueReader r = new ValueReader(v);
         ValueContext probe = new ValueContext();
         Map<Longhand, List<ComponentValue>> out = new HashMap<>();
         List<ComponentValue> last = null;
         for (Longhand l : longhands) {
-            List<ComponentValue> part = !r.atEnd() ? r.take(l.parser, probe) : repeat ? last : null;
+            List<ComponentValue> part = !r.atEnd() ? r.take(l.parser, probe) : last == null ? null : omitted.apply(last);
             if (part == null) return null;
             out.put(l, last = part);
         }
         return r.atEnd() ? out : null;
     }
 
-    /** One to three values for the first longhands in order; the rest are left at their initial value. */
-    private static Map<Longhand, List<ComponentValue>> upToThree(List<Longhand> longhands, List<ComponentValue> v) {
-        ValueReader r = new ValueReader(v);
-        ValueContext probe = new ValueContext();
-        Map<Longhand, List<ComponentValue>> out = new HashMap<>();
-        for (Longhand l : longhands) {
-            if (r.atEnd()) break;
-            List<ComponentValue> part = r.take(l.parser, probe);
-            if (part == null) return null;
-            out.put(l, part);
-        }
-        return out.isEmpty() || !r.atEnd() ? null : out;
-    }
-
-    /** {@code -mc-rotate}: one angle turns about y, three about x, y and z. */
-    private static Map<Longhand, List<ComponentValue>> rotate(List<Longhand> longhands, List<ComponentValue> v) {
-        Map<Longhand, List<ComponentValue>> parts = upToThree(longhands, v);
-        if (parts == null || parts.size() == 3) return parts;
-        return parts.size() == 1 ? Map.of(longhands.get(1), parts.get(longhands.get(0))) : null;
-    }
-
-    /** {@code -mc-translate} without the trailing zeros {@link #upToThree} fills in. */
-    private static String dropTrailingZeros(List<String> values) {
+    /**
+     * The shortest value {@link #sequence} reads back: trailing values that {@code omitted} gives from the one before
+     * (as text) are left out.
+     */
+    private static String shortest(List<String> values, UnaryOperator<String> omitted) {
         int n = values.size();
-        while (n > 1 && values.get(n - 1).equals("0")) n--;
-        return String.join(" ", values.subList(0, n));
-    }
-
-    /** {@code -mc-rotate}: one angle when only y turns. */
-    private static String rotation(List<String> values) {
-        return values.get(0).equals("0deg") && values.get(2).equals("0deg") ? values.get(1) : String.join(" ", values);
-    }
-
-    /** The shortest value {@link #sequence} reads back: trailing values equal to the one before are left out. */
-    private static String dropRepeats(List<String> values) {
-        int n = values.size();
-        while (n > 1 && values.get(n - 1).equals(values.get(n - 2))) n--;
+        while (n > 1 && values.get(n - 1).equals(omitted.apply(values.get(n - 2)))) n--;
         return String.join(" ", values.subList(0, n));
     }
 

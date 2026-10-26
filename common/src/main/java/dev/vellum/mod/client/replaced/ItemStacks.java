@@ -5,6 +5,7 @@ import com.mojang.serialization.Codec;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.mod.Constants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -13,14 +14,15 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Optional;
 
 /**
- * Item stacks and data components from element attributes: {@code <item>}, {@code <model item>} and an
- * {@code <entity>}'s equipment and components. Malformed SNBT and components that don't decode are logged and left
- * out.
+ * Item stacks, data components and block states from element attributes: {@code <item>}, {@code <model>}, a
+ * {@code <scene>}'s blocks and an {@code <entity>}'s equipment and components. Malformed SNBT and components that
+ * don't decode are logged and left out.
  */
 final class ItemStacks {
     private ItemStacks() {}
@@ -61,6 +63,14 @@ final class ItemStacks {
             Constants.LOG.warn("Vellum: {} is not SNBT: {}", what, e.getMessage());
             return null;
         }
+    }
+
+    /** The block state {@code text} names in {@code /setblock} syntax ({@code minecraft:oak_stairs[facing=east]}). */
+    static BlockState blockState(String text) throws CommandSyntaxException {
+        //? if >=26 {
+        return BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, text, false).blockState();
+        //?} else
+        //return BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK.asLookup(), text, false).blockState();
     }
 
     /** {@code tag} decoded with the world's registries, as much of it as decodes (errors are logged); empty without a world. */

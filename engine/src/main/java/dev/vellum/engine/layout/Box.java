@@ -74,12 +74,11 @@ public class Box {
      */
     public Box containingBlock;
     /**
-     * A {@code <scene-anchor>}'s box: laid out at its scene's padding-box origin, then moved by ({@link #anchorX},
-     * {@link #anchorY}) before its CSS transform, so the scene can put it at a projected point every frame without a
-     * relayout. Always a stacking context.
+     * How far the host of a {@link #hosted} box moves it after layout, in px, before its CSS transform: replaced
+     * content places the boxes it lays out every frame without a relayout (a scene puts its anchors at projected
+     * points). 0 for other boxes.
      */
-    public boolean anchored;
-    public float anchorX, anchorY;
+    public float hostOffsetX, hostOffsetY;
 
     Box(Kind kind, Element element, ComputedStyle style) {
         this.kind = kind;
@@ -109,6 +108,16 @@ public class Box {
      */
     public boolean isScrollContainer() {
         return (kind == Kind.BLOCK || kind == Kind.REPLACED) && style.isScrollContainer();
+    }
+
+    /**
+     * Whether this box is laid out for the replaced content of its parent ({@code ReplacedContent.laysOutChild}): an
+     * out-of-flow box of the replaced box, moved by its {@link #hostOffsetX host offset}. It is placed like a
+     * transformed box: its parent is its containing block, and it is a stacking context and the containing block of
+     * the out-of-flow boxes inside it.
+     */
+    public boolean hosted() {
+        return parent != null && parent.kind == Kind.REPLACED;
     }
 
     /** Scroll offset applied to this box's children (zero unless it is a scroll container). */

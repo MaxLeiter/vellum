@@ -5,9 +5,18 @@ package dev.vellum.engine.scene;
  * ({@code minecraft:furnace[facing=north,lit=true]}), and its block entity's data as SNBT, or null for none.
  */
 public record SceneBlock(int x, int y, int z, String state, String nbt) {
-    /** The block's id: its state without the properties. */
+    /** The block's id ({@link #id(String)}). */
     public String id() {
+        return id(state);
+    }
+
+    /**
+     * The id of a block state in {@code /setblock} syntax: the state without its properties, in {@code minecraft}
+     * unless it names a namespace.
+     */
+    public static String id(String state) {
         int bracket = state.indexOf('[');
-        return bracket < 0 ? state : state.substring(0, bracket);
+        String id = (bracket < 0 ? state : state.substring(0, bracket)).strip();
+        return id.indexOf(':') < 0 ? "minecraft:" + id : id;
     }
 }

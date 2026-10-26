@@ -13,8 +13,6 @@ import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
 import net.minecraft.world.item.ItemDisplayContext;
 //?} else
 //import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.commands.arguments.blocks.BlockStateParser;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
@@ -83,10 +81,7 @@ final class ModelContent extends TurnableContent {
         block = null;
         if (!state.isEmpty()) {
             try {
-                //? if >=26 {
-                block = BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, state, false).blockState();
-                //?} else
-                //block = BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK.asLookup(), state, false).blockState();
+                block = ItemStacks.blockState(state);
             } catch (CommandSyntaxException ignored) {
                 // An unknown block or property: nothing to draw.
             }

@@ -12,11 +12,12 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * The Minecraft elements, drawn by Minecraft: {@code <item>}, {@code <slot>}, {@code <entity>}, {@code <model>},
- * {@code <player-head>} and {@code <scene>} ({@code img}, {@code sprite} and {@code canvas} are the engine's). Layout sizes them like
- * images (intrinsic size, CSS size, object-fit).
+ * The Minecraft elements, drawn by Minecraft: {@code <item>}, {@code <slot>}, {@code <entity>}, {@code <model>} and
+ * {@code <player-head>} ({@code img}, {@code sprite} and {@code canvas} are the engine's). Layout sizes them like
+ * images (intrinsic size, CSS size, object-fit). {@link #ELEMENTS} also has {@code <scene>}, whose
+ * {@link SceneContent} builds on the engine's scene content instead.
  */
-public abstract class McReplaced implements ReplacedContent {
+public abstract class McReplaced implements ReplacedContent, OwnTooltip {
     /** The host's replaced elements, by tag ({@code Host.replacedElements}). */
     public static final Map<String, Function<Element, ReplacedContent>> ELEMENTS = Map.of(
             "item", ItemContent::new, "slot", SlotContent::new, "entity", EntityContent::new, "model", ModelContent::new,
@@ -40,11 +41,8 @@ public abstract class McReplaced implements ReplacedContent {
     /** Draws into the content box {@code (x, y, width, height)}, in the canvas's current transform. */
     protected abstract void draw(McCanvas canvas, float x, float y, float width, float height);
 
-    /**
-     * Shows the content's own tooltip ({@link #showsTooltip}) for this frame at GUI point ({@code x}, {@code y}),
-     * followed by {@code extra} (the lines of the {@code title} that applies), in one vanilla tooltip. Returns whether
-     * it set a tooltip.
-     */
+    /** None, unless the content {@link #showsTooltip shows one}. */
+    @Override
     public boolean showTooltip(GuiGraphicsExtractor g, List<Component> extra, int x, int y) {
         return false;
     }

@@ -263,10 +263,6 @@ public final class DevAutopilot {
     }
 
     /**
-     * The autopilot's portraits page, the conversation card, and the Turntable's portraits watching the pointer over
-     * the stage's caption, at GUI scales 2 and 3 (where they are sharper).
-     */
-    /**
      * The scene showcase: the finished cottage (opened at its last step) at GUI scale 2 and 3, and the build part way
      * through. Checks that it drew its blocks, and that hovering one fires {@code blockhover} and shows its name.
      */
@@ -299,6 +295,7 @@ public final class DevAutopilot {
         guiScale(mc, 2);
     }
 
+    //? if >=26 {
     /** How many block quads the open page's scene drew in its last frame. */
     private static int sceneQuads() {
         Screen screen = McClient.screen();
@@ -307,7 +304,12 @@ public final class DevAutopilot {
         Element scene = doc == null ? null : doc.querySelector("scene");
         return scene != null && scene.replaced instanceof SceneContent content ? content.drawnQuads() : 0;
     }
+    //?}
 
+    /**
+     * The autopilot's portraits page, the conversation card, and the Turntable's portraits watching the pointer over
+     * the stage's caption, at GUI scales 2 and 3 (where they are sharper).
+     */
     private static void portraits(Minecraft mc) {
         for (int scale : new int[] {2, 3}) {
             String suffix = scale == 2 ? "" : "_gui3";
