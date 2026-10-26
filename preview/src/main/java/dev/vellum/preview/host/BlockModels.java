@@ -3,6 +3,7 @@ package dev.vellum.preview.host;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.vellum.engine.scene.SceneBlock;
 import dev.vellum.preview.render.MinecraftAssets;
 
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ final class BlockModels {
     private static final String[] DIRECTIONS = {"down", "up", "north", "south", "west", "east"};
     /** Blocks that let neighbours' faces show through, though their model is a full cube. */
     private static final Set<String> SEE_THROUGH_WORDS = Set.of("glass", "leaves", "ice", "slime", "honey", "spawner",
-            "barrier", "water", "lava");
+            "barrier");
     private static final int GRASS = 0xFF91BD59, FOLIAGE = 0xFF77AB2F, WATER = 0xFF3F76E4;
 
     /**
@@ -55,8 +56,7 @@ final class BlockModels {
 
     private Model load(String state) {
         int bracket = state.indexOf('[');
-        String id = (bracket < 0 ? state : state.substring(0, bracket)).strip();
-        if (!id.contains(":")) id = "minecraft:" + id;
+        String id = SceneBlock.id(state);
         Map<String, String> props = new HashMap<>();
         if (bracket >= 0 && state.endsWith("]")) {
             for (String pair : state.substring(bracket + 1, state.length() - 1).split(",")) {
@@ -65,7 +65,7 @@ final class BlockModels {
             }
         }
         String path = id.substring(id.indexOf(':') + 1);
-        int tint = path.equals("grass_block") || path.contains("grass") || path.contains("fern") ? GRASS
+        int tint = path.contains("grass") || path.contains("fern") ? GRASS
                 : path.endsWith("leaves") || path.equals("vine") ? FOLIAGE : path.equals("lily_pad") ? 0xFF208030 : -1;
         if (path.equals("water") || path.equals("lava")) return fluid(id, path, props);
         Optional<JsonObject> blockstate = file(MinecraftAssets.assetUrl(id, "blockstates/", ".json"));

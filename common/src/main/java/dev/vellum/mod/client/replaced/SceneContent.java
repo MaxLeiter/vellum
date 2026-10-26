@@ -20,9 +20,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -38,7 +36,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * {@code <scene>}: a small world of blocks and entities in a box, as its {@link SceneModel} describes it, drawn as one
@@ -55,7 +52,8 @@ public final class SceneContent extends dev.vellum.engine.scene.SceneContent imp
     /** Block states by their text; empty for text that names no block. */
     private final Map<String, Optional<BlockState>> states = new HashMap<>();
     private final Map<SceneGroup, Built> meshes = new IdentityHashMap<>();
-    private final Set<String> warned = new HashSet<>();
+    /** The groups {@link #meshes} was last updated for. */
+    private List<SceneGroup> meshed = List.of();
     /** Changes whenever a mesh is rebuilt, so the kept picture goes too. */
     private int generation;
     private int drawnQuads;
@@ -64,7 +62,7 @@ public final class SceneContent extends dev.vellum.engine.scene.SceneContent imp
     private record Built(int version, Object models, SceneMesh mesh) {}
 
     /** What a picture without entities shows: equal keys draw the same. */
-    private record Key(int generation, SceneCamera camera, List<Float> groups, float depthScale) {}
+    private record Key(int generation, SceneCamera camera, int groups, float depthScale) {}
 
     SceneContent(Element element) {
         super(element);
@@ -99,7 +97,7 @@ public final class SceneContent extends dev.vellum.engine.scene.SceneContent imp
         int tint = model.element().computedStyle().tint;
         if (camera == null || camera.pixelsPerBlock() <= 0 || !canvas.sceneVisible(tint, x, y, width, height)) return;
         updateMeshes();
-        float[] m = camera.matrix();
+        float[] m = model.cameraMatrix();
         // The view's depth, in device px either way of the centre, squeezed to fit the picture's depth range.
         float[] b = model.bounds();
         float depth = 0;
@@ -121,22 +119,12 @@ public final class SceneContent extends dev.vellum.engine.scene.SceneContent imp
             Built built = meshes.get(g);
             if (g.visible() && built != null) drawnQuads += built.mesh().quads();
         }
-        Object key = entities.isEmpty() ? new Key(generation, camera, groupState(groups), depthScale) : null;
+        Object key = entities.isEmpty() ? new Key(generation, camera, model.groupsVersion(), depthScale) : null;
         canvas.drawScene(Scene.of(this, key, (pose, out, picture) -> {
             pose.mulPose(view);
             submitGroups(groups, pose, out);
             submitEntities(entities, pose, out);
         }), 1, tint, x, y, width, height);
-    }
-
-    /** Everything about the groups that shows in the picture, for its key. */
-    private static List<Float> groupState(List<SceneGroup> groups) {
-        List<Float> out = new ArrayList<>();
-        for (SceneGroup g : groups) {
-            out.add(g.visible() ? g.opacity() : -1);
-            if (g.moved()) for (float f : g.matrix()) out.add(f);
-        }
-        return out;
     }
 
     private void submitGroups(List<SceneGroup> groups, PoseStack pose, SubmitNodeCollector out) {
@@ -169,7 +157,10 @@ public final class SceneContent extends dev.vellum.engine.scene.SceneContent imp
     private void updateMeshes() {
         Object models = Minecraft.getInstance().getModelManager().getBlockStateModelSet();
         List<SceneGroup> groups = model.groups();
-        meshes.keySet().retainAll(new HashSet<>(groups));
+        if (groups != meshed) {
+            meshes.keySet().retainAll(new HashSet<>(groups));
+            meshed = groups;
+        }
         for (SceneGroup g : groups) {
             Built built = meshes.get(g);
             if (built != null && built.version() == g.version() && built.models() == models) continue;
@@ -193,13 +184,13 @@ public final class SceneContent extends dev.vellum.engine.scene.SceneContent imp
         return SceneMesh.build(blocks, blockEntities);
     }
 
-    /** The block state {@code text} names, or null (logged once) when it names none. */
+    /** The block state {@code text} names, or null (logged the first time) when it names none. */
     private @Nullable BlockState state(String text) {
         return states.computeIfAbsent(text, t -> {
             try {
-                return Optional.of(BlockStateParser.parseForBlock(BuiltInRegistries.BLOCK, t, false).blockState());
+                return Optional.of(ItemStacks.blockState(t));
             } catch (CommandSyntaxException e) {
-                if (warned.add(t)) Constants.LOG.warn("Vellum: <scene> has an unknown block state {}: {}", t, e.getMessage());
+                Constants.LOG.warn("Vellum: <scene> has an unknown block state {}: {}", t, e.getMessage());
                 return Optional.empty();
             }
         }).orElse(null);

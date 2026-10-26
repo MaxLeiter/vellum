@@ -2,8 +2,8 @@ package dev.vellum.preview.host;
 
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.scene.Mat;
 import dev.vellum.engine.scene.SceneBlock;
-import dev.vellum.engine.scene.SceneCamera;
 import dev.vellum.engine.scene.SceneContent;
 import dev.vellum.engine.scene.SceneEntity;
 import dev.vellum.engine.scene.SceneGroup;
@@ -12,23 +12,36 @@ import dev.vellum.preview.render.MinecraftAssets;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The previewer's {@code <scene>}: the same {@link SceneModel} and camera as in game, drawn with Java2D. Each block's
  * model faces ({@link BlockModels}) are projected (the view is orthographic, so a face is a parallelogram and its
  * texture an affine map onto it), shaded by the side they face as the world shades blocks, hidden when a neighbour in
- * their group covers them or when they face away, and painted far to near. Groups show, fade and move as in game.
- * Entities are silhouettes; block entities (chests, beds, signs) are not drawn.
+ * their group covers them or when they face away, and painted far to near. A group's uncovered faces are found once
+ * for each version of its blocks; a frame only projects them. Groups show, fade and move as in game. Entities are
+ * silhouettes; block entities (chests, beds, signs) are not drawn.
  */
 final class PreviewScene extends SceneContent implements NamedContent {
     /** The world's face shading: down, up, north, south, west, east. */
     private static final float[] SHADE = {0.5f, 1, 0.8f, 0.8f, 0.6f, 0.6f};
 
     private final BlockModels models;
+    private final Map<SceneGroup, Quads> quads = new IdentityHashMap<>();
+    /** The groups {@link #quads} was last trimmed to. */
+    private List<SceneGroup> trimmed = List.of();
 
     /** Something to paint, at its depth (larger is further). */
     private record Item(float depth, Runnable paint) {}
+
+    /** A face no neighbour covers: its corners in the group's coordinates, its texture and its shaded tint. */
+    private record Quad(float[] corners, String texture, float[] uv, int tint) {}
+
+    /** A group's quads, for the version of its blocks they were found for. */
+    private record Quads(int version, List<Quad> quads) {}
 
     PreviewScene(Element element, MinecraftAssets assets) {
         super(element);
@@ -49,14 +62,19 @@ final class PreviewScene extends SceneContent implements NamedContent {
 
     @Override
     public void paint(Canvas canvas, float x, float y, float width, float height) {
-        SceneCamera camera = scene().camera();
-        if (camera == null) return;
-        float[] view = camera.matrix();
-        List<Item> items = new ArrayList<>();
-        for (SceneGroup group : scene().groups()) {
-            if (group.visible()) addGroup(group, multiply(view, group.matrix()), group.opacity(), canvas, x, y, items);
+        float[] view = scene().cameraMatrix();
+        if (view == null) return;
+        List<SceneGroup> groups = scene().groups();
+        if (groups != trimmed) {
+            quads.keySet().retainAll(new HashSet<>(groups));
+            trimmed = groups;
         }
-        for (SceneEntity entity : scene().entities()) addEntity(entity, view, camera.pixelsPerBlock(), canvas, x, y, items);
+        List<Item> items = new ArrayList<>();
+        for (SceneGroup group : groups) {
+            if (group.visible()) addGroup(quads(group), Mat.multiply(view, group.matrix()), group.opacity(), canvas, x, y, items);
+        }
+        float u = scene().camera().pixelsPerBlock() * 1.8f / 32;
+        for (SceneEntity entity : scene().entities()) addEntity(entity, view, u, canvas, x, y, items);
         items.sort(Comparator.comparingDouble(Item::depth).reversed());
         canvas.save();
         canvas.clipRect(x, y, width, height);
@@ -64,36 +82,51 @@ final class PreviewScene extends SceneContent implements NamedContent {
         canvas.restore();
     }
 
-    private void addGroup(SceneGroup group, float[] m, float alpha, Canvas canvas, float ox, float oy, List<Item> out) {
+    /** The group's faces that no neighbour covers, found again only when its blocks changed. */
+    private List<Quad> quads(SceneGroup group) {
+        Quads cached = quads.get(group);
+        if (cached != null && cached.version() == group.version()) return cached.quads();
+        List<Quad> out = new ArrayList<>();
         for (SceneBlock block : group.blocks()) {
             for (BlockModels.Face face : models.of(block.state()).faces()) {
                 if (face.cullface() >= 0 && covered(group, block, face.cullface())) continue;
-                float[] p = new float[12];
-                float depth = 0;
-                for (int i = 0; i < 4; i++) {
-                    float cx = block.x() + face.corners()[i * 3], cy = block.y() + face.corners()[i * 3 + 1],
-                            cz = block.z() + face.corners()[i * 3 + 2];
-                    p[i * 3] = m[0] * cx + m[1] * cy + m[2] * cz + m[3];
-                    p[i * 3 + 1] = m[4] * cx + m[5] * cy + m[6] * cz + m[7];
-                    p[i * 3 + 2] = m[8] * cx + m[9] * cy + m[10] * cz + m[11];
-                    depth += p[i * 3 + 2] / 4;
+                float[] c = face.corners(), corners = new float[12];
+                for (int i = 0; i < 12; i += 3) {
+                    corners[i] = block.x() + c[i];
+                    corners[i + 1] = block.y() + c[i + 1];
+                    corners[i + 2] = block.z() + c[i + 2];
                 }
-                // Facing the viewer, top-left to top-right runs right of top-left to bottom-left (y is down).
-                float ax = p[3] - p[0], ay = p[4] - p[1], bx = p[9] - p[0], by = p[10] - p[1];
-                if (ax * by - ay * bx <= 0) continue;
-                int tint = shade(face.tint(), SHADE[face.direction()]);
-                out.add(new Item(depth, () -> {
-                    canvas.save();
-                    if (alpha < 1) canvas.multiplyAlpha(alpha);
-                    // A hair larger than the face, so neighbouring faces leave no seam.
-                    float grow = 0.5f / Math.max(1, Math.min((float) Math.hypot(ax, ay), (float) Math.hypot(bx, by)));
-                    canvas.transform(ax * (1 + 2 * grow), ay * (1 + 2 * grow), bx * (1 + 2 * grow), by * (1 + 2 * grow),
-                            ox + p[0] - (ax + bx) * grow, oy + p[1] - (ay + by) * grow);
-                    float[] uv = face.uv();
-                    canvas.drawImage(face.texture(), 0, 0, 1, 1, uv[0], uv[1], uv[2], uv[3], tint, false);
-                    canvas.restore();
-                }));
+                out.add(new Quad(corners, face.texture(), face.uv(), shade(face.tint(), SHADE[face.direction()])));
             }
+        }
+        quads.put(group, new Quads(group.version(), out));
+        return out;
+    }
+
+    /** Projects the quads facing the viewer through {@code m}. */
+    private static void addGroup(List<Quad> quads, float[] m, float alpha, Canvas canvas, float ox, float oy, List<Item> out) {
+        float[] q = new float[3];
+        for (Quad quad : quads) {
+            float[] c = quad.corners(), p = new float[12];
+            float depth = 0;
+            for (int i = 0; i < 12; i += 3) {
+                System.arraycopy(Mat.apply(m, c[i], c[i + 1], c[i + 2], q), 0, p, i, 3);
+                depth += p[i + 2] / 4;
+            }
+            // Facing the viewer, top-left to top-right runs right of top-left to bottom-left (y is down).
+            float ax = p[3] - p[0], ay = p[4] - p[1], bx = p[9] - p[0], by = p[10] - p[1];
+            if (ax * by - ay * bx <= 0) continue;
+            out.add(new Item(depth, () -> {
+                canvas.save();
+                if (alpha < 1) canvas.multiplyAlpha(alpha);
+                // A hair larger than the face, so neighbouring faces leave no seam.
+                float grow = 0.5f / Math.max(1, Math.min((float) Math.hypot(ax, ay), (float) Math.hypot(bx, by)));
+                canvas.transform(ax * (1 + 2 * grow), ay * (1 + 2 * grow), bx * (1 + 2 * grow), by * (1 + 2 * grow),
+                        ox + p[0] - (ax + bx) * grow, oy + p[1] - (ay + by) * grow);
+                float[] uv = quad.uv();
+                canvas.drawImage(quad.texture(), 0, 0, 1, 1, uv[0], uv[1], uv[2], uv[3], quad.tint(), false);
+                canvas.restore();
+            }));
         }
     }
 
@@ -104,22 +137,14 @@ final class PreviewScene extends SceneContent implements NamedContent {
         return neighbour != null && models.of(neighbour.state()).opaque();
     }
 
-    /** A player-shaped silhouette standing at the entity's point, as the previewer's {@code <entity>} is drawn. */
-    private static void addEntity(SceneEntity entity, float[] m, float pixelsPerBlock, Canvas canvas, float ox, float oy,
-                                  List<Item> out) {
-        float px = m[0] * entity.x() + m[1] * entity.y() + m[2] * entity.z() + m[3];
-        float py = m[4] * entity.x() + m[5] * entity.y() + m[6] * entity.z() + m[7];
-        float depth = m[8] * entity.x() + m[9] * (entity.y() + 0.9f) + m[10] * entity.z() + m[11];
-        float u = pixelsPerBlock * 1.8f / 32;
-        out.add(new Item(depth, () -> {
-            float x = ox + px - 8 * u, y = oy + py - 32 * u;
-            float[][] parts = {{4, 0, 8, 8}, {4, 8, 8, 12}, {0, 8, 4, 12}, {12, 8, 4, 12}, {4, 20, 4, 12}, {8, 20, 4, 12}};
-            int[] colors = {0xE0505050, 0xE0404040, 0xE0363636, 0xE0363636, 0xE0303030, 0xE02A2A2A};
-            for (int i = 0; i < parts.length; i++) {
-                float[] p = parts[i];
-                canvas.fillRect(x + p[0] * u, y + p[1] * u, p[2] * u, p[3] * u, colors[i]);
-            }
-        }));
+    /**
+     * A player-shaped silhouette standing at the entity's point, {@code u} px a model unit, as the previewer's
+     * {@code <entity>} is drawn.
+     */
+    private static void addEntity(SceneEntity entity, float[] m, float u, Canvas canvas, float ox, float oy, List<Item> out) {
+        float[] p = Mat.apply(m, entity.x(), entity.y(), entity.z(), new float[3]);
+        float depth = Mat.apply(m, entity.x(), entity.y() + 0.9f, entity.z(), new float[3])[2];
+        out.add(new Item(depth, () -> ReplacedElements.figure(canvas, ox + p[0], oy + p[1], u, 0xE0)));
     }
 
     /** {@code tint} (white for none) darkened by {@code shade}, keeping its alpha. */
@@ -127,17 +152,5 @@ final class PreviewScene extends SceneContent implements NamedContent {
         int a = tint >>> 24, r = Math.round((tint >> 16 & 0xFF) * shade), g = Math.round((tint >> 8 & 0xFF) * shade),
                 b = Math.round((tint & 0xFF) * shade);
         return a << 24 | r << 16 | g << 8 | b;
-    }
-
-    /** {@code a · b} for 3×4 row-major affine matrices. */
-    private static float[] multiply(float[] a, float[] b) {
-        float[] out = new float[12];
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 4; c++) {
-                float v = a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] + a[r * 4 + 2] * b[8 + c];
-                out[r * 4 + c] = c == 3 ? v + a[r * 4 + 3] : v;
-            }
-        }
-        return out;
     }
 }

@@ -4,6 +4,7 @@ package dev.vellum.mod.client.render;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import dev.vellum.engine.scene.SceneCamera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
@@ -32,8 +33,11 @@ public final class Scene {
         void submit(PoseStack pose, SubmitNodeCollector out, GuiSceneRenderState picture);
     }
 
-    /** The inventory's view of blocks: 30° from above, turned 225°, 0.625 of a slot. */
-    private static final float BLOCK_TILT = 30, BLOCK_YAW = 225, BLOCK_SCALE = 0.625F;
+    /**
+     * A block's size in the inventory, 0.625 of a slot; it is seen as a scene's camera sees blocks
+     * ({@link SceneCamera#BASE_TILT}, {@link SceneCamera#BASE_YAW}).
+     */
+    private static final float BLOCK_SCALE = 0.625F;
 
     private final @Nullable Object owner;
     private final @Nullable Object key;
@@ -76,8 +80,8 @@ public final class Scene {
     public static Scene block(Object owner, BlockModelRenderState state, Object identity, float yaw, float pitch, float dx, float dy) {
         return new Scene(owner, new ModelKey(identity, yaw, pitch, dx, dy), Lighting.Entry.ITEMS_3D, (pose, out, picture) -> {
             pose.translate(dx, dy, 0);
-            turn(pose, BLOCK_TILT, yaw, pitch);
-            rotate(pose, Axis.YP, BLOCK_YAW);
+            turn(pose, SceneCamera.BASE_TILT, yaw, pitch);
+            rotate(pose, Axis.YP, SceneCamera.BASE_YAW);
             pose.scale(BLOCK_SCALE, BLOCK_SCALE, BLOCK_SCALE);
             pose.translate(-0.5F, -0.5F, -0.5F);
             state.submit(pose, out, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
@@ -93,7 +97,7 @@ public final class Scene {
     public static Scene item(Object owner, TrackingItemStackRenderState state, float yaw, float pitch, float dx, float dy) {
         Object key = state.isAnimated() ? null : new ModelKey(state.getModelIdentity(), yaw, pitch, dx, dy);
         boolean blockLike = state.usesBlockLight();
-        float tilt = blockLike ? BLOCK_TILT : 0;
+        float tilt = blockLike ? SceneCamera.BASE_TILT : 0;
         return new Scene(owner, key, blockLike ? Lighting.Entry.ITEMS_3D : Lighting.Entry.ITEMS_FLAT, (pose, out, picture) -> {
             pose.translate(dx, dy, 0);
             turn(pose, tilt, yaw, pitch);

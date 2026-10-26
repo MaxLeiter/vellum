@@ -5,6 +5,7 @@ import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.ReplacedContent;
 import dev.vellum.engine.paint.Canvas;
+import dev.vellum.engine.scene.SceneBlock;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.EntityFocus;
 import dev.vellum.engine.style.EntityFraming;
@@ -17,13 +18,16 @@ import java.util.function.Function;
 /**
  * The previewer's stand-ins for the Minecraft elements, at the game's sizes: items and models as their flat item (or
  * block) texture (items with the stack size), player heads as the default skin's face, entities as a silhouette,
- * slots as nothing (CSS draws the slot), and scenes as their blocks' models ({@link PreviewScene}). Items and heads fill the square {@code object-fit: contain} gives them;
- * models and silhouettes place themselves by object-position, as in game. Attributes are read when painting, so
- * edits show up without reloading.
+ * slots as nothing (CSS draws the slot), and scenes as their blocks' models ({@link PreviewScene}). Items and heads
+ * fill the square {@code object-fit: contain} gives them; models and silhouettes place themselves by object-position,
+ * as in game. Attributes are read when painting, so edits show up without reloading.
  */
 final class ReplacedElements {
     private static final int WHITE = 0xFFFFFFFF;
     private static final String STEVE = "minecraft:textures/entity/player/wide/steve.png";
+    /** A silhouette's parts, {x, y, width, height} in model units, and their greys. */
+    private static final float[][] FIGURE = {{4, 0, 8, 8}, {4, 8, 8, 12}, {0, 8, 4, 12}, {12, 8, 4, 12}, {4, 20, 4, 12}, {8, 20, 4, 12}};
+    private static final int[] FIGURE_GREYS = {0x505050, 0x404040, 0x363636, 0x363636, 0x303030, 0x2A2A2A};
 
     private ReplacedElements() {}
 
@@ -105,7 +109,7 @@ final class ReplacedElements {
      */
     private static void paintModel(Canvas canvas, Element element, MinecraftAssets assets, float x, float y, float width, float height) {
         String block = element.getAttribute("block");
-        String id = block != null ? block.split("\\[", 2)[0].strip() : element.getAttribute("item");
+        String id = block != null ? SceneBlock.id(block) : element.getAttribute("item");
         ComputedStyle s = element.computedStyle();
         float[] square = s.objectSquare(x, y, width, height, s.modelScale);
         float size = square[2] * (block != null ? 0.625f : 1);
@@ -136,13 +140,19 @@ final class ReplacedElements {
             float fitted = Math.min(width, height / 2) * s.modelScale;
             frame = EntityFraming.fit(s, x, y, width, height, fitted, s.modelScale, 1, 2, 0);
         }
-        float u = frame.pixelsPerBlock() / 16, ox = frame.originX() - 8 * u, oy = frame.originY() - 32 * u;
-        float[][] parts = {{4, 0, 8, 8}, {4, 8, 8, 12}, {0, 8, 4, 12}, {12, 8, 4, 12}, {4, 20, 4, 12}, {8, 20, 4, 12}};
-        int[] colors = {0xC0505050, 0xC0404040, 0xC0363636, 0xC0363636, 0xC0303030, 0xC02A2A2A};
-        for (int i = 0; i < parts.length; i++) {
-            float[] p = parts[i];
-            canvas.fillRect(ox + p[0] * u, oy + p[1] * u, p[2] * u, p[3] * u, colors[i]);
-        }
+        figure(canvas, frame.originX(), frame.originY(), frame.pixelsPerBlock() / 16, 0xC0);
         if (eyes) canvas.restore();
+    }
+
+    /**
+     * A player-shaped silhouette, 16×32 model units of {@code u} px (head, body, arms, legs), its feet's middle at
+     * ({@code x}, {@code y}), in greys of opacity {@code alpha} (0 to 255).
+     */
+    static void figure(Canvas canvas, float x, float y, float u, int alpha) {
+        float ox = x - 8 * u, oy = y - 32 * u;
+        for (int i = 0; i < FIGURE.length; i++) {
+            float[] p = FIGURE[i];
+            canvas.fillRect(ox + p[0] * u, oy + p[1] * u, p[2] * u, p[3] * u, alpha << 24 | FIGURE_GREYS[i]);
+        }
     }
 }
