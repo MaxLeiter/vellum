@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.Window;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.inspect.Inspection;
 import dev.vellum.mod.Constants;
 import dev.vellum.mod.VellumConfig;
 import dev.vellum.mod.client.replaced.SceneContent;
@@ -181,6 +182,10 @@ public final class DevAutopilot {
             scene(mc);
             return;
         }
+        if (ONLY.equals("inspector")) {
+            inspector(mc);
+            return;
+        }
         serverPages(mc);
         shoot(mc, "canvastest", () -> McClient.setScreen(new CanvasTestScreen()));
         guiScale(mc, 3);
@@ -191,6 +196,7 @@ public final class DevAutopilot {
             if (!page.equals("scene")) shoot(mc, "showcase_" + page, () -> VellumScreens.open(VellumClientCommands.showcaseUrl(page)));
         }
         scene(mc);
+        inspector(mc);
         // The 3D pages again at GUI scale 3, where models and entities are drawn at a different resolution, and the
         // turntables a second later, having turned.
         guiScale(mc, 3);
@@ -293,6 +299,39 @@ public final class DevAutopilot {
         guiScale(mc, 3);
         shoot(mc, "showcase_scene_gui3", () -> VellumScreens.open(url, JsonParser.parseString("{\"start\": {\"step\": \"done\"}}")));
         guiScale(mc, 2);
+    }
+
+    /**
+     * The element inspector (F12) over the shop: it opens docked on the right and lists the page, picking highlights
+     * what is under the pointer, a click on a card selects it or what is in it (and ends picking), and F12 closes it again.
+     */
+    private static void inspector(Minecraft mc) {
+        leave();
+        shoot(mc, "inspector_shop", () -> VellumScreens.open(VellumClientCommands.showcaseUrl("shop")));
+        onPage("the inspector", page -> page.key("F12"));
+        until("the inspector inspects the page", ticks -> inspection().map(i -> i.document() != null).orElse(false));
+        steps.add(() -> inspection().ifPresent(i -> i.pick(true)));
+        hover(".wares .card");
+        grab(mc, "inspector_pick", 5);
+        onPage("picking", page -> page.click(".wares .card"));
+        steps.add(() -> {
+            Element picked = inspection().map(Inspection::highlighted).orElse(null);
+            boolean picking = inspection().map(Inspection::picking).orElse(true);
+            Element card = picked;
+            while (card != null && !card.classes().contains("card")) card = card.parentElement();
+            check(card != null && !picking, "a click picked {} in a card", "picking a card selected {}", picked);
+        });
+        leave();
+        grab(mc, "inspector_selected", 10);
+        onPage("closing the inspector", page -> page.key("F12"));
+        steps.add(() -> check(inspection().isEmpty(), "F12 closed the inspector", "the inspector is still open"));
+    }
+
+    /** The open screen's inspector, while it is open. */
+    private static Optional<Inspection> inspection() {
+        Screen screen = McClient.screen();
+        DocumentDriver driver = screen == null ? null : DocumentDriver.of(screen);
+        return Optional.ofNullable(driver == null ? null : driver.inspector()).map(i -> i.inspection);
     }
 
     //? if >=26 {

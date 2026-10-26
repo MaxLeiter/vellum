@@ -143,6 +143,7 @@ What a client lets pages do:
 | `client.webLinks` | `ask` | `ask`, `block` | Web links: confirm first (after a click or key press), or never open. |
 | `client.typingNotice` | `true` | `true`, `false` | The notice while typing into a server's page. |
 | `client.reducedMotion` | `false` | `true`, `false` | Pages see `prefers-reduced-motion: reduce`. |
+| `client.inspector` | `false` | `true`, `false` | F12 on a page's screen opens the element inspector. Always on in a development environment. |
 | `client.shapeShader` | `true` | `true`, `false` | Rounded boxes, borders and box-shadows drawn by a shader, with smooth edges and real blur (26.2 and 26.3). `false` draws them as flat quads. |
 
 The engine's caps on every page, a mod's or a server's. Each must be at least 1, and `heapLimitPercent` at most

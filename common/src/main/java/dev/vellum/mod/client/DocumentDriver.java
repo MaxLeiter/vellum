@@ -11,6 +11,7 @@ import dev.vellum.engine.host.Urls;
 import dev.vellum.engine.dom.Viewport;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.engine.input.Tooltip;
+import dev.vellum.engine.inspect.Inspection;
 import dev.vellum.engine.paint.HitResult;
 import dev.vellum.engine.style.Cursor;
 import dev.vellum.mod.Constants;
@@ -114,6 +115,11 @@ public final class DocumentDriver {
     private @Nullable Document document;
     private @Nullable ErrorPanel error;
     private int width, height;
+    /** The inspected page's width: the screen's, less the inspector's panel while it is open. */
+    private int pageWidth;
+    private @Nullable DevInspector inspector;
+    /** For the inspector's own panel: the page it inspects. */
+    private @Nullable Inspection inspecting;
     private Cursor cursor = Cursor.AUTO;
     private boolean textInput, closeRequested, closedByServer;
     /** A child screen (link confirmation) is up and will return to this one: survive the owner's removal. */
@@ -152,7 +158,7 @@ public final class DocumentDriver {
 
     /** The driver showing its page in {@code screen}, or null. */
     static @Nullable DocumentDriver of(Screen screen) {
-        for (DocumentDriver d : LIVE) if (d.owner.screen() == screen) return d;
+        for (DocumentDriver d : LIVE) if (d.owner.screen() == screen && d.inspecting == null) return d;
         return null;
     }
 
@@ -175,6 +181,7 @@ public final class DocumentDriver {
     public void resize(int width, int height) {
         this.width = width;
         this.height = height;
+        pageWidth = inspector == null ? width : inspector.resize(width, height);
         if (document == null && error == null) load();
         else applyViewport(document);
     }
@@ -194,6 +201,8 @@ public final class DocumentDriver {
             return;
         }
         LIVE.remove(this);
+        if (inspector != null) inspector.close();
+        inspector = null;
         setTextInput(false);
         if (owner.screen() != null) McGui.resetCursor();
         disposeDocument();
@@ -251,7 +260,7 @@ public final class DocumentDriver {
     /** The GUI-scaled window, which pages are laid out in. */
     private Viewport viewport() {
         // A minimised or mid-resize window can report 0x0; a page laid out at zero size has nothing to show anyway.
-        return new Viewport(Math.max(1, width), Math.max(1, height), (float) Minecraft.getInstance().getWindow().getGuiScale());
+        return new Viewport(Math.max(1, pageWidth), Math.max(1, height), (float) Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void disposeDocument() {
@@ -293,6 +302,7 @@ public final class DocumentDriver {
             fail("Vellum could not show " + name(), document.error());
         }
         if (error != null) error.extract(g, width, height, owner.screen() != null);
+        if (inspector != null) inspector.extract(g, document(), mouseX, mouseY);
         extractTypingNotice(g);
     }
 
@@ -425,15 +435,18 @@ public final class DocumentDriver {
     // ---- Input (true = consumed) ----
 
     public boolean mouseMoved(double x, double y) {
+        if (inspector != null && inspector.mouseMoved(x, y)) return true;
         return input(in -> in.mouseMove((float) x, (float) y, KeyNames.current()));
     }
 
     public boolean mouseClicked(MouseButtonEvent e) {
+        if (inspector != null && inspector.mouseClicked(e)) return true;
         lastUserInput = Util.getMillis();
         return input(in -> in.mouseDown((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
     public boolean mouseReleased(MouseButtonEvent e) {
+        if (inspector != null && inspector.mouseReleased(e)) return true;
         return input(in -> in.mouseUp((float) e.x(), (float) e.y(), KeyNames.button(e.button()), KeyNames.modifiers(e.modifiers())));
     }
 
@@ -444,6 +457,7 @@ public final class DocumentDriver {
     }
 
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        if (inspector != null && inspector.mouseScrolled(x, y, scrollX, scrollY)) return true;
         return input(in -> in.wheel((float) x, (float) y, (float) -scrollX * InputHandler.WHEEL_NOTCH,
                 (float) -scrollY * InputHandler.WHEEL_NOTCH, KeyNames.current()));
     }
@@ -481,6 +495,11 @@ public final class DocumentDriver {
             owner.closeDocument();
             return true;
         }
+        if (inspecting == null && owner.screen() != null && DevInspector.toggleKey(e) && DevInspector.enabled()) {
+            toggleInspector();
+            return true;
+        }
+        if (inspector != null && inspector.keyPressed(e)) return true;
         lastUserInput = now;
         if (e.isEscape()) lastEscape = now;
         String key = KeyNames.key(e);
@@ -553,11 +572,13 @@ public final class DocumentDriver {
     }
 
     public boolean keyReleased(KeyEvent e) {
+        if (inspector != null && inspector.keyReleased(e)) return true;
         String key = KeyNames.key(e);
         return input(in -> in.keyUp(key, KeyNames.code(e), KeyNames.modifiers(e.modifiers())));
     }
 
     public boolean charTyped(CharacterEvent e) {
+        if (inspector != null && inspector.charTyped(e)) return true;
         return input(in -> in.charTyped(e.codepointAsString()));
     }
 
@@ -773,6 +794,37 @@ public final class DocumentDriver {
     /** The cursor the page asks for where its pointer is: the hovered element's {@code cursor}, as it is used. */
     Cursor cursor() {
         return cursor;
+    }
+
+    // ---- Inspector ----
+
+    /** Opens or closes the element inspector over this page ({@link DevInspector}). */
+    void toggleInspector() {
+        if (inspector != null) {
+            inspector.close();
+            inspector = null;
+        } else {
+            inspector = new DevInspector(this);
+        }
+        resize(width, height);
+    }
+
+    /** The inspector over this page, while it is open. */
+    @Nullable DevInspector inspector() {
+        return inspector;
+    }
+
+    /** Makes this the inspector's panel, inspecting another page. */
+    void inspecting(Inspection inspection) {
+        inspecting = inspection;
+    }
+
+    @Nullable Inspection inspection() {
+        return inspecting;
+    }
+
+    @Nullable Screen screen() {
+        return owner.screen();
     }
 
     // ---- Internals ----

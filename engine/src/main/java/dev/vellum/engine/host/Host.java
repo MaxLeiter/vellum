@@ -3,6 +3,7 @@ package dev.vellum.engine.host;
 import dev.vellum.engine.Limits;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.inspect.Inspection;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.style.Cursor;
 
@@ -105,6 +106,12 @@ public interface Host {
 
     /** Called for {@code <a href>} activation and {@code location.href = ...}; hosts may navigate or ignore. */
     default void navigate(String url) {}
+
+    /**
+     * The page this document inspects, for an inspector page: its scripts get an {@code inspector} global reading and
+     * editing that page. Null (the default) for every other document.
+     */
+    default Inspection inspection() { return null; }
 
     enum LogLevel { DEBUG, INFO, WARN, ERROR }
 }

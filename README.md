@@ -80,7 +80,7 @@ Full pages, opened in game with `/vellum showcase <name>`:
 
 Smaller demos of one feature each, opened with `/vellum demo <name>`: [settings](common/src/main/resources/assets/vellum/vellum/demo/settings.html), [layout](common/src/main/resources/assets/vellum/vellum/demo/layout.html), [animation](common/src/main/resources/assets/vellum/vellum/demo/animation.html), [templates](common/src/main/resources/assets/vellum/vellum/demo/templates.html), [HUD overlay](common/src/main/resources/assets/vellum/vellum/demo/hud.html), [toast over chat](common/src/main/resources/assets/vellum/vellum/demo/toast.html) and a [vanilla chest](common/src/main/resources/assets/vellum/vellum/demo/chest.html) built from `<slot>`s ([server side](common/src/main/java/dev/vellum/mod/server/VellumDemos.java)).
 
-`/vellum open <resource id>` opens any page and `/vellum reload` reloads them. In a dev client, saving a page under `src/main/resources` reloads it in the open screen.
+`/vellum open <resource id>` opens any page and `/vellum reload` reloads them. In a dev client, saving a page under `src/main/resources` reloads it in the open screen. F12 opens an element inspector next to the page: pick an element, see its box and computed styles, and edit its attributes, style and text live.
 
 ## Previewer
 

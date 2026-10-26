@@ -3,6 +3,7 @@ package dev.vellum.mod.client;
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.host.FontMetrics;
+import dev.vellum.engine.inspect.Inspection;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.host.PixelSurface;
 import dev.vellum.engine.host.ReplacedContent;
@@ -42,6 +43,11 @@ final class McHost implements Host {
 
     McHost(DocumentDriver driver) {
         this.driver = driver;
+    }
+
+    @Override
+    public @Nullable Inspection inspection() {
+        return driver.inspection();
     }
 
     @Override

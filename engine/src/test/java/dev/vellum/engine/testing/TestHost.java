@@ -9,6 +9,7 @@ import dev.vellum.engine.host.FontMetrics;
 import dev.vellum.engine.host.Host;
 import dev.vellum.engine.host.PixelSurface;
 import dev.vellum.engine.host.ReplacedContent;
+import dev.vellum.engine.inspect.Inspection;
 import dev.vellum.engine.script.ScriptRuntime;
 import dev.vellum.engine.script.Scripting;
 import dev.vellum.engine.style.Cursor;
@@ -88,8 +89,14 @@ public class TestHost implements Host {
         return this;
     }
 
+    /** What pages loaded by this host inspect ({@link Host#inspection}), or null. */
+    public Inspection inspection;
+
     @Override
     public FontMetrics fonts() { return fonts; }
+
+    @Override
+    public Inspection inspection() { return inspection; }
 
     @Override
     public Limits limits() { return limits; }

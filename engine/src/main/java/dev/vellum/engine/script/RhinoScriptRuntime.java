@@ -78,6 +78,7 @@ final class RhinoScriptRuntime implements ScriptRuntime {
         templates = new Templates(this);
         vellum = new VellumApi(this);
         WindowBindings.install(this);
+        if (document.host().inspection() != null) InspectorBindings.install(this, document.host().inspection());
     }
 
     // ---- ScriptRuntime ----

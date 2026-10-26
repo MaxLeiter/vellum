@@ -182,6 +182,16 @@ public final class McGui {
         g.nextStratum();
     }
 
+    /** Moves what is drawn next by ({@code x}, {@code y}) GUI px, until {@link #popTranslation}. */
+    public static void pushTranslation(GuiGraphicsExtractor g, float x, float y) {
+        g.pose().pushMatrix();
+        g.pose().translate(x, y);
+    }
+
+    public static void popTranslation(GuiGraphicsExtractor g) {
+        g.pose().popMatrix();
+    }
+
     public static void fill(GuiGraphicsExtractor g, int x0, int y0, int x1, int y1, int color) {
         g.fill(x0, y0, x1, y1, color);
     }

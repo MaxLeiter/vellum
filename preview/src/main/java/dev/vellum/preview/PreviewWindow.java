@@ -2,6 +2,7 @@ package dev.vellum.preview;
 
 import dev.vellum.engine.event.Modifiers;
 import dev.vellum.engine.host.FileStamps;
+import dev.vellum.engine.inspect.BoxHighlight;
 import dev.vellum.engine.input.InputHandler;
 import dev.vellum.preview.host.PreviewHost;
 import dev.vellum.preview.render.ImageCanvas;
@@ -98,7 +99,7 @@ final class PreviewWindow {
     }
 
     private void paintInspector(ImageCanvas canvas) {
-        if (page != null) Inspector.paint(canvas, host.fonts(), page.document(), mouseX, mouseY);
+        if (page != null) BoxHighlight.paintAt(canvas, page.document(), mouseX, mouseY);
     }
 
     private void reload() {

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- An element inspector: F12 on a page's screen docks a panel on the right with the page's tree, a picker, and the selected element's box, attributes, inline style, text and computed values. Attributes, style and text can be edited live, and elements deleted. It's on in a development environment, and `client.inspector=true` turns it on elsewhere. See "Inspector" in `docs/api/development.md`.
+- The `map` demo is gone.
+
 ## 0.8.0
 
 - `<scene>`: a small 3D world in a box. Blocks come from a structure file (`structure="ns:path/file.nbt"`) and `<block x y z state>` children; `<block-group x y z>` claims a box of them (`x="3..7" y="2"`, an axis left out being all of it) to show, fade (`opacity`), move (`-mc-translate`) and turn (`-mc-yaw`, `-mc-pitch` and the new `-mc-roll`) with ordinary CSS transitions and animations; `<entity x y z>` children stand in it; and `<scene-anchor x y z>` pins HTML captions to points in it. The camera is `-mc-yaw`, `-mc-pitch`, `-mc-model-scale` and the new `-mc-scene-center`, plus dragging with `rotatable`. Hovering a block shows its name and fires `blockhover`, clicking fires `blockclick`. Each group is meshed once, with neighbors culled, fluids, connected blocks and block entities, and a scene that doesn't change is one blit a frame. Scripts change scenes by changing their children. 26.x only: on 1.21.1 a scene lays out and fires its events but draws nothing. The previewer draws scenes from the blocks' models. See "Scenes" in `docs/api/elements.md`, and the Cottage showcase (`/vellum showcase scene`), which builds itself step by step.

@@ -240,6 +240,16 @@ public final class McGui {
         clearDepth();
     }
 
+    /** Moves what is drawn next by ({@code x}, {@code y}) GUI px, until {@link #popTranslation}. */
+    public static void pushTranslation(GuiGraphics g, float x, float y) {
+        g.pose().pushPose();
+        g.pose().translate(x, y, 0);
+    }
+
+    public static void popTranslation(GuiGraphics g) {
+        g.pose().popPose();
+    }
+
     public static void fill(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
         g.fill(x0, y0, x1, y1, color);
     }

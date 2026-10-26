@@ -7,7 +7,7 @@ Commands, hot reload, and driving pages from code for autopilots and tests. [All
 | Command | Side | |
 |---|---|---|
 | `/vellum open <url>` | client | Opens any page, e.g. `/vellum open mymod:vellum/shop.html`. |
-| `/vellum demo [name]` | client | The demo gallery, or one demo: `settings`, `layout`, `animation`, `templates`, `map`, `hud` (toggles the HUD overlay), `toast` (toggles an interactive HUD overlay: press T and click it). |
+| `/vellum demo [name]` | client | The demo gallery, or one demo: `settings`, `layout`, `animation`, `templates`, `hud` (toggles the HUD overlay), `toast` (toggles an interactive HUD overlay: press T and click it). |
 | `/vellum demo chest` | server | The inventory demo on a real chest menu (needs cheats). |
 | `/vellum demo live` | server | The templates demo as a server session with live data. |
 | `/vellum showcase [page]` | client | The showcase gallery, or one page: `title`, `hud`, `shop`, `mobdex` (every mob in the game, with your kill statistics), `journal`, `console`, `models` (blocks, items and mobs in 3D, and head-and-shoulders portraits). |
@@ -21,6 +21,26 @@ Commands, hot reload, and driving pages from code for autopilots and tests. [All
   the run directory up to the project root (the directory with `settings.gradle`).
 - `config/vellum.properties`: `client.reducedMotion=true` makes pages match `@media (prefers-reduced-motion: reduce)`.
   The file holds every other setting too ([Settings](security.md#settings)).
+
+## Inspector
+
+F12 on a page's screen opens the element inspector, docked on the right. It's on in a development environment;
+elsewhere `client.inspector=true` turns it on. The page is laid out in what's left of the screen and keeps working
+while you inspect it.
+
+- The tree lists the page's elements. Click a row to select it, click its arrow to open or close it, and hover a row
+  to highlight the element in the page (margin orange, border yellow, padding green, content blue).
+- Pick, then click an element in the page, selects what's under the pointer and opens the tree down to it. Escape
+  stops picking.
+- For the selected element you get its ancestors (click one to select it), its box, its attributes, inline style and
+  text, and its computed values that differ from the initial ones, with a filter. Edit a field and press Enter, or
+  click away, to change the page. A new attribute takes a name and a value. Delete element removes it.
+- Edits change the live page only, not your files, and a reload (or saving a file it was read from) starts over.
+- Escape or F12 closes the inspector. While one of its fields has focus, keys type into the field instead.
+
+The panel is a Vellum page itself (`vellum:vellum/dev/inspector.html`), which reads and edits the inspected page
+through an `inspector` global that only it gets. The previewer's F12 draws the same box highlight for the element
+under the pointer.
 
 ## Dev automation
 

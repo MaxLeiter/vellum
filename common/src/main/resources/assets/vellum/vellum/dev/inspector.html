@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+  <title>Inspector</title>
+  <!--
+    The element inspector's panel (F12 on a page's screen in a development environment, or with client.inspector=true).
+    The inspected page comes through the `inspector` global: elements are numbers, everything else plain objects.
+  -->
+  <style>
+    :root { --bg: #15171c; --line: #2c3039; --dim: #8a909c; --tag: #e8a35f; --id: #f2d16b; --class: #8fc0f0; --hover: #232731; --pick: #3a6ea5; }
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); color: #dfe3ea; }
+    button { background: none; border: 1px solid var(--line); color: #dfe3ea; padding: 1px 4px; cursor: pointer; }
+    button:hover { background: var(--hover); }
+    button.on { background: var(--pick); border-color: var(--pick); }
+    input { background: #0d0f13; border: 1px solid var(--line); color: #dfe3ea; padding: 0 3px; height: 10px; line-height: 10px; width: 100%; }
+    input:focus { background-image: none; border-color: var(--pick); }
+
+    header { display: flex; align-items: center; gap: 4px; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+    header b { flex: 1; }
+    #url { padding: 1px 4px 3px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); }
+
+    #tree { flex: 1 1 55%; overflow: auto; padding: 2px 0; }
+    .row { white-space: nowrap; padding: 1px 4px 1px 0; cursor: pointer; }
+    .row:hover { background: var(--hover); }
+    .row.selected { background: #2b3f5c; }
+    .twist { display: inline-block; width: 8px; color: var(--dim); }
+    .tag { color: var(--tag); }
+    .hash { color: var(--id); }
+    .dot { color: var(--class); }
+    .text { color: var(--dim); }
+
+    #details { flex: 1 1 45%; overflow: auto; border-top: 1px solid var(--line); padding: 3px 4px; }
+    #details:empty::before { content: "Pick or click an element"; color: var(--dim); }
+    h3 { margin: 5px 0 2px; color: var(--dim); font-weight: 400; }
+    #path a { color: var(--dim); text-decoration: none; }
+    #path a:hover { color: #fff; }
+    .field { display: flex; align-items: center; gap: 3px; margin-bottom: 2px; }
+    .field > span { flex: none; color: var(--class); }
+    .field > input { flex: 1; min-width: 0; width: auto; }
+    .field > button { flex: none; padding: 0 3px; }
+
+    /* The box model, nested as the highlight colours it. */
+    .bm { text-align: center; padding: 1px 3px; color: #15171c; }
+    .bm > small { display: block; text-align: left; }
+    .bm-margin { background: #f6b26b; }
+    .bm-border { background: #ffe08a; }
+    .bm-padding { background: #93c47d; }
+    .bm-content { background: #6fa8dc; padding: 3px; }
+
+    .computed { display: flex; gap: 4px; white-space: nowrap; }
+    .computed > span:first-child { color: var(--class); flex: none; }
+    .computed > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <header>
+    <b>Inspector</b>
+    <button id="pick" title="Pick an element with the pointer">Pick</button>
+    <button id="close" title="Close (F12)">×</button>
+  </header>
+  <div id="url"></div>
+  <div id="tree"></div>
+  <div id="details"></div>
+
+  <script>
+    const tree = document.getElementById('tree');
+    const details = document.getElementById('details');
+    const open = new Set();
+    let stamp = null, selected = -1, parents = {}, lastRefresh = -1e9;
+    // A pick can select an element in a closed subtree: the next render opens its ancestors and scrolls to it.
+    let revealing = false;
+
+    // Every frame: a pick or selection shows at once; other changes to the inspected page (one that animates its DOM
+    // changes every frame) at most four times a second.
+    function tick(now) {
+      requestAnimationFrame(tick);
+      const s = inspector.state();
+      document.getElementById('pick').classList.toggle('on', s.picking);
+      if (s.stamp === stamp || (s.selected === selected && now - lastRefresh < 250)) return;
+      lastRefresh = now;
+      refresh(s);
+    }
+
+    // The stamp changes when the inspected page's tree or the selection may have.
+    function refresh(s) {
+      s = s || inspector.state();
+      if (s.stamp === stamp) return;
+      stamp = s.stamp;
+      document.getElementById('url').textContent = s.url;
+      if (s.selected !== selected) {
+        selected = s.selected;
+        revealing = true;
+      }
+      renderTree();
+      // Not while a field is being edited: the edit would be lost.
+      if (!details.contains(document.activeElement)) renderDetails();
+    }
+
+    function renderTree() {
+      const root = inspector.tree();
+      parents = {};
+      if (!root) {
+        tree.replaceChildren();
+        return;
+      }
+      if (!open.size) [root].concat(root.kids).forEach(n => open.add(n.id)); // <html>, <head> and <body>
+      (function link(node, parent) {
+        parents[node.id] = parent;
+        node.kids.forEach(k => link(k, node.id));
+      })(root, -1);
+      if (revealing) for (let p = parents[selected]; p !== undefined && p >= 0; p = parents[p]) open.add(p);
+      const rows = [];
+      (function walk(node, depth) {
+        rows.push(row(node, depth));
+        if (open.has(node.id)) node.kids.forEach(k => walk(k, depth + 1));
+      })(root, 0);
+      tree.innerHTML = rows.join('');
+      const sel = tree.querySelector('.selected');
+      if (sel && revealing) sel.scrollIntoView({ block: 'nearest' });
+      revealing = false;
+    }
+
+    function row(node, depth) {
+      const twist = node.kids.length ? (open.has(node.id) ? '▾' : '▸') : '';
+      const text = node.text ? ' <span class="text">' + escape(node.text) + '</span>' : '';
+      return '<div class="row' + (node.id === selected ? ' selected' : '') + '" data-id="' + node.id + '" style="padding-left: ' +
+          (2 + depth * 7) + 'px"><span class="twist">' + twist + '</span>' + label(node.label) + text + '</div>';
+    }
+
+    // "<div#id.a.b>" coloured as devtools do.
+    function label(text) {
+      const m = /^<([^#.>]+)(#[^.>]+)?((?:\.[^.>]+)*)>$/.exec(text);
+      if (!m) return escape(text);
+      return '<span class="tag">' + escape(m[1]) + '</span>' + (m[2] ? '<span class="hash">' + escape(m[2]) + '</span>' : '') +
+          (m[3] ? '<span class="dot">' + escape(m[3]) + '</span>' : '');
+    }
+
+
+    function select(id) {
+      inspector.select(id);
+      stamp = null;
+      refresh();
+    }
+
+    tree.addEventListener('click', e => {
+      const r = e.target.closest('.row');
+      if (!r) return;
+      const id = Number(r.dataset.id);
+      if (e.target.classList.contains('twist')) {
+        open.has(id) ? open.delete(id) : open.add(id);
+        renderTree();
+      } else {
+        select(id);
+      }
+    });
+    tree.addEventListener('mouseover', e => {
+      const r = e.target.closest('.row');
+      inspector.hover(r ? Number(r.dataset.id) : -1);
+    });
+    tree.addEventListener('mouseleave', () => inspector.hover(-1));
+
+    function renderDetails() {
+      const d = selected >= 0 ? inspector.details(selected) : null;
+      if (!d) {
+        details.replaceChildren();
+        return;
+      }
+      let html = '<div id="path">' + d.path.map(p => '<a data-select="' + p[0] + '">' + escape(p[1]) + '</a> › ').join('') + label(d.label) + '</div>';
+      if (d.box) html += boxModel(d.box);
+      html += '<h3>Attributes</h3>';
+      d.attributes.forEach(a => {
+        html += '<div class="field"><span>' + escape(a[0]) + '</span><input data-attr="' + escape(a[0]) + '" value="' + escape(a[1]) + '">' +
+            '<button data-remove="' + escape(a[0]) + '" title="Remove">×</button></div>';
+      });
+      html += '<div class="field"><input id="new-name" placeholder="name"><input id="new-value" placeholder="value"></div>';
+      html += '<h3>Style</h3><div class="field"><input data-attr="style" value="' + escape(d.style) + '" placeholder="color: red; padding: 4px"></div>';
+      if (d.text !== undefined) html += '<h3>Text</h3><div class="field"><input id="text" value="' + escape(d.text) + '"></div>';
+      html += '<h3>Computed</h3><div class="field"><input id="filter" placeholder="Filter" value="' + escape(filter) + '"></div><div id="computed"></div>';
+      html += '<h3></h3><button id="delete">Delete element</button>';
+      details.innerHTML = html;
+      computed = d.computed;
+      renderComputed();
+    }
+
+    function boxModel(b) {
+      const sides = a => a.map(n => +n.toFixed(1)).join(' ');
+      return '<h3>Box ' + fmt(b.width) + ' × ' + fmt(b.height) + ' at ' + fmt(b.x) + ', ' + fmt(b.y) + '</h3>' +
+          '<div class="bm bm-margin"><small>margin ' + sides(b.margin) + '</small>' +
+          '<div class="bm bm-border"><small>border ' + sides(b.border) + '</small>' +
+          '<div class="bm bm-padding"><small>padding ' + sides(b.padding) + '</small>' +
+          '<div class="bm bm-content">' + fmt(b.width) + ' × ' + fmt(b.height) + '</div></div></div></div>';
+    }
+
+    let computed = [], filter = '';
+    function renderComputed() {
+      const list = document.getElementById('computed');
+      if (!list) return;
+      const f = filter.toLowerCase();
+      list.innerHTML = computed.filter(c => !f || c[0].includes(f) || c[1].toLowerCase().includes(f))
+          .map(c => '<div class="computed"><span>' + escape(c[0]) + '</span><span>' + escape(c[1]) + '</span></div>').join('');
+    }
+
+    // Edits apply on Enter or when the field loses focus.
+    details.addEventListener('change', e => {
+      const t = e.target;
+      if (t.dataset.attr !== undefined) inspector.setAttribute(selected, t.dataset.attr, t.value);
+      else if (t.id === 'text') inspector.setText(selected, t.value);
+      else if (t.id === 'new-value' || t.id === 'new-name') {
+        const name = document.getElementById('new-name').value, value = document.getElementById('new-value').value;
+        if (!name || t.id === 'new-name') return;
+        inspector.setAttribute(selected, name, value);
+      } else return;
+      t.blur();
+      stamp = null;
+      refresh();
+    });
+    details.addEventListener('input', e => {
+      if (e.target.id !== 'filter') return;
+      filter = e.target.value;
+      renderComputed();
+    });
+    details.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && document.activeElement && document.activeElement.matches('input')) {
+        e.preventDefault();
+        document.activeElement.blur();
+      }
+    });
+    details.addEventListener('click', e => {
+      const t = e.target;
+      if (t.dataset.select !== undefined) select(Number(t.dataset.select));
+      else if (t.dataset.remove !== undefined) inspector.setAttribute(selected, t.dataset.remove, null);
+      else if (t.id === 'delete') inspector.remove(selected);
+      else return;
+      stamp = null;
+      refresh();
+    });
+
+    document.getElementById('pick').addEventListener('click', () => inspector.pick(!inspector.state().picking));
+    document.getElementById('close').addEventListener('click', () => vellum.close());
+
+    function fmt(n) { return String(+n.toFixed(1)); }
+    function escape(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    refresh();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
