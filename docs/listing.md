@@ -76,7 +76,7 @@ VellumScreens.open("mymod:vellum/journal.html", data).driver()
         .onMessage("save", value -> Journal.save(value.getAsJsonObject()));
 ```
 
-Depend on it from [maven.maxleiter.com](https://maven.maxleiter.com) (`dev.vellum:vellum-neoforge-26.3:0.8.0`, and the same for Fabric and 1.21.1), and make it a required dependency of your mod, or bundle it in your jar.
+Depend on it from [maven.maxleiter.com](https://maven.maxleiter.com) (`dev.vellum:vellum-neoforge-26.3:0.9.0`, and the same for Fabric and 1.21.1), and make it a required dependency of your mod, or bundle it in your jar.
 
 Docs: [API](https://github.com/MaxLeiter/vellum/blob/main/docs/index.md), [scripting](https://github.com/MaxLeiter/vellum/blob/main/docs/SCRIPTING.md), [porting an existing screen](https://github.com/MaxLeiter/vellum/blob/main/docs/MIGRATING.md).
 

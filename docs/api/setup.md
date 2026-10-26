@@ -16,10 +16,10 @@ repositories {
 }
 
 // common/ (compiles against vanilla): the API, plus the engine types it exposes
-dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.8.0") }
+dependencies { compileOnly("dev.vellum:vellum-common-26.3:0.9.0") }
 
 // neoforge/ and fabric/: the loader jar, so dev runs load Vellum as a mod (it bundles the engine and Rhino)
-dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.8.0") }   // or vellum-fabric-26.3
+dependencies { implementation("dev.vellum:vellum-neoforge-26.3:0.9.0") }   // or vellum-fabric-26.3
 ```
 
 To build against an unreleased Vellum, run `./gradlew publishToMavenLocal` in a Vellum checkout and add
@@ -49,7 +49,7 @@ every version, except:
   int)`...), so subclasses override those there.
 
 The recommended setup is a required dependency: `[[dependencies.<modid>]] modId="vellum" type="required"` in
-`neoforge.mods.toml`, `"depends": {"vellum": ">=0.8.0"}` in `fabric.mod.json`, and a required dependency on your
+`neoforge.mods.toml`, `"depends": {"vellum": ">=0.9.0"}` in `fabric.mod.json`, and a required dependency on your
 Modrinth and CurseForge pages, so launchers install it with your mod. Players then get Vellum fixes without waiting for
 your next release.
 
@@ -57,9 +57,9 @@ You can also bundle Vellum in your jar, so players install one file:
 
 ```groovy
 // NeoForge (ModDevGradle)
-dependencies { jarJar(implementation("dev.vellum:vellum-neoforge-26.3:0.8.0")) }
+dependencies { jarJar(implementation("dev.vellum:vellum-neoforge-26.3:0.9.0")) }
 // Fabric (Loom); on 1.21.1, modImplementation instead of implementation
-dependencies { include(implementation("dev.vellum:vellum-fabric-26.3:0.8.0")) }
+dependencies { include(implementation("dev.vellum:vellum-fabric-26.3:0.9.0")) }
 ```
 
 Keep the required dependency in `neoforge.mods.toml` or `fabric.mod.json` either way. When several mods bundle

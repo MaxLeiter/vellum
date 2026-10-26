@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 - An element inspector: F12 on a page's screen docks a panel on the right with the page's tree, a picker, and the selected element's box, attributes, inline style, text and computed values. Attributes, style and text can be edited live, and elements deleted. Drag the panel's edge to resize it, and the bar between the tree and the details to share its height. It's on in a development environment, and `client.inspector=true` turns it on elsewhere. See "Inspector" in `docs/api/development.md`.
 - The `map` demo is gone.
