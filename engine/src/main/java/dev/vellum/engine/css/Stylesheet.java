@@ -13,7 +13,8 @@ import java.util.function.Predicate;
 /**
  * A parsed stylesheet: style rules with expanded declarations, {@code @media} blocks, {@code @import}s (loaded by
  * the style engine) and {@code @keyframes}. {@code @supports} is decided while parsing, {@code @layer} blocks are
- * flattened (layer order is not modelled), and other at-rules ({@code @font-face}, {@code @page}...) are skipped.
+ * flattened (layer order is not modelled), nested style rules (CSS Nesting) are flattened into rules of their own,
+ * and other at-rules ({@code @font-face}, {@code @page}...) are skipped.
  */
 final class Stylesheet {
     sealed interface Rule permits StyleRule, MediaRule, ImportRule, KeyframesRule {}
@@ -53,6 +54,9 @@ final class Stylesheet {
     static List<Decl> declarations(String css, String url, Host host, Consumer<String> log) {
         return new Builder(url, host, log).declarations(CssParser.parseComponentValues(css), false);
     }
+
+    /** How deep style rules and the at-rules in them may nest. */
+    private static final int MAX_NESTING = 16;
 
     private record Builder(String url, Host host, Consumer<String> log) {
         List<Rule> rules(List<CssParser.Rule> raw, boolean topLevel) {
@@ -96,21 +100,82 @@ final class Stylesheet {
         }
 
         private void styleRule(CssParser.Rule r, List<Rule> out) {
+            styleRule(r, null, out, 0);
+        }
+
+        /**
+         * A style rule, nested in the rule whose resolved selector is {@code parent} (null at the top level). Its
+         * nested rules (CSS Nesting) come out as separate rules after it, with {@code &} replaced by the parent's
+         * selector: {@code :is(parent)}, or the parent itself when that is one compound selector and {@code &}
+         * starts a compound, which is the same selector without hiding its class from the rule index.
+         */
+        private void styleRule(CssParser.Rule r, List<ComponentValue> parent, List<Rule> out, int depth) {
+            List<ComponentValue> prelude = parent == null ? r.prelude() : Nesting.resolve(r.prelude(), parent);
             List<Selector> selectors;
             try {
-                selectors = SelectorParser.parse(r.prelude());
+                selectors = SelectorParser.parse(prelude);
             } catch (IllegalArgumentException e) {
                 log(r.line(), "Invalid selector '" + ComponentValue.text(r.prelude()) + "': " + e.getMessage());
                 return;
             }
-            List<Decl> decls = declarations(r.block().body(), false);
+            styleBlock(r.block().body(), prelude, selectors, out, depth);
+        }
+
+        /**
+         * The contents of a style rule's block (or of an at-rule nested in one), for {@code selectors}: each run of
+         * declarations becomes a rule, in source order with the nested rules between them.
+         */
+        private void styleBlock(List<ComponentValue> body, List<ComponentValue> prelude, List<Selector> selectors,
+                                List<Rule> out, int depth) {
+            List<CssParser.Declaration> run = new ArrayList<>();
+            for (CssParser.Content c : CssParser.parseBlockContents(body)) {
+                if (c instanceof CssParser.Declaration d) {
+                    run.add(d);
+                    continue;
+                }
+                flush(run, selectors, out);
+                CssParser.Rule r = (CssParser.Rule) c;
+                if (depth >= MAX_NESTING) {
+                    log(r.line(), "Rules nested too deeply");
+                } else if (!r.isAtRule()) {
+                    styleRule(r, prelude, out, depth + 1);
+                } else if (r.block() != null) {
+                    switch (r.atKeyword()) {
+                        case "media" -> {
+                            List<Rule> inner = new ArrayList<>();
+                            styleBlock(r.block().body(), prelude, selectors, inner, depth + 1);
+                            out.add(new MediaRule(MediaQuery.parse(r.prelude()), inner));
+                        }
+                        case "supports" -> {
+                            Predicate<Void> condition = Conditions.parse(r.prelude(), this::supports);
+                            if (condition == null) log(r.line(), "Invalid @supports condition");
+                            else if (condition.test(null)) styleBlock(r.block().body(), prelude, selectors, out, depth + 1);
+                        }
+                        case "layer" -> styleBlock(r.block().body(), prelude, selectors, out, depth + 1);
+                        default -> log(r.line(), "Unknown at-rule @" + r.atKeyword() + " in a style rule");
+                    }
+                } else {
+                    log(r.line(), "Unknown at-rule @" + r.atKeyword() + " in a style rule");
+                }
+            }
+            flush(run, selectors, out);
+        }
+
+        private void flush(List<CssParser.Declaration> run, List<Selector> selectors, List<Rule> out) {
+            if (run.isEmpty()) return;
+            List<Decl> decls = expand(run, false);
+            run.clear();
             if (!decls.isEmpty()) out.add(new StyleRule(selectors, decls));
         }
 
         /** Expands declarations, logging invalid ones; {@code !important} ones are dropped in keyframes. */
         List<Decl> declarations(List<ComponentValue> body, boolean keyframe) {
+            return expand(CssParser.parseDeclarations(body), keyframe);
+        }
+
+        private List<Decl> expand(List<CssParser.Declaration> declarations, boolean keyframe) {
             List<Decl> out = new ArrayList<>();
-            for (CssParser.Declaration d : CssParser.parseDeclarations(body)) {
+            for (CssParser.Declaration d : declarations) {
                 List<Decl> expanded = keyframe && d.important() ? List.of() : Decl.expand(d, url, host);
                 if (expanded == null) {
                     log(d.line(), "Invalid declaration '" + d.name() + ": " + ComponentValue.text(d.value()) + "'");

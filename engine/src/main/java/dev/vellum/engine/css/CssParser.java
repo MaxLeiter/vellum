@@ -17,13 +17,16 @@ import java.util.List;
 final class CssParser {
     private CssParser() {}
 
+    /** What a style rule's block holds: declarations and, with CSS Nesting, rules. */
+    sealed interface Content permits Rule, Declaration {}
+
     /** A qualified rule (selector + block) or an at-rule; {@code block} is null for at-rules ending in {@code ;}. */
-    record Rule(String atKeyword, List<ComponentValue> prelude, Block block, int line) {
+    record Rule(String atKeyword, List<ComponentValue> prelude, Block block, int line) implements Content {
         boolean isAtRule() { return atKeyword != null; }
     }
 
     /** A declaration; {@code value} has the {@code !important} flag and surrounding whitespace removed. */
-    record Declaration(String name, List<ComponentValue> value, boolean important, int line) {}
+    record Declaration(String name, List<ComponentValue> value, boolean important, int line) implements Content {}
 
     static List<ComponentValue> parseComponentValues(String source) {
         return new TreeBuilder(Tokenizer.tokenize(source)).list(null);
@@ -79,6 +82,46 @@ final class CssParser {
             while (end < values.size() && !(values.get(end) instanceof Token t && t.is(Type.SEMICOLON))) end++;
             Declaration d = declaration(values.subList(i, end));
             if (d != null) out.add(d);
+            i = end + 1;
+        }
+        return out;
+    }
+
+    /**
+     * Parses a style rule's block (§5.4.4 "consume a block's contents"): declarations, nested at-rules and nested
+     * style rules, in source order. Something that runs into a <code>{}</code> block before its {@code ;} is a nested
+     * rule ({@code &:hover { ... }}, {@code div:hover { ... }}), unless it is a custom property, whose value may hold
+     * blocks.
+     */
+    static List<Content> parseBlockContents(List<ComponentValue> values) {
+        List<Content> out = new ArrayList<>();
+        int i = 0;
+        while (i < values.size()) {
+            ComponentValue v = values.get(i);
+            if (v instanceof Token t && (t.is(Type.WHITESPACE) || t.is(Type.SEMICOLON))) {
+                i++;
+                continue;
+            }
+            String at = v instanceof Token t && t.is(Type.AT_KEYWORD) ? t.lower : null;
+            boolean custom = v instanceof Token t && t.is(Type.IDENT) && t.value.startsWith("--");
+            int end = at != null ? i + 1 : i;
+            Block block = null;
+            for (; end < values.size(); end++) {
+                ComponentValue p = values.get(end);
+                if (p instanceof Token t && t.is(Type.SEMICOLON)) break;
+                if (!custom && p instanceof Block b && b.open() == '{') {
+                    block = b;
+                    break;
+                }
+            }
+            if (at != null) {
+                out.add(new Rule(at, trim(values.subList(i + 1, end)), block, v.line()));
+            } else if (block != null) {
+                out.add(new Rule(null, trim(values.subList(i, end)), block, v.line()));
+            } else {
+                Declaration d = declaration(values.subList(i, end));
+                if (d != null) out.add(d);
+            }
             i = end + 1;
         }
         return out;

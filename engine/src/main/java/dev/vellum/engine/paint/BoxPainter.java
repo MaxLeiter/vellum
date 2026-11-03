@@ -71,8 +71,15 @@ final class BoxPainter implements StackingOrder.Visitor {
         if (depth == dpStack.length) dpStack = Arrays.copyOf(dpStack, depth * 2);
         dpStack[depth++] = dp;
         if (transform != null) {
+            // Everything inside snaps to device pixels in the context's own coordinates, which only lands on the
+            // screen's pixels if the context's origin does: put it on one (a rotated context has no grid to keep).
+            float e = transform.e, f = transform.f;
+            if (transform.b == 0 && transform.c == 0) {
+                e = snap(x + e) - x;
+                f = snap(y + f) - y;
+            }
             canvas.translate(x, y);
-            canvas.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
+            canvas.transform(transform.a, transform.b, transform.c, transform.d, e, f);
             dp = Geometry.devicePixel(canvas);
         }
         if (opacity < 1) canvas.multiplyAlpha(opacity);
@@ -109,7 +116,8 @@ final class BoxPainter implements StackingOrder.Visitor {
         if (element == null || box.kind == Box.Kind.PSEUDO) return;
         if (Controls.isControl(element.tagName())) {
             canvas.save();
-            canvas.translate(x, y);
+            // Controls snap what they draw in their own coordinates: keep their origin on a device pixel.
+            canvas.translate(snap(x), snap(y));
             Controls.paint(canvas, box, s);
             canvas.restore();
         }
