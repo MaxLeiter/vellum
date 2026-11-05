@@ -6,6 +6,7 @@ import dev.vellum.engine.testing.RecordingCanvas;
 import dev.vellum.engine.testing.TestHost;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -271,6 +272,27 @@ class PaintOrderTest {
         canvas.devicePixel = 0.5f;
         float[] snapped = page.paint(canvas).ops("fillRect").getFirst().args();
         assertArrayEquals(new float[] {10.5f, 0, 5.0f, 2.5f}, snapped, 1e-5f);
+    }
+
+    @Test
+    void transformedContentStaysOnDevicePixels() {
+        // A context's contents snap in its own coordinates; its origin must be on the pixel grid too, or a 1px border
+        // straddles two device pixels and the font's texels land between them.
+        Page page = new TestHost().load("<div style='position: absolute; left: 10px; top: 4px; width: 20px; "
+                + "height: 10px; transform: translate(0.3px, 0.7px); border: 1px solid red'>x</div>"
+                + "<button style='position: absolute; left: 3.3px; top: 30.4px'>ok</button>");
+        for (float dp : new float[] {1, 0.5f}) {
+            RecordingCanvas canvas = new RecordingCanvas();
+            canvas.devicePixel = dp;
+            page.paint(canvas);
+            List<RecordingCanvas.Call> calls = new ArrayList<>(canvas.ops("fillBorder"));
+            calls.addAll(canvas.ops("drawText"));
+            assertEquals(3, calls.size(), canvas.trace().toString());
+            for (RecordingCanvas.Call c : calls) {
+                assertEquals(0, c.x() / dp - Math.round(c.x() / dp), 1e-4, c + " at dp " + dp);
+                assertEquals(0, c.y() / dp - Math.round(c.y() / dp), 1e-4, c + " at dp " + dp);
+            }
+        }
     }
 
     @Test

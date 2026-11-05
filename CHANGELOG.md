@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Transformed elements (`transform: translate(-50%, -50%)`, hover `translate`s and the like) and form controls at fractional positions no longer draw off the device pixel grid: 1px borders came out uneven or blurred, and text in the Minecraft font lost some of its pixels at low GUI scales.
+
 ## 0.9.0
 
 - An element inspector: F12 on a page's screen docks a panel on the right with the page's tree, a picker, and the selected element's box, attributes, inline style, text and computed values. Attributes, style and text can be edited live, and elements deleted. Drag the panel's edge to resize it, and the bar between the tree and the details to share its height. It's on in a development environment, and `client.inspector=true` turns it on elsewhere. See "Inspector" in `docs/api/development.md`.
