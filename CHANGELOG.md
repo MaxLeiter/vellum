@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 - CSS nesting: style rules can hold rules (`.window { & > .header { ... } &:hover { ... } .icon { ... } }`) and `@media`, `@supports` and `@layer` blocks. `&` is the parent's selector, with its specificity, and a nested selector without one is relative to the parent (`.icon` is `& .icon`, `> .header` is `& > .header`). Declarations after nested rules still apply in source order.
 - Transformed elements (`transform: translate(-50%, -50%)`, hover `translate`s and the like) and form controls at fractional positions no longer draw off the device pixel grid: 1px borders came out uneven or blurred, and text in the Minecraft font lost some of its pixels at low GUI scales.
