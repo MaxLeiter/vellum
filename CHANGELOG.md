@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Borders and padding are as wide on the right and bottom as on the left and top. A box whose right or bottom edge falls exactly halfway between device pixels, such as one centered or sized in percent in a window of odd width or height at GUI scale 2, drew a 1px border 1.5px wide there, because those edges rounded the other way from the left and top ones.
+
 ## 0.10.0
 
 - CSS nesting: style rules can hold rules (`.window { & > .header { ... } &:hover { ... } .icon { ... } }`) and `@media`, `@supports` and `@layer` blocks. `&` is the parent's selector, with its specificity, and a nested selector without one is relative to the parent (`.icon` is `& .icon`, `> .header` is `& > .header`). Declarations after nested rules still apply in source order.

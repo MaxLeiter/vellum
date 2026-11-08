@@ -47,22 +47,34 @@ final class Geometry {
         this.y = y0;
         width = snap(x + w, dp) - x0;
         height = snap(y + h, dp) - y0;
-        border[0] = edge(y, bt, y0, dp);
-        border[1] = edge(-(x + w), br, -(x0 + width), dp);
-        border[2] = edge(-(y + h), bb, -(y0 + height), dp);
-        border[3] = edge(x, bl, x0, dp);
-        padding[0] = edge(y + bt, pt, y0 + border[0], dp);
-        padding[1] = edge(-(x + w - br), pr, -(x0 + width - border[1]), dp);
-        padding[2] = edge(-(y + h - bb), pb, -(y0 + height - border[2]), dp);
-        padding[3] = edge(x + bl, pl, x0 + border[3], dp);
+        float x1 = x0 + width, y1 = y0 + height;
+        border[0] = near(y, bt, y0, dp);
+        border[1] = far(x + w, br, x1, dp);
+        border[2] = far(y + h, bb, y1, dp);
+        border[3] = near(x, bl, x0, dp);
+        padding[0] = near(y + bt, pt, y0 + border[0], dp);
+        padding[1] = far(x + w - br, pr, x1 - border[1], dp);
+        padding[2] = far(y + h - bb, pb, y1 - border[2], dp);
+        padding[3] = near(x + bl, pl, x0 + border[3], dp);
         rounded = Shapes.radii(s, width, height, radii);
         return this;
     }
 
-    /** Snapped width of an edge band from {@code pos} (snapped: {@code snappedPos}); a non-zero band keeps at least one device pixel. */
-    private static float edge(float pos, float width, float snappedPos, float dp) {
+    // Every edge is snapped where it is, with the same rounding, and a band's width is the distance between its two
+    // snapped edges. Measuring the right and bottom bands on negated coordinates instead rounded their edges the other
+    // way at ties (Math.round takes -2.5 to -2 but 2.5 to 3), so an edge exactly halfway between device pixels, as a
+    // box centred in an odd-sized page puts it, gave a 1px border 1.5px (#10).
+
+    /** Snapped width of a left or top band from {@code pos} (snapped: {@code snappedPos}) inwards; a non-zero band keeps at least one device pixel. */
+    private static float near(float pos, float width, float snappedPos, float dp) {
         if (!(width > 0)) return 0;
         return Math.max(dp, snap(pos + width, dp) - snappedPos);
+    }
+
+    /** Snapped width of a right or bottom band from {@code pos} (snapped: {@code snappedPos}) inwards; a non-zero band keeps at least one device pixel. */
+    private static float far(float pos, float width, float snappedPos, float dp) {
+        if (!(width > 0)) return 0;
+        return Math.max(dp, snappedPos - snap(pos - width, dp));
     }
 
     static float snap(float v, float devicePixel) {
