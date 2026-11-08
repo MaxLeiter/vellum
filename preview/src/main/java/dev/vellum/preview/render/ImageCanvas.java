@@ -24,7 +24,7 @@ import java.util.Deque;
 /**
  * {@link Canvas} over a Java2D {@link BufferedImage}, drawing like Minecraft's GUI renderer: one GUI px is
  * {@code scale} device px, textures and glyphs are sampled nearest-neighbour, sprites are cut with vanilla's
- * scaling, text uses {@link MinecraftFont}, clips are device-pixel rectangles like the GUI scissor, and rounded boxes,
+ * scaling, text uses {@link MinecraftFont}, clips are whole GUI px like the GUI scissor, and rounded boxes,
  * borders and box-shadows have the shape shader's smooth edges and blur ({@link ShapeRasterizer}). Used by the
  * previewer and the snapshot tests. A canvas can be {@link #reset} and reused for the next frame of the same image.
  */
@@ -134,15 +134,23 @@ public final class ImageCanvas implements Canvas {
         this.alpha *= Math.clamp(alpha, 0f, 1f);
     }
 
-    /** Like Minecraft's scissor: the transformed rectangle's bounding box, on whole device pixels. */
+    /**
+     * Like Minecraft's scissor (McCanvas through ScissorStack): the transformed rectangle's bounding box, rounded to
+     * whole GUI px, so a clip on a half GUI px edge cuts where it does in game.
+     */
     @Override
     public void clipRect(float x, float y, float width, float height) {
         rect.setRect(x, y, width, height);
         Rectangle2D box = transform.createTransformedShape(rect).getBounds2D();
-        int x0 = (int) Math.round(box.getMinX()), y0 = (int) Math.round(box.getMinY());
-        int x1 = (int) Math.round(box.getMaxX()), y1 = (int) Math.round(box.getMaxY());
+        int x0 = guiRound(box.getMinX()), y0 = guiRound(box.getMinY());
+        int x1 = guiRound(box.getMaxX()), y1 = guiRound(box.getMaxY());
         Rectangle next = clip.intersection(new Rectangle(x0, y0, x1 - x0, y1 - y0));
         clip = next.isEmpty() ? new Rectangle() : next;
+    }
+
+    /** A device-px coordinate rounded to whole GUI px as ScissorStack rounds them, back in device px. */
+    private int guiRound(double device) {
+        return (int) (Math.round((float) (device / scale)) * scale);
     }
 
     @Override
@@ -229,17 +237,21 @@ public final class ImageCanvas implements Canvas {
     public void drawSprite(String spriteId, float x, float y, float width, float height, int tint) {
         Texture sprite = assets.sprite(spriteId).orElse(MinecraftAssets.MISSING);
         int color = modulate(tint);
-        // blitSprite works in whole GUI px; only the origin may be fractional (McCanvas translates the pose).
-        SpriteSlicer.slice(sprite.scaling(), Math.round(width), Math.round(height), (bx, by, bw, bh, u0, v0, u1, v1) ->
-                blit(sprite.image(), u0, v0, u1, v1, x + bx, y + by, bw, bh, color, false));
+        int w = Math.round(width), h = Math.round(height);
+        if ((color >>> 24) == 0 || w <= 0 || h <= 0) return;
+        // As McCanvas: vanilla cuts sprites at whole GUI px, so cut at the rounded size and stretch that to the box.
+        float sx = width / w, sy = height / h;
+        SpriteSlicer.slice(sprite.scaling(), w, h, (bx, by, bw, bh, u0, v0, u1, v1) ->
+                blit(sprite.image(), u0, v0, u1, v1, x + bx * sx, y + by * sy, bw * sx, bh * sy, color, false));
     }
 
     // ---- Drawing ----
     // Graphics2D state is only touched when it changes: Java2D revalidates its pipeline on every change, which would
     // otherwise dominate the cost of small blits such as glyphs.
 
+    /** {@code argb} at the canvas's opacity, as McCanvas applies it. */
     private int modulate(int argb) {
-        return Colors.withAlphaFactor(argb, alpha);
+        return Colors.withOpacity(argb, alpha);
     }
 
     /** Fills a shape given in GUI px with a final colour. */

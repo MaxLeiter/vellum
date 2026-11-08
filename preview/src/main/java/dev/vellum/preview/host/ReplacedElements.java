@@ -87,8 +87,10 @@ final class ReplacedElements {
         public void paint(Canvas canvas, float x, float y, float width, float height) {
             float size = Math.min(width, height);
             canvas.drawImage(flatTexture(assets, element.getAttribute("id")), x, y, size, size, 0, 0, 1, 1, WHITE, false);
-            String count = element.getAttribute("count");
-            if (count == null || count.isBlank() || count.equals("1")) return;
+            // As in game (ItemStacks.of): the count is a number, at least 1, and vanilla doesn't draw a count of 1.
+            int stack = Math.max(1, (int) element.numberAttribute("count", 1));
+            if (stack == 1) return;
+            String count = Integer.toString(stack);
             // Vanilla draws the count at (17 - width, 9) in the 16px slot, white with the native shadow.
             float s = size / 16;
             if (countFont.size() != 8 * s) countFont = new FontSpec(MinecraftFont.NATIVE.families(), 8 * s, false, false);

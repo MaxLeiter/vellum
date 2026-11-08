@@ -360,9 +360,7 @@ public final class McCanvas implements Canvas {
 
     /** {@code argb} with the opacity multiplied into its alpha. */
     private int color(int argb) {
-        if (alpha >= 1) return argb;
-        if (argb == 0 || alpha <= 0) return 0;
-        return (int) Math.floor(Colors.alpha(argb) / 255f * alpha * 255f) << 24 | argb & 0xFFFFFF;
+        return Colors.withOpacity(argb, alpha);
     }
 
     /** The current transform for a render state, which keeps it: shared until the transform changes. */

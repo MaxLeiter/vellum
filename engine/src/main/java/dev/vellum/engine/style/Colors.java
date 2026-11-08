@@ -24,6 +24,17 @@ public final class Colors {
         return (a << 24) | (argb & 0xFFFFFF);
     }
 
+    /**
+     * {@code argb} drawn at {@code opacity} (0..1, the canvas's multiplied opacity): its alpha scaled and rounded down,
+     * as Minecraft's GUI renderer and so every {@code Canvas} backend applies it. Not {@link #withAlphaFactor}, which
+     * rounds to nearest: backends share this so the previewer matches the game.
+     */
+    public static int withOpacity(int argb, float opacity) {
+        if (opacity >= 1) return argb;
+        if (argb == 0 || opacity <= 0) return 0;
+        return (int) Math.floor(alpha(argb) / 255f * opacity * 255f) << 24 | argb & 0xFFFFFF;
+    }
+
     public static boolean isTransparent(int argb) {
         return alpha(argb) == 0;
     }
