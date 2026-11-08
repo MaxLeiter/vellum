@@ -35,7 +35,7 @@ final class BoxPainter implements StackingOrder.Visitor {
     private float[] dpStack = new float[8];
     private int depth;
 
-    private final float[] rect = new float[4], radii = new float[8], widths = new float[4];
+    private final float[] rect = new float[4], replacedRect = new float[4], radii = new float[8], widths = new float[4];
     /** The border or padding box a box-shadow is drawn from, for {@link Canvas#fillBoxShadow}. */
     private final float[] shadowBox = new float[4], shadowRadii = new float[8];
     private final BorderStyle[] styles = new BorderStyle[4];
@@ -48,7 +48,7 @@ final class BoxPainter implements StackingOrder.Visitor {
 
     void begin(Canvas canvas) {
         this.canvas = canvas;
-        dp = Geometry.devicePixel(canvas);
+        dp = PixelGrid.devicePixel(canvas);
         depth = 0;
     }
 
@@ -57,7 +57,7 @@ final class BoxPainter implements StackingOrder.Visitor {
     }
 
     private float snap(float v) {
-        return Geometry.snap(v, dp);
+        return PixelGrid.snap(v, dp);
     }
 
     // ---- State ----
@@ -71,8 +71,8 @@ final class BoxPainter implements StackingOrder.Visitor {
         if (depth == dpStack.length) dpStack = Arrays.copyOf(dpStack, depth * 2);
         dpStack[depth++] = dp;
         if (transform != null) {
-            // Everything inside snaps to device pixels in the context's own coordinates, which only lands on the
-            // screen's pixels if the context's origin does: put it on one (a rotated context has no grid to keep).
+            // PixelGrid's third rule: put the context's origin on a device pixel, since everything inside snaps
+            // relative to it (a rotated context has no grid to keep).
             float e = transform.e, f = transform.f;
             if (transform.b == 0 && transform.c == 0) {
                 e = snap(x + e) - x;
@@ -80,7 +80,7 @@ final class BoxPainter implements StackingOrder.Visitor {
             }
             canvas.translate(x, y);
             canvas.transform(transform.a, transform.b, transform.c, transform.d, e, f);
-            dp = Geometry.devicePixel(canvas);
+            dp = PixelGrid.devicePixel(canvas);
         }
         if (opacity < 1) canvas.multiplyAlpha(opacity);
         return true;
@@ -96,8 +96,8 @@ final class BoxPainter implements StackingOrder.Visitor {
     public boolean pushClip(float x, float y, float width, float height) {
         if (width <= 0 || height <= 0) return false;
         canvas.save();
-        float x0 = snap(x), y0 = snap(y);
-        canvas.clipRect(x0, y0, snap(x + width) - x0, snap(y + height) - y0);
+        PixelGrid.rect(x, y, width, height, dp, rect);
+        canvas.clipRect(rect[0], rect[1], rect[2], rect[3]);
         return true;
     }
 
@@ -116,7 +116,7 @@ final class BoxPainter implements StackingOrder.Visitor {
         if (element == null || box.kind == Box.Kind.PSEUDO) return;
         if (Controls.isControl(element.tagName())) {
             canvas.save();
-            // Controls snap what they draw in their own coordinates: keep their origin on a device pixel.
+            // Controls snap what they draw relative to their origin: PixelGrid's third rule.
             canvas.translate(snap(x), snap(y));
             Controls.paint(canvas, box, s);
             canvas.restore();
@@ -167,11 +167,9 @@ final class BoxPainter implements StackingOrder.Visitor {
         float[] fitted = Coordinates.objectBox(box, s, content);
         float w = fitted[2], h = fitted[3];
         boolean overflows = w > cw + 0.01f || h > ch + 0.01f;
-        float ox = x + fitted[0], oy = y + fitted[1];
-        float x0 = snap(ox), y0 = snap(oy);
-        float width = snap(ox + w) - x0, height = snap(oy + h) - y0;
-        if (width <= 0 || height <= 0 || overflows && !pushClip(cx, cy, cw, ch)) return;
-        content.paint(canvas, x0, y0, width, height);
+        float[] r = PixelGrid.rect(x + fitted[0], y + fitted[1], w, h, dp, replacedRect);
+        if (r[2] <= 0 || r[3] <= 0 || overflows && !pushClip(cx, cy, cw, ch)) return;
+        content.paint(canvas, r[0], r[1], r[2], r[3]);
         if (overflows) popClip();
     }
 
@@ -212,16 +210,17 @@ final class BoxPainter implements StackingOrder.Visitor {
     /** The outline around a border box at (x, y), outline-offset away, following the border radius. */
     private void outline(ComputedStyle s, float x, float y, float width, float height) {
         canvas.crispShapes(s.shapeRendering == ShapeRendering.CRISP_EDGES);
-        float out = s.outlineOffset + s.outlineWidth;
-        float x0 = snap(x - out), y0 = snap(y - out);
-        rect[0] = x0;
-        rect[1] = y0;
-        rect[2] = snap(x + width + out) - x0;
-        rect[3] = snap(y + height + out) - y0;
+        float out = s.outlineOffset + s.outlineWidth, w = s.outlineWidth;
+        float left = x - out, top = y - out, right = x + width + out, bottom = y + height + out;
+        PixelGrid.edges(left, top, right, bottom, dp, rect);
         if (rect[2] <= 0 || rect[3] <= 0) return;
         Shapes.radii(s, width, height, radii);
         Shapes.insetRadii(radii, -out, -out, -out, -out, radii);
-        Arrays.fill(widths, Math.max(dp, snap(s.outlineWidth)));
+        // Each side from its snapped outer edge to its own inner edge, so an outline with no offset meets the border.
+        widths[0] = PixelGrid.band(PixelGrid.snap(top, dp), top + w, w, dp);
+        widths[1] = PixelGrid.band(PixelGrid.snap(right, dp), right - w, w, dp);
+        widths[2] = PixelGrid.band(PixelGrid.snap(bottom, dp), bottom - w, w, dp);
+        widths[3] = PixelGrid.band(PixelGrid.snap(left, dp), left + w, w, dp);
         Arrays.fill(styles, s.outlineStyle);
         Arrays.fill(colors, s.outlineColor);
         borders.paint(canvas, batch, dp, rect, radii, widths, styles, colors);
@@ -229,7 +228,7 @@ final class BoxPainter implements StackingOrder.Visitor {
 
     private void fill(float x, float y, float w, float h, int argb) {
         if (Colors.isTransparent(argb)) return;
-        float x0 = snap(x), y0 = snap(y);
-        canvas.fillRect(x0, y0, snap(x + w) - x0, snap(y + h) - y0, argb);
+        PixelGrid.rect(x, y, w, h, dp, rect);
+        canvas.fillRect(rect[0], rect[1], rect[2], rect[3], argb);
     }
 }

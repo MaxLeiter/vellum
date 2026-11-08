@@ -99,8 +99,7 @@ public final class Controls {
         }
         if (el.isFocused() && field.caretOn() && !editor.hasSelection()) {
             int caret = editor.caret();
-            canvas.fillRect(TextPainter.snap(canvas, field.textX() + value.x(caret)),
-                    TextPainter.snap(canvas, field.glyphY(value.lineOf(caret))), 1, field.glyphHeight(), s.color);
+            fillSnapped(canvas, field.textX() + value.x(caret), field.glyphY(value.lineOf(caret)), 1, field.glyphHeight(), s.color);
         }
         if (clip) canvas.restore();
     }
@@ -117,12 +116,14 @@ public final class Controls {
             // A selection running past a hard line end includes the newline: show it as a space's width.
             float extra = editor.selectionEnd() > line.end() && !line.softWrapped() ? newline : 0;
             float x = line.x(from), w = line.x(to) - x + extra;
-            if (w > 0) {
-                float left = TextPainter.snap(canvas, x0 + x);
-                canvas.fillRect(left, TextPainter.snap(canvas, field.glyphY(i)),
-                        TextPainter.snap(canvas, x0 + x + w) - left, field.glyphHeight(), color);
-            }
+            if (w > 0) fillSnapped(canvas, x0 + x, field.glyphY(i), w, field.glyphHeight(), color);
         }
+    }
+
+    /** Fills a rectangle with its edges on device pixels, where the text it goes with is drawn. */
+    private static void fillSnapped(Canvas canvas, float x, float y, float w, float h, int color) {
+        float left = TextPainter.snap(canvas, x), top = TextPainter.snap(canvas, y);
+        canvas.fillRect(left, top, TextPainter.snap(canvas, x + w) - left, TextPainter.snap(canvas, y + h) - top, color);
     }
 
     private static void drawLines(Canvas canvas, Box box, TextField field, TextLayout layout, ComputedStyle s, int color) {

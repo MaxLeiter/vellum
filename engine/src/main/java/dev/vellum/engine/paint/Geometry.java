@@ -6,8 +6,8 @@ import dev.vellum.engine.style.BackgroundLayer;
 import dev.vellum.engine.style.ComputedStyle;
 
 /**
- * The painted geometry of a box or inline fragment: border box, border and padding widths, corner radii. Every
- * edge is rounded to the device pixel grid independently, so borders stay crisp at any GUI scale and adjacent boxes
+ * The painted geometry of a box or inline fragment: border box, border and padding widths, corner radii, every edge
+ * on the device pixel grid by {@link PixelGrid}'s rules, so borders stay crisp at any GUI scale and adjacent boxes
  * still meet. A reused scratch object.
  */
 final class Geometry {
@@ -16,6 +16,7 @@ final class Geometry {
     final float[] border = new float[4], padding = new float[4];
     final float[] radii = new float[8];
     boolean rounded;
+    private final float[] scratch = new float[4];
 
     /** A box's geometry with its border box at (x, y). */
     Geometry box(Box b, ComputedStyle s, float x, float y, float devicePixel) {
@@ -40,51 +41,25 @@ final class Geometry {
         return this;
     }
 
+    /** Snaps the border box's edges, then each border and padding band from its snapped outer edge to its inner one. */
     private Geometry set(float x, float y, float w, float h, float bt, float br, float bb, float bl,
                          float pt, float pr, float pb, float pl, ComputedStyle s, float dp) {
-        float x0 = snap(x, dp), y0 = snap(y, dp);
-        this.x = x0;
-        this.y = y0;
-        width = snap(x + w, dp) - x0;
-        height = snap(y + h, dp) - y0;
-        float x1 = x0 + width, y1 = y0 + height;
-        border[0] = near(y, bt, y0, dp);
-        border[1] = far(x + w, br, x1, dp);
-        border[2] = far(y + h, bb, y1, dp);
-        border[3] = near(x, bl, x0, dp);
-        padding[0] = near(y + bt, pt, y0 + border[0], dp);
-        padding[1] = far(x + w - br, pr, x1 - border[1], dp);
-        padding[2] = far(y + h - bb, pb, y1 - border[2], dp);
-        padding[3] = near(x + bl, pl, x0 + border[3], dp);
+        float[] box = PixelGrid.rect(x, y, w, h, dp, scratch);
+        this.x = box[0];
+        this.y = box[1];
+        width = box[2];
+        height = box[3];
+        float x0 = this.x, y0 = this.y, x1 = x0 + width, y1 = y0 + height;
+        border[0] = PixelGrid.band(y0, y + bt, bt, dp);
+        border[1] = PixelGrid.band(x1, x + w - br, br, dp);
+        border[2] = PixelGrid.band(y1, y + h - bb, bb, dp);
+        border[3] = PixelGrid.band(x0, x + bl, bl, dp);
+        padding[0] = PixelGrid.band(y0 + border[0], y + bt + pt, pt, dp);
+        padding[1] = PixelGrid.band(x1 - border[1], x + w - br - pr, pr, dp);
+        padding[2] = PixelGrid.band(y1 - border[2], y + h - bb - pb, pb, dp);
+        padding[3] = PixelGrid.band(x0 + border[3], x + bl + pl, pl, dp);
         rounded = Shapes.radii(s, width, height, radii);
         return this;
-    }
-
-    // Every edge is snapped where it is, with the same rounding, and a band's width is the distance between its two
-    // snapped edges. Measuring the right and bottom bands on negated coordinates instead rounded their edges the other
-    // way at ties (Math.round takes -2.5 to -2 but 2.5 to 3), so an edge exactly halfway between device pixels, as a
-    // box centred in an odd-sized page puts it, gave a 1px border 1.5px (#10).
-
-    /** Snapped width of a left or top band from {@code pos} (snapped: {@code snappedPos}) inwards; a non-zero band keeps at least one device pixel. */
-    private static float near(float pos, float width, float snappedPos, float dp) {
-        if (!(width > 0)) return 0;
-        return Math.max(dp, snap(pos + width, dp) - snappedPos);
-    }
-
-    /** Snapped width of a right or bottom band from {@code pos} (snapped: {@code snappedPos}) inwards; a non-zero band keeps at least one device pixel. */
-    private static float far(float pos, float width, float snappedPos, float dp) {
-        if (!(width > 0)) return 0;
-        return Math.max(dp, snappedPos - snap(pos - width, dp));
-    }
-
-    static float snap(float v, float devicePixel) {
-        return Math.round(v / devicePixel) * devicePixel;
-    }
-
-    /** The canvas's device pixel in GUI px, or 1 when the transform makes it meaningless. */
-    static float devicePixel(Canvas canvas) {
-        float dp = canvas.devicePixel();
-        return dp > 0 && Float.isFinite(dp) ? dp : 1;
     }
 
     /** Writes the {x, y, width, height} and radii of the border, padding or content box. */
