@@ -57,13 +57,13 @@ public final class Shapes {
             return;
         }
         QuadBatch batch = SCRATCH.get();
-        batch.roundedRect(x, y, width, height, radii, canvas.devicePixel(), argb);
+        batch.roundedRect(x, y, width, height, radii, PixelGrid.devicePixel(canvas), argb);
         batch.flush(canvas);
     }
 
     public static void fillBorder(Canvas canvas, float[] outer, float[] radii, float[] widths, int[] colors) {
         QuadBatch batch = SCRATCH.get();
-        batch.ring(outer[0], outer[1], outer[2], outer[3], radii, widths, colors, colors, ALL_SIDES, canvas.devicePixel());
+        batch.ring(outer[0], outer[1], outer[2], outer[3], radii, widths, colors, colors, ALL_SIDES, PixelGrid.devicePixel(canvas));
         batch.flush(canvas);
     }
 

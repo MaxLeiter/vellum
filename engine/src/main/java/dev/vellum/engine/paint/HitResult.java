@@ -59,7 +59,7 @@ public final class HitResult {
     public int textOffset() {
         if (textOffset == -2) {
             textOffset = text() == null ? -1
-                    : run.sourceIndex(measure.offsetAt(run.text(), FontSpec.of(runStyle), runStyle, runX));
+                    : run.sourceIndex(measure.offsetAt(run.text(), runStyle.font(), runStyle, runX));
         }
         return textOffset;
     }

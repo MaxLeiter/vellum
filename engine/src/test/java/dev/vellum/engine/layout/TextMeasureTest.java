@@ -55,7 +55,7 @@ class TextMeasureTest {
     @Test
     void spacingAddsPerGlyphAndPerWordSeparator() {
         TextMeasure measure = new TextMeasure(new TestFonts());
-        FontSpec font = FontSpec.of(ComputedStyle.INITIAL);
+        FontSpec font = ComputedStyle.INITIAL.font();
         ComputedStyle s = new ComputedStyle();
         assertNull(measure.spaced("a b", font, s));
         s.letterSpacing = 1;

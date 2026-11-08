@@ -159,7 +159,7 @@ public final class Controls {
                 RangeControl.THUMB_WIDTH, box.contentHeight(), s.tint);
         String label = el.getAttribute("label");
         if (label != null) {
-            FontSpec font = FontSpec.of(s);
+            FontSpec font = s.font();
             TextMeasure measure = measure(el);
             drawCentred(canvas, box, s, range.label.set(range.caption(label), font, s, measure), font, measure);
         }
@@ -167,9 +167,8 @@ public final class Controls {
 
     /** The selected option's label, and a down arrow at the right. */
     private static void paintSelect(Canvas canvas, Box box, ComputedStyle s, Element el) {
-        SelectState state = el.controlState instanceof SelectState st ? st : new SelectState();
-        el.controlState = state;
-        FontSpec font = FontSpec.of(s);
+        SelectState state = Dom.controlState(el, SelectState.class, e -> new SelectState());
+        FontSpec font = s.font();
         TextMeasure measure = measure(el);
         float glyphHeight = measure.glyphHeight(font), y = textTop(box, glyphHeight);
         Label arrow = state.arrow.set(ARROW, font, s, measure);
@@ -200,7 +199,7 @@ public final class Controls {
     /** Submit, reset and button inputs: their value (or default label), centred. */
     private static void paintButton(Canvas canvas, Box box, ComputedStyle s, Element el) {
         Label label = Dom.controlState(el, Label.class, e -> new Label());
-        FontSpec font = FontSpec.of(s);
+        FontSpec font = s.font();
         TextMeasure measure = measure(el);
         drawCentred(canvas, box, s, label.set(buttonLabel(el), font, s, measure), font, measure);
     }

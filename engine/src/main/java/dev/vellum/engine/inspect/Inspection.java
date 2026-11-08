@@ -6,7 +6,6 @@ import dev.vellum.engine.dom.Element;
 import dev.vellum.engine.dom.Node;
 import dev.vellum.engine.dom.Text;
 import dev.vellum.engine.layout.Box;
-import dev.vellum.engine.paint.Affine;
 import dev.vellum.engine.paint.Coordinates;
 import dev.vellum.engine.style.ComputedStyle;
 import dev.vellum.engine.style.Prop;
@@ -131,7 +130,7 @@ public final class Inspection {
         m.put("path", path);
         Box box = e.box;
         if (box != null) {
-            float[] r = Coordinates.toViewport(box, new Affine()).mapBounds(0, 0, box.width, box.height, new float[4]);
+            float[] r = Coordinates.boundingRect(box);
             m.put("box", Map.of(
                     "x", r[0], "y", r[1], "width", r[2], "height", r[3],
                     "margin", List.of(box.marginTop, box.marginRight, box.marginBottom, box.marginLeft),
