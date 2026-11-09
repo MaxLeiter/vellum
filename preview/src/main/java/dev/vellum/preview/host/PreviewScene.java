@@ -8,6 +8,7 @@ import dev.vellum.engine.scene.SceneContent;
 import dev.vellum.engine.scene.SceneEntity;
 import dev.vellum.engine.scene.SceneGroup;
 import dev.vellum.engine.scene.SceneModel;
+import dev.vellum.engine.style.Colors;
 import dev.vellum.preview.render.MinecraftAssets;
 
 import java.util.ArrayList;
@@ -96,7 +97,7 @@ final class PreviewScene extends SceneContent implements NamedContent {
                     corners[i + 1] = block.y() + c[i + 1];
                     corners[i + 2] = block.z() + c[i + 2];
                 }
-                out.add(new Quad(corners, face.texture(), face.uv(), shade(face.tint(), SHADE[face.direction()])));
+                out.add(new Quad(corners, face.texture(), face.uv(), Colors.shade(face.tint(), SHADE[face.direction()])));
             }
         }
         quads.put(group, new Quads(group.version(), out));
@@ -145,12 +146,5 @@ final class PreviewScene extends SceneContent implements NamedContent {
         float[] p = Mat.apply(m, entity.x(), entity.y(), entity.z(), new float[3]);
         float depth = Mat.apply(m, entity.x(), entity.y() + 0.9f, entity.z(), new float[3])[2];
         out.add(new Item(depth, () -> ReplacedElements.figure(canvas, ox + p[0], oy + p[1], u, 0xE0)));
-    }
-
-    /** {@code tint} (white for none) darkened by {@code shade}, keeping its alpha. */
-    private static int shade(int tint, float shade) {
-        int a = tint >>> 24, r = Math.round((tint >> 16 & 0xFF) * shade), g = Math.round((tint >> 8 & 0xFF) * shade),
-                b = Math.round((tint & 0xFF) * shade);
-        return a << 24 | r << 16 | g << 8 | b;
     }
 }

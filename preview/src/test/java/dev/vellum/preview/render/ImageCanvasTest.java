@@ -73,7 +73,7 @@ class ImageCanvasTest {
     }
 
     @Test
-    void clipsToTheDevicePixelBoundingBoxOfTheTransformedRect() {
+    void clipsToTheGuiPixelBoundingBoxOfTheTransformedRect() {
         ImageCanvas c = canvas(10, 10, 2);
         c.translate(4, 0);
         c.transform(0, 1, -1, 0, 0, 0); // rotate 90°: (2, 1) → (-1, 2)
@@ -96,7 +96,8 @@ class ImageCanvasTest {
         c.fillRect(0, 0, 1, 1, W);
         c.restore();
         c.fillRect(1, 0, 1, 1, W);
-        assertArrayEquals(new int[] {0x40FFFFFF, 0x80FFFFFF}, pixels(c));
+        // Opacity rounds down, as in game: 0.25 of 255 is 0x3F, 0.5 is 0x7F.
+        assertArrayEquals(new int[] {0x3FFFFFFF, 0x7FFFFFFF}, pixels(c));
         assertThrows(IllegalStateException.class, c::restore);
     }
 
@@ -140,6 +141,29 @@ class ImageCanvasTest {
         ImageCanvas c = canvas(2, 2, 1);
         c.drawImage("test:textures/nothing.png", 0, 0, 2, 2, 0, 0, 1, 1, W, false);
         assertArrayEquals(new int[] {0xFF000000, 0xFFF800F8, 0xFFF800F8, 0xFF000000}, pixels(c));
+    }
+
+    @Test
+    void clipsRoundToWholeGuiPixelsAsTheGameScissorDoes() {
+        // At GUI scale 2 a clip from 0.5 to 2.5 GUI px is [1, 3) GUI px in game: device px 2 to 6, not 1 to 5.
+        ImageCanvas c = canvas(8, 1, 2);
+        c.clipRect(0.5f, 0, 2, 1);
+        c.fillRect(0, 0, 4, 1, R);
+        assertArrayEquals(new int[] {CLEAR, CLEAR, R, R, R, R, CLEAR, CLEAR}, pixels(c));
+    }
+
+    @Test
+    void fractionalSpritesStretchToTheirBoxAsInGame() {
+        // Cut at the rounded size (4 GUI px wide), then stretched to 4.4 (device px 0 to 8.8): the right edge column
+        // reaches device px 8, where a sprite drawn at the rounded size would stop at 7.
+        ImageCanvas c = canvas(9, 2, 2);
+        c.drawSprite("test:frame", 0, 0, 4.4f, 1, W);
+        BufferedImage image = c.image();
+        assertEquals(C1, image.getRGB(0, 0));
+        assertEquals(C2, image.getRGB(8, 0), "the sprite reaches the box's right edge");
+        ImageCanvas empty = canvas(2, 2, 1);
+        empty.drawSprite("test:frame", 0, 0, 0.4f, 2, W);
+        assertArrayEquals(new int[] {CLEAR, CLEAR, CLEAR, CLEAR}, pixels(empty), "rounds to nothing, as in game");
     }
 
     @Test

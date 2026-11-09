@@ -156,7 +156,7 @@ final class SelectPopup {
     // ---- Geometry and paint ----
 
     private FontSpec font() {
-        return FontSpec.of(select.computedStyle());
+        return select.computedStyle().font();
     }
 
     private float rowHeight() {
@@ -200,7 +200,7 @@ final class SelectPopup {
         canvas.save();
         canvas.clipRect(x + 1, y + 1, w - 2, h - 2);
         FontSpec font = font();
-        float rowHeight = rowHeight(), textOffset = (rowHeight - Controls.measure(select).glyphHeight(font)) / 2;
+        float rowHeight = rowHeight(), textOffset = Controls.glyphTop(0, rowHeight, Controls.measure(select).glyphHeight(font), 0);
         Element current = select.selectedOption();
         for (int i = top; i < Math.min(rows.size(), top + MAX_ROWS); i++) {
             Row r = rows.get(i);

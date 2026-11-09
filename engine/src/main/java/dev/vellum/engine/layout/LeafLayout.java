@@ -37,7 +37,7 @@ final class LeafLayout implements FormattingContext {
         if (box.isReplaced()) return Float.NaN;
         Element e = box.element;
         if (!e.tagName().equals("select") && !e.isTextControl()) return Float.NaN;
-        FontSpec font = FontSpec.of(box.style);
+        FontSpec font = box.style.font();
         float lineHeight = Controls.lineHeight(e, box.style, contentHeight);
         return Controls.glyphTop(box.contentY(), lineHeight, pass.text.glyphHeight(font), 0) + pass.text.ascent(font);
     }

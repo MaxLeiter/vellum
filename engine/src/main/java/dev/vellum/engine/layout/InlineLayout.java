@@ -364,7 +364,7 @@ final class InlineLayout {
         if (span.metrics != null) return span.metrics;
         Metrics m = new Metrics();
         ComputedStyle s = span.style;
-        m.font = FontSpec.of(s);
+        m.font = s.font();
         m.ascent = pass.text.ascent(m.font);
         m.glyphHeight = pass.text.glyphHeight(m.font);
         float halfLeading = (s.usedLineHeight() - m.glyphHeight) / 2;

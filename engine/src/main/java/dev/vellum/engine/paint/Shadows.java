@@ -33,7 +33,7 @@ final class Shadows {
     /** Tessellates one shadow of {@code box} (see {@link Canvas#fillBoxShadow}) and draws it on {@code canvas}. */
     static void fill(Canvas canvas, float[] box, float[] radii, Shadow shadow) {
         Shadows shadows = SCRATCH.get();
-        float dp = Geometry.devicePixel(canvas);
+        float dp = PixelGrid.devicePixel(canvas);
         if (shadow.inset()) shadows.inset(shadow, box, radii, dp);
         else shadows.outer(shadow, box, radii, dp);
         shadows.batch.flush(canvas);

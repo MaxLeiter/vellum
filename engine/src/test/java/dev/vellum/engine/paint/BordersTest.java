@@ -96,6 +96,26 @@ class BordersTest {
     }
 
     @Test
+    void edgesHalfwayBetweenDevicePixelsKeepBordersEven() {
+        // #10: a box centred in an odd-height page at GUI scale 2 (top 126.25, height 252.5) has its far edges exactly
+        // halfway between device pixels. Every edge must round the same way, or its bottom border came out 1.5px.
+        for (float dp : new float[] {1, 0.5f}) {
+            RecordingCanvas canvas = new RecordingCanvas();
+            canvas.devicePixel = dp;
+            float q = dp / 2;
+            String box = "left: " + (240 + q) + "px; top: " + (126 + q) + "px; width: " + (480 + dp) + "px; height: "
+                    + (252 + dp) + "px; box-sizing: border-box; ";
+            new TestHost().load("<div style='position: absolute; " + box + "border: 1px solid red; padding: 3px; "
+                    + "background: blue; background-clip: content-box'></div>").paint(canvas);
+            float[] ring = canvas.ops("fillBorder").getFirst().args();
+            assertArrayEquals(new float[] {1, 1, 1, 1}, Arrays.copyOfRange(ring, 12, 16), 1e-5f, "border widths at dp " + dp);
+            float[] content = canvas.ops("fillRect").getFirst().args();
+            assertEquals(ring[2] - 8, content[2], 1e-5f, "content width at dp " + dp);
+            assertEquals(ring[3] - 8, content[3], 1e-5f, "content height at dp " + dp);
+        }
+    }
+
+    @Test
     void outlinesUseTheBorderMachinery() {
         RecordingCanvas.Call ring = rings("outline: 1px outset #c6c6c6; outline-offset: 2px").getFirst();
         assertArrayEquals(new float[] {-3, -3, 46, 26}, ring.bounds(), 1e-5f);

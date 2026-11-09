@@ -6,6 +6,7 @@ import dev.vellum.engine.paint.Canvas;
 import dev.vellum.engine.paint.ScissorStack;
 import dev.vellum.engine.paint.Shapes;
 import dev.vellum.engine.paint.SmoothShape;
+import dev.vellum.engine.style.Colors;
 import dev.vellum.engine.style.Shadow;
 import dev.vellum.mod.VellumConfig;
 import net.minecraft.client.Minecraft;
@@ -188,7 +189,7 @@ public final class McCanvas implements Canvas {
     public void fillRect(float x, float y, float width, float height, int argb) {
         if (clippedAway() || width <= 0 || height <= 0) return;
         int c = color(argb);
-        if (alpha(c) != 0) rect(null, false, x, y, width, height, 0, 0, 0, 0, c);
+        if (Colors.alpha(c) != 0) rect(null, false, x, y, width, height, 0, 0, 0, 0, c);
     }
 
     @Override
@@ -234,7 +235,7 @@ public final class McCanvas implements Canvas {
         if (clippedAway()) return;
         int c = color(tint);
         int w = Math.round(width), h = Math.round(height);
-        if (sprite == null || alpha(c) == 0 || w <= 0 || h <= 0) return;
+        if (sprite == null || Colors.alpha(c) == 0 || w <= 0 || h <= 0) return;
         // Nine-slice and tiling work at integer sizes; scale the remainder so the sprite still fills the box exactly.
         gui.sprite(m, x, y, width / w, height / h, sprite, w, h, c);
     }
@@ -271,7 +272,7 @@ public final class McCanvas implements Canvas {
         if (s == null || !shapes || crisp) return false;
         if (s == SmoothShape.NOTHING || clippedAway()) return true;
         int c = color(s.argb());
-        if (alpha(c) == 0) return true;
+        if (Colors.alpha(c) == 0) return true;
         short[] r = new short[4];
         for (int k = 0; k < 4; k++) {
             float sixteenths = s.radii()[2 * k] * 16;
@@ -300,7 +301,7 @@ public final class McCanvas implements Canvas {
     public void blit(Identifier texture, float x, float y, float width, float height,
                      float u0, float v0, float u1, float v1, int tint, boolean smooth) {
         int c = color(tint);
-        if (clippedAway() || alpha(c) == 0 || width <= 0 || height <= 0) return;
+        if (clippedAway() || Colors.alpha(c) == 0 || width <= 0 || height <= 0) return;
         rect(texture, smooth, x, y, width, height, u0, v0, u1, v1, c);
     }
 
@@ -320,7 +321,7 @@ public final class McCanvas implements Canvas {
      * the scene, since pictures are rendered even where nothing of them shows (scrolled or clipped away, transparent).
      */
     public boolean sceneVisible(int tint, float x, float y, float width, float height) {
-        if (clippedAway() || alpha(color(tint)) == 0) return false;
+        if (clippedAway() || Colors.alpha(color(tint)) == 0) return false;
         boundsOf(x, y, x + width, y + height);
         return Math.round(bx1) > Math.round(bx0) && Math.round(by1) > Math.round(by0) && clippedBounds(gui.scissor()) != null;
     }
@@ -359,15 +360,8 @@ public final class McCanvas implements Canvas {
 
     /** {@code argb} with the opacity multiplied into its alpha. */
     private int color(int argb) {
-        if (alpha >= 1) return argb;
-        if (argb == 0 || alpha <= 0) return 0;
-        return (int) Math.floor(alpha(argb) / 255f * alpha * 255f) << 24 | argb & 0xFFFFFF;
+        return Colors.withOpacity(argb, alpha);
     }
-
-    private static int alpha(int argb) {
-        return argb >>> 24;
-    }
-
 
     /** The current transform for a render state, which keeps it: shared until the transform changes. */
     private Matrix3x2f pose() {

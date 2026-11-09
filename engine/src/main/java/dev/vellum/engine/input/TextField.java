@@ -82,7 +82,7 @@ final class TextField {
     }
 
     FontSpec font() {
-        return FontSpec.of(element.computedStyle());
+        return element.computedStyle().font();
     }
 
     TextMeasure measure() {
@@ -111,7 +111,7 @@ final class TextField {
     private TextLayout lines(TextLayout cached, String text, boolean masked) {
         float wrap = multiline && element.box != null ? element.box.contentWidth() : Float.POSITIVE_INFINITY;
         ComputedStyle s = element.computedStyle();
-        FontSpec font = FontSpec.of(s);
+        FontSpec font = s.font();
         if (cached != null && cached.matches(text, masked, wrap, font, s)) return cached;
         return new TextLayout(text, masked, wrap, measure(), font, s);
     }

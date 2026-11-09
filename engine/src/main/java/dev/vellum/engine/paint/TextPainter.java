@@ -21,12 +21,12 @@ public final class TextPainter {
      */
     public static void draw(Canvas canvas, String text, SpacedText spaced, float x, float y, FontSpec font,
                             ComputedStyle s, int color) {
-        draw(canvas, text, spaced, x, y, font, s, color, Geometry.devicePixel(canvas));
+        draw(canvas, text, spaced, x, y, font, s, color, PixelGrid.devicePixel(canvas));
     }
 
     /** Rounds a position to device pixels as {@link #draw} does, so carets and highlights line up with the text. */
     public static float snap(Canvas canvas, float v) {
-        return Geometry.snap(v, Geometry.devicePixel(canvas));
+        return PixelGrid.snap(v, PixelGrid.devicePixel(canvas));
     }
 
     /** {@link #draw} snapping to {@code devicePixel}, which the painter tracks per transform. */
@@ -48,15 +48,15 @@ public final class TextPainter {
 
     private static void line(Canvas canvas, String text, SpacedText spaced, float x, float y, FontSpec font, int argb,
                              int decorations, boolean shadow, float dp) {
-        float ty = Geometry.snap(y, dp);
+        float ty = PixelGrid.snap(y, dp);
         if (spaced == null) {
-            canvas.drawText(text, Geometry.snap(x, dp), ty, font, argb, decorations, shadow);
+            canvas.drawText(text, PixelGrid.snap(x, dp), ty, font, argb, decorations, shadow);
             return;
         }
         String[] parts = spaced.parts();
         float[] xs = spaced.x();
         for (int i = 0; i < parts.length; i++) {
-            canvas.drawText(parts[i], Geometry.snap(x + xs[i], dp), ty, font, argb, decorations, shadow);
+            canvas.drawText(parts[i], PixelGrid.snap(x + xs[i], dp), ty, font, argb, decorations, shadow);
         }
     }
 }

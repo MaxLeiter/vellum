@@ -2,7 +2,9 @@ package dev.vellum.preview.host;
 
 import dev.vellum.engine.dom.Document;
 import dev.vellum.engine.dom.Element;
+import dev.vellum.engine.host.FontSpec;
 import dev.vellum.engine.host.ReplacedContent;
+import dev.vellum.engine.paint.Canvas;
 import dev.vellum.preview.render.MinecraftAssets;
 import dev.vellum.preview.render.MinecraftFont;
 import org.junit.jupiter.api.Test;
@@ -11,7 +13,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -58,6 +63,44 @@ class PreviewHostTest {
         assertEquals("minecraft:textures/a.png", host.resolveUrl(url, "minecraft:textures/a.png"));
         assertEquals("body {}", host.loadText(host.resolveUrl(url, "../css/site.css")));
         assertNull(host.loadText(host.resolveUrl(url, "missing.css")));
+    }
+
+    @Test
+    void itemCountsAreNumbersAsInGame() {
+        // As ItemStacks.of in game: a number, at least 1; vanilla draws no count of 1.
+        PreviewHost host = host(List.of());
+        Document document = Document.create(host, "test");
+        Map<String, String> drawn = new LinkedHashMap<>();
+        for (String count : new String[] {"5", "07", "2.9", "abc", "0", "1", " 12 "}) {
+            Element item = document.createElement("item");
+            item.setAttribute("id", "minecraft:stone");
+            item.setAttribute("count", count);
+            List<String> texts = new ArrayList<>();
+            document.replacedContent(item).paint(textRecorder(texts), 0, 0, 16, 16);
+            drawn.put(count, String.join(",", texts));
+        }
+        assertEquals(Map.of("5", "5", "07", "7", "2.9", "2", "abc", "", "0", "", "1", "", " 12 ", "12"), drawn);
+    }
+
+    /** A canvas that only records the text drawn on it. */
+    private static Canvas textRecorder(List<String> texts) {
+        return new Canvas() {
+            @Override public void save() {}
+            @Override public void restore() {}
+            @Override public int saveCount() { return 0; }
+            @Override public void translate(float dx, float dy) {}
+            @Override public void transform(float a, float b, float c, float d, float e, float f) {}
+            @Override public void multiplyAlpha(float alpha) {}
+            @Override public void clipRect(float x, float y, float width, float height) {}
+            @Override public void fillRect(float x, float y, float width, float height, int argb) {}
+            @Override public void fillQuads(float[] xy, int[] colors, int quadCount) {}
+            @Override public void drawText(String text, float x, float y, FontSpec font, int argb, int decorations, boolean shadow) {
+                texts.add(text);
+            }
+            @Override public void drawImage(String url, float x, float y, float width, float height,
+                                            float u0, float v0, float u1, float v1, int tint, boolean smooth) {}
+            @Override public void drawSprite(String spriteId, float x, float y, float width, float height, int tint) {}
+        };
     }
 
     @Test

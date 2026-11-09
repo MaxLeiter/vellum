@@ -45,7 +45,7 @@ final class Borders {
             switch (style) {
                 case INSET, OUTSET -> colorsA[i] = bevel(c, i, style == BorderStyle.INSET);
                 case GROOVE, RIDGE -> {
-                    float half = Math.max(dp, Geometry.snap(w / 2, dp));
+                    float half = Math.max(dp, PixelGrid.snap(w / 2, dp));
                     if (half < w) {
                         widthsA[i] = offsetsB[i] = half;
                         widthsB[i] = w - half;
@@ -55,7 +55,7 @@ final class Borders {
                 }
                 case DOUBLE -> {
                     // Two lines and a gap; too thin for three device pixels and it stays solid.
-                    float third = Geometry.snap(w / 3, dp);
+                    float third = PixelGrid.snap(w / 3, dp);
                     if (third >= dp && 2 * third < w) {
                         widthsA[i] = widthsB[i] = third;
                         offsetsB[i] = w - third;
@@ -119,7 +119,7 @@ final class Borders {
         };
         batch.setClip(side, 4);
         for (int k = 0; k < n; k++) {
-            float p0 = Geometry.snap(start + k * (dash + gap), dp), p1 = Geometry.snap(start + k * (dash + gap) + dash, dp);
+            float p0 = PixelGrid.snap(start + k * (dash + gap), dp), p1 = PixelGrid.snap(start + k * (dash + gap) + dash, dp);
             if (horizontal) batch.rect(p0, across, p1 - p0, w, colorsA[i]);
             else batch.rect(across, p0, w, p1 - p0, colorsA[i]);
         }
